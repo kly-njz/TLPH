@@ -308,42 +308,28 @@
         import { auth, db } from "{{ url_for('static', filename='js/firebase-config.js') }}";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { philippineLocations } from "{{ url_for('static', filename='js/ph-locations.js') }}";
 
         let currentUser = null;
         let currentUserData = null;
-        let philippinesData = {};
-
-        // Load PH locations data
-        async function loadPhilippinesData() {
-            try {
-                const response = await fetch("{{ url_for('static', filename='js/ph-locations.js') }}");
-                const script = await response.text();
-                eval(script);
-                philippinesData = window.philippinesLocations || {};
-                console.log('PH locations loaded');
-            } catch (e) {
-                console.error('Error loading PH locations:', e);
-            }
-        }
 
         // Populate province dropdown
         function populateProvinces() {
             const provinceSelect = document.getElementById('editProvince');
-            const currentProvince = document.getElementById('editProvince').value || currentUserData?.province;
+            const currentProvince = currentUserData?.province;
             
             provinceSelect.innerHTML = '<option value="">Select Province</option>';
             
-            if (philippinesData && philippinesData.provinces) {
-                Object.keys(philippinesData.provinces).forEach(province => {
-                    const option = document.createElement('option');
-                    option.value = province;
-                    option.textContent = province;
-                    if (province === currentProvince) {
-                        option.selected = true;
-                    }
-                    provinceSelect.appendChild(option);
-                });
-            }
+            const provinces = Object.keys(philippineLocations).sort();
+            provinces.forEach(province => {
+                const option = document.createElement('option');
+                option.value = province;
+                option.textContent = province;
+                if (province === currentProvince) {
+                    option.selected = true;
+                }
+                provinceSelect.appendChild(option);
+            });
         }
 
         // Populate municipality dropdown based on province
@@ -359,8 +345,8 @@
             municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
             municipalitySelect.disabled = false;
             
-            if (philippinesData && philippinesData.provinces && philippinesData.provinces[province]) {
-                const municipalities = philippinesData.provinces[province];
+            if (philippineLocations[province]) {
+                const municipalities = philippineLocations[province].sort();
                 municipalities.forEach(city => {
                     const option = document.createElement('option');
                     option.value = city;
@@ -488,7 +474,6 @@
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
-                await loadPhilippinesData();
                 await loadUserData();
             } else {
                 window.location.href = '/login';
