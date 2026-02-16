@@ -9,8 +9,9 @@ def application_national_view():
     try:
         db = get_firestore_db()
         
-        # Fetch only APPROVED applications from Regional (for National view)
-        applications_ref = db.collection('license_applications').where('status', '==', 'approved')
+        # Fetch APPROVED and TO REVIEW applications from Regional (for National view)
+        # When Regional clicks "to review", it goes to National for final approve/reject
+        applications_ref = db.collection('license_applications')
         docs = applications_ref.stream()
         
         applications = []
@@ -28,16 +29,21 @@ def application_national_view():
         for doc in docs:
             data = doc.to_dict()
             
-            # National only sees approved applications from Regional
+            # National sees approved AND to review applications from Regional
             status = data.get('status', 'pending').lower()
             
-            # Check if application has regional approval
-            regional_status = data.get('regionalStatus', 'pending').lower()
-            
-            # Only include if approved by regional
-            if status == 'approved':
+            # Only include if approved OR to review by regional
+            if status in ['approved', 'to review', 'review']:
                 total_count += 1
-                approved_count += 1
+                
+                # For National, check nationalStatus for counting
+                national_status = data.get('nationalStatus', 'pending').lower()
+                if national_status == 'approved':
+                    approved_count += 1
+                elif national_status == 'rejected':
+                    rejected_count += 1
+                else:
+                    pending_count += 1
                 
                 # Format the application data
                 created_at = data.get('createdAt')
@@ -90,9 +96,11 @@ def application_national_view():
                 }
                 category = category_map.get(app_type.lower(), app_type.upper())
                 
-                # Count by status (for breakdown)
-                national_status = data.get('nationalStatus', 'pending').lower()
-                status_breakdown[national_status] += 1
+                # Count by status (for breakdown) - National only has approved/rejected/pending
+                if national_status in ['approved', 'rejected']:
+                    status_breakdown[national_status] += 1
+                else:
+                    status_breakdown['pending'] += 1
                 
                 # Get approval details
                 approved_by_regional = data.get('approvedByRegional', 'N/A')
@@ -105,7 +113,8 @@ def application_national_view():
                     'applicant_name': full_name,
                     'category': category,
                     'location': location,
-                    'status': status,
+                    'status': national_status,  # Use nationalStatus for display
+                    'regional_status': status,  # Keep regional status for reference
                     'user_email': data.get('userEmail', 'N/A'),
                     'approved_by_regional': approved_by_regional,
                     'approval_date': approval_date
@@ -140,12 +149,11 @@ def application_national_view():
         region_labels = [item[0] for item in top_regions] if top_regions else ['N/A']
         region_counts = [item[1] for item in top_regions] if top_regions else [0]
         
-        # Status breakdown
-        status_labels = ['Approved', 'Pending', 'Review', 'Rejected']
+        # Status breakdown - National only has Approved, Pending, Rejected (no "To Review")
+        status_labels = ['Approved', 'Pending', 'Rejected']
         status_data = [
             status_breakdown.get('approved', 0),
             status_breakdown.get('pending', 0),
-            status_breakdown.get('review', 0),
             status_breakdown.get('rejected', 0)
         ]
         
@@ -177,8 +185,8 @@ def application_national_view():
                              trend_data=[0, 0, 0, 0, 0, 0],
                              region_labels=['N/A'],
                              region_counts=[0],
-                             status_labels=['Approved', 'Pending', 'Review', 'Rejected'],
-                             status_data=[0, 0, 0, 0])
+                             status_labels=['Approved', 'Pending', 'Rejected'],
+                             status_data=[0, 0, 0])
 
 @bp.route('/permit-national')
 def permit_national_view():
