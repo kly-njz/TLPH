@@ -53,10 +53,34 @@
         </div>
     </div>
 
+    <!-- Application Details Modal -->
+    <div id="detailsModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="sticky top-0 bg-gradient-to-r from-green-700 to-green-800 text-white p-6 border-b">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-black uppercase">Application Details</h2>
+                    <button onclick="closeDetailsModal()" class="text-white hover:bg-green-600 p-2 rounded-lg transition">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="modalContent" class="p-6 space-y-6">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+            
+            <div class="border-t bg-gray-50 p-6 flex gap-3">
+                <button onclick="closeDetailsModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { auth, db } from '/static/js/firebase-config.js';
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-        import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+        import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
         const loadingState = document.getElementById('loadingState');
         const emptyState = document.getElementById('emptyState');
@@ -207,9 +231,153 @@
             }
         };
 
-        window.viewDetails = function(applicationId) {
-            window.location.href = `/user/inventory/stock-info?id=${applicationId}`;
+        window.viewDetails = async function(applicationId) {
+            try {
+                const applicationDoc = await getDoc(doc(db, 'applications', applicationId));
+                if (!applicationDoc.exists()) {
+                    alert('Application not found');
+                    return;
+                }
+                
+                const app = applicationDoc.data();
+                const categoryLabels = {
+                    'farming': 'Crop & Plant',
+                    'livestock': 'Fisheries & Agriculture',
+                    'agribusiness': 'Agribusiness & Agro-Processing',
+                    'trade': 'Agricultural Trade',
+                    'infrastructure': 'Infrastructure',
+                    'research': 'Research & Innovation',
+                    'support': 'Support & Insurance',
+                    'safety': 'Food Safety',
+                    'extension': 'Extension Services',
+                    'climate': 'Climate & Risk',
+                    'data': 'Digital Agriculture',
+                    'compliance': 'Compliance & Enforcement',
+                    'institutional': 'Cooperative Development'
+                };
+                
+                const categoryLabel = categoryLabels[app.category] || app.category || 'Application';
+                const statusBadgeClass = {
+                    'approved': 'bg-green-100 text-green-700',
+                    'pending': 'bg-yellow-100 text-yellow-700',
+                    'under-review': 'bg-blue-100 text-blue-700',
+                    'rejected': 'bg-red-100 text-red-700',
+                    'cancelled': 'bg-gray-100 text-gray-700'
+                };
+                const statusClass = statusBadgeClass[app.status] || statusBadgeClass['pending'];
+                const statusText = (app.status || 'Unknown').toUpperCase();
+                
+                const submittedDate = app.submittedAt ? new Date(app.submittedAt.toDate ? app.submittedAt.toDate() : app.submittedAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
+                
+                const modalContent = document.getElementById('modalContent');
+                modalContent.innerHTML = `
+                    <div class="space-y-6">
+                        <!-- Status Summary -->
+                        <div class="bg-gray-50 p-4 rounded-lg border-l-4 border-green-700">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-sm font-bold text-gray-600 uppercase tracking-wider">Status</h3>
+                                <span class="px-3 py-1 rounded-full text-xs font-bold ${statusClass}">${statusText}</span>
+                            </div>
+                            <p class="text-xs text-gray-500">Last updated: ${submittedDate}</p>
+                        </div>
+                        
+                        <!-- Application Information -->
+                        <div class="space-y-4">
+                            <div>
+                                <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Application ID</p>
+                                <p class="text-sm font-mono text-gray-700 break-all">${applicationId}</p>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Category</p>
+                                    <p class="text-sm font-semibold text-gray-800">${categoryLabel}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Submitted</p>
+                                    <p class="text-sm font-semibold text-gray-800">${submittedDate}</p>
+                                </div>
+                            </div>
+                            
+                            ${app.productName ? `
+                            <div>
+                                <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Product/Project Name</p>
+                                <p class="text-sm font-semibold text-gray-800">${app.productName}</p>
+                            </div>
+                            ` : ''}
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                ${app.investmentQty ? `
+                                <div>
+                                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Investment</p>
+                                    <p class="text-sm font-semibold text-green-700">₱${Number(app.investmentQty).toLocaleString()}</p>
+                                </div>
+                                ` : ''}
+                                ${app.harvestQty ? `
+                                <div>
+                                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Est. Harvest Qty</p>
+                                    <p class="text-sm font-semibold text-gray-800">${Number(app.harvestQty).toLocaleString()} units</p>
+                                </div>
+                                ` : ''}
+                            </div>
+                            
+                            ${app.municipality ? `
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Municipality</p>
+                                    <p class="text-sm font-semibold text-gray-800">${app.municipality}</p>
+                                </div>
+                                ${app.province ? `
+                                <div>
+                                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Province</p>
+                                    <p class="text-sm font-semibold text-gray-800">${app.province}</p>
+                                </div>
+                                ` : ''}
+                            </div>
+                            ` : ''}
+                        </div>
+                        
+                        <!-- Additional Notes -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <p class="text-xs font-bold text-blue-900 uppercase tracking-wider mb-2">📋 Status Information</p>
+                            <ul class="text-xs text-blue-800 space-y-1 list-disc list-inside">
+                                ${app.status === 'approved' ? '<li>Your application has been approved by the municipality</li>' : ''}
+                                ${app.status === 'under-review' ? '<li>Your application is currently being reviewed</li>' : ''}
+                                ${app.status === 'pending' ? '<li>Your application is waiting for review</li>' : ''}
+                                ${app.status === 'rejected' ? '<li>Your application has been rejected. Please contact the municipal office for details.</li>' : ''}
+                                ${app.status === 'cancelled' ? '<li>This application has been cancelled</li>' : ''}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('detailsModal').classList.remove('hidden');
+                document.getElementById('detailsModal').classList.add('flex');
+            } catch (error) {
+                console.error('Error loading application details:', error);
+                alert('Error loading application details: ' + error.message);
+            }
         };
+        
+        window.closeDetailsModal = function() {
+            const modal = document.getElementById('detailsModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+        
+        // Close modal when clicking outside of it
+        document.getElementById('detailsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                window.closeDetailsModal();
+            }
+        });
+        
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && !document.getElementById('detailsModal').classList.contains('hidden')) {
+                window.closeDetailsModal();
+            }
+        });
 
         onAuthStateChanged(auth, async user => {
             if (user) {
