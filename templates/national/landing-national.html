@@ -163,19 +163,19 @@
     <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
       <div class="card p-4 border-t-4 border-t-slate-800">
         <p class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Applications Received</p>
-        <h3 class="text-3xl font-black text-slate-900 mt-1">12,480</h3>
+        <h3 class="text-3xl font-black text-slate-900 mt-1">{{ total_applications }}</h3>
       </div>
       <div class="card p-4 border-t-4 border-t-blue-800">
         <p class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Service Requests</p>
-        <h3 class="text-3xl font-black text-slate-900 mt-1">4,235</h3>
+        <h3 class="text-3xl font-black text-slate-900 mt-1">{{ total_service_requests }}</h3>
       </div>
       <div class="card p-4 border-t-4 border-t-amber-700">
         <p class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Compliance Registry</p>
-        <h3 class="text-3xl font-black text-slate-900 mt-1">3,102</h3>
+        <h3 class="text-3xl font-black text-slate-900 mt-1">{{ total_count }}</h3>
       </div>
       <div class="card p-4 border-t-4 border-t-emerald-800 bg-emerald-950 text-white shadow-lg">
         <p class="text-[9px] font-black uppercase text-emerald-400 tracking-widest">National Collections</p>
-        <h3 class="text-3xl font-black text-white mt-1">₱ 3.74M</h3>
+        <h3 class="text-3xl font-black text-white mt-1">₱ {{ "%.2f"|format(total_collections / 1000000) }}M</h3>
       </div>
     </section>
 
@@ -188,14 +188,14 @@
         <h3 class="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4 border-b border-slate-100 pb-2">Operational Health</h3>
         <div class="relative h-[120px] w-full mx-auto">
           <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none translate-y-1">
-            <span class="text-lg font-black text-slate-900">24.9k</span>
+            <span class="text-lg font-black text-slate-900">{{ total_count }}</span>
             <span class="text-[7px] font-bold text-slate-400 uppercase tracking-tighter">Total Items</span>
           </div>
           <canvas id="statusChart"></canvas>
         </div>
         <div class="space-y-1 mt-4">
-          <div class="flex items-center justify-between p-2 bg-slate-50 border border-slate-200"><span class="text-[8px] font-black text-slate-500 uppercase">Approved</span><span class="text-[10px] font-black text-emerald-700">18,430</span></div>
-          <div class="flex items-center justify-between p-2 bg-slate-50 border border-slate-200"><span class="text-[8px] font-black text-slate-500 uppercase">Pending</span><span class="text-[10px] font-black text-amber-700">3,680</span></div>
+          <div class="flex items-center justify-between p-2 bg-slate-50 border border-slate-200"><span class="text-[8px] font-black text-slate-500 uppercase">Approved</span><span class="text-[10px] font-black text-emerald-700">{{ approved_count }}</span></div>
+          <div class="flex items-center justify-between p-2 bg-slate-50 border border-slate-200"><span class="text-[8px] font-black text-slate-500 uppercase">Pending</span><span class="text-[10px] font-black text-amber-700">{{ pending_count }}</span></div>
         </div>
       </div>
     </section>
@@ -207,13 +207,31 @@
         <div class="table-scroll"><table class="w-full">
           <thead><tr><th>Date</th><th>Reference & Applicant</th><th>Category</th><th>Region</th><th>Municipality</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
-            <tr>
-              <td>Feb 12, 2026</td>
-              <td><span class="font-black font-mono">APP-2026-001284</span><br><span class="text-[10px] text-slate-500 uppercase tracking-tighter italic">Dela Cruz, Juan M.</span></td>
-              <td>Crop & Plant</td><td>NCR</td><td>Quezon City</td>
-              <td><span class="status-badge bg-amber-50 text-amber-800 border-amber-200">Pending</span></td>
-              <td><button class="bg-slate-800 text-white px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest">Review</button></td>
-            </tr>
+            {% if applications and applications|length > 0 %}
+              {% for app in applications %}
+              <tr>
+                <td>{{ app.created_at if app.created_at else 'N/A' }}</td>
+                <td><span class="font-black font-mono">APP-{{ app.reference_id }}</span><br><span class="text-[10px] text-slate-500 uppercase tracking-tighter italic">{{ app.applicant_name }}</span></td>
+                <td>{{ app.category }}</td>
+                <td>{{ app.region }}</td>
+                <td>{{ app.municipality }}</td>
+                <td>
+                  {% if app.status == 'approved' %}
+                    <span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200">Approved</span>
+                  {% elif app.status == 'rejected' %}
+                    <span class="status-badge bg-rose-50 text-rose-800 border-rose-200">Rejected</span>
+                  {% else %}
+                    <span class="status-badge bg-amber-50 text-amber-800 border-amber-200">Pending</span>
+                  {% endif %}
+                </td>
+                <td><button class="bg-slate-800 text-white px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest">Review</button></td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="7" class="text-center text-slate-400 py-4">No applications found</td>
+              </tr>
+            {% endif %}
           </tbody>
         </table></div>
       </section>
@@ -222,7 +240,33 @@
         <div class="gov-header">2. Service Requests Masterlist</div>
         <div class="table-scroll"><table class="w-full">
           <thead><tr><th>Date</th><th>Request ID</th><th>Applicant Category</th><th>Region</th><th>Municipality</th><th>Current Status</th><th>Actions</th></tr></thead>
-          <tbody><tr><td>Feb 12, 2026</td><td class="font-black">SR-2026-000442</td><td>Initial farm visit</td><td>Region VII</td><td>Cebu City</td><td><span class="status-badge bg-blue-50 text-blue-800 border-blue-200">Processing</span></td><td><button class="border border-slate-300 px-3 py-1 rounded text-[9px] font-black">EXPORT</button></td></tr></tbody>
+          <tbody>
+            {% if service_requests and service_requests|length > 0 %}
+              {% for req in service_requests %}
+              <tr>
+                <td>N/A</td>
+                <td class="font-black">SR-{{ req.reference_id }}</td>
+                <td>{{ req.service_type }}</td>
+                <td>{{ req.region }}</td>
+                <td>{{ req.municipality }}</td>
+                <td>
+                  {% if req.status == 'approved' %}
+                    <span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200">Approved</span>
+                  {% elif req.status == 'rejected' %}
+                    <span class="status-badge bg-rose-50 text-rose-800 border-rose-200">Rejected</span>
+                  {% else %}
+                    <span class="status-badge bg-blue-50 text-blue-800 border-blue-200">Processing</span>
+                  {% endif %}
+                </td>
+                <td><button class="border border-slate-300 px-3 py-1 rounded text-[9px] font-black">EXPORT</button></td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="7" class="text-center text-slate-400 py-4">No service requests found</td>
+              </tr>
+            {% endif %}
+          </tbody>
         </table></div>
       </section>
 
@@ -281,10 +325,18 @@
     new Chart(document.getElementById('trendChart'), {
       type: 'line',
       data: {
-        labels: ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'],
+        labels: {{ trend_labels | tojson }},
         datasets: [
-          { label: 'Applications', data: [1800, 2050, 2200, 2400, 2600, 2480], borderColor: '#002e5d', backgroundColor: 'rgba(0, 46, 93, 0.02)', fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 0 },
-          { label: 'Requests', data: [520, 610, 700, 680, 740, 735], borderColor: '#065f46', tension: 0.4, borderWidth: 2.5, pointRadius: 0 }
+          { 
+            label: 'Applications', 
+            data: {{ trend_data | tojson }}, 
+            borderColor: '#002e5d', 
+            backgroundColor: 'rgba(0, 46, 93, 0.02)', 
+            fill: true, 
+            tension: 0.4, 
+            borderWidth: 2.5, 
+            pointRadius: 0 
+          }
         ]
       },
       options: { 
@@ -299,8 +351,8 @@
       type: 'doughnut',
       data: {
         datasets: [{
-          data: [18430, 3680, 1320, 1487],
-          backgroundColor: ['#065f46', '#f59e0b', '#002e5d', '#be123c'],
+          data: [{{ approved_count }}, {{ pending_count }}, {{ rejected_count }}],
+          backgroundColor: ['#065f46', '#f59e0b', '#be123c'],
           borderWidth: 0,
           cutout: '88%'
         }]
