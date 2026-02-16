@@ -26,7 +26,164 @@ def create_regional_account():
 # Landing pages for different roles
 @bp.route('/national/dashboard')
 def national_dashboard():
-    return render_template('national/landing-national.html')
+    try:
+        from firebase_config import get_firestore_db
+        from datetime import datetime
+        from collections import defaultdict
+        
+        db = get_firestore_db()
+        
+        # Fetch all license applications (overview from all levels)
+        applications_ref = db.collection('license_applications')
+        app_docs = applications_ref.stream()
+        
+        applications = []
+        total_applications = 0
+        
+        # For status breakdown
+        status_counts = defaultdict(int)
+        
+        # For 6-month trend
+        monthly_trend = defaultdict(int)
+        
+        for doc in app_docs:
+            data = doc.to_dict()
+            total_applications += 1
+            
+            # Count by status
+            status = data.get('status', 'pending').lower()
+            status_counts[status] += 1
+            
+            # Calculate monthly trend
+            created_at = data.get('createdAt')
+            if created_at:
+                try:
+                    if isinstance(created_at, str):
+                        date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    elif hasattr(created_at, 'strftime'):
+                        date_obj = created_at
+                    else:
+                        date_obj = None
+                    
+                    if date_obj:
+                        month_key = date_obj.strftime('%Y-%m')
+                        monthly_trend[month_key] += 1
+                except:
+                    pass
+            
+            # Get form data
+            form_data = data.get('formData', {})
+            full_name = form_data.get('fullName', 'N/A')
+            region = form_data.get('region', 'N/A')
+            municipality = form_data.get('municipality', 'N/A')
+            
+            # Map application type
+            app_type = data.get('applicationType', 'N/A')
+            category_map = {
+                'farm-visit': 'Crop & Plant',
+                'fishery-permit': 'Fisheries',
+                'livestock': 'Livestock',
+                'forest': 'Forestry',
+                'wildlife': 'Wildlife',
+                'environment': 'Environmental'
+            }
+            category = category_map.get(app_type.lower(), app_type.upper())
+            
+            applications.append({
+                'id': doc.id,
+                'reference_id': doc.id[:12].upper(),
+                'applicant_name': full_name,
+                'category': category,
+                'region': region,
+                'municipality': municipality,
+                'status': status,
+                'created_at': created_at
+            })
+        
+        # Fetch all service requests
+        service_requests_ref = db.collection('service_requests')
+        service_docs = service_requests_ref.stream()
+        
+        service_requests = []
+        total_service_requests = 0
+        
+        for doc in service_docs:
+            data = doc.to_dict()
+            total_service_requests += 1
+            
+            # Count by status
+            status = data.get('status', 'pending').lower()
+            status_counts[status] += 1
+            
+            service_requests.append({
+                'id': doc.id,
+                'reference_id': doc.id[:10].upper(),
+                'service_type': data.get('serviceType', 'N/A'),
+                'region': data.get('region', 'N/A'),
+                'municipality': data.get('municipality', 'N/A'),
+                'status': status
+            })
+        
+        # Calculate metrics
+        approved_count = status_counts.get('approved', 0)
+        pending_count = status_counts.get('pending', 0) + status_counts.get('to review', 0) + status_counts.get('review', 0)
+        rejected_count = status_counts.get('rejected', 0)
+        total_count = total_applications + total_service_requests
+        
+        # Calculate collections (placeholder - would need actual payment data)
+        total_collections = total_applications * 1250.0  # Rough estimate
+        
+        # Prepare 6-month trend data
+        import calendar
+        current_date = datetime.now()
+        last_6_months = []
+        trend_data = []
+        
+        for i in range(5, -1, -1):
+            target_month = current_date.month - i
+            target_year = current_date.year
+            
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+            
+            month_key = f"{target_year}-{target_month:02d}"
+            month_label = calendar.month_abbr[target_month]
+            last_6_months.append(month_label)
+            trend_data.append(monthly_trend.get(month_key, 0))
+        
+        # Sort applications by most recent
+        applications.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        return render_template('national/landing-national.html',
+                             applications=applications[:10],  # Top 10 recent
+                             service_requests=service_requests[:10],
+                             total_applications=total_applications,
+                             total_service_requests=total_service_requests,
+                             total_count=total_count,
+                             approved_count=approved_count,
+                             pending_count=pending_count,
+                             rejected_count=rejected_count,
+                             total_collections=total_collections,
+                             trend_labels=last_6_months,
+                             trend_data=trend_data)
+    except Exception as e:
+        print(f"Error in national dashboard: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Return template with empty data on error
+        return render_template('national/landing-national.html',
+                             applications=[],
+                             service_requests=[],
+                             total_applications=0,
+                             total_service_requests=0,
+                             total_count=0,
+                             approved_count=0,
+                             pending_count=0,
+                             rejected_count=0,
+                             total_collections=0,
+                             trend_labels=['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'],
+                             trend_data=[0, 0, 0, 0, 0, 0])
 
 @bp.route('/regional/dashboard')
 def regional_dashboard():
