@@ -182,7 +182,155 @@ def application_national_view():
 
 @bp.route('/permit-national')
 def permit_national_view():
-    return render_template('national/licensing-permit-national.html')
+    try:
+        db = get_firestore_db()
+        
+        # Fetch only APPROVED license/permit applications from Regional (for National view)
+        permits_ref = db.collection('license_applications').where('status', '==', 'approved')
+        docs = permits_ref.stream()
+        
+        permits = []
+        total_count = 0
+        approved_count = 0
+        pending_count = 0
+        expired_count = 0
+        
+        # For chart calculations
+        from collections import defaultdict
+        monthly_trend = defaultdict(int)
+        region_count = defaultdict(int)
+        status_breakdown = defaultdict(int)
+        
+        for doc in docs:
+            data = doc.to_dict()
+            
+            # National only sees approved permits from Regional
+            status = data.get('status', 'pending').lower()
+            
+            # Only include if approved by regional
+            if status == 'approved':
+                total_count += 1
+                
+                # Determine national status
+                national_status = data.get('nationalStatus', 'pending').lower()
+                if national_status == 'approved':
+                    approved_count += 1
+                elif national_status == 'expired':
+                    expired_count += 1
+                else:
+                    pending_count += 1
+                
+                # Count by status for chart
+                status_breakdown[national_status] += 1
+                
+                # Format the permit data
+                created_at = data.get('createdAt')
+                date_obj = None
+                if created_at:
+                    # Handle Firestore timestamp
+                    if isinstance(created_at, str):
+                        try:
+                            date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                            date_filed = date_obj.strftime('%b %d, %Y')
+                        except:
+                            date_filed = created_at
+                    elif hasattr(created_at, 'strftime'):
+                        date_obj = created_at
+                        date_filed = created_at.strftime('%b %d, %Y')
+                    else:
+                        date_filed = 'N/A'
+                else:
+                    date_filed = 'N/A'
+                
+                # Calculate monthly trend for last 6 months
+                if date_obj:
+                    month_key = date_obj.strftime('%Y-%m')
+                    monthly_trend[month_key] += 1
+                
+                # Get form data
+                form_data = data.get('formData', {})
+                
+                # Extract location from form data
+                region = form_data.get('region', 'N/A')
+                
+                # Count by region
+                if region and region != 'N/A':
+                    region_count[region] += 1
+                
+                permits.append({
+                    'id': doc.id,
+                    'date_filed': date_filed,
+                    'status': national_status,
+                    'region': region
+                })
+        
+        # Sort by most recent first
+        permits.sort(key=lambda x: x['date_filed'], reverse=True)
+        
+        # Prepare chart data - last 6 months
+        import calendar
+        current_date = datetime.now()
+        last_6_months = []
+        trend_data = []
+        
+        for i in range(5, -1, -1):
+            # Calculate month and year
+            target_month = current_date.month - i
+            target_year = current_date.year
+            
+            # Handle negative months (previous year)
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+            
+            month_key = f"{target_year}-{target_month:02d}"
+            month_label = calendar.month_abbr[target_month]
+            last_6_months.append(month_label)
+            trend_data.append(monthly_trend.get(month_key, 0))
+        
+        # Top 5 regions by volume
+        top_regions = sorted(region_count.items(), key=lambda x: x[1], reverse=True)[:5]
+        region_labels = [item[0] for item in top_regions] if top_regions else ['N/A']
+        region_counts = [item[1] for item in top_regions] if top_regions else [0]
+        
+        # Status breakdown
+        status_labels = ['Approved', 'Pending', 'Expired']
+        status_data = [
+            status_breakdown.get('approved', 0),
+            status_breakdown.get('pending', 0),
+            status_breakdown.get('expired', 0)
+        ]
+        
+        return render_template('national/licensing-permit-national.html',
+                             permits=permits,
+                             total_count=total_count,
+                             approved_count=approved_count,
+                             pending_count=pending_count,
+                             expired_count=expired_count,
+                             # Chart data
+                             trend_labels=last_6_months,
+                             trend_data=trend_data,
+                             region_labels=region_labels,
+                             region_counts=region_counts,
+                             status_labels=status_labels,
+                             status_data=status_data)
+    except Exception as e:
+        print(f"Error fetching permits: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Return empty data on error
+        return render_template('national/licensing-permit-national.html',
+                             permits=[],
+                             total_count=0,
+                             approved_count=0,
+                             pending_count=0,
+                             expired_count=0,
+                             trend_labels=['S', 'O', 'N', 'D', 'J', 'F'],
+                             trend_data=[0, 0, 0, 0, 0, 0],
+                             region_labels=['N/A'],
+                             region_counts=[0],
+                             status_labels=['Approved', 'Pending', 'Expired'],
+                             status_data=[0, 0, 0])
 
 @bp.route('/service-national')
 def service_national_view():
