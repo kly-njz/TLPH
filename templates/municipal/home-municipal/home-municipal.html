@@ -563,52 +563,129 @@
         els.btnExport.innerHTML = '<span class="material-icons-round text-[18px] animate-spin">download</span> Generating PDF...';
         els.btnExport.disabled = true;
 
-        // Create PDF content
-        const pdfContent = document.createElement('div');
-        pdfContent.style.cssText = 'width: 210mm; padding: 20mm; background: white; font-family: Arial, sans-serif;';
-
         const s = data.applicationStatus;
         const municipalityName = currentAdminMunicipality || 'Municipal';
         const reportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: '2-digit' });
         const reportTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+        // Fetch all users in the municipality
+        const usersRef = collection(db, 'users');
+        const usersSnapshot = await getDocs(usersRef);
+        const municipalityUsers = [];
+        
+        usersSnapshot.forEach(doc => {
+          const userData = doc.data();
+          if (userData.municipality && userData.municipality.toLowerCase() === municipalityName.toLowerCase()) {
+            municipalityUsers.push({ id: doc.id, ...userData });
+          }
+        });
+
+        // Fetch all applications
+        const appRef = collection(db, 'applications');
+        const appSnapshot = await getDocs(appRef);
+        const municipalityApplications = {};
+
+        appSnapshot.forEach(doc => {
+          const appData = doc.data();
+          const userId = appData.userId;
+          
+          // Check if user is in this municipality
+          const user = municipalityUsers.find(u => u.id === userId);
+          if (user) {
+            if (!municipalityApplications[userId]) {
+              municipalityApplications[userId] = [];
+            }
+            municipalityApplications[userId].push({ id: doc.id, ...appData });
+          }
+        });
+
+        // Create comprehensive PDF content
+        const pdfContent = document.createElement('div');
+        pdfContent.style.cssText = 'width: 210mm; padding: 20mm; background: white; font-family: Arial, sans-serif; color: #1e293b;';
+
+        let userDetailsHTML = '';
+        municipalityUsers.forEach((user, idx) => {
+          const userApps = municipalityApplications[user.id] || [];
+          const fullName = (user.firstName || '') + ' ' + (user.lastName || '');
+          const userName = fullName.trim() || user.email || 'Unknown';
+          
+          let userHTML = '<div style="page-break-inside: avoid; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-left: 4px solid #0f172a;">';
+          userHTML += '<h3 style="margin: 0 0 10px 0; color: #0f172a; font-size: 13px; border-bottom: 2px solid #cbd5e1; padding-bottom: 8px;">';
+          userHTML += '👤 USER ' + (idx + 1) + ': ' + userName.toUpperCase();
+          userHTML += '</h3>';
+          userHTML += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; font-size: 10px;">';
+          userHTML += '<div><strong>Email:</strong> ' + (user.email || 'N/A') + '</div>';
+          userHTML += '<div><strong>Phone:</strong> ' + (user.phone || 'N/A') + '</div>';
+          userHTML += '<div><strong>Province:</strong> ' + (user.province || 'N/A') + '</div>';
+          userHTML += '<div><strong>Municipality:</strong> ' + (user.municipality || 'N/A') + '</div>';
+          userHTML += '</div>';
+          
+          if (userApps.length > 0) {
+            userHTML += '<div style="background: white; padding: 10px; border: 1px solid #e2e8f0; margin-top: 10px;">';
+            userHTML += '<p style="margin: 0 0 8px 0; font-weight: bold; font-size: 11px; color: #0f172a;">📋 Applications (' + userApps.length + '):</p>';
+            
+            userApps.forEach(app => {
+              const appDate = app.createdAt?.toDate ? app.createdAt.toDate() : (app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt));
+              const statusColor = app.status === 'approved' ? '#dcfce7' : app.status === 'rejected' ? '#fee2e2' : '#fef3c7';
+              const statusTextColor = app.status === 'approved' ? '#166534' : app.status === 'rejected' ? '#991b1b' : '#92400e';
+              
+              userHTML += '<div style="background: #fff; padding: 8px; margin-bottom: 6px; border-left: 3px solid #0f172a; font-size: 10px;">';
+              userHTML += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">';
+              userHTML += '<strong>' + (app.productName || app.projectName || 'N/A') + '</strong>';
+              userHTML += '<span style="background: ' + statusColor + '; color: ' + statusTextColor + '; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">' + (app.status || 'pending').toUpperCase() + '</span>';
+              userHTML += '</div>';
+              userHTML += '<div style="color: #64748b; margin-bottom: 3px;">Category: ' + (app.category || 'N/A') + ' | Filed: ' + appDate.toLocaleDateString() + '</div>';
+              userHTML += '<div style="color: #64748b;">Investment: ₱ ' + (app.investmentQty ? Number(app.investmentQty).toLocaleString() : 'N/A') + ' | Harvest Qty: ' + (app.harvestQty || 'N/A') + '</div>';
+              userHTML += '</div>';
+            });
+            
+            userHTML += '</div>';
+          } else {
+            userHTML += '<p style="margin: 10px 0 0 0; font-size: 10px; color: #64748b;"><em>No applications submitted</em></p>';
+          }
+          
+          userHTML += '</div>';
+          userDetailsHTML += userHTML;
+        });
+
+
         pdfContent.innerHTML = `
           <style>
-            body { font-family: Arial, sans-serif; color: #1e293b; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #0f172a; padding-bottom: 20px; }
+            body { font-family: Arial, sans-serif; color: #1e293b; line-height: 1.4; }
+            .header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid #0f172a; padding-bottom: 20px; }
             .header-title { font-size: 24px; font-weight: bold; color: #0f172a; margin: 0; }
-            .header-subtitle { font-size: 14px; color: #4b5563; margin: 5px 0 0 0; }
+            .header-subtitle { font-size: 13px; color: #4b5563; margin: 5px 0 0 0; }
             .seal { text-align: center; font-size: 48px; margin-bottom: 10px; }
-            .metadata { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 11px; color: #64748b; }
+            .metadata { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 25px; font-size: 10px; color: #64748b; background: #f8fafc; padding: 12px; border: 1px solid #cbd5e1; }
             .metadata-item { }
-            .section-title { font-size: 14px; font-weight: bold; color: #0f172a; background: #f3f4f6; padding: 10px; margin: 20px 0 10px 0; border-left: 4px solid #0f172a; }
-            .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
-            .kpi-card { background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; text-align: center; }
-            .kpi-label { font-size: 10px; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 8px; }
-            .kpi-value { font-size: 28px; font-weight: bold; color: #0f172a; margin-bottom: 5px; }
-            .kpi-desc { font-size: 10px; color: #64748b; }
-            .table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 11px; }
-            .table th { background: #0f172a; color: white; padding: 10px; text-align: left; font-weight: bold; }
-            .table td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+            .metadata-item strong { display: block; color: #0f172a; margin-bottom: 3px; }
+            .section-title { font-size: 13px; font-weight: bold; color: white; background: #0f172a; padding: 10px; margin: 20px 0 12px 0; border-radius: 3px; }
+            .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+            .kpi-card { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #cbd5e1; padding: 12px; text-align: center; border-radius: 4px; }
+            .kpi-label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 6px; }
+            .kpi-value { font-size: 26px; font-weight: bold; color: #0f172a; margin-bottom: 3px; }
+            .kpi-desc { font-size: 9px; color: #64748b; }
+            .table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10px; }
+            .table th { background: #0f172a; color: white; padding: 8px; text-align: left; font-weight: bold; }
+            .table td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
             .table tr:nth-child(even) { background: #f8fafc; }
-            .table tr:hover { background: #f1f5f9; }
             .metric-name { font-weight: bold; color: #0f172a; }
             .metric-value { text-align: right; font-weight: bold; color: #0f172a; }
-            .status-badge { display: inline-block; padding: 4px 8px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+            .status-badge { display: inline-block; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
             .status-pending { background: #fef3c7; color: #92400e; }
             .status-approved { background: #dcfce7; color: #166534; }
             .status-rejected { background: #fee2e2; color: #991b1b; }
-            .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #cbd5e1; font-size: 10px; color: #64748b; text-align: center; }
-            .chart-section { margin: 20px 0; }
-            .chart-title { font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #0f172a; }
+            .status-review { background: #bfdbfe; color: #1e40af; }
+            .footer { margin-top: 25px; padding-top: 12px; border-top: 1px solid #cbd5e1; font-size: 9px; color: #64748b; text-align: center; }
+            .page-break { page-break-after: always; }
           </style>
 
           <div class="header">
             <div class="seal">🌿</div>
             <p class="header-title">DEPARTMENT OF ENVIRONMENT AND NATURAL RESOURCES</p>
             <p class="header-subtitle">Republic of the Philippines</p>
-            <p class="header-subtitle" style="margin-top: 10px; font-weight: bold;">DENR PORTAL ANALYTICS REPORT</p>
-            <p class="header-subtitle">${municipalityName} Municipal Office</p>
+            <p class="header-subtitle" style="margin-top: 10px; font-weight: bold;">DENR PORTAL COMPREHENSIVE ANALYTICS REPORT</p>
+            <p class="header-subtitle">${municipalityName} Municipal Office - Detailed User & Application Records</p>
           </div>
 
           <div class="metadata">
@@ -619,12 +696,17 @@
               <strong>Municipality:</strong> ${municipalityName}
             </div>
             <div class="metadata-item">
-              <strong>Report Type:</strong> Analytics Summary
+              <strong>Total Users:</strong> ${municipalityUsers.length}
             </div>
           </div>
 
-          <div class="section-title">📊 Key Performance Indicators</div>
+          <div class="section-title">📊 KEY PERFORMANCE INDICATORS</div>
           <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-label">Registered Users</div>
+              <div class="kpi-value">${municipalityUsers.length}</div>
+              <div class="kpi-desc">Active Users</div>
+            </div>
             <div class="kpi-card">
               <div class="kpi-label">Service Requests</div>
               <div class="kpi-value">${data.serviceRequests}</div>
@@ -636,92 +718,60 @@
               <div class="kpi-desc">Total Issued</div>
             </div>
             <div class="kpi-card">
-              <div class="kpi-label">Transactions</div>
-              <div class="kpi-value">${data.permits}</div>
-              <div class="kpi-desc">Total Processed</div>
-            </div>
-            <div class="kpi-card">
               <div class="kpi-label">Applications</div>
               <div class="kpi-value">${s.pending + s.toReview + s.approved + s.rejected}</div>
               <div class="kpi-desc">All Statuses</div>
             </div>
           </div>
 
-          <div class="section-title">📋 Application Status Breakdown</div>
+          <div class="section-title">📋 APPLICATION STATUS SUMMARY</div>
           <table class="table">
             <thead>
               <tr>
-                <th style="width: 40%;">Status Category</th>
-                <th style="width: 40%;">Description</th>
-                <th style="width: 20%; text-align: right;">Count</th>
+                <th style="width: 35%;">Status</th>
+                <th style="width: 50%;">Description</th>
+                <th style="width: 15%; text-align: right;">Count</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td><span class="status-badge status-pending">PENDING</span></td>
-                <td>Applications currently pending review</td>
+                <td>Awaiting initial review</td>
                 <td class="metric-value">${s.pending}</td>
               </tr>
               <tr>
-                <td><span class="status-badge status-pending">TO REVIEW</span></td>
-                <td>Applications waiting for regional review</td>
+                <td><span class="status-badge status-review">TO REVIEW</span></td>
+                <td>Submitted for regional review</td>
                 <td class="metric-value">${s.toReview}</td>
               </tr>
               <tr>
                 <td><span class="status-badge status-approved">APPROVED</span></td>
-                <td>Successfully approved applications</td>
+                <td>Successfully approved and issued</td>
                 <td class="metric-value">${s.approved}</td>
               </tr>
               <tr>
                 <td><span class="status-badge status-rejected">REJECTED</span></td>
-                <td>Rejected applications</td>
+                <td>Application rejected</td>
                 <td class="metric-value">${s.rejected}</td>
               </tr>
-              <tr style="background: #f3f4f6; font-weight: bold;">
+              <tr style="background: #f3f4f6; font-weight: bold; font-size: 11px;">
                 <td colspan="2">TOTAL APPLICATIONS</td>
                 <td class="metric-value">${s.pending + s.toReview + s.approved + s.rejected}</td>
               </tr>
             </tbody>
           </table>
 
-          <div class="section-title">📑 Detailed Metrics Summary</div>
+          <div class="section-title">👥 DETAILED USER & APPLICATION RECORDS</div>
+          ${userDetailsHTML}
+
+          <div class="page-break"></div>
+
+          <div class="section-title">✅ PERFORMANCE METRICS</div>
           <table class="table">
             <thead>
               <tr>
                 <th style="width: 50%;">Metric</th>
-                <th style="width: 50%; text-align: right;">Total Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="metric-name">Service Request Submissions</td>
-                <td class="metric-value">${data.serviceRequests}</td>
-              </tr>
-              <tr>
-                <td class="metric-name">License Applications & Issuances</td>
-                <td class="metric-value">${data.licenses}</td>
-              </tr>
-              <tr>
-                <td class="metric-name">Permit Applications & Issuances</td>
-                <td class="metric-value">${data.permits}</td>
-              </tr>
-              <tr>
-                <td class="metric-name">Processed Transactions</td>
-                <td class="metric-value">${data.permits}</td>
-              </tr>
-              <tr style="background: #f3f4f6; font-weight: bold;">
-                <td class="metric-name">GRAND TOTAL (All Categories)</td>
-                <td class="metric-value">${data.serviceRequests + data.licenses + data.permits}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="section-title">✅ Approval Rate Analysis</div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th style="width: 50%;">Category</th>
-                <th style="width: 50%; text-align: right;">Percentage</th>
+                <th style="width: 50%; text-align: right;">Value</th>
               </tr>
             </thead>
             <tbody>
@@ -737,13 +787,17 @@
                 <td class="metric-name">Pending Rate</td>
                 <td class="metric-value">${(s.pending + s.toReview + s.approved + s.rejected > 0 ? ((s.pending / (s.pending + s.toReview + s.approved + s.rejected)) * 100).toFixed(1) : 0)}%</td>
               </tr>
+              <tr style="background: #f3f4f6; font-weight: bold;">
+                <td class="metric-name">Average Applications per User</td>
+                <td class="metric-value">${municipalityUsers.length > 0 ? ((s.pending + s.toReview + s.approved + s.rejected) / municipalityUsers.length).toFixed(2) : 0}</td>
+              </tr>
             </tbody>
           </table>
 
           <div class="footer">
-            <p>This report is generated by the DENR Portal Analytics System</p>
-            <p>For inquiries, contact the ${municipalityName} Municipal DENR Office</p>
-            <p style="margin-top: 10px; border-top: 1px solid #cbd5e1; padding-top: 10px;">
+            <p><strong>REPORT CERTIFICATION</strong></p>
+            <p>This comprehensive report has been generated by the DENR Portal Analytics System and includes detailed information on all users registered under ${municipalityName} and their applications.</p>
+            <p style="margin-top: 12px; border-top: 1px solid #cbd5e1; padding-top: 10px;">
               Republic of the Philippines &bull; Department of Environment and Natural Resources &bull; 2026
             </p>
           </div>
@@ -753,9 +807,9 @@
         const element = pdfContent;
         const opt = {
           margin: 0,
-          filename: `DENR-Analytics-${municipalityName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`,
+          filename: `DENR-Comprehensive-Report-${municipalityName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
           jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
         };
 
@@ -765,7 +819,7 @@
         els.btnExport.innerHTML = originalHTML;
         els.btnExport.disabled = false;
 
-        console.log('✅ PDF exported successfully');
+        console.log('✅ Comprehensive PDF exported successfully');
       } catch (error) {
         console.error('Export error:', error);
         els.btnExport.innerHTML = originalHTML;
