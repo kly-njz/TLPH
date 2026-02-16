@@ -19,6 +19,12 @@ def application_national_view():
         pending_count = 0
         rejected_count = 0
         
+        # For chart calculations
+        from collections import defaultdict
+        monthly_trend = defaultdict(int)
+        region_count = defaultdict(int)
+        status_breakdown = defaultdict(int)
+        
         for doc in docs:
             data = doc.to_dict()
             
@@ -35,14 +41,27 @@ def application_national_view():
                 
                 # Format the application data
                 created_at = data.get('createdAt')
+                date_obj = None
                 if created_at:
                     # Handle Firestore timestamp
-                    if hasattr(created_at, 'strftime'):
+                    if isinstance(created_at, str):
+                        try:
+                            date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                            date_filed = date_obj.strftime('%b %d, %Y')
+                        except:
+                            date_filed = created_at
+                    elif hasattr(created_at, 'strftime'):
+                        date_obj = created_at
                         date_filed = created_at.strftime('%b %d, %Y')
                     else:
                         date_filed = 'N/A'
                 else:
                     date_filed = 'N/A'
+                
+                # Calculate monthly trend for last 6 months
+                if date_obj:
+                    month_key = date_obj.strftime('%Y-%m')
+                    monthly_trend[month_key] += 1
                 
                 # Get form data
                 form_data = data.get('formData', {})
@@ -55,6 +74,10 @@ def application_national_view():
                 municipality = form_data.get('municipality', 'N/A')
                 location = f"{region} / {municipality}"
                 
+                # Count by region
+                if region and region != 'N/A':
+                    region_count[region] += 1
+                
                 # Map applicationType to category
                 app_type = data.get('applicationType', 'N/A')
                 category_map = {
@@ -66,6 +89,10 @@ def application_national_view():
                     'environment': 'ENVIRONMENTAL'
                 }
                 category = category_map.get(app_type.lower(), app_type.upper())
+                
+                # Count by status (for breakdown)
+                national_status = data.get('nationalStatus', 'pending').lower()
+                status_breakdown[national_status] += 1
                 
                 # Get approval details
                 approved_by_regional = data.get('approvedByRegional', 'N/A')
@@ -87,21 +114,71 @@ def application_national_view():
         # Sort by most recent first
         applications.sort(key=lambda x: x['date_filed'], reverse=True)
         
+        # Prepare chart data - last 6 months
+        import calendar
+        current_date = datetime.now()
+        last_6_months = []
+        trend_data = []
+        
+        for i in range(5, -1, -1):
+            # Calculate month and year
+            target_month = current_date.month - i
+            target_year = current_date.year
+            
+            # Handle negative months (previous year)
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+            
+            month_key = f"{target_year}-{target_month:02d}"
+            month_label = calendar.month_abbr[target_month]
+            last_6_months.append(month_label)
+            trend_data.append(monthly_trend.get(month_key, 0))
+        
+        # Top 5 regions by volume
+        top_regions = sorted(region_count.items(), key=lambda x: x[1], reverse=True)[:5]
+        region_labels = [item[0] for item in top_regions] if top_regions else ['N/A']
+        region_counts = [item[1] for item in top_regions] if top_regions else [0]
+        
+        # Status breakdown
+        status_labels = ['Approved', 'Pending', 'Review', 'Rejected']
+        status_data = [
+            status_breakdown.get('approved', 0),
+            status_breakdown.get('pending', 0),
+            status_breakdown.get('review', 0),
+            status_breakdown.get('rejected', 0)
+        ]
+        
         return render_template('national/applications-national.html',
                              applications=applications,
                              total_count=total_count,
                              approved_count=approved_count,
                              pending_count=pending_count,
-                             rejected_count=rejected_count)
+                             rejected_count=rejected_count,
+                             # Chart data
+                             trend_labels=last_6_months,
+                             trend_data=trend_data,
+                             region_labels=region_labels,
+                             region_counts=region_counts,
+                             status_labels=status_labels,
+                             status_data=status_data)
     except Exception as e:
         print(f"Error fetching applications: {str(e)}")
+        import traceback
+        traceback.print_exc()
         # Return empty data on error
         return render_template('national/applications-national.html',
                              applications=[],
                              total_count=0,
                              approved_count=0,
                              pending_count=0,
-                             rejected_count=0)
+                             rejected_count=0,
+                             trend_labels=['S', 'O', 'N', 'D', 'J', 'F'],
+                             trend_data=[0, 0, 0, 0, 0, 0],
+                             region_labels=['N/A'],
+                             region_counts=[0],
+                             status_labels=['Approved', 'Pending', 'Review', 'Rejected'],
+                             status_data=[0, 0, 0, 0])
 
 @bp.route('/permit-national')
 def permit_national_view():
