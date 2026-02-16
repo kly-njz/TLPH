@@ -1222,6 +1222,74 @@
           console.error('Error loading from Firebase applications:', fbError);
         }
 
+        // Load from license_applications collection
+        try {
+          console.log('Loading licenses/permits from license_applications for user:', user.uid);
+          const licensesQuery = query(
+            collection(db, 'license_applications'),
+            where('userId', '==', user.uid)
+          );
+          const licensesSnapshot = await getDocs(licensesQuery);
+          
+          console.log('License applications found:', licensesSnapshot.size);
+
+          licensesSnapshot.forEach((doc) => {
+            const license = doc.data();
+            const applicationType = license.applicationType || 'License/Permit';
+            const status = license.status || 'pending';
+            console.log(`License: ${applicationType} | Status: ${status}`);
+            
+            const date = license.createdAt ? new Date(license.createdAt.toDate()).toLocaleDateString('en-PH', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            }) : 'N/A';
+            
+            const statusInfo = getStatusInfo(status);
+            const permitName = applicationType.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            
+            applications.push({
+              date: license.createdAt || new Date(),
+              html: `
+                <div class="bg-white border border-gray-200 rounded-lg p-4 sm:p-5 hover:border-green-500 transition-all">
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 pb-3 border-b border-gray-100">
+                    <div class="flex items-center gap-2">
+                      <span class="status-badge ${statusInfo.bgClass} ${statusInfo.textClass} text-xs font-bold px-2.5 py-1 rounded">🪪 ${permitName}</span>
+                      <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">${date}</span>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <div>
+                      <p class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-0.5">Permit Type</p>
+                      <p class="text-sm font-bold text-gray-800">${permitName}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 sm:gap-4">
+                      <div>
+                        <p class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-0.5">Application Date</p>
+                        <p class="text-sm font-bold text-gray-700">${date}</p>
+                      </div>
+                      <div>
+                        <p class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-0.5">Status</p>
+                        <p class="text-xs font-bold ${statusInfo.textClass}">${statusInfo.label}</p>
+                      </div>
+                      <div>
+                        <p class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-0.5">ID</p>
+                        <p class="text-xs font-semibold text-gray-700">${doc.id.substring(0, 8)}</p>
+                      </div>
+                      <div>
+                        <p class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-0.5">Type</p>
+                        <p class="text-xs font-semibold text-gray-700">License/Permit</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              `
+            });
+          });
+        } catch (licenseError) {
+          console.error('Error loading from license_applications:', licenseError);
+        }
+
         // Also load from payment transactions API
         try {
           let userEmail = null;
@@ -1404,8 +1472,19 @@
           }) : 'N/A';
           
           const serviceType = service.serviceType || 'Service Request';
-          const status = (service.status || 'Unknown').toUpperCase();
+          const status = (service.status || 'Unknown').toLowerCase();
+          const statusDisplay = (service.status || 'Unknown').toUpperCase();
           const description = service.description || 'No description provided';
+          
+          // Status badge styling based on actual status
+          let statusBadgeClass = 'bg-yellow-50 text-yellow-700'; // default pending
+          if (status === 'approved') {
+            statusBadgeClass = 'bg-green-50 text-green-700';
+          } else if (status === 'rejected') {
+            statusBadgeClass = 'bg-red-50 text-red-700';
+          } else if (status === 'submitted') {
+            statusBadgeClass = 'bg-blue-50 text-blue-700';
+          }
 
           return {
             date: service.createdAt || new Date(),
@@ -1413,10 +1492,10 @@
               <div class="bg-white border border-gray-200 rounded-lg p-4 sm:p-5 hover:border-green-500 transition-all">
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 pb-3 border-b border-gray-100">
                   <div class="flex items-center gap-2">
-                    <span class="status-badge bg-gray-200 text-gray-700 text-xs font-bold px-2.5 py-1 rounded">${serviceType}</span>
+                    <span class="status-badge bg-gray-200 text-gray-700 text-xs font-bold px-2.5 py-1 rounded">📋 ${serviceType}</span>
                     <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">${date}</span>
                   </div>
-                  <span class="text-[10px] font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded">${status}</span>
+                  <span class="text-[10px] font-bold ${statusBadgeClass} px-2.5 py-1 rounded">${statusDisplay}</span>
                 </div>
                 <div class="space-y-2">
                   <div>
@@ -1430,7 +1509,7 @@
                     </div>
                     <div>
                       <p class="text-gray-500 font-bold uppercase tracking-widest mb-0.5">Status</p>
-                      <p class="font-bold text-green-700">${status}</p>
+                      <p class="font-bold ${statusBadgeClass === 'bg-green-50 text-green-700' ? 'text-green-700' : statusBadgeClass === 'bg-red-50 text-red-700' ? 'text-red-700' : statusBadgeClass === 'bg-blue-50 text-blue-700' ? 'text-blue-700' : 'text-yellow-700'}">${statusDisplay}</p>
                     </div>
                   </div>
                 </div>

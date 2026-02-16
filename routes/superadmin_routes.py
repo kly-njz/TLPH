@@ -41,3 +41,61 @@ def superadmin_profile():
 @bp.route('/superadmin-notification')
 def superadmin_notification():
     return render_template('super-admin/superadmin-notification.html')
+
+# --- Added stubs for additional superadmin UI pages requested by product owner ---
+@bp.route('/regions')
+def regions_list_view():
+    return render_template('super-admin/regions/regions-list.html')
+
+
+@bp.route('/regions/<region_id>')
+def regions_detail_view(region_id):
+    return render_template('super-admin/regions/region-detail.html', region_id=region_id)
+
+@bp.route('/user-groups')
+def user_groups_view():
+    return render_template('super-admin/user-groups/user-groups.html')
+
+@bp.route('/products-national')
+def products_national_view():
+    return render_template('super-admin/products/products-national.html')
+
+@bp.route('/purchases')
+def purchases_view():
+    return render_template('super-admin/products/purchases-supplier.html')
+
+@bp.route('/sales')
+def sales_view():
+    return render_template('super-admin/products/sales-list.html')
+
+@bp.route('/sales-return')
+def sales_return_view():
+    return render_template('super-admin/products/sales-return.html')
+
+@bp.route('/distributed-products')
+def distributed_products_view():
+    return render_template('super-admin/products/distributed-products.html')
+
+@bp.route('/damage-products')
+def damage_products_view():
+    return render_template('super-admin/products/damage-products.html')
+
+@bp.route('/transfer-products')
+def transfer_products_view():
+    return render_template('super-admin/products/transfer-products.html')
+
+@bp.route('/quotation')
+def quotation_view():
+    return render_template('super-admin/finance/quotation.html')
+
+@bp.route('/projects')
+def projects_view():
+    return render_template('super-admin/projects/projects-region.html')
+
+@bp.route('/tasks')
+def tasks_view():
+    return render_template('super-admin/projects/tasks-region.html')
+
+@bp.route('/applicants')
+def applicants_view():
+    return render_template('super-admin/applicants/applicants.html')

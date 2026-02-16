@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Damaged Products — Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+    
+    {% include 'super-admin/header-superadmin.html' %}
+    {% include 'super-admin/sidenav-superadmin.html' %}
+    
+    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+        
+        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
+            <div class="flex items-center gap-4">
+                <div class="bg-red-700 p-2.5 rounded-sm hidden sm:block">
+                    <span class="material-icons-round text-white text-xl">report_problem</span>
+                </div>
+                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">Damaged Asset Registry</h1>
+                    <p class="text-[10px] font-bold text-red-600 uppercase tracking-widest mt-1">Loss Management & Quality Control</p>
+                </div>
+            </div>
+            <div class="flex gap-2 no-print">
+                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm" onclick="window.print()">
+                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export Audit</span>
+                </button>
+                <button onclick="openDamageDrawer()" class="bg-red-700 text-white px-4 py-1.5 text-[10px] font-black uppercase hover:bg-red-800 transition rounded-sm shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-plus text-[10px]"></i> Report Damage
+                </button>
+            </div>
+        </header>
+      
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 shrink-0">
+            <div class="bg-white border border-slate-200 border-l-4 border-l-red-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Damaged</p>
+                <h3 id="statTotal" class="text-xl font-black text-slate-900 leading-none mt-1">2,847</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-orange-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Estimated Loss</p>
+                <h3 id="statLoss" class="text-xl font-black text-orange-600 leading-none mt-1">₱1.2M</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-yellow-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Pending Review</p>
+                <h3 id="statPending" class="text-xl font-black text-yellow-600 leading-none mt-1">342</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-green-700 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Resolved Cases</p>
+                <h3 id="statResolved" class="text-xl font-black text-green-700 leading-none mt-1">2,505</h3>
+            </div>
+        </div>
+      
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 shrink-0">
+            <section onclick="openChartModal('trend')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-red-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">7-Day Damage Trend</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full mt-2">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="damageChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section onclick="openChartModal('status')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-red-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Resolution Distribution</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full flex justify-center mt-2 group-hover:scale-[1.02] transition-transform duration-300">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="statusDmgChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="flex-1 min-h-0 flex flex-col bg-white rounded-sm border border-slate-200 shadow-sm relative">
+            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex flex-col sm:flex-row justify-between sm:items-center gap-3 shrink-0 relative z-20">
+                <div class="flex-1 flex items-center gap-2 max-w-2xl">
+                    <div class="relative flex-1">
+                        <span class="material-icons-round absolute left-2.5 top-1.5 text-slate-400 text-[14px]">search</span>
+                        <input id="dmgSearch" type="text" placeholder="Search ref #, product, or reporter..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 outline-none focus:border-red-700 focus:ring-1 focus:ring-red-700 rounded-sm transition bg-white text-slate-800">
+                    </div>
+                    <select id="dmgStatusFilter" class="px-3 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-red-700 rounded-sm text-slate-700 w-32">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                </div>
+                <input type="date" id="dmgDateFilter" class="px-3 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-red-700 rounded-sm text-slate-700">
+            </div>
+            
+            <div class="flex-1 overflow-auto custom-scrollbar z-10">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Ref Number</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Affected Product</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Quantity</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Reported By</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Status</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Entry Date</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dmgTable" class="text-xs">
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-300" onclick="closeDamageDrawer()"></div>
+    <div id="dmgDrawer" class="fixed inset-y-0 right-0 z-[100] w-full max-w-md bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-300">
+        <div class="bg-red-800 px-5 py-4 flex justify-between items-center text-white shrink-0">
+            <h2 class="text-sm font-black uppercase tracking-widest leading-none">Report Asset Damage</h2>
+            <button onclick="closeDamageDrawer()" class="text-red-200 hover:text-white transition-colors bg-red-900 p-1 rounded-sm"><span class="material-icons-round text-sm">close</span></button>
+        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-slate-50">
+            <form id="newDmgForm" class="space-y-4 bg-white border border-slate-200 p-5 rounded-sm shadow-sm">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Product Description</label>
+                    <input type="text" id="newProd" placeholder="Affected item name" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Quantity</label>
+                        <input type="number" id="newQty" placeholder="0" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Reported By</label>
+                        <input type="text" id="newReporter" placeholder="Region / Office" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Incident Date</label>
+                    <input type="date" id="newDate" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                </div>
+                <button type="submit" class="w-full bg-red-700 text-white py-2.5 text-[10px] font-black uppercase hover:bg-red-800 transition rounded-sm shadow-sm mt-4">File Official Report</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="chartModal" class="hidden fixed inset-0 z-[110] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="modalBody" class="bg-white rounded-sm shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden">
+            <div class="flex justify-between items-center border-b border-slate-200 px-5 py-3 bg-slate-50">
+                <h3 id="modalTitle" class="text-[11px] font-black uppercase tracking-widest text-slate-800">Detail View</h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-red-600 transition-colors"><span class="material-icons-round">close</span></button>
+            </div>
+            <div class="p-8 h-[450px] relative"><canvas id="modalCanvas"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        // 1. DATA
+        let damageData = [
+            {ref:'DMG-26-001', product:'High-Yield Seedlings', qty:150, reporter:'Region VII', status:'resolved', date:'2026-02-08'},
+            {ref:'DMG-26-002', product:'Soil Analysis Kits', qty:12, reporter:'Region IV-B', status:'pending', date:'2026-02-12'},
+            {ref:'DMG-26-003', product:'Solar Panel Units', qty:2, reporter:'BARMM', status:'pending', date:'2026-02-14'}
+        ];
+
+        // 2. LIVE SEARCH & FILTER
+        function filterDamages() {
+            const query = document.getElementById('dmgSearch').value.toLowerCase();
+            const status = document.getElementById('dmgStatusFilter').value;
+
+            const filtered = damageData.filter(d => {
+                const matchSearch = d.ref.toLowerCase().includes(query) || d.product.toLowerCase().includes(query) || d.reporter.toLowerCase().includes(query);
+                const matchStatus = !status || d.status === status;
+                return matchSearch && matchStatus;
+            });
+
+            renderTable(filtered);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('dmgTable');
+            tbody.innerHTML = data.length ? data.map(d => `
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                    <td class="py-2.5 px-4 font-mono font-bold text-slate-700">${d.ref}</td>
+                    <td class="py-2.5 px-4 font-black text-slate-900">${d.product}</td>
+                    <td class="py-2.5 px-4 font-mono text-red-600 font-bold">${d.qty}</td>
+                    <td class="py-2.5 px-4"><span class="px-2 py-0.5 border border-blue-200 bg-blue-50 text-blue-700 text-[9px] font-black rounded-sm">${d.reporter}</span></td>
+                    <td class="py-2.5 px-4">
+                        <span class="px-2 py-0.5 border rounded-sm font-black text-[9px] uppercase tracking-widest ${getStatusColor(d.status)}">
+                            ${d.status}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-4 text-slate-500 font-bold uppercase text-[10px]">${d.date}</td>
+                    <td class="py-2.5 px-4"><button class="text-red-700 font-bold hover:underline">Review</button></td>
+                </tr>
+            `).join('') : '<tr><td colspan="7" class="py-10 text-center text-slate-400 font-bold">No reports found.</td></tr>';
+        }
+
+        function getStatusColor(s) {
+            if(s === 'resolved') return 'bg-green-50 text-green-700 border-green-200';
+            if(s === 'pending') return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+            return 'bg-red-50 text-red-700 border-red-200';
+        }
+
+        // 3. UI CONTROLS
+        document.getElementById('dmgSearch').addEventListener('input', filterDamages);
+        document.getElementById('dmgStatusFilter').addEventListener('change', filterDamages);
+
+        function openDamageDrawer() {
+            document.getElementById('drawerOverlay').classList.remove('hidden');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('opacity-100'), 10);
+            document.getElementById('dmgDrawer').classList.remove('translate-x-full');
+        }
+
+        function closeDamageDrawer() {
+            document.getElementById('dmgDrawer').classList.add('translate-x-full');
+            document.getElementById('drawerOverlay').classList.remove('opacity-100');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('hidden'), 300);
+        }
+
+        document.getElementById('newDmgForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const ref = 'DMG-26-' + (damageData.length + 1).toString().padStart(3, '0');
+            damageData.unshift({
+                ref: ref,
+                product: document.getElementById('newProd').value,
+                qty: parseInt(document.getElementById('newQty').value),
+                reporter: document.getElementById('newReporter').value,
+                status: 'pending',
+                date: document.getElementById('newDate').value
+            });
+            filterDamages();
+            closeDamageDrawer();
+            document.getElementById('newDmgForm').reset();
+        });
+
+        // 4. CHARTS
+        let modalChart;
+        const trendData = { labels:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], datasets:[{label:'Damaged Units', data:[120, 150, 145, 200, 175, 190, 165], borderColor:'#dc2626', backgroundColor:'rgba(220, 38, 38, 0.1)', fill:true, tension:0.4}]};
+        const statusData = { labels:['Resolved','Pending','Rejected'], datasets:[{data:[2505, 342, 5], backgroundColor:['#047857','#fbbf24','#dc2626']}]};
+
+        window.onload = () => {
+            filterDamages();
+            new Chart(document.getElementById('damageChart').getContext('2d'), { type:'line', data:trendData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{ticks:{display:false}, grid:{display:false}}, x:{grid:{display:false}, ticks:{font:{size:9}}}}} });
+            new Chart(document.getElementById('statusDmgChart').getContext('2d'), { type:'doughnut', data:statusData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right', labels:{boxWidth:10, font:{size:9}}}}, cutout:'75%'} });
+        };
+
+        function openChartModal(type) {
+            const m = document.getElementById('chartModal');
+            const b = document.getElementById('modalBody');
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.add('opacity-100'); b.classList.replace('scale-95', 'scale-100'); }, 10);
+            if (modalChart) modalChart.destroy();
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            if(type === 'trend') {
+                document.getElementById('modalTitle').innerText = '7-Day Damage Incident Trend';
+                modalChart = new Chart(ctx, { type:'line', data:trendData, options:{responsive:true, maintainAspectRatio:false}});
+            } else {
+                document.getElementById('modalTitle').innerText = 'Resolution Status Breakdown';
+                modalChart = new Chart(ctx, { type:'doughnut', data:statusData, options:{responsive:true, maintainAspectRatio:false}});
+            }
+        }
+
+        function closeChartModal() {
+            const m = document.getElementById('chartModal');
+            const b = document.getElementById('modalBody');
+            m.classList.remove('opacity-100');
+            b.classList.replace('scale-100', 'scale-95');
+            setTimeout(() => m.classList.add('hidden'), 300);
+        }
+    </script>
+</body>
+</html>

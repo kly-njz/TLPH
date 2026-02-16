@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>National Products — Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+    
+    {% include 'super-admin/header-superadmin.html' %}
+    {% include 'super-admin/sidenav-superadmin.html' %}
+    
+    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+        
+        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
+            <div class="flex items-center gap-4">
+                <div class="bg-slate-800 p-2.5 rounded-sm hidden sm:block">
+                    <span class="material-icons-round text-white text-xl">inventory_2</span>
+                </div>
+                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">National Product Registry</h1>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Central Procurement & Asset Management</p>
+                </div>
+            </div>
+            <div class="flex gap-2 no-print">
+                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm" onclick="window.print()">
+                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export CSV</span>
+                </button>
+                <button onclick="openRegisterDrawer()" class="bg-green-800 text-white px-4 py-1.5 text-[10px] font-bold uppercase hover:bg-green-900 transition rounded-sm shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-add text-[10px]"></i> New Product
+                </button>
+            </div>
+        </header>
+      
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 shrink-0">
+            <div class="bg-white border border-slate-200 border-l-4 border-l-slate-800 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Catalog</p>
+                <h3 id="statTotal" class="text-xl font-black text-slate-900 leading-none mt-1">0</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-green-700 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Units in Stock</p>
+                <h3 id="statStock" class="text-xl font-black text-green-700 leading-none mt-1">0</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-blue-700 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">High Volume Items</p>
+                <h3 id="statHighVol" class="text-xl font-black text-blue-700 leading-none mt-1">0</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-orange-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Reorder Alerts</p>
+                <h3 id="statAlerts" class="text-xl font-black text-orange-600 leading-none mt-1">0</h3>
+            </div>
+        </div>
+      
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-3 mb-3 shrink-0">
+            <div class="bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[160px]">
+                <h3 class="text-[10px] font-black uppercase tracking-widest mb-2 text-slate-700 border-b border-slate-100 pb-1">Top Products by Volume</h3>
+                <div class="flex-1 overflow-auto custom-scrollbar">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 sticky top-0 border-b border-slate-200">
+                            <tr>
+                                <th class="py-1 px-3 font-black text-slate-500 uppercase text-[8px]">Product</th>
+                                <th class="py-1 px-3 font-black text-slate-500 uppercase text-[8px] text-right">Quantity</th>
+                                <th class="py-1 px-3 font-black text-slate-500 uppercase text-[8px]">Region</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topProductsBody">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <section onclick="openChartModal()" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[160px] cursor-pointer hover:border-green-600 hover:shadow-md transition-all relative">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Distribution counts by Region</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full mt-2">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="productsChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="flex-1 min-h-0 flex flex-col bg-white rounded-sm border border-slate-200 shadow-sm relative">
+            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex justify-between items-center gap-3 shrink-0 relative z-20">
+                <div class="relative flex-1 max-w-sm">
+                    <span class="material-icons-round absolute left-2.5 top-1.5 text-slate-400 text-[14px]">search</span>
+                    <input id="productSearch" type="text" placeholder="Search SKU, item name, or category..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700 rounded-sm transition bg-white text-slate-800">
+                </div>
+                <div class="flex items-center gap-2">
+                    <select id="categoryFilter" class="px-3 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-green-700 rounded-sm text-slate-700">
+                        <option value="">All Categories</option>
+                        <option value="Reforestation">Reforestation</option>
+                        <option value="Equipment">Equipment</option>
+                        <option value="Supplies">Supplies</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto custom-scrollbar z-10">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Product SKU</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Item Name</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Category</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600 text-right">Available</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Status</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productTable" class="text-xs">
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-300" onclick="closeRegisterDrawer()"></div>
+    
+    <div id="registerDrawer" class="fixed inset-y-0 right-0 z-[100] w-full max-w-md bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-300">
+        <div class="bg-slate-900 px-5 py-4 flex justify-between items-center text-white shrink-0">
+            <div class="flex items-center gap-3">
+                <span class="material-icons-round text-green-500 text-[20px]">add_box</span>
+                <h2 class="text-sm font-black uppercase tracking-widest leading-none">Register New Product</h2>
+            </div>
+            <button onclick="closeRegisterDrawer()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-red-600 rounded-sm p-1.5 flex items-center justify-center">
+                <span class="material-icons-round text-[16px]">close</span>
+            </button>
+        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-slate-50">
+            <form id="newProductForm" class="space-y-4 bg-white border border-slate-200 p-5 rounded-sm shadow-sm">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Product SKU</label>
+                    <input type="text" id="newSku" placeholder="e.g. SKU-123" class="w-full px-3 py-2 text-xs border border-slate-300 outline-none focus:border-green-700 rounded-sm" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Item Name</label>
+                    <input type="text" id="newName" placeholder="Item full name" class="w-full px-3 py-2 text-xs border border-slate-300 outline-none focus:border-green-700 rounded-sm" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Category</label>
+                    <select id="newCat" class="w-full px-3 py-2 text-xs border border-slate-300 outline-none focus:border-green-700 rounded-sm" required>
+                        <option value="Reforestation">Reforestation</option>
+                        <option value="Equipment">Equipment</option>
+                        <option value="Supplies">Supplies</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Initial Stock</label>
+                    <input type="number" id="newStock" placeholder="0" class="w-full px-3 py-2 text-xs border border-slate-300 outline-none focus:border-green-700 rounded-sm" required>
+                </div>
+                <button type="submit" class="w-full bg-green-800 text-white py-2 text-[10px] font-black uppercase hover:bg-green-900 transition rounded-sm shadow-sm mt-4">Save to Registry</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="chartModal" class="hidden fixed inset-0 z-[110] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="modalBody" class="bg-white rounded-sm shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden">
+            <div class="flex justify-between items-center border-b border-slate-200 px-5 py-3 bg-slate-50">
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-800">Regional Distribution - Expanded</h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-red-600"><span class="material-icons-round text-[20px]">close</span></button>
+            </div>
+            <div class="p-8 h-[450px] relative"><canvas id="modalCanvas"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        // 1. DATA REPOSITORY
+        let productRegistry = [
+            {sku: 'SKU-NRR-001', name: 'Narra High-Yield Seedlings', cat: 'Reforestation', stock: 12500, status: 'In Stock'},
+            {sku: 'SKU-MNG-042', name: 'Mangrove Propagules', cat: 'Reforestation', stock: 2400, status: 'Low Stock'},
+            {sku: 'SKU-SLK-009', name: 'Soil Analysis Kits', cat: 'Equipment', stock: 800, status: 'Low Stock'},
+            {sku: 'SKU-DRN-102', name: 'Surveying Drone Unit', cat: 'Equipment', stock: 12, status: 'In Stock'},
+            {sku: 'SKU-PPE-552', name: 'Field Operations Gear', cat: 'Supplies', stock: 450, status: 'In Stock'}
+        ];
+
+        // 2. LIVE SEARCH & RENDERING LOGIC
+        function filterProducts() {
+            const query = document.getElementById('productSearch').value.toLowerCase();
+            const category = document.getElementById('categoryFilter').value;
+
+            const filtered = productRegistry.filter(p => {
+                const matchSearch = p.sku.toLowerCase().includes(query) || p.name.toLowerCase().includes(query);
+                const matchCat = !category || p.cat === category;
+                return matchSearch && matchCat;
+            });
+
+            renderTable(filtered);
+            updateStats(filtered);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('productTable');
+            tbody.innerHTML = data.length ? data.map(p => `
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                    <td class="py-2.5 px-4 font-mono font-bold text-slate-700">${p.sku}</td>
+                    <td class="py-2.5 px-4 font-black text-slate-900">${p.name}</td>
+                    <td class="py-2.5 px-4 text-slate-500 text-[10px] font-bold">${p.cat}</td>
+                    <td class="py-2.5 px-4 text-right font-mono font-bold">${p.stock.toLocaleString()}</td>
+                    <td class="py-2.5 px-4">
+                        <span class="${p.status === 'Low Stock' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-green-50 text-green-700 border-green-200'} border px-2 py-0.5 rounded-sm font-black text-[9px] uppercase tracking-widest">
+                            ${p.status}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-4"><button class="text-green-700 font-bold hover:underline">Manage</button></td>
+                </tr>
+            `).join('') : '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold">No products match your criteria.</td></tr>';
+        }
+
+        function updateStats(data) {
+            document.getElementById('statTotal').innerText = data.length;
+            const totalStock = data.reduce((sum, p) => sum + p.stock, 0);
+            document.getElementById('statStock').innerText = totalStock.toLocaleString();
+            document.getElementById('statHighVol').innerText = data.filter(p => p.stock > 1000).length;
+            document.getElementById('statAlerts').innerText = data.filter(p => p.status === 'Low Stock').length;
+
+            // Update Top Products mini-table
+            const sorted = [...data].sort((a,b) => b.stock - a.stock).slice(0, 3);
+            document.getElementById('topProductsBody').innerHTML = sorted.map(p => `
+                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                    <td class="py-1.5 px-3 font-bold text-[10px]">${p.name}</td>
+                    <td class="py-1.5 px-3 text-right font-mono font-bold">${p.stock.toLocaleString()}</td>
+                    <td class="py-1.5 px-3"><span class="px-2 py-0.5 border border-blue-200 bg-blue-50 text-blue-700 text-[8px] font-black rounded-sm">HQ</span></td>
+                </tr>
+            `).join('');
+        }
+
+        // 3. UI CONTROLS
+        document.getElementById('productSearch').addEventListener('input', filterProducts);
+        document.getElementById('categoryFilter').addEventListener('change', filterProducts);
+
+        function openRegisterDrawer() {
+            const overlay = document.getElementById('drawerOverlay');
+            overlay.classList.remove('hidden');
+            setTimeout(() => overlay.classList.add('opacity-100'), 10);
+            document.getElementById('registerDrawer').classList.remove('translate-x-full');
+        }
+
+        function closeRegisterDrawer() {
+            document.getElementById('registerDrawer').classList.add('translate-x-full');
+            document.getElementById('drawerOverlay').classList.remove('opacity-100');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('hidden'), 300);
+        }
+
+        document.getElementById('newProductForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const stock = parseInt(document.getElementById('newStock').value);
+            productRegistry.unshift({
+                sku: document.getElementById('newSku').value,
+                name: document.getElementById('newName').value,
+                cat: document.getElementById('newCat').value,
+                stock: stock,
+                status: stock < 100 ? 'Low Stock' : 'In Stock'
+            });
+            filterProducts();
+            closeRegisterDrawer();
+            document.getElementById('newProductForm').reset();
+        });
+
+        // 4. CHARTS
+        const chartData = {
+            labels: ['IV-B','VII','IV-A','III', 'VI', 'CAR'],
+            datasets: [{
+                label: 'Units', data: [5000, 2400, 1800, 1200, 900, 600],
+                backgroundColor: ['#047857', '#334155', '#475569', '#64748b', '#94a3b8', '#1e293b'], borderRadius: 2
+            }]
+        };
+
+        let mainChart, modalChart;
+        window.onload = () => {
+            filterProducts();
+            mainChart = new Chart(document.getElementById('productsChart').getContext('2d'), {
+                type: 'bar', data: chartData,
+                options: { 
+                    responsive: true, maintainAspectRatio: false, devicePixelRatio: 2,
+                    plugins: { legend: {display: false}, tooltip: {enabled: false} },
+                    scales: { y: {beginAtZero: true, grid: {color: '#f1f5f9'}, ticks: {font: {size: 8}}}, x: {grid: {display: false}, ticks: {font: {size: 8, weight: 'bold'}}} }
+                }
+            });
+        };
+
+        function openChartModal() {
+            const m = document.getElementById('chartModal');
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.add('opacity-100'); document.getElementById('modalBody').classList.replace('scale-95', 'scale-100'); }, 10);
+            if (modalChart) modalChart.destroy();
+            modalChart = new Chart(document.getElementById('modalCanvas').getContext('2d'), {
+                type: 'bar', data: chartData, options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: 2 }
+            });
+        }
+
+        function closeChartModal() {
+            const m = document.getElementById('chartModal');
+            m.classList.remove('opacity-100');
+            document.getElementById('modalBody').classList.replace('scale-100', 'scale-95');
+            setTimeout(() => m.classList.add('hidden'), 300);
+        }
+    </script>
+</body>
+</html>

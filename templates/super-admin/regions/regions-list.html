@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Regions Registry — Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Modal Transition Utilities */
+        .modal-enter { opacity: 0; transform: scale(0.95); }
+        .modal-enter-active { opacity: 1; transform: scale(1); transition: opacity 300ms, transform 300ms cubic-bezier(0.4, 0, 0.2, 1); }
+        .modal-exit { opacity: 1; transform: scale(1); }
+        .modal-exit-active { opacity: 0; transform: scale(0.95); transition: opacity 200ms, transform 200ms ease-in; }
+    </style>
+</head>
+<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+    
+    {% include 'super-admin/header-superadmin.html' %}
+    {% include 'super-admin/sidenav-superadmin.html' %}
+    
+    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+        
+        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
+            <div class="flex items-center gap-4">
+                <div class="bg-slate-800 p-2.5 rounded-sm hidden sm:block">
+                    <span class="material-icons-round text-white text-xl">corporate_fare</span>
+                </div>
+                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">Regional Administration</h1>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Registry & Coverage Areas</p>
+                </div>
+            </div>
+            <div class="flex gap-2 no-print">
+                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm" onclick="window.print()">
+                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export CSV</span>
+                </button>
+                <button onclick="openRegisterDrawer()" class="bg-green-800 text-white px-4 py-1.5 text-[10px] font-black uppercase hover:bg-green-900 transition rounded-sm shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-add text-[10px]"></i> Register Region
+                </button>
+            </div>
+        </header>
+      
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 shrink-0">
+            <div class="bg-white border border-slate-200 border-l-4 border-l-slate-800 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Regions</p>
+                <h3 id="statTotal" class="text-xl font-black text-slate-900 leading-none mt-1">5</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-green-700 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Active Divisions</p>
+                <h3 id="statActive" class="text-xl font-black text-green-700 leading-none mt-1">4</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-blue-700 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Municipalities</p>
+                <h3 class="text-xl font-black text-blue-700 leading-none mt-1">34</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-orange-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Registered Staff</p>
+                <h3 class="text-xl font-black text-orange-600 leading-none mt-1">79</h3>
+            </div>
+        </div>
+      
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3 shrink-0">
+            <section onclick="openChartModal('bar')" class="group lg:col-span-2 bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[160px] cursor-pointer hover:border-green-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Municipalities per Region</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full mt-2 group-hover:scale-[1.01] transition-transform duration-300">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="regionChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section onclick="openChartModal('doughnut')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[160px] cursor-pointer hover:border-green-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Status Distribution</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full flex justify-center mt-2 group-hover:scale-[1.02] transition-transform duration-300">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="flex-1 min-h-0 flex flex-col bg-white rounded-sm border border-slate-200 shadow-sm relative">
+            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex justify-between items-center gap-3 shrink-0 relative z-20">
+                <div class="relative flex-1 max-w-sm">
+                    <span class="material-icons-round absolute left-2.5 top-1.5 text-slate-400 text-[14px]">search</span>
+                    <input id="regionSearch" type="text" placeholder="Search region registry..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700 rounded-sm transition bg-white text-slate-800">
+                </div>
+                
+                <div class="relative">
+                    <button id="filterToggleBtn" class="bg-white border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 rounded-sm hover:bg-slate-100 transition flex items-center gap-1.5">
+                        <span class="material-icons-round text-[14px] text-slate-500">filter_list</span> Filters
+                    </button>
+                    
+                    <div id="filterDropdown" class="hidden absolute right-0 mt-1 w-64 bg-white rounded-sm shadow-xl border border-slate-300 p-3 z-50 flex flex-col gap-3">
+                        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+                            <h4 class="text-[10px] font-black uppercase text-slate-800 tracking-wider">Advanced Filters</h4>
+                            <button id="closeFilterBtn" class="text-slate-400 hover:text-red-600"><span class="material-icons-round text-[14px]">close</span></button>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Island Group</label>
+                            <select id="islandGroupFilter" class="px-2 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-green-700 rounded-sm text-slate-700">
+                                <option value="">All Islands</option>
+                                <option value="Luzon">Luzon</option>
+                                <option value="Visayas">Visayas</option>
+                                <option value="Mindanao">Mindanao</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Operational Status</label>
+                            <select id="regionStatusFilter" class="px-2 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-green-700 rounded-sm text-slate-700">
+                                <option value="">All Status</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="flex flex-col gap-1 w-1/2">
+                                <label class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Min Munic.</label>
+                                <input type="number" id="minMunicFilter" min="0" placeholder="0" class="px-2 py-1.5 w-full text-xs border border-slate-300 outline-none focus:border-green-700 rounded-sm bg-white">
+                            </div>
+                            <div class="flex flex-col gap-1 w-1/2">
+                                <label class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Min Staff</label>
+                                <input type="number" id="minStaffFilter" min="0" placeholder="0" class="px-2 py-1.5 w-full text-xs border border-slate-300 outline-none focus:border-green-700 rounded-sm bg-white">
+                            </div>
+                        </div>
+                        <button onclick="resetAllFilters()" class="mt-2 bg-slate-800 text-white text-[10px] font-black uppercase py-2 hover:bg-slate-900 transition rounded-sm w-full">
+                            Reset Parameters
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto custom-scrollbar z-10">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Reg. Code</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Designation Name</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Island Group</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Municipalities</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Reg. Staff</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Status</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="regionTable" class="text-xs">
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-300" onclick="closeRegisterDrawer()"></div>
+    
+    <div id="registerDrawer" class="fixed inset-y-0 right-0 z-[100] w-full max-w-md bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-300">
+        
+        <div class="bg-slate-900 px-5 py-4 flex justify-between items-center text-white shrink-0">
+            <div class="flex items-center gap-3">
+                <span class="material-icons-round text-green-500 text-[20px]">app_registration</span>
+                <div>
+                    <h2 class="text-sm font-black uppercase tracking-widest leading-none">Official Data Entry</h2>
+                    <p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">Register New Region</p>
+                </div>
+            </div>
+            <button onclick="closeRegisterDrawer()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-red-600 rounded-sm p-1.5 flex items-center justify-center">
+                <span class="material-icons-round text-[16px]">close</span>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-slate-50">
+            <form id="regionForm" class="space-y-5 bg-white border border-slate-200 p-5 rounded-sm shadow-sm">
+                
+                <p class="text-[10px] font-medium text-slate-500 border-b border-slate-100 pb-3 mb-4">Complete all mandatory fields (<span class="text-red-600 font-bold">*</span>) before submitting to the registry.</p>
+                
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Region Code <span class="text-red-600">*</span></label>
+                    <input type="text" id="regionCode" placeholder="e.g., NCR, IV-A" class="w-full px-3 py-2 text-xs border border-slate-300 outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700 rounded-sm transition text-slate-800" required>
+                </div>
+                
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Official Designation Name <span class="text-red-600">*</span></label>
+                    <input type="text" id="regionName" placeholder="e.g., National Capital Region" class="w-full px-3 py-2 text-xs border border-slate-300 outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700 rounded-sm transition text-slate-800" required>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Island Group <span class="text-red-600">*</span></label>
+                    <select id="islandGroup" class="w-full px-3 py-2 text-xs border border-slate-300 outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700 rounded-sm transition text-slate-800" required>
+                        <option value="" disabled selected>Select categorization...</option>
+                        <option value="Luzon">Luzon</option>
+                        <option value="Visayas">Visayas</option>
+                        <option value="Mindanao">Mindanao</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Municipalities <span class="text-red-600">*</span></label>
+                        <input type="number" id="regionMunic" min="1" placeholder="0" class="w-full px-3 py-2 text-xs border border-slate-300 outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700 rounded-sm transition text-slate-800" required>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Initial Staff <span class="text-red-600">*</span></label>
+                        <input type="number" id="regionStaff" min="1" placeholder="0" class="w-full px-3 py-2 text-xs border border-slate-300 outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700 rounded-sm transition text-slate-800" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Operational Status <span class="text-red-600">*</span></label>
+                    <select id="regionFormStatus" class="w-full px-3 py-2 text-xs border border-slate-300 outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700 rounded-sm transition text-slate-800" required>
+                        <option value="active" selected>Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+
+                <div class="pt-4 border-t border-slate-200 mt-6 flex gap-3">
+                    <button type="submit" class="flex-1 bg-green-800 text-white px-4 py-2 text-[10px] font-black uppercase hover:bg-green-900 transition rounded-sm shadow-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-save"></i> Submit Record
+                    </button>
+                    <button type="button" onclick="closeRegisterDrawer()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 text-[10px] font-black uppercase hover:bg-slate-100 transition rounded-sm">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="chartModalWrapper" class="hidden fixed inset-0 z-[110] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="chartModalBody" class="bg-white rounded-sm shadow-2xl w-full max-w-5xl flex flex-col overflow-hidden relative z-10 transform scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-center border-b border-slate-200 px-5 py-3 bg-slate-50">
+                <div class="flex items-center gap-2">
+                    <span class="material-icons-round text-slate-400 text-[18px]">analytics</span>
+                    <h3 id="modalChartTitle" class="text-[11px] font-black uppercase tracking-widest text-slate-800">Chart Detailed View</h3>
+                </div>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-red-600 transition-colors flex items-center justify-center rounded-sm hover:bg-red-50 p-1">
+                    <span class="material-icons-round text-[18px]">close</span>
+                </button>
+            </div>
+            <div class="p-6 sm:p-8 bg-white w-full flex-1 relative h-[50vh] min-h-[350px]">
+                <canvas id="modalCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ----------------------------------------------------
+        // DATA & FILTERING LOGIC
+        // ----------------------------------------------------
+        // Make regions variable 'let' so we can modify it
+        let regions = [
+            {code:'IV-B', name:'MIMAROPA', island:'Luzon', munic:5, staff:12, status:'active', link:'/superadmin/regions/iv-b'},
+            {code:'VII', name:'Central Visayas', island:'Visayas', munic:8, staff:18, status:'active', link:'/superadmin/regions/vii'},
+            {code:'III', name:'Central Luzon', island:'Luzon', munic:6, staff:15, status:'active', link:'/superadmin/regions/iii'},
+            {code:'VIII', name:'Eastern Visayas', island:'Visayas', munic:4, staff:9, status:'inactive', link:'/superadmin/regions/viii'},
+            {code:'XI', name:'Davao Region', island:'Mindanao', munic:11, staff:25, status:'active', link:'/superadmin/regions/xi'}
+        ];
+
+        function renderStatusBadge(status) {
+            if(status === 'active') return '<span class="inline-block border border-green-200 bg-green-50 text-green-700 px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-widest font-black shadow-sm">Active</span>';
+            return '<span class="inline-block border border-slate-200 bg-slate-50 text-slate-500 px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-widest font-black shadow-sm">Inactive</span>';
+        }
+
+        function filterRegions(){
+            const search = document.getElementById('regionSearch').value.toLowerCase();
+            const status = document.getElementById('regionStatusFilter').value;
+            const island = document.getElementById('islandGroupFilter').value;
+            const minMunic = parseInt(document.getElementById('minMunicFilter').value) || 0;
+            const minStaff = parseInt(document.getElementById('minStaffFilter').value) || 0;
+
+            const filtered = regions.filter(r => {
+                return (r.code.toLowerCase().includes(search) || r.name.toLowerCase().includes(search)) &&
+                       (!status || r.status === status) &&
+                       (!island || r.island === island) &&
+                       (parseInt(r.munic) >= minMunic) &&
+                       (parseInt(r.staff) >= minStaff);
+            });
+            
+            document.getElementById('regionTable').innerHTML = filtered.length ? filtered.map(r => `
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                    <td class="py-2.5 px-4 font-mono font-bold text-slate-700">${r.code}</td>
+                    <td class="py-2.5 px-4 font-black text-slate-900">${r.name}</td>
+                    <td class="py-2.5 px-4 text-slate-500 text-[10px] uppercase tracking-widest font-bold">${r.island}</td>
+                    <td class="py-2.5 px-4">
+                        <span class="inline-block border border-slate-300 bg-white text-slate-800 px-2.5 py-0.5 rounded-sm text-[10px] font-bold shadow-sm">${r.munic}</span>
+                    </td>
+                    <td class="py-2.5 px-4">
+                        <span class="inline-block border border-slate-300 bg-white text-slate-800 px-2.5 py-0.5 rounded-sm text-[10px] font-bold shadow-sm">${r.staff}</span>
+                    </td>
+                    <td class="py-2.5 px-4">${renderStatusBadge(r.status)}</td>
+                    <td class="py-2.5 px-4">
+                        <a href="${r.link}" class="text-green-700 font-bold hover:text-green-900 hover:underline flex items-center gap-1">
+                            Review <span class="material-icons-round text-[12px]">open_in_new</span>
+                        </a>
+                    </td>
+                </tr>`).join('') : '<tr><td colspan="7" class="py-8 px-4 text-center text-slate-500 font-bold"><span class="material-icons-round text-3xl mb-2 text-slate-300 block">folder_off</span> No registry records found.</td></tr>';
+            
+            // Update Stat Cards dynamically
+            document.getElementById('statTotal').innerText = filtered.length;
+            document.getElementById('statActive').innerText = filtered.filter(r => r.status === 'active').length;
+        }
+
+        const filterBtn = document.getElementById('filterToggleBtn');
+        const filterDropdown = document.getElementById('filterDropdown');
+        const closeFilterBtn = document.getElementById('closeFilterBtn');
+        filterBtn.addEventListener('click', (e) => { e.stopPropagation(); filterDropdown.classList.toggle('hidden'); });
+        closeFilterBtn.addEventListener('click', (e) => { e.stopPropagation(); filterDropdown.classList.add('hidden'); });
+        document.addEventListener('click', (event) => { if (!filterBtn.contains(event.target) && !filterDropdown.contains(event.target)) filterDropdown.classList.add('hidden'); });
+
+        function resetAllFilters() {
+            document.getElementById('regionSearch').value = '';
+            document.getElementById('regionStatusFilter').value = '';
+            document.getElementById('islandGroupFilter').value = '';
+            document.getElementById('minMunicFilter').value = '';
+            document.getElementById('minStaffFilter').value = '';
+            filterRegions();
+            filterDropdown.classList.add('hidden');
+        }
+
+        const inputs = ['regionSearch', 'regionStatusFilter', 'islandGroupFilter', 'minMunicFilter', 'minStaffFilter'];
+        inputs.forEach(id => {
+            document.getElementById(id).addEventListener('input', filterRegions);
+            document.getElementById(id).addEventListener('change', filterRegions);
+        });
+
+        // Initial Table Render
+        filterRegions();
+
+        // ----------------------------------------------------
+        // DRAWER LOGIC & FORM SUBMISSION
+        // ----------------------------------------------------
+        const drawerOverlay = document.getElementById('drawerOverlay');
+        const registerDrawer = document.getElementById('registerDrawer');
+
+        function openRegisterDrawer() {
+            drawerOverlay.classList.remove('hidden');
+            setTimeout(() => drawerOverlay.classList.add('opacity-100'), 10);
+            registerDrawer.classList.remove('translate-x-full');
+        }
+
+        function closeRegisterDrawer() {
+            registerDrawer.classList.add('translate-x-full');
+            drawerOverlay.classList.remove('opacity-100');
+            setTimeout(() => drawerOverlay.classList.add('hidden'), 300);
+            document.getElementById('regionForm').reset(); // Clear form on close
+        }
+
+        document.getElementById('regionForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Get values
+            const code = document.getElementById('regionCode').value.trim();
+            const name = document.getElementById('regionName').value.trim();
+            const island = document.getElementById('islandGroup').value;
+            const munic = document.getElementById('regionMunic').value;
+            const staff = document.getElementById('regionStaff').value;
+            const status = document.getElementById('regionFormStatus').value;
+
+            // Add to array
+            const newRegion = {
+                code: code,
+                name: name,
+                island: island,
+                munic: munic,
+                staff: staff,
+                status: status,
+                link: '#' // Placeholder link
+            };
+            
+            // Push to top of table array
+            regions.unshift(newRegion);
+            
+            // Rerender table and close drawer
+            filterRegions();
+            closeRegisterDrawer();
+            
+            // Optional: You could trigger a tiny toast notification here
+            alert("System Registry Updated: " + code + " has been successfully added.");
+        });
+
+        // ----------------------------------------------------
+        // CHART DATA & CONFIGURATIONS
+        // ----------------------------------------------------
+        const barData = {
+            labels: ['IV-B', 'VII', 'III', 'IV-A', 'CAR', 'VI', 'VIII'],
+            datasets: [{
+                label: 'Municipalities',
+                data: [5, 8, 6, 7, 5, 9, 4],
+                backgroundColor: ['#047857', '#334155', '#475569', '#64748b', '#94a3b8', '#1d4ed8', '#0ea5e9'],
+                borderRadius: 2,
+                borderSkipped: false
+            }]
+        };
+
+        const doughnutData = {
+            labels: ['Active', 'Inactive'],
+            datasets: [{
+                data: [16, 1],
+                backgroundColor: ['#047857', '#e2e8f0'],
+                borderColor: '#ffffff',
+                borderWidth: 2
+            }]
+        };
+
+        setTimeout(() => {
+            new Chart(document.getElementById('regionChart'), {
+                type: 'bar', data: barData,
+                options: { 
+                    indexAxis: 'x', responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                    plugins: { legend: {display: false}, tooltip: {enabled: false} },
+                    scales: { 
+                        y: {beginAtZero: true, border: {display: false}, grid: {color: '#f1f5f9'}, ticks: {font: {size: 9}, color: '#64748b'}},
+                        x: {grid: {display: false}, ticks: {font: {size: 9, weight: 'bold'}, color: '#334155'}}
+                    } 
+                }
+            });
+            new Chart(document.getElementById('statusChart'), {
+                type: 'doughnut', data: doughnutData,
+                options: { 
+                    responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                    plugins: { legend: {position: 'right', labels: {boxWidth: 10, font: {size: 10}, color: '#334155'}}, tooltip: {enabled: false} },
+                    cutout: '70%'
+                }
+            });
+        }, 100);
+
+        // ----------------------------------------------------
+        // CHART MODAL LOGIC
+        // ----------------------------------------------------
+        let modalChartInstance = null;
+        const modalWrapper = document.getElementById('chartModalWrapper');
+        const modalBody = document.getElementById('chartModalBody');
+        const modalTitle = document.getElementById('modalChartTitle');
+
+        function openChartModal(type) {
+            modalWrapper.classList.remove('hidden');
+            setTimeout(() => { modalWrapper.classList.add('opacity-100'); modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
+            if (modalChartInstance) modalChartInstance.destroy();
+
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            if (type === 'bar') {
+                modalTitle.innerText = "Municipalities per Region (Detailed View)";
+                modalChartInstance = new Chart(ctx, { type: 'bar', data: barData, options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, plugins: { legend: {display: false} }, scales: { y: {beginAtZero: true, border: {display: false}, grid: {color: '#e2e8f0'}}, x: {grid: {display: false}} } }});
+            } else if (type === 'doughnut') {
+                modalTitle.innerText = "Operational Status Distribution (Detailed View)";
+                modalChartInstance = new Chart(ctx, { type: 'doughnut', data: doughnutData, options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, plugins: { legend: {position: 'right'} }, cutout: '60%' }});
+            }
+        }
+
+        function closeChartModal() {
+            modalWrapper.classList.remove('opacity-100');
+            modalBody.classList.remove('scale-100');
+            modalBody.classList.add('scale-95');
+            setTimeout(() => { modalWrapper.classList.add('hidden'); if (modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } }, 300);
+        }
+    </script>
+</body>
+</html>

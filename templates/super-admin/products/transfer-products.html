@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Transfer Products — Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+    
+    {% include 'super-admin/header-superadmin.html' %}
+    {% include 'super-admin/sidenav-superadmin.html' %}
+    
+    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+        
+        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
+            <div class="flex items-center gap-4">
+                <div class="bg-purple-700 p-2.5 rounded-sm hidden sm:block">
+                    <span class="material-icons-round text-white text-xl">compare_arrows</span>
+                </div>
+                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">Inter-Regional Transfers</h1>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Resource Realocation & Logistics Tracking</p>
+                </div>
+            </div>
+            <div class="flex gap-2 no-print">
+                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm" onclick="window.print()">
+                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export Audit</span>
+                </button>
+                <button onclick="openTransferDrawer()" class="bg-purple-700 text-white px-4 py-1.5 text-[10px] font-black uppercase hover:bg-purple-800 transition rounded-sm shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-plus text-[10px]"></i> New Transfer
+                </button>
+            </div>
+        </header>
+      
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 shrink-0">
+            <div class="bg-white border border-slate-200 border-l-4 border-l-purple-700 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Transfers</p>
+                <h3 id="statTotal" class="text-xl font-black text-slate-900 leading-none mt-1">156</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-green-700 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Units Moved</p>
+                <h3 id="statUnits" class="text-xl font-black text-green-700 leading-none mt-1">48K</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-yellow-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">In Transit</p>
+                <h3 id="statTransit" class="text-xl font-black text-yellow-600 leading-none mt-1">5</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-blue-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Completed (MTD)</p>
+                <h3 id="statMonth" class="text-xl font-black text-blue-600 leading-none mt-1">24</h3>
+            </div>
+        </div>
+      
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 shrink-0">
+            <section onclick="openChartModal('volume')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-purple-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Monthly Transfer Volume</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full mt-2">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="volumeChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section onclick="openChartModal('status')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-purple-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Fulfillment Status Breakdown</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full flex justify-center mt-2 group-hover:scale-[1.02] transition-transform duration-300">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="flex-1 min-h-0 flex flex-col bg-white rounded-sm border border-slate-200 shadow-sm relative">
+            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex flex-col sm:flex-row justify-between sm:items-center gap-3 shrink-0 relative z-20">
+                <div class="flex-1 flex items-center gap-2 max-w-2xl">
+                    <div class="relative flex-1">
+                        <span class="material-icons-round absolute left-2.5 top-1.5 text-slate-400 text-[14px]">search</span>
+                        <input id="trfSearch" type="text" placeholder="Search Transfer #, product, or region..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 outline-none focus:border-purple-700 focus:ring-1 focus:ring-purple-700 rounded-sm transition bg-white text-slate-800">
+                    </div>
+                    <select id="statusFilter" class="px-3 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-purple-700 rounded-sm text-slate-700 w-32">
+                        <option value="">All Status</option>
+                        <option value="received">Received</option>
+                        <option value="intransit">In Transit</option>
+                        <option value="pending">Pending</option>
+                    </select>
+                </div>
+                <input type="date" id="dateFilter" class="px-3 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-purple-700 rounded-sm text-slate-700">
+            </div>
+            
+            <div class="flex-1 overflow-auto custom-scrollbar z-10">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Trf Number</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Product Item</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Quantity</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">From</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">To</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Status</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trfTable" class="text-xs">
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-300" onclick="closeTransferDrawer()"></div>
+    <div id="trfDrawer" class="fixed inset-y-0 right-0 z-[100] w-full max-w-md bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-300">
+        <div class="bg-purple-900 px-5 py-4 flex justify-between items-center text-white shrink-0">
+            <h2 class="text-sm font-black uppercase tracking-widest leading-none">New Stock Transfer</h2>
+            <button onclick="closeTransferDrawer()" class="text-purple-300 hover:text-white transition-colors bg-purple-800 p-1 rounded-sm"><span class="material-icons-round text-sm">close</span></button>
+        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-slate-50">
+            <form id="newTransferForm" class="space-y-4 bg-white border border-slate-200 p-5 rounded-sm shadow-sm">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Product Description</label>
+                    <input type="text" id="newProd" placeholder="Item to transfer" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Quantity</label>
+                    <input type="number" id="newQty" placeholder="0" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Origin Region</label>
+                        <select id="newFrom" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm uppercase font-bold" required>
+                            <option value="NCR">NCR</option><option value="Region I">Reg I</option><option value="Region IV-B">Reg IV-B</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Destination</label>
+                        <select id="newTo" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm uppercase font-bold" required>
+                            <option value="Region IV-A">Reg IV-A</option><option value="Region VII">Reg VII</option><option value="BARMM">BARMM</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-purple-700 text-white py-2.5 text-[10px] font-black uppercase hover:bg-purple-800 transition rounded-sm shadow-sm mt-4">Initiate Transfer</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="chartModal" class="hidden fixed inset-0 z-[110] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="modalBody" class="bg-white rounded-sm shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden">
+            <div class="flex justify-between items-center border-b border-slate-200 px-5 py-3 bg-slate-50">
+                <h3 id="modalTitle" class="text-[11px] font-black uppercase tracking-widest text-slate-800">Detail View</h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-red-600 transition-colors"><span class="material-icons-round">close</span></button>
+            </div>
+            <div class="p-8 h-[450px] relative"><canvas id="modalCanvas"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        // 1. DATA
+        let transferData = [
+            {trf:'TRF-26-001', prod:'Seedlings (High Yield)', qty:500, from:'Region IV-B', to:'Region IV-A', status:'received', date:'2026-02-04'},
+            {trf:'TRF-26-002', prod:'Soil Analysis Kits', qty:25, from:'NCR', to:'Region VII', status:'intransit', date:'2026-02-12'},
+            {trf:'TRF-26-003', prod:'Solar Irrigation Unit', qty:10, from:'Region I', to:'BARMM', status:'pending', date:'2026-02-15'}
+        ];
+
+        // 2. LIVE SEARCH & FILTER
+        function filterTransfers() {
+            const query = document.getElementById('trfSearch').value.toLowerCase();
+            const status = document.getElementById('statusFilter').value;
+
+            const filtered = transferData.filter(t => {
+                const matchSearch = t.trf.toLowerCase().includes(query) || t.prod.toLowerCase().includes(query) || t.from.toLowerCase().includes(query) || t.to.toLowerCase().includes(query);
+                const matchStatus = !status || t.status === status;
+                return matchSearch && matchStatus;
+            });
+
+            renderTable(filtered);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('trfTable');
+            tbody.innerHTML = data.length ? data.map(t => `
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                    <td class="py-2.5 px-4 font-mono font-bold text-slate-700">${t.trf}</td>
+                    <td class="py-2.5 px-4 font-black text-slate-900">${t.prod}</td>
+                    <td class="py-2.5 px-4 font-mono text-slate-500">${t.qty}</td>
+                    <td class="py-2.5 px-4"><span class="px-2 py-0.5 border border-purple-200 bg-purple-50 text-purple-700 text-[9px] font-black rounded-sm">${t.from}</span></td>
+                    <td class="py-2.5 px-4"><span class="px-2 py-0.5 border border-blue-200 bg-blue-50 text-blue-700 text-[9px] font-black rounded-sm">${t.to}</span></td>
+                    <td class="py-2.5 px-4">
+                        <span class="px-2 py-0.5 border rounded-sm font-black text-[9px] uppercase tracking-widest ${getStatusColor(t.status)}">
+                            ${t.status}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-4"><button class="text-purple-700 font-bold hover:underline">Track</button></td>
+                </tr>
+            `).join('') : '<tr><td colspan="7" class="py-10 text-center text-slate-400 font-bold">No transfer records found.</td></tr>';
+        }
+
+        function getStatusColor(s) {
+            if(s === 'received') return 'bg-green-50 text-green-700 border-green-200';
+            if(s === 'intransit') return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+            return 'bg-slate-50 text-slate-500 border-slate-200';
+        }
+
+        // 3. UI CONTROLS
+        document.getElementById('trfSearch').addEventListener('input', filterTransfers);
+        document.getElementById('statusFilter').addEventListener('change', filterTransfers);
+
+        function openTransferDrawer() {
+            document.getElementById('drawerOverlay').classList.remove('hidden');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('opacity-100'), 10);
+            document.getElementById('trfDrawer').classList.remove('translate-x-full');
+        }
+
+        function closeTransferDrawer() {
+            document.getElementById('trfDrawer').classList.add('translate-x-full');
+            document.getElementById('drawerOverlay').classList.remove('opacity-100');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('hidden'), 300);
+        }
+
+        document.getElementById('newTransferForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const trfNum = 'TRF-26-' + (transferData.length + 1).toString().padStart(3, '0');
+            transferData.unshift({
+                trf: trfNum,
+                prod: document.getElementById('newProd').value,
+                qty: parseInt(document.getElementById('newQty').value),
+                from: document.getElementById('newFrom').value,
+                to: document.getElementById('newTo').value,
+                status: 'pending',
+                date: new Date().toISOString().split('T')[0]
+            });
+            filterTransfers();
+            closeTransferDrawer();
+            document.getElementById('newTransferForm').reset();
+        });
+
+        // 4. CHARTS
+        let modalChart;
+        const volData = { labels:['Oct','Nov','Dec','Jan','Feb'], datasets:[{label:'Volume', data:[120, 180, 110, 240, 156], borderColor:'#7e22ce', backgroundColor:'rgba(126,34,206,0.1)', fill:true, tension:0.4}]};
+        const statusDist = { labels:['Received','In Transit','Pending'], datasets:[{data:[98, 24, 5], backgroundColor:['#047857','#f59e0b','#94a3b8']}]};
+
+        window.onload = () => {
+            filterTransfers();
+            new Chart(document.getElementById('volumeChart').getContext('2d'), { type:'line', data:volData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{display:false}, x:{grid:{display:false}, ticks:{font:{size:9}}}}} });
+            new Chart(document.getElementById('statusChart').getContext('2d'), { type:'doughnut', data:statusDist, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right', labels:{boxWidth:10, font:{size:9}}}}, cutout:'75%'} });
+        };
+
+        function openChartModal(type) {
+            const m = document.getElementById('chartModal');
+            const b = document.getElementById('modalBody');
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.add('opacity-100'); b.classList.replace('scale-95', 'scale-100'); }, 10);
+            if (modalChart) modalChart.destroy();
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            if(type === 'volume') {
+                document.getElementById('modalTitle').innerText = 'Monthly Transfer Volume Trend';
+                modalChart = new Chart(ctx, { type:'line', data:volData, options:{responsive:true, maintainAspectRatio:false}});
+            } else {
+                document.getElementById('modalTitle').innerText = 'Status Fulfillment Analysis';
+                modalChart = new Chart(ctx, { type:'doughnut', data:statusDist, options:{responsive:true, maintainAspectRatio:false}});
+            }
+        }
+
+        function closeChartModal() {
+            const m = document.getElementById('chartModal');
+            const b = document.getElementById('modalBody');
+            m.classList.remove('opacity-100');
+            b.classList.replace('scale-100', 'scale-95');
+            setTimeout(() => m.classList.add('hidden'), 300);
+        }
+    </script>
+</body>
+</html>

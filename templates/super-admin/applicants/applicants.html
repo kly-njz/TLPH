@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Applicants — Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+    
+    {% include 'super-admin/header-superadmin.html' %}
+    {% include 'super-admin/sidenav-superadmin.html' %}
+    
+    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+        
+        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
+            <div class="flex items-center gap-4">
+                <div class="bg-emerald-700 p-2.5 rounded-sm hidden sm:block">
+                    <span class="material-icons-round text-white text-xl">person_add</span>
+                </div>
+                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">Applicants & Trainees</h1>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">OJT & Human Resource Pipeline</p>
+                </div>
+            </div>
+            <div class="flex gap-2 no-print">
+                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm" onclick="window.print()">
+                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export CSV</span>
+                </button>
+                <button onclick="openAppDrawer()" class="bg-emerald-700 text-white px-4 py-1.5 text-[10px] font-black uppercase hover:bg-emerald-800 transition rounded-sm shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-plus text-[10px]"></i> Add Applicant
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 shrink-0">
+            <div class="bg-white border border-slate-200 border-l-4 border-l-slate-800 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Applicants</p>
+                <h3 id="statTotal" class="text-xl font-black text-slate-900 leading-none mt-1">145</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-emerald-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Hired</p>
+                <h3 id="statHired" class="text-xl font-black text-emerald-600 leading-none mt-1">48</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-yellow-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Interview Phase</p>
+                <h3 id="statInterview" class="text-xl font-black text-yellow-600 leading-none mt-1">23</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-blue-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Pending Review</p>
+                <h3 id="statPending" class="text-xl font-black text-blue-600 leading-none mt-1">74</h3>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 shrink-0">
+            <section onclick="openChartModal('hiring')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-emerald-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Application Success Trend</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full mt-2">
+                    <div class="absolute inset-0 pointer-events-none"><canvas id="hiringChart"></canvas></div>
+                </div>
+            </section>
+
+            <section onclick="openChartModal('type')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-emerald-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Applicant Composition</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full flex justify-center mt-2">
+                    <div class="absolute inset-0 pointer-events-none"><canvas id="typeChart"></canvas></div>
+                </div>
+            </section>
+        </div>
+
+        <section class="flex-1 min-h-0 flex flex-col bg-white rounded-sm border border-slate-200 shadow-sm relative">
+            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0 relative z-20">
+                
+                <div class="relative w-full md:max-w-md">
+                    <span class="material-icons-round absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">search</span>
+                    <input id="appSearch" type="text" placeholder="Search name, candidate type, or region..." class="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 outline-none focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-sm transition bg-white text-slate-800">
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                    <select id="statusFilter" class="flex-1 md:w-32 px-3 py-2 text-xs border border-slate-300 bg-white outline-none focus:border-emerald-700 rounded-sm text-slate-700 font-bold uppercase">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="interview">Interview</option>
+                        <option value="hired">Hired</option>
+                    </select>
+                    
+                    <select id="regionFilter" class="flex-1 md:w-40 px-3 py-2 text-xs border border-slate-300 bg-white outline-none focus:border-emerald-700 rounded-sm text-slate-700 font-bold uppercase tracking-tighter">
+                        <option value="">All Regions</option>
+                        <option value="NCR">NCR</option><option value="CAR">CAR</option>
+                        <option value="Region I">Region I</option><option value="Region II">Region II</option>
+                        <option value="Region III">Region III</option><option value="Region IV-A">Region IV-A</option>
+                        <option value="Region IV-B">Region IV-B</option><option value="Region V">Region V</option>
+                        <option value="Region VI">Region VI</option><option value="Region VII">Region VII</option>
+                        <option value="Region VIII">Region VIII</option><option value="Region IX">Region IX</option>
+                        <option value="Region X">Region X</option><option value="Region XI">Region XI</option>
+                        <option value="Region XII">Region XII</option><option value="Region XIII">Region XIII</option>
+                        <option value="BARMM">BARMM</option>
+                    </select>
+
+                    <button onclick="resetFilters()" class="bg-white border border-slate-300 text-slate-400 p-2 hover:text-emerald-700 hover:border-emerald-700 transition rounded-sm flex items-center justify-center">
+                        <span class="material-icons-round text-sm">refresh</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto custom-scrollbar z-10">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Full Name</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Candidate Type</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Region Office</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600 text-center">Status</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="appTable" class="text-xs">
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-300" onclick="closeAppDrawer()"></div>
+    <div id="appDrawer" class="fixed inset-y-0 right-0 z-[100] w-full max-w-md bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-300">
+        <div class="bg-slate-900 px-5 py-4 flex justify-between items-center text-white shrink-0">
+            <h2 class="text-sm font-black uppercase tracking-widest leading-none">Add New Applicant</h2>
+            <button onclick="closeAppDrawer()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded-sm"><span class="material-icons-round text-sm">close</span></button>
+        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-slate-50">
+            <form id="newAppForm" class="space-y-4 bg-white border border-slate-200 p-5 rounded-sm shadow-sm">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Full Name</label>
+                    <input type="text" id="newName" placeholder="Last Name, First Name" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Application Type</label>
+                    <select id="newType" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                        <option value="OJT">OJT / Trainee</option>
+                        <option value="Employee">Employee Applicant</option>
+                        <option value="Contractor">Contractor</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Region</label>
+                    <select id="newRegion" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm uppercase font-bold" required>
+                        <option value="NCR">NCR</option>
+                        <option value="Region IV-A">Region IV-A</option>
+                        <option value="Region VII">Region VII</option>
+                        <option value="BARMM">BARMM</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-emerald-700 text-white py-2.5 text-[10px] font-black uppercase hover:bg-emerald-800 transition rounded-sm shadow-sm mt-4">Record Application</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="chartModal" class="hidden fixed inset-0 z-[110] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="modalBody" class="bg-white rounded-sm shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden">
+            <div class="flex justify-between items-center border-b border-slate-200 px-5 py-3 bg-slate-50">
+                <h3 id="modalTitle" class="text-[11px] font-black uppercase tracking-widest text-slate-800">Detail View</h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-red-600"><span class="material-icons-round">close</span></button>
+            </div>
+            <div class="p-8 h-[450px] relative"><canvas id="modalCanvas"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        // 1. DATA REPOSITORY
+        let applicantData = [
+            {name:'Juan Dela Cruz', type:'OJT', region:'Region IV-B', status:'pending'},
+            {name:'Anna Reyes', type:'Employee', region:'Region VII', status:'hired'},
+            {name:'Mark Tan', type:'OJT', region:'Region IV-A', status:'interview'},
+            {name:'Elena Santos', type:'Employee', region:'NCR', status:'pending'}
+        ];
+
+        const statusMap = {pending:'Pending', interview:'Interview', hired:'Hired'};
+
+        // 2. LIVE SEARCH & FILTERING
+        function filterApplicants() {
+            const query = document.getElementById('appSearch').value.toLowerCase();
+            const status = document.getElementById('statusFilter').value;
+            const region = document.getElementById('regionFilter').value;
+
+            const filtered = applicantData.filter(a => {
+                const matchSearch = a.name.toLowerCase().includes(query) || a.type.toLowerCase().includes(query) || a.region.toLowerCase().includes(query);
+                const matchStatus = !status || a.status === status;
+                const matchRegion = !region || a.region.includes(region);
+                return matchSearch && matchStatus && matchRegion;
+            });
+            renderTable(filtered);
+            updateStats(filtered);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('appTable');
+            tbody.innerHTML = data.length ? data.map(a => `
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                    <td class="py-2.5 px-4 font-black text-slate-900">${a.name}</td>
+                    <td class="py-2.5 px-4"><span class="px-2 py-0.5 border border-indigo-200 bg-indigo-50 text-indigo-700 text-[9px] font-black rounded-sm uppercase tracking-widest">${a.type}</span></td>
+                    <td class="py-2.5 px-4 text-slate-600 font-bold uppercase text-[10px]">${a.region}</td>
+                    <td class="py-2.5 px-4 text-center">
+                        <span class="px-2 py-0.5 border rounded-sm font-black text-[9px] uppercase tracking-widest ${getStatusColor(a.status)}">
+                            ${statusMap[a.status]}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-4"><button class="text-emerald-700 font-bold hover:underline">Review</button></td>
+                </tr>
+            `).join('') : '<tr><td colspan="5" class="py-10 text-center text-slate-400 font-bold">No results found.</td></tr>';
+        }
+
+        function getStatusColor(s) {
+            if(s === 'hired') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            if(s === 'interview') return 'bg-blue-50 text-blue-700 border-blue-200';
+            return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+        }
+
+        function updateStats(data) {
+            document.getElementById('statTotal').innerText = data.length;
+            document.getElementById('statHired').innerText = data.filter(a => a.status === 'hired').length;
+            document.getElementById('statInterview').innerText = data.filter(a => a.status === 'interview').length;
+            document.getElementById('statPending').innerText = data.filter(a => a.status === 'pending').length;
+        }
+
+        function resetFilters() {
+            document.getElementById('appSearch').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('regionFilter').value = '';
+            filterApplicants();
+        }
+
+        // 3. UI CONTROLS (DRAWER)
+        function openAppDrawer() {
+            document.getElementById('drawerOverlay').classList.remove('hidden');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('opacity-100'), 10);
+            document.getElementById('appDrawer').classList.remove('translate-x-full');
+        }
+
+        function closeAppDrawer() {
+            document.getElementById('appDrawer').classList.add('translate-x-full');
+            document.getElementById('drawerOverlay').classList.remove('opacity-100');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('hidden'), 300);
+        }
+
+        document.getElementById('newAppForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            applicantData.unshift({
+                name: document.getElementById('newName').value,
+                type: document.getElementById('newType').value,
+                region: document.getElementById('newRegion').value,
+                status: 'pending'
+            });
+            filterApplicants();
+            closeAppDrawer();
+            document.getElementById('newAppForm').reset();
+        });
+
+        // 4. CHARTS
+        let modalChart;
+        const trendData = { labels:['Sep','Oct','Nov','Dec','Jan','Feb'], datasets:[{label:'Hired', data:[5, 12, 8, 15, 11, 48], borderColor:'#059669', backgroundColor:'rgba(5,150,105,0.1)', fill:true, tension:0.4}]};
+        const typeDist = { labels:['OJT','Employee','Contractor'], datasets:[{data:[65, 55, 25], backgroundColor:['#059669','#0ea5e9','#6366f1']}]};
+
+        window.onload = () => {
+            filterApplicants();
+            new Chart(document.getElementById('hiringChart').getContext('2d'), { type:'line', data:trendData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{display:false}, x:{grid:{display:false}, ticks:{font:{size:9}}}}} });
+            new Chart(document.getElementById('typeChart').getContext('2d'), { type:'doughnut', data:typeDist, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right', labels:{boxWidth:10, font:{size:9}}}}, cutout:'75%'} });
+        };
+
+        function openChartModal(type) {
+            const m = document.getElementById('chartModal');
+            const b = document.getElementById('modalBody');
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.add('opacity-100'); b.classList.replace('scale-95', 'scale-100'); }, 10);
+            if (modalChart) modalChart.destroy();
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            if(type === 'hiring') {
+                document.getElementById('modalTitle').innerText = 'Hiring Success Trend';
+                modalChart = new Chart(ctx, { type:'line', data:trendData, options:{responsive:true, maintainAspectRatio:false}});
+            } else {
+                document.getElementById('modalTitle').innerText = 'Applicant Composition';
+                modalChart = new Chart(ctx, { type:'doughnut', data:typeDist, options:{responsive:true, maintainAspectRatio:false}});
+            }
+        }
+
+        function closeChartModal() {
+            const m = document.getElementById('chartModal');
+            const b = document.getElementById('modalBody');
+            m.classList.remove('opacity-100');
+            b.classList.replace('scale-100', 'scale-95');
+            setTimeout(() => m.classList.add('hidden'), 300);
+        }
+
+        document.getElementById('appSearch').addEventListener('input', filterApplicants);
+        document.getElementById('statusFilter').addEventListener('change', filterApplicants);
+        document.getElementById('regionFilter').addEventListener('change', filterApplicants);
+    </script>
+</body>
+</html>

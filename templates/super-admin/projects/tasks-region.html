@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Tasks — Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+    
+    {% include 'super-admin/header-superadmin.html' %}
+    {% include 'super-admin/sidenav-superadmin.html' %}
+    
+    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+        
+        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
+            <div class="flex items-center gap-4">
+                <div class="bg-orange-600 p-2.5 rounded-sm hidden sm:block">
+                    <span class="material-icons-round text-white text-xl">task_alt</span>
+                </div>
+                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">Task Assignment Registry</h1>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Directives & Regional Execution Tracking</p>
+                </div>
+            </div>
+            <div class="flex gap-2 no-print">
+                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm" onclick="window.print()">
+                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export Audit</span>
+                </button>
+                <button onclick="openTaskDrawer()" class="bg-orange-600 text-white px-4 py-1.5 text-[10px] font-black uppercase hover:bg-orange-700 transition rounded-sm shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-plus text-[10px]"></i> Create Task
+                </button>
+            </div>
+        </header>
+      
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 shrink-0">
+            <div class="bg-white border border-slate-200 border-l-4 border-l-slate-800 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Directives</p>
+                <h3 id="statTotal" class="text-xl font-black text-slate-900 leading-none mt-1">127</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-orange-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">In Progress</p>
+                <h3 id="statProgress" class="text-xl font-black text-orange-600 leading-none mt-1">28</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-green-700 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Completed</p>
+                <h3 id="statCompleted" class="text-xl font-black text-green-700 leading-none mt-1">84</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-red-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Overdue Items</p>
+                <h3 id="statOverdue" class="text-xl font-black text-red-600 leading-none mt-1">15</h3>
+            </div>
+        </div>
+      
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 shrink-0">
+            <section onclick="openChartModal('status')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-orange-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Tasks by Workflow Status</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full mt-2"><div class="absolute inset-0 pointer-events-none"><canvas id="taskChart"></canvas></div></div>
+            </section>
+            <section onclick="openChartModal('priority')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-orange-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Priority Distribution</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full flex justify-center mt-2"><div class="absolute inset-0 pointer-events-none"><canvas id="priorityChart"></canvas></div></div>
+            </section>
+        </div>
+
+        <section class="flex-1 min-h-0 flex flex-col bg-white rounded-sm border border-slate-200 shadow-sm relative">
+            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex flex-col sm:flex-row justify-between sm:items-center gap-3 shrink-0 relative z-20">
+                <div class="flex-1 flex items-center gap-2 max-w-2xl">
+                    <div class="relative flex-1">
+                        <span class="material-icons-round absolute left-2.5 top-1.5 text-slate-400 text-[14px]">search</span>
+                        <input id="taskSearch" type="text" placeholder="Search Task ID, title, or assignee..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 outline-none focus:border-orange-700 focus:ring-1 focus:ring-orange-700 rounded-sm transition bg-white text-slate-800">
+                    </div>
+                    <select id="regionFilter" class="px-3 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-orange-700 rounded-sm text-slate-700 w-40 font-bold uppercase tracking-tighter">
+                        <option value="">All Regions</option>
+                        <option value="NCR">NCR</option><option value="CAR">CAR</option>
+                        <option value="Region I">Region I</option><option value="Region II">Region II</option>
+                        <option value="Region III">Region III</option><option value="Region IV-A">Region IV-A</option>
+                        <option value="Region IV-B">Region IV-B</option><option value="Region V">Region V</option>
+                        <option value="Region VI">Region VI</option><option value="Region VII">Region VII</option>
+                        <option value="Region VIII">Region VIII</option><option value="Region IX">Region IX</option>
+                        <option value="Region X">Region X</option><option value="Region XI">Region XI</option>
+                        <option value="Region XII">Region XII</option><option value="Region XIII">Region XIII</option>
+                        <option value="BARMM">BARMM</option>
+                    </select>
+                    <select id="statusFilter" class="px-3 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-orange-700 rounded-sm text-slate-700 w-32 font-bold uppercase">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                </div>
+                <button onclick="resetFilters()" class="text-[9px] font-black uppercase text-slate-400 hover:text-orange-600 transition flex items-center gap-1">
+                    <span class="material-icons-round text-sm">refresh</span> Reset
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-auto custom-scrollbar z-10">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Task ID</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Directive Title</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Assigned To</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Status</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Due Date</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="taskTable" class="text-xs">
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-300" onclick="closeTaskDrawer()"></div>
+    <div id="taskDrawer" class="fixed inset-y-0 right-0 z-[100] w-full max-w-md bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-300">
+        <div class="bg-slate-900 px-5 py-4 flex justify-between items-center text-white shrink-0">
+            <h2 class="text-sm font-black uppercase tracking-widest leading-none">New Task Directive</h2>
+            <button onclick="closeTaskDrawer()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1 rounded-sm"><span class="material-icons-round text-sm">close</span></button>
+        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-slate-50">
+            <form id="newTaskForm" class="space-y-4 bg-white border border-slate-200 p-5 rounded-sm shadow-sm">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Task Title</label>
+                    <input type="text" id="newTitle" placeholder="e.g. Audit Regional Inventory" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Assigned Region <span class="text-red-600">*</span></label>
+                    <select id="newAssignee" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm font-bold uppercase" required>
+                        <option value="" disabled selected>Select regional office...</option>
+                        <option value="NCR">NCR</option><option value="CAR">CAR</option>
+                        <option value="Region I">Region I</option><option value="Region II">Region II</option>
+                        <option value="Region III">Region III</option><option value="Region IV-A">Region IV-A</option>
+                        <option value="Region IV-B">Region IV-B</option><option value="Region V">Region V</option>
+                        <option value="Region VI">Region VI</option><option value="Region VII">Region VII</option>
+                        <option value="Region VIII">Region VIII</option><option value="Region IX">Region IX</option>
+                        <option value="Region X">Region X</option><option value="Region XI">Region XI</option>
+                        <option value="Region XII">Region XII</option><option value="Region XIII">Region XIII</option>
+                        <option value="BARMM">BARMM</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Priority Level</label>
+                        <select id="newPriority" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                            <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Target Date</label>
+                        <input type="date" id="newDue" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-orange-600 text-white py-2.5 text-[10px] font-black uppercase hover:bg-orange-700 transition rounded-sm shadow-sm mt-4">Assign Directive</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="chartModal" class="hidden fixed inset-0 z-[110] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="modalBody" class="bg-white rounded-sm shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden">
+            <div class="flex justify-between items-center border-b border-slate-200 px-5 py-3 bg-slate-50">
+                <h3 id="modalTitle" class="text-[11px] font-black uppercase tracking-widest text-slate-800">Detail View</h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-red-600"><span class="material-icons-round">close</span></button>
+            </div>
+            <div class="p-8 h-[450px] relative"><canvas id="modalCanvas"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        // 1. DATA
+        let taskData = [
+            {id:'T-26-001', title:'Quarterly Inventory Audit', assigned:'Region IV-B', status:'in_progress', due:'2026-02-20'},
+            {id:'T-26-002', title:'Annual Performance Review', assigned:'NCR', status:'pending', due:'2026-02-25'},
+            {id:'T-26-003', title:'Infrastructure Inspection', assigned:'BARMM', status:'completed', due:'2026-02-10'}
+        ];
+
+        const statusMap = {pending:'Pending', in_progress:'In Progress', completed:'Completed'};
+
+        // 2. LIVE SEARCH & FILTER (Scans Title, ID, and assigned region)
+        function filterTasks() {
+            const query = document.getElementById('taskSearch').value.toLowerCase();
+            const status = document.getElementById('statusFilter').value;
+            const region = document.getElementById('regionFilter').value;
+
+            const filtered = taskData.filter(t => {
+                const matchSearch = t.id.toLowerCase().includes(query) || t.title.toLowerCase().includes(query) || t.assigned.toLowerCase().includes(query);
+                const matchStatus = !status || t.status === status;
+                const matchRegion = !region || t.assigned === region;
+                return matchSearch && matchStatus && matchRegion;
+            });
+
+            renderTable(filtered);
+            updateStats(filtered);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('taskTable');
+            tbody.innerHTML = data.length ? data.map(t => `
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                    <td class="py-2.5 px-4 font-mono font-bold text-slate-700">${t.id}</td>
+                    <td class="py-2.5 px-4 font-black text-slate-900">${t.title}</td>
+                    <td class="py-2.5 px-4"><span class="px-2 py-0.5 border border-blue-200 bg-blue-50 text-blue-700 text-[9px] font-black rounded-sm">${t.assigned}</span></td>
+                    <td class="py-2.5 px-4">
+                        <span class="px-2 py-0.5 border rounded-sm font-black text-[9px] uppercase tracking-widest ${getStatusColor(t.status)}">
+                            ${statusMap[t.status]}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-4 text-slate-500 font-bold uppercase text-[10px]">${t.due}</td>
+                    <td class="py-2.5 px-4 text-center"><button class="text-orange-700 font-bold hover:underline">Manage</button></td>
+                </tr>
+            `).join('') : '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold">No tasks matching criteria.</td></tr>';
+        }
+
+        function getStatusColor(s) {
+            if(s === 'completed') return 'bg-green-50 text-green-700 border-green-200';
+            if(s === 'in_progress') return 'bg-blue-50 text-blue-700 border-blue-200';
+            return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+        }
+
+        function updateStats(data) {
+            document.getElementById('statTotal').innerText = data.length;
+            document.getElementById('statCompleted').innerText = data.filter(t => t.status === 'completed').length;
+        }
+
+        function resetFilters() {
+            document.getElementById('taskSearch').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('regionFilter').value = '';
+            filterTasks();
+        }
+
+        // 3. UI CONTROLS
+        document.getElementById('taskSearch').addEventListener('input', filterTasks);
+        document.getElementById('statusFilter').addEventListener('change', filterTasks);
+        document.getElementById('regionFilter').addEventListener('change', filterTasks);
+
+        function openTaskDrawer() {
+            document.getElementById('drawerOverlay').classList.remove('hidden');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('opacity-100'), 10);
+            document.getElementById('taskDrawer').classList.remove('translate-x-full');
+        }
+
+        function closeTaskDrawer() {
+            document.getElementById('taskDrawer').classList.add('translate-x-full');
+            document.getElementById('drawerOverlay').classList.remove('opacity-100');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('hidden'), 300);
+        }
+
+        document.getElementById('newTaskForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = 'T-26-' + (taskData.length + 1).toString().padStart(3, '0');
+            taskData.unshift({
+                id: id,
+                title: document.getElementById('newTitle').value,
+                assigned: document.getElementById('newAssignee').value,
+                status: 'pending',
+                due: document.getElementById('newDue').value
+            });
+            filterTasks();
+            closeTaskDrawer();
+            document.getElementById('newTaskForm').reset();
+        });
+
+        // 4. CHARTS
+        let modalChart;
+        const statusChartData = { labels:['Todo','In-Progress','Review','Done'], datasets:[{data:[24, 56, 18, 112], backgroundColor:['#ef4444','#f59e0b','#fbbf24','#059669']}]};
+        const priorityChartData = { labels:['High','Medium','Low'], datasets:[{data:[34, 78, 98], backgroundColor:['#dc2626','#f59e0b','#10b981']}]};
+
+        window.onload = () => {
+            filterTasks();
+            new Chart(document.getElementById('taskChart').getContext('2d'), { type:'bar', data:statusChartData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{display:false}, x:{grid:{display:false}, ticks:{font:{size:9}}}}} });
+            new Chart(document.getElementById('priorityChart').getContext('2d'), { type:'doughnut', data:priorityChartData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right', labels:{boxWidth:10, font:{size:9}}}}, cutout:'75%'} });
+        };
+
+        function openChartModal(type) {
+            const m = document.getElementById('chartModal');
+            const b = document.getElementById('modalBody');
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.add('opacity-100'); b.classList.replace('scale-95', 'scale-100'); }, 10);
+            if (modalChart) modalChart.destroy();
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            if(type === 'status') {
+                document.getElementById('modalTitle').innerText = 'Workflow Analysis';
+                modalChart = new Chart(ctx, { type:'bar', data:statusChartData, options:{responsive:true, maintainAspectRatio:false}});
+            } else {
+                document.getElementById('modalTitle').innerText = 'Priority Breakdown';
+                modalChart = new Chart(ctx, { type:'doughnut', data:priorityChartData, options:{responsive:true, maintainAspectRatio:false}});
+            }
+        }
+
+        function closeChartModal() {
+            const m = document.getElementById('chartModal');
+            const b = document.getElementById('modalBody');
+            m.classList.remove('opacity-100');
+            b.classList.replace('scale-100', 'scale-95');
+            setTimeout(() => m.classList.add('hidden'), 300);
+        }
+    </script>
+</body>
+</html>

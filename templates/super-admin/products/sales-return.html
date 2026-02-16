@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Sales Return — Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+    
+    {% include 'super-admin/header-superadmin.html' %}
+    {% include 'super-admin/sidenav-superadmin.html' %}
+    
+    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+        
+        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
+            <div class="flex items-center gap-4">
+                <div class="bg-red-700 p-2.5 rounded-sm hidden sm:block">
+                    <span class="material-icons-round text-white text-xl">undo</span>
+                </div>
+                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">Returns & Refunds Registry</h1>
+                    <p class="text-[10px] font-bold text-red-600 uppercase tracking-widest mt-1">Defect Tracking & Resource Recovery</p>
+                </div>
+            </div>
+            <div class="flex gap-2 no-print">
+                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm" onclick="window.print()">
+                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export CSV</span>
+                </button>
+                <button onclick="openReturnDrawer()" class="bg-red-700 text-white px-4 py-1.5 text-[10px] font-black uppercase hover:bg-red-800 transition rounded-sm shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-plus text-[10px]"></i> Record Return
+                </button>
+            </div>
+        </header>
+      
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 shrink-0">
+            <div class="bg-white border border-slate-200 border-l-4 border-l-slate-800 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Returns</p>
+                <h3 id="statTotal" class="text-xl font-black text-slate-900 leading-none mt-1">42</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-red-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Refunded Amount</p>
+                <h3 id="statRefund" class="text-xl font-black text-red-600 leading-none mt-1">₱210K</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-yellow-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Pending Review</p>
+                <h3 id="statPending" class="text-xl font-black text-yellow-600 leading-none mt-1">8</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-blue-600 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Average Return Rate</p>
+                <h3 id="statRate" class="text-xl font-black text-blue-600 leading-none mt-1">8.3%</h3>
+            </div>
+        </div>
+      
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 shrink-0">
+            <section onclick="openChartModal('reason')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-red-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Returns by Reason Category</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full mt-2">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="reasonChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section onclick="openChartModal('trend')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-red-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Monthly Return Volume Trend</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full flex justify-center mt-2">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="flex-1 min-h-0 flex flex-col bg-white rounded-sm border border-slate-200 shadow-sm relative">
+            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex justify-between items-center gap-3 shrink-0 relative z-20">
+                <div class="relative flex-1 max-w-sm">
+                    <span class="material-icons-round absolute left-2.5 top-1.5 text-slate-400 text-[14px]">search</span>
+                    <input id="retSearch" type="text" placeholder="Search Return #, sale ref, or product..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 outline-none focus:border-red-700 focus:ring-1 focus:ring-red-700 rounded-sm transition bg-white text-slate-800">
+                </div>
+                <div class="flex gap-2">
+                    <select id="reasonFilter" class="px-3 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-red-700 rounded-sm text-slate-700">
+                        <option value="">All Reasons</option>
+                        <option value="damaged">Damaged</option>
+                        <option value="defective">Defective</option>
+                        <option value="wrong_item">Wrong Item</option>
+                    </select>
+                    <input type="date" id="dateFilter" class="px-3 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-red-700 rounded-sm text-slate-700">
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto custom-scrollbar z-10">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Return ID</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Sale Ref</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Product</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Qty</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Reason</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Date</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="retTable" class="text-xs">
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-300" onclick="closeReturnDrawer()"></div>
+    <div id="retDrawer" class="fixed inset-y-0 right-0 z-[100] w-full max-w-md bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-300">
+        <div class="bg-red-800 px-5 py-4 flex justify-between items-center text-white shrink-0">
+            <h2 class="text-sm font-black uppercase tracking-widest leading-none">Record Sale Return</h2>
+            <button onclick="closeReturnDrawer()" class="text-red-200 hover:text-white transition-colors bg-red-900 p-1 rounded-sm"><span class="material-icons-round text-sm">close</span></button>
+        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-slate-50">
+            <form id="newReturnForm" class="space-y-4 bg-white border border-slate-200 p-5 rounded-sm shadow-sm">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Original Sale Ref</label>
+                    <input type="text" id="newSaleRef" placeholder="SAL-XXXXXX" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Product Returned</label>
+                    <input type="text" id="newProd" placeholder="Item name" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Quantity</label>
+                        <input type="number" id="newQty" placeholder="0" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Return Date</label>
+                        <input type="date" id="newDate" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Return Reason</label>
+                    <select id="newReason" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                        <option value="damaged">Damaged / Expired</option>
+                        <option value="defective">Defective Unit</option>
+                        <option value="wrong_item">Wrong Item Sent</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-red-700 text-white py-2.5 text-[10px] font-black uppercase hover:bg-red-800 transition rounded-sm shadow-sm mt-4">Process Return</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="chartModal" class="hidden fixed inset-0 z-[110] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="modalBody" class="bg-white rounded-sm shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden">
+            <div class="flex justify-between items-center border-b border-slate-200 px-5 py-3 bg-slate-50">
+                <h3 id="modalTitle" class="text-[11px] font-black uppercase tracking-widest text-slate-800">Detail View</h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-red-600 transition-colors"><span class="material-icons-round">close</span></button>
+            </div>
+            <div class="p-8 h-[450px] relative"><canvas id="modalCanvas"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        // 1. DATA REPOSITORY
+        let returnData = [
+            {id:'RET-26-001', sale:'SAL-26-001', product:'Seedlings (High Yield)', qty:50, reason:'damaged', date:'2026-02-06'},
+            {id:'RET-26-002', sale:'SAL-26-042', product:'Solar Irrigation Unit', qty:1, reason:'defective', date:'2026-02-08'},
+            {id:'RET-26-003', sale:'SAL-26-105', product:'Soil Analysis Kits', qty:10, reason:'wrong_item', date:'2026-02-10'}
+        ];
+
+        // 2. LIVE SEARCH & FILTERING
+        function filterReturns() {
+            const query = document.getElementById('retSearch').value.toLowerCase();
+            const reason = document.getElementById('reasonFilter').value;
+
+            const filtered = returnData.filter(r => {
+                const matchSearch = r.id.toLowerCase().includes(query) || r.sale.toLowerCase().includes(query) || r.product.toLowerCase().includes(query);
+                const matchReason = !reason || r.reason === reason;
+                return matchSearch && matchReason;
+            });
+
+            renderTable(filtered);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('retTable');
+            tbody.innerHTML = data.length ? data.map(r => `
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                    <td class="py-2.5 px-4 font-mono font-bold text-slate-700">${r.id}</td>
+                    <td class="py-2.5 px-4 font-black text-slate-900">${r.sale}</td>
+                    <td class="py-2.5 px-4 text-slate-600">${r.product}</td>
+                    <td class="py-2.5 px-4 font-mono text-slate-500">${r.qty}</td>
+                    <td class="py-2.5 px-4">
+                        <span class="px-2 py-0.5 border rounded-sm font-black text-[9px] uppercase tracking-widest ${getReasonColor(r.reason)}">
+                            ${r.reason.replace('_', ' ')}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-4 text-slate-500 font-bold uppercase text-[10px]">${r.date}</td>
+                    <td class="py-2.5 px-4"><button class="text-red-700 font-bold hover:underline">Inspect</button></td>
+                </tr>
+            `).join('') : '<tr><td colspan="7" class="py-10 text-center text-slate-400 font-bold">No return records found.</td></tr>';
+        }
+
+        function getReasonColor(r) {
+            if(r === 'damaged') return 'bg-red-50 text-red-700 border-red-200';
+            if(r === 'defective') return 'bg-orange-50 text-orange-700 border-orange-200';
+            return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+        }
+
+        // 3. UI CONTROLS
+        document.getElementById('retSearch').addEventListener('input', filterReturns);
+        document.getElementById('reasonFilter').addEventListener('change', filterReturns);
+
+        function openReturnDrawer() {
+            document.getElementById('drawerOverlay').classList.remove('hidden');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('opacity-100'), 10);
+            document.getElementById('retDrawer').classList.remove('translate-x-full');
+        }
+
+        function closeReturnDrawer() {
+            document.getElementById('retDrawer').classList.add('translate-x-full');
+            document.getElementById('drawerOverlay').classList.remove('opacity-100');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('hidden'), 300);
+        }
+
+        document.getElementById('newReturnForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = 'RET-26-' + (returnData.length + 1).toString().padStart(3, '0');
+            returnData.unshift({
+                id: id,
+                sale: document.getElementById('newSaleRef').value,
+                product: document.getElementById('newProd').value,
+                qty: document.getElementById('newQty').value,
+                date: document.getElementById('newDate').value,
+                reason: document.getElementById('newReason').value
+            });
+            filterReturns();
+            closeReturnDrawer();
+            document.getElementById('newReturnForm').reset();
+        });
+
+        // 4. CHARTS
+        let modalChart;
+        const reasonData = { labels:['Damaged','Defective','Wrong'], datasets:[{data:[25, 12, 5], backgroundColor:['#b91c1c','#ea580c','#f59e0b']}]};
+        const trendData = { labels:['Jan','Feb','Mar','Apr'], datasets:[{label:'Returns', data:[5, 12, 8, 15], borderColor:'#dc2626', fill:false, tension:0.4}]};
+
+        window.onload = () => {
+            filterReturns();
+            new Chart(document.getElementById('reasonChart').getContext('2d'), { type:'doughnut', data:reasonData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right', labels:{boxWidth:10, font:{size:9}}}}, cutout:'70%'} });
+            new Chart(document.getElementById('trendChart').getContext('2d'), { type:'line', data:trendData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{display:false}, x:{grid:{display:false}, ticks:{font:{size:9}}}}} });
+        };
+
+        function openChartModal(type) {
+            const m = document.getElementById('chartModal');
+            const b = document.getElementById('modalBody');
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.add('opacity-100'); b.classList.replace('scale-95', 'scale-100'); }, 10);
+            if (modalChart) modalChart.destroy();
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            if(type === 'reason') {
+                document.getElementById('modalTitle').innerText = 'Returns by Reason Analysis';
+                modalChart = new Chart(ctx, { type:'doughnut', data:reasonData, options:{responsive:true, maintainAspectRatio:false}});
+            } else {
+                document.getElementById('modalTitle').innerText = 'Volume Trend Analysis';
+                modalChart = new Chart(ctx, { type:'line', data:trendData, options:{responsive:true, maintainAspectRatio:false}});
+            }
+        }
+
+        function closeChartModal() {
+            const m = document.getElementById('chartModal');
+            const b = document.getElementById('modalBody');
+            m.classList.remove('opacity-100');
+            b.classList.replace('scale-100', 'scale-95');
+            setTimeout(() => m.classList.add('hidden'), 300);
+        }
+    </script>
+</body>
+</html>
