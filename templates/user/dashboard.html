@@ -8,6 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/denr-print.css') }}" />
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -717,22 +718,50 @@
       }
 
       const pdfContainer = document.createElement('div');
-      pdfContainer.style.padding = '20px';
+      pdfContainer.style.padding = '25px';
       pdfContainer.style.backgroundColor = '#ffffff';
-      pdfContainer.style.fontFamily = 'Arial, sans-serif';
-      pdfContainer.style.lineHeight = '1.3';
+      pdfContainer.style.fontFamily = "'Times New Roman', Georgia, serif";
+      pdfContainer.style.lineHeight = '1.6';
 
+      // Official DENR Header
       const header = document.createElement('div');
+      header.className = 'denr-official-header';
       header.style.textAlign = 'center';
-      header.style.marginBottom = '12px';
-      header.style.borderBottom = '2px solid #10b981';
-      header.style.paddingBottom = '8px';
+      header.style.paddingBottom = '15px';
+      header.style.borderBottom = '4px solid #1b5e20';
+      header.style.marginBottom = '25px';
       header.innerHTML = `
-        <h1 style="color: #1b330d; font-size: 22px; margin: 0; font-weight: 800;">DENR Dashboard Report</h1>
-        <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 12px;">Comprehensive Application & Transaction Summary</p>
-        <p style="color: #9ca3af; margin: 2px 0 0 0; font-size: 10px;">Generated: ${new Date().toLocaleString()}</p>
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="{{ url_for('static', filename='daily-tribune_import_wp-content_uploads_2022_12_DENR.avif') }}" 
+               alt="DENR Logo" 
+               style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto;" />
+        </div>
+        <p style="font-size: 11pt; margin: 5px 0 0; text-transform: uppercase; letter-spacing: 0.5px;">Republic of the Philippines</p>
+        <h1 style="font-size: 13pt; font-weight: bold; margin: 5px 0; text-transform: uppercase; color: #1b5e20; letter-spacing: 1px;">Department of Environment and Natural Resources</h1>
+        <p style="font-size: 10pt; margin: 3px 0; font-style: italic;">Office of the Secretary</p>
+        <p style="font-size: 9pt; margin: 8px 0 0; line-height: 1.4;">
+          DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
+          Tel: (632) 8929-6626 | Fax: (632) 8920-4352 | Website: www.denr.gov.ph
+        </p>
       `;
       pdfContainer.appendChild(header);
+
+      // Document Title
+      const titleSection = document.createElement('div');
+      titleSection.className = 'denr-doc-title';
+      titleSection.style.textAlign = 'center';
+      titleSection.style.margin = '25px 0';
+      titleSection.innerHTML = `
+        <h1 style="font-size: 18pt; font-weight: bold; color: #1b5e20; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1.5px;">
+          APPLICATION STATUS REPORT
+        </h1>
+        <p style="font-size: 11pt; color: #333; margin: 5px 0;">Comprehensive Dashboard Summary</p>
+        <p style="font-size: 10pt; color: #666; margin: 10px 0; font-weight: bold;">
+          Document No. DSR-${new Date().getTime().toString().slice(-8)}<br>
+          Generated: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}
+        </p>
+      `;
+      pdfContainer.appendChild(titleSection);
 
       const totalTransactions = allTransactions.length;
       const licenseReq = allTransactions.filter(r => r.type_of_application === "License/Permit Request").length;
@@ -749,183 +778,208 @@
       const pendingAmount = allTransactions.filter(r => normalize(r.status) === "pending").reduce((sum, t) => sum + (t.amount || 0), 0);
 
       const execSummary = document.createElement('div');
-      execSummary.style.marginBottom = '12px';
+      execSummary.className = 'denr-section';
+      execSummary.style.marginBottom = '20px';
       execSummary.innerHTML = `
-        <h2 style="color: #1b330d; font-size: 14px; font-weight: 800; border-bottom: 2px solid #10b981; padding-bottom: 4px; margin-bottom: 8px;">Executive Summary</h2>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-            <div style="background: #f0fdf4; padding: 10px; border-radius: 6px; border-left: 3px solid #10b981;">
-              <p style="color: #6b7280; font-size: 10px; margin: 0; text-transform: uppercase; font-weight: 700;">Total Txns</p>
-              <h3 style="color: #10b981; font-size: 20px; margin: 4px 0 0 0; font-weight: 800;">${totalTransactions}</h3>
-            </div>
-            <div style="background: #fef3c7; padding: 10px; border-radius: 6px; border-left: 3px solid #f59e0b;">
-              <p style="color: #6b7280; font-size: 10px; margin: 0; text-transform: uppercase; font-weight: 700;">Success</p>
-              <h3 style="color: #f59e0b; font-size: 20px; margin: 4px 0 0 0; font-weight: 800;">${successTxn}</h3>
-            </div>
-            <div style="background: #eff6ff; padding: 10px; border-radius: 6px; border-left: 3px solid #3b82f6;">
-              <p style="color: #6b7280; font-size: 10px; margin: 0; text-transform: uppercase; font-weight: 700;">Total</p>
-              <h3 style="color: #3b82f6; font-size: 18px; margin: 4px 0 0 0; font-weight: 800;">₱${totalAmount.toLocaleString()}</h3>
-            </div>
+        <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+          I. EXECUTIVE SUMMARY
+        </h2>
+        <div style="display: flex; justify-content: space-around; margin: 20px 0;">
+          <div style="text-align: center; padding: 15px; border: 2px solid #1b5e20; background: #f1f8e9; min-width: 150px;">
+            <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Applications</p>
+            <p style="font-size: 22pt; color: #1b5e20; font-weight: bold; margin: 0;">${totalTransactions}</p>
+          </div>
+          <div style="text-align: center; padding: 15px; border: 2px solid #2e7d32; background: #f1f8e9; min-width: 150px;">
+            <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Approved</p>
+            <p style="font-size: 22pt; color: #2e7d32; font-weight: bold; margin: 0;">${successTxn}</p>
+          </div>
+          <div style="text-align: center; padding: 15px; border: 2px solid #558b2f; background: #f1f8e9; min-width: 150px;">
+            <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Amount</p>
+            <p style="font-size: 16pt; color: #558b2f; font-weight: bold; margin: 0;">₱${totalAmount.toLocaleString()}</p>
+          </div>
         </div>
       `;
       pdfContainer.appendChild(execSummary);
 
       const breakdown = document.createElement('div');
-      breakdown.style.marginBottom = '12px';
+      breakdown.className = 'denr-section';
+      breakdown.style.marginBottom = '20px';
       breakdown.innerHTML = `
-        <h2 style="color: #1b330d; font-size: 14px; font-weight: 800; border-bottom: 2px solid #10b981; padding-bottom: 4px; margin-bottom: 8px;">Breakdown</h2>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-            <div style="background: #f0fdf4; border: 1px solid #10b981; padding: 10px; border-radius: 6px;">
-              <div style="font-size: 10px; color: #6b7280; font-weight: 700;">LICENSE/PERMIT</div>
-              <div style="font-size: 24px; color: #10b981; font-weight: 800;">${licenseReq}</div>
-            </div>
-            <div style="background: #eff6ff; border: 1px solid #3b82f6; padding: 10px; border-radius: 6px;">
-              <div style="font-size: 10px; color: #6b7280; font-weight: 700;">SERVICE REQUEST</div>
-              <div style="font-size: 24px; color: #3b82f6; font-weight: 800;">${serviceReq}</div>
-            </div>
-        </div>
+        <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+          II. APPLICATION TYPE CLASSIFICATION
+        </h2>
+        <table style="width: 100%; border-collapse: collapse; font-size: 10pt; margin: 15px 0;">
+          <thead style="background: #1b5e20; color: white;">
+            <tr>
+              <th style="padding: 10px; text-align: left; border: 1px solid #333;">Application Type</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #333;">Count</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #333;">Percentage</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="background: #f9f9f9;">
+              <td style="padding: 8px 10px; border: 1px solid #999;">License/Permit Request</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">${licenseReq}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">${((licenseReq/totalTransactions)*100).toFixed(1)}%</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 10px; border: 1px solid #999;">Service Request</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">${serviceReq}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">${((serviceReq/totalTransactions)*100).toFixed(1)}%</td>
+            </tr>
+            <tr style="background: #f1f8e9; font-weight: bold;">
+              <td style="padding: 8px 10px; border: 1px solid #999;">TOTAL</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">${totalTransactions}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">100.0%</td>
+            </tr>
+          </tbody>
+        </table>
       `;
       pdfContainer.appendChild(breakdown);
-      const typeBreakdown = document.createElement('div');
-      typeBreakdown.style.marginBottom = '12px';
-      typeBreakdown.style.pageBreakInside = 'avoid';
 
-      const typeTitle = document.createElement('h2');
-      typeTitle.innerHTML = 'Application Type Breakdown';
-      typeTitle.style.color = '#1b330d';
-      typeTitle.style.fontSize = '14px';
-      typeTitle.style.fontWeight = '800';
-      typeTitle.style.borderBottom = '2px solid #10b981';
-      typeTitle.style.paddingBottom = '4px';
-      typeTitle.style.marginBottom = '8px';
-      typeBreakdown.appendChild(typeTitle);
-
-      const typeGrid = document.createElement('div');
-      typeGrid.style.display = 'grid';
-      typeGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
-      typeGrid.style.gap = '8px';
-
-      const types = [
-        { name: 'License/Permit', count: licenseReq, color: '#10b981', bgColor: '#f0fdf4' },
-        { name: 'Service Request', count: serviceReq, color: '#3b82f6', bgColor: '#eff6ff' }
-      ];
-
-      types.forEach(type => {
-        const typeBox = document.createElement('div');
-        typeBox.style.background = type.bgColor;
-        typeBox.style.border = `1px solid ${type.color}`;
-        typeBox.style.padding = '10px';
-        typeBox.style.borderRadius = '6px';
-        typeBox.innerHTML = `
-          <div style="font-size: 10px; color: #6b7280; font-weight: 700; text-transform: uppercase;">${type.name}</div>
-          <div style="font-size: 24px; color: ${type.color}; font-weight: 800; margin-top: 4px;">${type.count}</div>
-          <div style="font-size: 9px; color: #9ca3af; margin-top: 2px;">${((type.count / totalTransactions) * 100).toFixed(1)}%</div>
-        `;
-        typeGrid.appendChild(typeBox);
-      });
-
-      typeBreakdown.appendChild(typeGrid);
-      pdfContainer.appendChild(typeBreakdown);
       const statusSection = document.createElement('div');
-      statusSection.style.marginBottom = '12px';
-      statusSection.style.pageBreakInside = 'avoid';
-
-      const statusTitle = document.createElement('h2');
-      statusTitle.innerHTML = 'Application Status Analysis';
-      statusTitle.style.color = '#1b330d';
-      statusTitle.style.fontSize = '14px';
-      statusTitle.style.fontWeight = '800';
-      statusTitle.style.borderBottom = '2px solid #10b981';
-      statusTitle.style.paddingBottom = '4px';
-      statusTitle.style.marginBottom = '8px';
-      statusSection.appendChild(statusTitle);
-
-      const statusGrid = document.createElement('div');
-      statusGrid.style.display = 'grid';
-      statusGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
-      statusGrid.style.gap = '8px';
-
-      const statuses = [
-        { name: 'Approved', count: approvedTxns, amount: approvedAmount, color: '#10b981', bgColor: '#f0fdf4' },
-        { name: 'Pending', count: pendingTxns, amount: pendingAmount, color: '#3b82f6', bgColor: '#eff6ff' },
-        { name: 'Rejected', count: rejectedTxns, amount: 0, color: '#ef4444', bgColor: '#fee2e2' }
-      ];
-
-      statuses.forEach(status => {
-        const statusBox = document.createElement('div');
-        statusBox.style.background = status.bgColor;
-        statusBox.style.border = `1px solid ${status.color}`;
-        statusBox.style.padding = '10px';
-        statusBox.style.borderRadius = '6px';
-        statusBox.innerHTML = `
-          <div style="font-size: 10px; color: #6b7280; font-weight: 700; text-transform: uppercase;">${status.name}</div>
-          <div style="font-size: 22px; color: ${status.color}; font-weight: 800; margin-top: 4px;">📊 ${status.count}</div>
-          <div style="font-size: 10px; color: ${status.color}; margin-top: 4px; font-weight: 700;">₱${status.amount.toLocaleString()}</div>
-        `;
-        statusGrid.appendChild(statusBox);
-      });
-
-      statusSection.appendChild(statusGrid);
+      statusSection.className = 'denr-section';
+      statusSection.style.marginBottom = '20px';
+      statusSection.innerHTML = `
+        <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+          III. STATUS ANALYSIS
+        </h2>
+        <table style="width: 100%; border-collapse: collapse; font-size: 10pt; margin: 15px 0;">
+          <thead style="background: #1b5e20; color: white;">
+            <tr>
+              <th style="padding: 10px; text-align: left; border: 1px solid #333;">Status</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #333;">Count</th>
+              <th style="padding: 10px; text-align: right; border: 1px solid #333;">Amount (₱)</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #333;">Percentage</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="background: #f9f9f9;">
+              <td style="padding: 8px 10px; border: 1px solid #999;">Approved</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold; color: #1b5e20;">${approvedTxns}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: right;">₱${approvedAmount.toLocaleString()}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">${((approvedTxns/totalTransactions)*100).toFixed(1)}%</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 10px; border: 1px solid #999;">Pending</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold; color: #f57c00;">${pendingTxns}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: right;">₱${pendingAmount.toLocaleString()}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">${((pendingTxns/totalTransactions)*100).toFixed(1)}%</td>
+            </tr>
+            <tr style="background: #f9f9f9;">
+              <td style="padding: 8px 10px; border: 1px solid #999;">Rejected</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold; color: #c62828;">${rejectedTxns}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: right;">₱0</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">${((rejectedTxns/totalTransactions)*100).toFixed(1)}%</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
       pdfContainer.appendChild(statusSection);
 
       const paymentSection = document.createElement('div');
-      paymentSection.style.marginBottom = '12px';
-      paymentSection.style.pageBreakInside = 'avoid';
-
-      const paymentTitle = document.createElement('h2');
-      paymentTitle.innerHTML = 'Payment Status Analysis';
-      paymentTitle.style.color = '#1b330d';
-      paymentTitle.style.fontSize = '14px';
-      paymentTitle.style.fontWeight = '800';
-      paymentTitle.style.borderBottom = '2px solid #10b981';
-      paymentTitle.style.paddingBottom = '4px';
-      paymentTitle.style.marginBottom = '8px';
-      paymentSection.appendChild(paymentTitle);
-
-      const paymentGrid = document.createElement('div');
-      paymentGrid.style.display = 'grid';
-      paymentGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
-      paymentGrid.style.gap = '8px';
-
-      const payments = [
-        { name: 'Paid', count: paidTxns, color: '#10b981', bgColor: '#f0fdf4' },
-        { name: 'Unpaid', count: unpaidTxns, color: '#ef4444', bgColor: '#fee2e2' },
-        { name: 'Refunded', count: refundedTxns, color: '#f59e0b', bgColor: '#fef3c7' }
-      ];
-
-      payments.forEach(payment => {
-        const paymentBox = document.createElement('div');
-        paymentBox.style.background = payment.bgColor;
-        paymentBox.style.border = `1px solid ${payment.color}`;
-        paymentBox.style.padding = '10px';
-        paymentBox.style.borderRadius = '6px';
-        paymentBox.innerHTML = `
-          <div style="font-size: 10px; color: #6b7280; font-weight: 700; text-transform: uppercase;">${payment.name}</div>
-          <div style="font-size: 24px; color: ${payment.color}; font-weight: 800; margin-top: 4px;">${payment.count}</div>
-        `;
-        paymentGrid.appendChild(paymentBox);
-      });
-
-      paymentSection.appendChild(paymentGrid);
+      paymentSection.className = 'denr-section';
+      paymentSection.style.marginBottom = '20px';
+      paymentSection.innerHTML = `
+        <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+          IV. PAYMENT STATUS ANALYSIS
+        </h2>
+        <table style="width: 100%; border-collapse: collapse; font-size: 10pt; margin: 15px 0;">
+          <thead style="background: #1b5e20; color: white;">
+            <tr>
+              <th style="padding: 10px; text-align: left; border: 1px solid #333;">Payment Status</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #333;">Count</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #333;">Percentage</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="background: #f9f9f9;">
+              <td style="padding: 8px 10px; border: 1px solid #999;">Paid</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold; color: #1b5e20;">${paidTxns}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">${totalTransactions > 0 ? ((paidTxns/totalTransactions)*100).toFixed(1) : '0.0'}%</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 10px; border: 1px solid #999;">Unpaid</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold; color: #c62828;">${unpaidTxns}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">${totalTransactions > 0 ? ((unpaidTxns/totalTransactions)*100).toFixed(1) : '0.0'}%</td>
+            </tr>
+            <tr style="background: #f9f9f9;">
+              <td style="padding: 8px 10px; border: 1px solid #999;">Refunded</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold; color: #f57c00;">${refundedTxns}</td>
+              <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">${totalTransactions > 0 ? ((refundedTxns/totalTransactions)*100).toFixed(1) : '0.0'}%</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
       pdfContainer.appendChild(paymentSection);
 
+      // Footer with signature
+      const footer = document.createElement('div');
+      footer.style.marginTop = '40px';
+      footer.style.pageBreakInside = 'avoid';
+      footer.innerHTML = `
+        <div style="margin: 30px 0;">
+          <p style="font-size: 10pt; margin-bottom: 20px; text-align: justify; text-indent: 40px;">
+            This report is electronically generated and contains accurate information as of the date of generation. 
+            For any clarifications or inquiries, please contact the DENR office through the channels provided below.
+          </p>
+        </div>
+        <div style="text-align: right; margin-right: 50px; margin-top: 50px;">
+          <div style="border-bottom: 2px solid #000; width: 250px; margin-left: auto; padding-top: 50px;"></div>
+          <p style="margin: 5px 0 0; font-size: 11pt; font-weight: bold; text-transform: uppercase;">Authorized Official</p>
+          <p style="margin: 0; font-size: 10pt;">DENR Representative</p>
+          <p style="margin: 5px 0 0; font-size: 9pt; color: #666;">Date: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>
+        <div style="margin-top: 40px; padding: 15px; border: 2px solid #ffc107; background: #fff3cd;">
+          <p style="margin: 0; font-size: 9pt; color: #856404; text-align: center;">
+            <strong>NOTICE:</strong> This is an electronically generated document. 
+            Any alteration or unauthorized use is punishable by law under relevant Philippine statutes.
+          </p>
+        </div>
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 3px solid #1b5e20; font-size: 8pt; text-align: center; color: #666;">
+          <p style="margin: 0; line-height: 1.4;">
+            Department of Environment and Natural Resources<br>
+            DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
+            Telephone: (632) 8929-6626 | Fax: (632) 8920-4352<br>
+            Email: osec@denr.gov.ph | Website: www.denr.gov.ph
+          </p>
+          <p style="margin: 5px 0 0; font-style: italic;">
+            Document Reference: DSR-${new Date().getTime().toString().slice(-8)} | Generated: ${new Date().toLocaleString('en-PH')}
+          </p>
+        </div>
+      `;
+      pdfContainer.appendChild(footer);
+
       const detailsSection = document.createElement('div');
+      detailsSection.className = 'denr-section';
       detailsSection.style.pageBreakBefore = 'always';
-      detailsSection.innerHTML = `<h2 style="color: #1b330d; font-size: 14px; font-weight: 800; border-bottom: 2px solid #10b981; padding-bottom: 4px; margin-bottom: 10px;">Detailed Transaction List</h2>`;
+      detailsSection.innerHTML = `
+        <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+          V. DETAILED TRANSACTION LIST
+        </h2>
+      `;
       
       allTransactions.forEach((transaction, idx) => {
-        const sColor = normalize(transaction.status) === 'approved' ? '#10b981' : normalize(transaction.status) === 'pending' ? '#3b82f6' : '#ef4444';
-        const pColor = normalize(transaction.payment_status) === 'paid' ? '#10b981' : '#ef4444';
+        const statusColor = normalize(transaction.status) === 'approved' ? '#1b5e20' : normalize(transaction.status) === 'pending' ? '#f57c00' : '#c62828';
+        const paymentColor = normalize(transaction.payment_status) === 'paid' ? '#1b5e20' : '#c62828';
+        
         const txnCard = document.createElement('div');
-        txnCard.style.cssText = 'margin-bottom:12px; padding:10px; border:1px solid #e5e7eb; border-radius:6px; background:#f9fafb; page-break-inside:avoid; font-size:11px;';
+        txnCard.style.cssText = 'margin-bottom: 15px; padding: 12px; border: 1px solid #999; background: #fafafa; page-break-inside: avoid;';
         txnCard.innerHTML = `
-          <div style="display:flex; justify-content:space-between; border-bottom:1px solid #10b981; padding-bottom:8px; margin-bottom:8px;">
-            <div><div style="font-size:9px; font-weight:700;">Txn #${idx+1}</div><div style="font-weight:700;">${transaction.name_of_application}</div></div>
-            <div style="text-align:right;"><div style="font-size:12px; font-weight:800; color:${pColor};">₱${(transaction.amount || 0).toLocaleString()}</div></div>
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1b5e20; padding-bottom: 8px; margin-bottom: 10px;">
+            <div>
+              <div style="font-size: 9pt; font-weight: bold; color: #666;">Transaction #${idx+1}</div>
+              <div style="font-size: 11pt; font-weight: bold; color: #1b5e20; margin-top: 3px;">${transaction.name_of_application}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 14pt; font-weight: bold; color: ${paymentColor};">₱${(transaction.amount || 0).toLocaleString()}</div>
+            </div>
           </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:10px;">
-            <div>Ref: ${transaction.reference_num}</div><div>Type: ${transaction.type_of_application}</div>
-            <div>Payment: <span style="color:${pColor}; font-weight:700;">● ${transaction.payment_status}</span></div>
-            <div>Status: <span style="color:${sColor}; font-weight:700;">● ${transaction.status}</span></div>
+          <div style="font-size: 9pt; line-height: 1.6;">
+            <p style="margin: 3px 0;"><strong>Reference:</strong> ${transaction.reference_num}</p>
+            <p style="margin: 3px 0;"><strong>Type:</strong> ${transaction.type_of_application}</p>
+            <p style="margin: 3px 0;"><strong>Payment Status:</strong> <span style="color: ${paymentColor}; font-weight: bold; text-transform: uppercase;">${transaction.payment_status}</span></p>
+            <p style="margin: 3px 0;"><strong>Application Status:</strong> <span style="color: ${statusColor}; font-weight: bold; text-transform: uppercase;">${transaction.status}</span></p>
           </div>
         `;
         detailsSection.appendChild(txnCard);
