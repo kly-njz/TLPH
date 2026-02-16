@@ -193,15 +193,15 @@ def permit_national_view():
     try:
         db = get_firestore_db()
         
-        # Fetch only APPROVED license/permit applications from Regional (for National view)
-        permits_ref = db.collection('license_applications').where('status', '==', 'approved')
+        # Fetch permits that Regional has approved OR marked for review by National
+        permits_ref = db.collection('license_applications')
         docs = permits_ref.stream()
         
         permits = []
         total_count = 0
         approved_count = 0
         pending_count = 0
-        expired_count = 0
+        rejected_count = 0
         
         # For chart calculations
         from collections import defaultdict
@@ -212,24 +212,27 @@ def permit_national_view():
         for doc in docs:
             data = doc.to_dict()
             
-            # National only sees approved permits from Regional
+            # National sees approved AND to review from Regional (status: approved, to review, or review)
             status = data.get('status', 'pending').lower()
             
-            # Only include if approved by regional
-            if status == 'approved':
+            # Only include if approved or to review by regional
+            if status in ['approved', 'to review', 'review']:
                 total_count += 1
                 
-                # Determine national status
+                # National status determines display and counts
                 national_status = data.get('nationalStatus', 'pending').lower()
                 if national_status == 'approved':
                     approved_count += 1
-                elif national_status == 'expired':
-                    expired_count += 1
+                elif national_status == 'rejected':
+                    rejected_count += 1
                 else:
                     pending_count += 1
                 
-                # Count by status for chart
-                status_breakdown[national_status] += 1
+                # Count by status for chart - National only has approved/rejected/pending
+                if national_status in ['approved', 'rejected']:
+                    status_breakdown[national_status] += 1
+                else:
+                    status_breakdown['pending'] += 1
                 
                 # Format the permit data
                 created_at = data.get('createdAt')
@@ -294,7 +297,8 @@ def permit_national_view():
                     'location': location,
                     'region': region,
                     'date_filed': date_filed,
-                    'status': national_status,
+                    'status': national_status,  # Use nationalStatus for display
+                    'regional_status': status,  # Keep regional status for reference
                     'issue_date': issue_date,
                     'expiry_date': expiry_date
                 })
@@ -328,12 +332,12 @@ def permit_national_view():
         region_labels = [item[0] for item in top_regions] if top_regions else ['N/A']
         region_counts = [item[1] for item in top_regions] if top_regions else [0]
         
-        # Status breakdown
-        status_labels = ['Approved', 'Pending', 'Expired']
+        # Status breakdown - National only has Approved, Pending, Rejected (no "Expired")
+        status_labels = ['Approved', 'Pending', 'Rejected']
         status_data = [
             status_breakdown.get('approved', 0),
             status_breakdown.get('pending', 0),
-            status_breakdown.get('expired', 0)
+            status_breakdown.get('rejected', 0)
         ]
         
         return render_template('national/licensing-permit-national.html',
@@ -341,7 +345,7 @@ def permit_national_view():
                              total_count=total_count,
                              approved_count=approved_count,
                              pending_count=pending_count,
-                             expired_count=expired_count,
+                             rejected_count=rejected_count,
                              # Chart data
                              trend_labels=last_6_months,
                              trend_data=trend_data,
@@ -359,12 +363,12 @@ def permit_national_view():
                              total_count=0,
                              approved_count=0,
                              pending_count=0,
-                             expired_count=0,
+                             rejected_count=0,
                              trend_labels=['S', 'O', 'N', 'D', 'J', 'F'],
                              trend_data=[0, 0, 0, 0, 0, 0],
                              region_labels=['N/A'],
                              region_counts=[0],
-                             status_labels=['Approved', 'Pending', 'Expired'],
+                             status_labels=['Approved', 'Pending', 'Rejected'],
                              status_data=[0, 0, 0])
 
 @bp.route('/service-national')
