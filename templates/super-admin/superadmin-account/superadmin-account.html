@@ -1,251 +1,440 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DENR | Government Account Registry</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DENR | Assign User Permissions</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        denr: '#006400',
-                        'gov-blue': '#0038a8',
-                        'gov-red': '#ce1126',
-                        'gov-navy': '#002e5f'
-                    },
-                    fontFamily: {
-                        'serif': ['Georgia', 'serif'],
-                        'sans': ['Inter', 'sans-serif'],
-                    }
-                }
-            }
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            denr: '#006400',
+            'gov-blue': '#0038a8',
+            'gov-red': '#ce1126',
+            'gov-navy': '#002e5f'
+          },
+          fontFamily: {
+            'serif': ['Georgia', 'serif'],
+            'sans': ['Inter', 'sans-serif'],
+          }
         }
-    </script>
-    
-    <style>
-        .gov-strip { background: linear-gradient(to right, #0038a8 50%, #ce1126 50%); height: 3px; width: 100%; position: fixed; top: 0; left: 0; z-index: 7000; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #006400; border-radius: 10px; }
-        html, body { height: 100vh; overflow: hidden; background-color: #f1f5f9; }
-        .executive-border { border: 1px solid #cbd5e1; }
-        .table-header-gov { background-color: #f8fafc; border-bottom: 2px solid #002e5f; position: sticky; top: 0; z-index: 10; }
-        .modal-active { overflow: hidden; }
-    </style>
+      }
+    }
+  </script>
+
+  <style>
+    :root{
+      --col1-left: 0px;
+      --col1-w: 320px; /* overwritten by JS */
+    }
+
+    .gov-strip { background: linear-gradient(to right, #0038a8 50%, #ce1126 50%); height: 3px; width: 100%; position: fixed; top: 0; left: 0; z-index: 7000; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #006400; border-radius: 10px; }
+
+    html, body { height: 100vh; overflow: hidden; background-color: #f1f5f9; }
+    .executive-border { border: 1px solid #cbd5e1; }
+    .table-header-gov { background-color: #f8fafc; border-bottom: 2px solid #002e5f; position: sticky; top: 0; z-index: 10; }
+
+    /* Sticky first 2 columns */
+    .sticky-col-1{ position: sticky; left: var(--col1-left); z-index: 25; background:#fff; }
+    .sticky-col-2{ position: sticky; left: var(--col1-w); z-index: 24; background:#fff; }
+
+    .sticky-col-1.header, .sticky-col-2.header{
+      background:#f8fafc; z-index: 40;
+    }
+
+    /* Visual separation so sticky columns don’t look like they overlap */
+    .sticky-divider{
+      box-shadow: 6px 0 10px rgba(15,23,42,.06);
+      border-right: 1px solid #e2e8f0;
+    }
+
+    .cell-box{ border:1px solid #e2e8f0; background:#fff; }
+    .tiny { font-size: 10px; }
+    .chk{ width: 14px; height: 14px; accent-color: #006400; }
+    .chip{ display:inline-flex; align-items:center; gap:.35rem; padding:.12rem .45rem; border-radius:999px; border:1px solid #e2e8f0; background:#f8fafc; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
+  </style>
 </head>
 
 <body class="font-sans text-slate-900">
+  <div class="gov-strip"></div>
 
-    <div class="gov-strip"></div>
+  <div class="fixed top-1 w-full z-[1050]">{% include 'super-admin/header-superadmin.html' %}</div>
+  <div class="fixed left-0 h-full z-[1040]">{% include 'super-admin/sidenav-superadmin.html' %}</div>
 
-    <div class="fixed top-1 w-full z-[1050]">{% include 'super-admin/header-superadmin.html' %}</div>
-    <div class="fixed left-0 h-full z-[1040]">{% include 'super-admin/sidenav-superadmin.html' %}</div>
+  <main class="lg:ml-64 pt-24 h-screen flex flex-col transition-all duration-300">
+    <div class="max-w-[1900px] mx-auto w-full px-4 flex flex-col flex-1 min-h-0 space-y-3">
 
-    <div id="accountModal" class="fixed inset-0 z-[6000] hidden flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div class="bg-white w-full max-w-lg border-t-8 border-gov-navy shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div class="p-4 border-b flex justify-between items-center bg-slate-50">
-                <div class="flex items-center gap-3">
-                    <span class="material-icons-round text-gov-navy">person_add</span>
-                    <h2 class="font-serif text-lg font-black text-slate-800 uppercase leading-none">Authorize Personnel</h2>
-                </div>
-                <button onclick="toggleModal()" class="text-slate-400 hover:text-red-600 transition-colors"><span class="material-icons-round">close</span></button>
-            </div>
-            <form class="p-6 space-y-4">
-                <div class="space-y-1">
-                    <label class="text-[9px] font-black text-slate-500 uppercase">Personnel Full Name</label>
-                    <input type="text" required class="w-full px-3 py-1.5 border border-slate-300 outline-none text-sm focus:ring-1 focus:ring-gov-blue" placeholder="Juan Dela Cruz">
-                </div>
-                <div class="space-y-1">
-                    <label class="text-[9px] font-black text-slate-500 uppercase">Official Government Email</label>
-                    <input type="email" required class="w-full px-3 py-1.5 border border-slate-300 outline-none text-sm focus:ring-1 focus:ring-gov-blue" placeholder="name@denr.gov.ph">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-1">
-                        <label class="text-[9px] font-black text-slate-500 uppercase">Access Role</label>
-                        <select class="w-full px-3 py-1.5 border border-slate-300 text-sm font-bold outline-none bg-white uppercase">
-                            <option>Regional Director</option>
-                            <option>PENRO Official</option>
-                            <option>CENRO Personnel</option>
-                            <option>Field Inspector</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-[9px] font-black text-slate-500 uppercase">Jurisdiction Region</label>
-                        <select class="w-full px-3 py-1.5 border border-slate-300 text-sm font-bold outline-none bg-white">
-                            <option value="NCR">NCR</option>
-                            <option value="CAR">CAR</option>
-                            <option value="I">Region I</option>
-                            <option value="II">Region II</option>
-                            <option value="III">Region III</option>
-                            <option value="IV-A">Region IV-A</option>
-                            <option value="IV-B">Region IV-B</option>
-                            <option value="V">Region V</option>
-                            <option value="VI">Region VI</option>
-                            <option value="VII">Region VII</option>
-                            <option value="VIII">Region VIII</option>
-                            <option value="IX">Region IX</option>
-                            <option value="X">Region X</option>
-                            <option value="XI">Region XI</option>
-                            <option value="XII">Region XII</option>
-                            <option value="XIII">Region XIII</option>
-                            <option value="BARMM">BARMM</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="pt-4 border-t flex gap-3">
-                    <button type="button" onclick="toggleModal()" class="flex-1 py-2 border border-slate-300 text-[9px] font-black uppercase hover:bg-slate-50 transition">Cancel</button>
-                    <button type="submit" class="flex-1 py-2 bg-gov-navy text-white text-[9px] font-black uppercase shadow-lg hover:bg-black transition">Authorize Account</button>
-                </div>
-            </form>
+      <!-- HEADER -->
+      <header class="bg-white executive-border p-3 flex items-center justify-between shadow-sm shrink-0">
+        <div class="flex items-center gap-4">
+          <div class="bg-gov-navy p-2 rounded">
+            <span class="material-icons-round text-white text-2xl">rule</span>
+          </div>
+          <div class="border-l-2 border-slate-200 pl-4">
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] leading-tight">Republic of the Philippines</p>
+            <h1 class="font-serif text-lg font-black text-gov-navy uppercase tracking-tight leading-none">Assign User Permissions</h1>
+            <p class="text-[10px] font-bold text-gov-blue uppercase tracking-widest mt-1">Row = User • Column = Module • Cell = Checklist</p>
+          </div>
         </div>
+
+        <div class="flex items-center gap-2 flex-wrap justify-end">
+          <!-- TEMPLATE (optional; keep or remove) -->
+          <div class="bg-slate-50 executive-border px-3 py-2 flex items-center gap-2">
+            <span class="material-icons-round text-slate-500 text-sm">content_paste</span>
+            <select id="templateSelect" class="bg-transparent outline-none text-[10px] font-black uppercase text-slate-700">
+              <option value="">-- APPLY TEMPLATE TO SELECTED USER --</option>
+              <option value="Departments">Departments (Create+Edit all)</option>
+              <option value="User permition">User permition (View all)</option>
+              <option value="User management">User management (Delete all)</option>
+              <option value="Suplier list">Suplier list (Edit tax on P/S/Q)</option>
+              <option value="Farmer list">Farmer list (Edit discount on P/S/Q)</option>
+              <option value="Customer list">Customer list (Change product details on P/S/Q)</option>
+              <option value="Purchases">Purchases (Shipments on Sales)</option>
+              <option value="Distributed">Distributed (pos/voucher on Sales)</option>
+              <option value="qoutations">qoutations (Installement on Sales)</option>
+            </select>
+          </div>
+
+          <button onclick="applyTemplateToSelected()"
+            class="bg-denr text-white px-4 py-2 text-[10px] font-black uppercase shadow hover:bg-black transition flex items-center gap-2">
+            <span class="material-icons-round text-sm">playlist_add_check</span> Apply
+          </button>
+
+          <!-- NEW: REMOVE ALL PRIVILEGES (selected user) -->
+          <button onclick="removeAllPrivilegesSelected()"
+            class="bg-gov-red text-white px-4 py-2 text-[10px] font-black uppercase shadow hover:bg-black transition flex items-center gap-2">
+            <span class="material-icons-round text-sm">block</span> Remove All
+          </button>
+
+          <button onclick="savePermissions()"
+            class="bg-gov-navy text-white px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-black transition flex items-center gap-2">
+            <span class="material-icons-round text-sm">save</span> Save (JSON)
+          </button>
+        </div>
+      </header>
+
+      <!-- LEGEND -->
+      <div class="bg-white executive-border p-3 shadow-sm shrink-0 flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="chip"><span class="material-icons-round text-[14px] text-gov-blue">add_circle</span>Create</span>
+          <span class="chip"><span class="material-icons-round text-[14px] text-amber-600">edit</span>Edit</span>
+          <span class="chip"><span class="material-icons-round text-[14px] text-green-700">visibility</span>View</span>
+          <span class="chip"><span class="material-icons-round text-[14px] text-gov-red">delete</span>Delete</span>
+          <span class="chip"><span class="material-icons-round text-[14px] text-indigo-700">bolt</span>Special</span>
+        </div>
+        <div class="text-[10px] font-black uppercase tracking-widest text-slate-500">
+          Tip: select a user (radio button) • use Select All per module
+        </div>
+      </div>
+
+      <!-- TABLE -->
+      <div class="bg-white executive-border shadow-md flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div class="overflow-auto flex-1">
+          <table class="min-w-[1700px] w-full text-left border-collapse">
+            <thead class="table-header-gov">
+              <tr id="permHeader" class="text-[9px] uppercase font-black text-slate-600"></tr>
+            </thead>
+            <tbody id="permBody" class="divide-y divide-slate-100 text-[11px] text-slate-700"></tbody>
+          </table>
+        </div>
+
+        <div class="p-2 bg-slate-800 text-white flex justify-between items-center text-[8px] font-black uppercase tracking-widest shrink-0">
+          <div>User Permission Assignment Matrix</div>
+          <div class="flex items-center gap-2 text-green-400">
+            <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+            RBAC ASSIGNMENT v1.1
+          </div>
+        </div>
+      </div>
+
     </div>
+  </main>
 
-    <main class="lg:ml-64 pt-24 h-screen flex flex-col transition-all duration-300">
-        <div class="max-w-[1800px] mx-auto w-full px-4 flex flex-col flex-1 min-h-0 space-y-3"> 
-            
-            <header class="bg-white executive-border p-3 flex items-center justify-between shadow-sm shrink-0">
-                <div class="flex items-center gap-4">
-                    <div class="bg-gov-navy p-2 rounded">
-                        <span class="material-icons-round text-white text-2xl">manage_accounts</span>
-                    </div>
-                    <div class="border-l-2 border-slate-200 pl-4">
-                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] leading-tight">Republic of the Philippines</p>
-                        <h1 class="font-serif text-lg font-black text-gov-navy uppercase tracking-tight leading-none">Account Management Registry</h1>
-                        <p class="text-[10px] font-bold text-gov-blue uppercase tracking-widest mt-1">Authorized Personnel Access & Security Intelligence Console</p>
-                    </div>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="toggleModal()" class="bg-denr text-white px-5 py-2 text-[10px] font-black uppercase shadow hover:bg-black transition flex items-center gap-2">
-                        <span class="material-icons-round text-sm">person_add</span> New Account
-                    </button>
-                </div>
-            </header>
+  <script>
+    const MODULES = [
+      "Dashboard","Departments","User management","User permition","Suplier list","Farmer list","Customer list",
+      "Purchases","Sales","Quotations","Sales return","Purchases return","Payment sales","Payment purchases"
+    ];
 
-            <div class="grid grid-cols-5 gap-3 shrink-0">
-                <div class="bg-white executive-border border-t-4 border-t-denr p-2 shadow-sm text-center">
-                    <p class="text-[8px] font-black text-slate-400 uppercase">Active Users</p>
-                    <h3 class="text-xl font-black text-slate-800">482</h3>
-                </div>
-                <div class="bg-white executive-border border-t-4 border-t-gov-blue p-2 shadow-sm text-center">
-                    <p class="text-[8px] font-black text-slate-400 uppercase">Admin Access</p>
-                    <h3 class="text-xl font-black text-gov-blue">12</h3>
-                </div>
-                <div class="bg-white executive-border border-t-4 border-t-amber-500 p-2 shadow-sm text-center">
-                    <p class="text-[8px] font-black text-slate-400 uppercase">Pending</p>
-                    <h3 class="text-xl font-black text-amber-600">05</h3>
-                </div>
-                <div class="bg-white executive-border border-t-4 border-t-gov-red p-2 shadow-sm text-center">
-                    <p class="text-[8px] font-black text-slate-400 uppercase">Security Risks</p>
-                    <h3 class="text-xl font-black text-gov-red">03</h3>
-                </div>
-                <div class="bg-white executive-border border-t-4 border-t-indigo-600 p-2 shadow-sm text-center">
-                    <p class="text-[8px] font-black text-slate-400 uppercase">Registry Status</p>
-                    <h3 class="text-xl font-black text-indigo-600">100%</h3>
-                </div>
-            </div>
+    const DEFAULT_ACTIONS = ["create","edit","view","delete"];
 
-            <div class="bg-white executive-border shadow-md flex flex-col flex-1 min-h-0 overflow-hidden">
-                <div class="p-3 bg-slate-50 border-b grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0">
-                    <div class="md:col-span-2 relative">
-                        <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-400 text-[10px]"></i>
-                        <input id="searchInput" oninput="renderTable()" class="w-full pl-9 pr-4 py-1.5 text-xs executive-border outline-none focus:ring-1 focus:ring-gov-navy" placeholder="Search by name, email, or employee ID...">
-                    </div>
-                    
-                    <select id="regFilter" onchange="renderTable()" class="px-4 py-1.5 text-xs executive-border bg-white font-bold uppercase outline-none focus:ring-1 focus:ring-gov-navy">
-                        <option value="all">-- ALL 17 REGIONS --</option>
-                        <option value="NCR">NCR - National Capital</option>
-                        <option value="CAR">CAR - Cordillera</option>
-                        <option value="I">Region I - Ilocos</option>
-                        <option value="II">Region II - Cagayan</option>
-                        <option value="III">Region III - Central Luzon</option>
-                        <option value="IV-A">Region IV-A - CALABARZON</option>
-                        <option value="IV-B">Region IV-B - MIMAROPA</option>
-                        <option value="V">Region V - Bicol</option>
-                        <option value="VI">Region VI - W. Visayas</option>
-                        <option value="VII">Region VII - C. Visayas</option>
-                        <option value="VIII">Region VIII - E. Visayas</option>
-                        <option value="IX">Region IX - Zamboanga</option>
-                        <option value="X">Region X - N. Mindanao</option>
-                        <option value="XI">Region XI - Davao</option>
-                        <option value="XII">Region XII - SOCCSKSARGEN</option>
-                        <option value="XIII">Region XIII - Caraga</option>
-                        <option value="BARMM">BARMM - Bangsamoro</option>
-                    </select>
+    function actionsForModule(module){
+      const base = [...DEFAULT_ACTIONS];
+      if (["Purchases","Sales","Quotations"].includes(module)) {
+        base.push("edit_tax","edit_discount","change_product_details");
+      }
+      if (module === "Sales") {
+        base.push("shipments","pos_voucher","installment");
+      }
+      return base;
+    }
 
-                    <button onclick="location.reload()" class="bg-slate-800 text-white text-[10px] font-black uppercase py-1.5 hover:bg-black transition tracking-widest">Apply Filter</button>
-                </div>
+    const LABELS = {
+      create: "Create",
+      edit: "Edit",
+      view: "View",
+      delete: "Delete",
+      edit_tax: "Edit tax",
+      edit_discount: "Edit discount",
+      change_product_details: "Change product details",
+      shipments: "Shipments",
+      pos_voucher: "pos/voucher",
+      installment: "Installement"
+    };
 
-                <div class="overflow-y-auto flex-1">
-                    <table class="w-full text-left border-collapse">
-                        <thead class="table-header-gov">
-                            <tr class="text-[9px] uppercase font-black text-slate-600">
-                                <th class="px-6 py-3">Personnel Identification</th>
-                                <th class="px-6 py-3">Designation</th>
-                                <th class="px-6 py-3">Jurisdiction Region</th>
-                                <th class="px-6 py-3 text-center">Status</th>
-                                <th class="px-6 py-3 text-right">Security</th>
-                            </tr>
-                        </thead>
-                        <tbody id="accountTableBody" class="divide-y divide-slate-100 text-[11px] text-slate-700">
-                            <tr class="hover:bg-slate-50 transition-colors">
-                                <td class="px-6 py-2 flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded bg-gov-navy text-white flex items-center justify-center font-bold text-[10px]">AD</div>
-                                    <div>
-                                        <div class="font-black text-slate-800 uppercase tracking-tighter leading-none">Dave Alquiz</div>
-                                        <div class="text-[9px] text-slate-400 font-medium italic lowercase">d.alquiz@denr.gov.ph</div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-2 font-bold text-gov-blue uppercase text-[9px]">Super Administrator</td>
-                                <td class="px-6 py-2 font-bold text-slate-500 uppercase">National / Central</td>
-                                <td class="px-6 py-2 text-center">
-                                    <span class="px-2 py-0.5 rounded border border-green-200 bg-green-50 text-green-700 text-[8px] font-black uppercase">Verified</span>
-                                </td>
-                                <td class="px-6 py-2 text-right">
-                                    <div class="flex justify-end gap-3 text-slate-400">
-                                        <button title="Security"><span class="material-icons-round text-sm hover:text-gov-blue transition-colors">security</span></button>
-                                        <button title="Lock"><span class="material-icons-round text-sm hover:text-gov-red transition-colors">lock_person</span></button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                
-                <div class="p-2 bg-slate-800 text-white flex justify-between items-center text-[8px] font-black uppercase tracking-widest shrink-0">
-                    <div>Consolidated Personnel Registry</div>
-                    <div class="flex items-center gap-2 text-green-400">
-                        <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
-                        SECURE PERSONNEL ACCESS v2.5
-                    </div>
-                </div>
-            </div>
+    // MOCK USERS (rows)
+    const USERS = [
+      { id:"U-1001", name:"Dave Alquiz", email:"d.alquiz@denr.gov.ph", department:"Central Office" },
+      { id:"U-1002", name:"Maria Cruz", email:"m.cruz@denr.gov.ph", department:"Finance" },
+      { id:"U-1003", name:"Juan Ramos", email:"j.ramos@denr.gov.ph", department:"Regional Office IV-A" }
+    ];
+
+    // permissions[userId][module] = Set(actions)
+    const permissions = {};
+    USERS.forEach(u => {
+      permissions[u.id] = {};
+      MODULES.forEach(m => permissions[u.id][m] = new Set());
+    });
+
+    // Templates based on your matrix (optional)
+    const TEMPLATE = {
+      "Departments": (userId) => { MODULES.forEach(m => { permissions[userId][m].add("create"); permissions[userId][m].add("edit"); }); },
+      "User permition": (userId) => { MODULES.forEach(m => permissions[userId][m].add("view")); },
+      "User management": (userId) => { MODULES.forEach(m => permissions[userId][m].add("delete")); },
+      "Suplier list": (userId) => { ["Purchases","Sales","Quotations"].forEach(m => permissions[userId][m].add("edit_tax")); },
+      "Farmer list": (userId) => { ["Purchases","Sales","Quotations"].forEach(m => permissions[userId][m].add("edit_discount")); },
+      "Customer list": (userId) => { ["Purchases","Sales","Quotations"].forEach(m => permissions[userId][m].add("change_product_details")); },
+      "Purchases": (userId) => { permissions[userId]["Sales"].add("shipments"); },
+      "Distributed": (userId) => { permissions[userId]["Sales"].add("pos_voucher"); },
+      "qoutations": (userId) => { permissions[userId]["Sales"].add("installment"); }
+    };
+
+    function buildHeader(){
+      const h = document.getElementById("permHeader");
+      h.innerHTML = `
+        <th id="thUser" class="px-4 py-3 sticky-col-1 header sticky-divider w-[320px]">User Account</th>
+        <th id="thDept" class="px-4 py-3 sticky-col-2 header sticky-divider w-[220px]">Department</th>
+        ${MODULES.map(m => `<th class="px-4 py-3 whitespace-nowrap text-center">${m}</th>`).join("")}
+        <th class="px-4 py-3 whitespace-nowrap text-right">Row Actions</th>
+      `;
+    }
+
+    function userCell(u){
+      return `
+        <div class="flex items-start gap-3">
+          <input type="radio" name="selectedUser" value="${u.id}" class="mt-1" />
+          <div>
+            <div class="font-black uppercase text-slate-800 leading-none">${escapeHtml(u.name)}</div>
+            <div class="text-[10px] italic text-slate-400 lowercase">${escapeHtml(u.email)}</div>
+            <div class="text-[10px] font-black tracking-widest text-slate-500 uppercase mt-1">${escapeHtml(u.id)}</div>
+          </div>
         </div>
-    </main>
+      `;
+    }
 
-    <script>
-        function toggleModal() {
-            const modal = document.getElementById('accountModal');
-            modal.classList.toggle('hidden');
-            document.body.classList.toggle('modal-active');
-        }
+    function permissionChecklist(userId, module){
+      const acts = actionsForModule(module);
 
-        window.onclick = function(event) {
-            const modal = document.getElementById('accountModal');
-            if (event.target == modal) toggleModal();
-        }
+      const allChecked = acts.every(a => permissions[userId][module].has(a));
+      const someChecked = !allChecked && acts.some(a => permissions[userId][module].has(a));
 
-        // Logic for filtering by Search + Region
-        function renderTable() {
-            const search = document.getElementById('searchInput').value.toLowerCase();
-            const region = document.getElementById('regFilter').value;
-            console.log("Filtering by Search: " + search + " and Region: " + region);
-            // Ang filtering logic ay depende kung paano mo ilo-load ang data dito
-        }
-    </script>
+      // We'll set indeterminate after render via JS hook.
+      const selectAllId = `selall__${userId}__${slug(module)}`;
+
+      return `
+        <div class="cell-box p-2 min-w-[210px]">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+            <label class="flex items-center gap-2 tiny font-black uppercase tracking-widest text-slate-700">
+              <input id="${selectAllId}" class="chk" type="checkbox"
+                ${allChecked ? "checked" : "" }
+                onchange="toggleSelectAll('${userId}', '${module}', this.checked)" />
+              Select all
+            </label>
+            <span class="tiny font-black uppercase tracking-widest ${someChecked ? "text-amber-700" : "text-slate-300"}">
+              ${someChecked ? "partial" : ""}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-x-3 gap-y-1 pt-2">
+            ${acts.map(a => {
+              const checked = permissions[userId][module].has(a) ? "checked" : "";
+              const color =
+                a==="create" ? "text-gov-blue" :
+                a==="edit" ? "text-amber-700" :
+                a==="view" ? "text-green-700" :
+                a==="delete" ? "text-gov-red" :
+                "text-indigo-700";
+              return `
+                <label class="flex items-center gap-2 tiny font-black uppercase tracking-widest ${color}">
+                  <input class="chk" type="checkbox" ${checked}
+                    onchange="togglePerm('${userId}', '${module}', '${a}', this.checked)" />
+                  ${LABELS[a] || a}
+                </label>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function buildBody(){
+      const body = document.getElementById("permBody");
+      body.innerHTML = USERS.map(u => `
+        <tr class="hover:bg-slate-50 transition-colors" data-user="${u.id}">
+          <td class="px-4 py-3 sticky-col-1 sticky-divider align-top">
+            ${userCell(u)}
+          </td>
+          <td class="px-4 py-3 sticky-col-2 sticky-divider align-top">
+            <div class="font-bold text-slate-700 uppercase text-[10px]">${escapeHtml(u.department)}</div>
+          </td>
+
+          ${MODULES.map(mod => `
+            <td class="px-2 py-2 align-top">
+              ${permissionChecklist(u.id, mod)}
+            </td>
+          `).join("")}
+
+          <td class="px-4 py-3 text-right align-top whitespace-nowrap">
+            <button onclick="clearUser('${u.id}')"
+              class="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border border-slate-300 hover:bg-slate-50">
+              Clear Row
+            </button>
+          </td>
+        </tr>
+      `).join("");
+
+      // Set indeterminate state for Select All checkboxes
+      USERS.forEach(u => {
+        MODULES.forEach(mod => {
+          const acts = actionsForModule(mod);
+          const allChecked = acts.every(a => permissions[u.id][mod].has(a));
+          const someChecked = !allChecked && acts.some(a => permissions[u.id][mod].has(a));
+          const id = `selall__${u.id}__${slug(mod)}`;
+          const el = document.getElementById(id);
+          if (el) el.indeterminate = someChecked;
+        });
+      });
+    }
+
+    function togglePerm(userId, module, action, isChecked){
+      if (isChecked) permissions[userId][module].add(action);
+      else permissions[userId][module].delete(action);
+
+      // refresh just that row so Select All + indeterminate updates
+      rebuildRow(userId);
+    }
+
+    // NEW: Select All per module (cell)
+    function toggleSelectAll(userId, module, shouldCheck){
+      const acts = actionsForModule(module);
+      acts.forEach(a => {
+        if (shouldCheck) permissions[userId][module].add(a);
+        else permissions[userId][module].delete(a);
+      });
+      rebuildRow(userId);
+    }
+
+    function clearUser(userId){
+      MODULES.forEach(m => permissions[userId][m].clear());
+      rebuildRow(userId);
+    }
+
+    function rebuildRow(userId){
+      const row = document.querySelector(`tr[data-user="${cssEscape(userId)}"]`);
+      if (!row) return;
+      const tds = row.querySelectorAll("td");
+      // columns: 0 user, 1 dept, 2.. modules, last row action
+      for (let i = 0; i < MODULES.length; i++){
+        const mod = MODULES[i];
+        const td = tds[2 + i];
+        td.innerHTML = permissionChecklist(userId, mod);
+      }
+
+      // re-apply indeterminate for that row
+      MODULES.forEach(mod => {
+        const acts = actionsForModule(mod);
+        const allChecked = acts.every(a => permissions[userId][mod].has(a));
+        const someChecked = !allChecked && acts.some(a => permissions[userId][mod].has(a));
+        const id = `selall__${userId}__${slug(mod)}`;
+        const el = document.getElementById(id);
+        if (el) el.indeterminate = someChecked;
+      });
+
+      syncStickyOffsets();
+    }
+
+    function getSelectedUserId(){
+      const r = document.querySelector('input[name="selectedUser"]:checked');
+      return r ? r.value : null;
+    }
+
+    function applyTemplateToSelected(){
+      const userId = getSelectedUserId();
+      if (!userId) return alert("Select a user first (radio button).");
+      const key = document.getElementById("templateSelect").value;
+      if (!key) return alert("Select a template first.");
+      if (!TEMPLATE[key]) return alert("Template not found.");
+      TEMPLATE[key](userId);
+      rebuildRow(userId);
+    }
+
+    // NEW: Remove all privileges for SELECTED USER (top button)
+    function removeAllPrivilegesSelected(){
+      const userId = getSelectedUserId();
+      if (!userId) return alert("Select a user first (radio button).");
+      const ok = confirm("Are you sure you want to remove ALL privileges for the selected user?");
+      if (!ok) return;
+      MODULES.forEach(m => permissions[userId][m].clear());
+      rebuildRow(userId);
+      alert("All privileges removed for selected user.");
+    }
+
+    function serialize(){
+      return USERS.map(u => {
+        const mods = {};
+        MODULES.forEach(m => mods[m] = Array.from(permissions[u.id][m]).sort());
+        return { user_id: u.id, name: u.name, email: u.email, department: u.department, permissions: mods };
+      });
+    }
+
+    function savePermissions(){
+      // Hook to backend later
+      console.log("SAVE PAYLOAD:", serialize());
+      alert("Saved (demo). Check console for JSON payload.");
+    }
+
+    function escapeHtml(str){
+      return String(str)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+    function cssEscape(str){ return String(str).replaceAll('"', '\\"'); }
+    function slug(str){ return String(str).toLowerCase().replaceAll(" ", "_").replaceAll("/", "_"); }
+
+    /* Sticky offset FIX: compute actual width of column 1 */
+    function syncStickyOffsets(){
+      const thUser = document.getElementById("thUser");
+      if (!thUser) return;
+      const w = Math.ceil(thUser.getBoundingClientRect().width);
+      document.documentElement.style.setProperty("--col1-w", w + "px");
+    }
+
+    // init
+    buildHeader();
+    buildBody();
+    syncStickyOffsets();
+    window.addEventListener("resize", syncStickyOffsets);
+  </script>
 </body>
 </html>
