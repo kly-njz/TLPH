@@ -177,12 +177,15 @@
       }
     }
 
+    let provinceMunicipalityMap = {}; // Store province-municipality relationships
+    
     async function loadLogs() {
       try {
         // Get users to populate municipality filter and map user data
         const uSnap = await getDocs(collection(db, 'users'));
         const munSet = new Set();
         const provSet = new Set();
+        provinceMunicipalityMap = {}; // Reset the map
         
         uSnap.forEach(doc => { 
           const userData = doc.data();
@@ -193,6 +196,14 @@
           if (userProvinces.length === 0 || userProvinces.includes(userProvince)) {
             if (userMunicipality) munSet.add(userMunicipality);
             if (userProvince) provSet.add(userProvince);
+            
+            // Build province-municipality map
+            if (userProvince && userMunicipality) {
+              if (!provinceMunicipalityMap[userProvince]) {
+                provinceMunicipalityMap[userProvince] = new Set();
+              }
+              provinceMunicipalityMap[userProvince].add(userMunicipality);
+            }
           }
         });
         
@@ -211,10 +222,8 @@
           }
         }
         
-        // Populate municipality filter
-        const mFilter = document.getElementById("municipalityFilter");
-        mFilter.innerHTML = '<option value="all">All Municipalities</option>';
-        Array.from(munSet).sort().forEach(m => mFilter.innerHTML += `<option value="${m}">${m}</option>`);
+        // Populate municipality filter with all municipalities initially
+        updateMunicipalityFilter('all');
 
         // Fetch real audit logs from Firebase only
         const snap = await getDocs(query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc')));
@@ -246,6 +255,41 @@
         console.error('Error loading audit logs:', e); 
         allLogs = []; // Empty array if error - NO DUMMY DATA
         render(); 
+      }
+    }
+
+    function updateMunicipalityFilter(selectedProvince) {
+      const mFilter = document.getElementById("municipalityFilter");
+      const currentSelection = mFilter.value;
+      
+      mFilter.innerHTML = '<option value="all">All Municipalities</option>';
+      
+      if (selectedProvince === 'all') {
+        // Show all municipalities from all provinces
+        const allMunicipalities = new Set();
+        Object.values(provinceMunicipalityMap).forEach(munSet => {
+          munSet.forEach(mun => allMunicipalities.add(mun));
+        });
+        Array.from(allMunicipalities).sort().forEach(m => {
+          mFilter.innerHTML += `<option value="${m}">${m}</option>`;
+        });
+      } else {
+        // Show only municipalities for the selected province
+        if (provinceMunicipalityMap[selectedProvince]) {
+          Array.from(provinceMunicipalityMap[selectedProvince]).sort().forEach(m => {
+            mFilter.innerHTML += `<option value="${m}">${m}</option>`;
+          });
+        }
+      }
+      
+      // Try to restore previous selection if it's still available
+      if (currentSelection !== 'all') {
+        const options = Array.from(mFilter.options).map(opt => opt.value);
+        if (options.includes(currentSelection)) {
+          mFilter.value = currentSelection;
+        } else {
+          mFilter.value = 'all';
+        }
       }
     }
 
@@ -302,7 +346,10 @@
     };
 
     document.getElementById("refreshBtn").onclick = loadLogs;
-    document.getElementById("provinceFilter").onchange = render;
+    document.getElementById("provinceFilter").onchange = () => {
+      updateMunicipalityFilter(document.getElementById("provinceFilter").value);
+      render();
+    };
     document.getElementById("municipalityFilter").onchange = render;
     document.getElementById("searchInput").oninput = render;
 
