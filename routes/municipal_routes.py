@@ -26,6 +26,10 @@ def services():
 def view_service(service_id):
     return render_template('municipal/service-municipal/service-municipal-view-profile.html')
 
+@bp.route('/services/details/<service_id>')
+def service_details(service_id):
+    return render_template('municipal/service-municipal/service-details.html')
+
 @bp.route('/inventory')
 def inventory():
     return render_template('municipal/inventory/inventory-dashboard.html')
