@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>User Groups — Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Modal Transition Utilities */
+        .modal-enter { opacity: 0; transform: scale(0.95); }
+        .modal-enter-active { opacity: 1; transform: scale(1); transition: opacity 300ms, transform 300ms cubic-bezier(0.4, 0, 0.2, 1); }
+        .modal-exit { opacity: 1; transform: scale(1); }
+        .modal-exit-active { opacity: 0; transform: scale(0.95); transition: opacity 200ms, transform 200ms ease-in; }
+    </style>
+</head>
+<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+    
+    {% include 'super-admin/header-superadmin.html' %}
+    {% include 'super-admin/sidenav-superadmin.html' %}
+    
+    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+      
+        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
+            <div class="flex items-center gap-4">
+                <div class="bg-slate-800 p-2.5 rounded-sm hidden sm:block">
+                    <span class="material-icons-round text-white text-xl">admin_panel_settings</span>
+                </div>
+                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">User Groups & Roles</h1>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Access Control & Permissions</p>
+                </div>
+            </div>
+            <div class="flex gap-2 no-print">
+                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm">
+                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export Audit</span>
+                </button>
+                <button class="bg-green-800 text-white px-4 py-1.5 text-[10px] font-black uppercase hover:bg-green-900 transition rounded-sm shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-add text-[10px]"></i> Add Group
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 shrink-0">
+            <div class="bg-white border border-slate-200 border-l-4 border-l-slate-800 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Groups</p>
+                <h3 class="text-xl font-black text-slate-900 leading-none mt-1">8</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-green-700 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Members</p>
+                <h3 class="text-xl font-black text-green-700 leading-none mt-1">156</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-blue-700 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Active Users</p>
+                <h3 class="text-xl font-black text-blue-700 leading-none mt-1">142</h3>
+            </div>
+            <div class="bg-white border border-slate-200 border-l-4 border-l-slate-400 p-3 shadow-sm rounded-sm">
+                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Inactive / Suspended</p>
+                <h3 class="text-xl font-black text-slate-500 leading-none mt-1">14</h3>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 shrink-0">
+            <section onclick="openChartModal('doughnut')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[160px] cursor-pointer hover:border-green-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Users by Group</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full flex justify-center mt-2 group-hover:scale-[1.02] transition-transform duration-300">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="groupChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section onclick="openChartModal('bar')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[160px] cursor-pointer hover:border-green-600 hover:shadow-md transition-all relative overflow-hidden">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Access Level Distribution</h3>
+                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
+                </div>
+                <div class="relative flex-1 w-full mt-2 group-hover:scale-[1.01] transition-transform duration-300">
+                    <div class="absolute inset-0 pointer-events-none">
+                        <canvas id="accessChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="flex-1 min-h-0 flex flex-col bg-white rounded-sm border border-slate-200 shadow-sm relative">
+            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex flex-col sm:flex-row justify-between sm:items-center gap-3 shrink-0 relative z-20">
+                <div class="flex-1 flex items-center gap-2 max-w-2xl">
+                    <div class="relative flex-1">
+                        <span class="material-icons-round absolute left-2.5 top-1.5 text-slate-400 text-[14px]">search</span>
+                        <input id="groupSearch" type="text" placeholder="Search name, description, or level..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700 rounded-sm transition bg-white text-slate-800">
+                    </div>
+                    <select id="groupStatus" class="px-3 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:border-green-700 rounded-sm text-slate-700 w-32">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                
+                <button onclick="resetFilters()" class="bg-white border border-slate-300 text-slate-700 text-[10px] font-black uppercase px-3 py-1.5 hover:bg-slate-100 transition rounded-sm flex items-center gap-1">
+                    <span class="material-icons-round text-[12px]">refresh</span> Reset
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-auto custom-scrollbar z-10">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Group Name</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Role Description</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Clearance Level</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Total Members</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Status</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">System Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="groupTable" class="text-xs">
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="chartModalWrapper" class="hidden fixed inset-0 z-[110] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        
+        <div id="chartModalBody" class="bg-white rounded-sm shadow-2xl w-full max-w-5xl flex flex-col overflow-hidden relative z-10 transform scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-center border-b border-slate-200 px-5 py-3 bg-slate-50">
+                <div class="flex items-center gap-2">
+                    <span class="material-icons-round text-slate-400 text-[18px]">analytics</span>
+                    <h3 id="modalChartTitle" class="text-[11px] font-black uppercase tracking-widest text-slate-800">Chart Detailed View</h3>
+                </div>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-red-600 transition-colors flex items-center justify-center rounded-sm hover:bg-red-50 p-1">
+                    <span class="material-icons-round text-[18px]">close</span>
+                </button>
+            </div>
+            
+            <div class="p-6 sm:p-8 bg-white w-full flex-1 relative h-[50vh] min-h-[350px]">
+                <canvas id="modalCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ----------------------------------------------------
+        // TABLE & FILTER LOGIC
+        // ----------------------------------------------------
+        const groups = [
+            {name:'Super Admin', desc:'Unrestricted system privileges', members:5, color:'red', clearance:'Level 5', status:'active'},
+            {name:'Regional Director', desc:'Full region-level administrative control', members:16, color:'orange', clearance:'Level 4', status:'active'},
+            {name:'Secretary', desc:'Manage official records & communications', members:32, color:'blue', clearance:'Level 3', status:'active'},
+            {name:'Treasurer', desc:'Handle payments & financial audits', members:14, color:'green', clearance:'Level 3', status:'inactive'},
+            {name:'Data Encoder', desc:'Standard data entry and file uploads', members:89, color:'slate', clearance:'Level 2', status:'active'}
+        ];
+
+        function getBadgeStyle(color) {
+            const styles = {
+                'red': 'border-red-300 bg-red-50 text-red-700',
+                'orange': 'border-orange-300 bg-orange-50 text-orange-700',
+                'blue': 'border-blue-300 bg-blue-50 text-blue-700',
+                'green': 'border-green-300 bg-green-50 text-green-700',
+                'slate': 'border-slate-300 bg-white text-slate-700'
+            };
+            return styles[color] || styles['slate'];
+        }
+
+        function renderStatusBadge(status) {
+            if(status === 'active') return '<span class="inline-block border border-green-200 bg-green-50 text-green-700 px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-widest font-black shadow-sm">Active</span>';
+            return '<span class="inline-block border border-slate-200 bg-slate-50 text-slate-500 px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-widest font-black shadow-sm">Inactive</span>';
+        }
+
+        function filterGroups(){
+            const search = document.getElementById('groupSearch').value.toLowerCase(); 
+            const statusFilter = document.getElementById('groupStatus').value.toLowerCase(); 
+
+            const filtered = groups.filter(g => {
+                const matchesSearch = g.name.toLowerCase().includes(search) || 
+                                      g.desc.toLowerCase().includes(search) || 
+                                      g.clearance.toLowerCase().includes(search);
+                const matchesStatus = !statusFilter || g.status === statusFilter;
+                
+                return matchesSearch && matchesStatus;
+            }); 
+
+            const table = document.getElementById('groupTable'); 
+            
+            table.innerHTML = filtered.length ? filtered.map(g => `
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                    <td class="py-2.5 px-4 font-black text-slate-900">${g.name}</td>
+                    <td class="py-2.5 px-4 text-slate-600 font-medium">${g.desc}</td>
+                    <td class="py-2.5 px-4 font-bold text-slate-700">${g.clearance}</td>
+                    <td class="py-2.5 px-4">
+                        <span class="inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 border rounded-sm text-[10px] font-bold shadow-sm ${getBadgeStyle(g.color)}">${g.members}</span>
+                    </td>
+                    <td class="py-2.5 px-4">${renderStatusBadge(g.status)}</td>
+                    <td class="py-2.5 px-4">
+                        <button class="text-green-700 font-bold hover:text-green-900 hover:underline flex items-center gap-1">
+                            Configure <span class="material-icons-round text-[12px]">settings</span>
+                        </button>
+                    </td>
+                </tr>
+            `).join('') : '<tr class="border-b border-slate-200"><td colspan="6" class="py-8 px-4 text-center text-slate-500 font-bold"><span class="material-icons-round text-3xl mb-2 text-slate-300 block">group_off</span> No groups found.</td></tr>';
+        }
+        
+        function resetFilters() {
+            document.getElementById('groupSearch').value = '';
+            document.getElementById('groupStatus').value = '';
+            filterGroups();
+        }
+
+        document.getElementById('groupSearch').addEventListener('input', filterGroups);
+        document.getElementById('groupStatus').addEventListener('change', filterGroups);
+        filterGroups();
+
+        // ----------------------------------------------------
+        // CHART DATA & INITIALIZATION
+        // ----------------------------------------------------
+        const doughnutData = {
+            labels: ['Admin', 'Director', 'Encoder', 'Guest'],
+            datasets: [{
+                data: [5, 16, 89, 46],
+                backgroundColor: ['#0f172a', '#047857', '#0ea5e9', '#94a3b8'],
+                borderColor: '#ffffff',
+                borderWidth: 2
+            }]
+        };
+
+        const barData = {
+            labels: ['Root', 'Admin', 'Regional', 'Local User'],
+            datasets: [{
+                label: 'Accounts',
+                data: [2, 18, 54, 82],
+                backgroundColor: ['#b91c1c', '#ea580c', '#0ea5e9', '#047857'],
+                borderRadius: 2,
+                borderSkipped: false
+            }]
+        };
+
+        setTimeout(() => {
+            // Small Doughnut Chart
+            new Chart(document.getElementById('groupChart'), {
+                type: 'doughnut', data: doughnutData,
+                options: { 
+                    responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, 
+                    plugins: { legend: {position: 'right', labels: {boxWidth: 10, font: {size: 10}, color: '#334155'}}, tooltip: {enabled: false} },
+                    cutout: '65%'
+                }
+            });
+            
+            // Small Bar Chart
+            new Chart(document.getElementById('accessChart'), {
+                type: 'bar', data: barData,
+                options: { 
+                    indexAxis: 'x', responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                    plugins: { legend: {display: false}, tooltip: {enabled: false} }, 
+                    scales: { 
+                        y: {beginAtZero: true, border: {display: false}, grid: {color: '#f1f5f9'}, ticks: {font: {size: 9}, color: '#64748b'}},
+                        x: {grid: {display: false}, ticks: {font: {size: 9, weight: 'bold'}, color: '#334155'}}
+                    } 
+                }
+            });
+        }, 100);
+
+        // ----------------------------------------------------
+        // CHART MODAL LOGIC
+        // ----------------------------------------------------
+        let modalChartInstance = null;
+        const modalWrapper = document.getElementById('chartModalWrapper');
+        const modalBody = document.getElementById('chartModalBody');
+        const modalTitle = document.getElementById('modalChartTitle');
+
+        function openChartModal(type) {
+            modalWrapper.classList.remove('hidden');
+            setTimeout(() => { modalWrapper.classList.add('opacity-100'); modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
+            
+            if (modalChartInstance) modalChartInstance.destroy();
+
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            
+            if (type === 'doughnut') {
+                modalTitle.innerText = "Users by Group (Detailed View)";
+                modalChartInstance = new Chart(ctx, { 
+                    type: 'doughnut', data: doughnutData, 
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, 
+                        plugins: { legend: {position: 'right', labels: {boxWidth: 16, font: {size: 14}, color: '#334155'}}, tooltip: {backgroundColor: '#1e293b', titleFont: {size: 14}, bodyFont: {size: 14, weight: 'bold'}, padding: 12, cornerRadius: 4} }, 
+                        cutout: '60%' 
+                    }
+                });
+            } else if (type === 'bar') {
+                modalTitle.innerText = "Access Level Distribution (Detailed View)";
+                modalChartInstance = new Chart(ctx, { 
+                    type: 'bar', data: barData, 
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, 
+                        plugins: { legend: {display: false}, tooltip: {backgroundColor: '#1e293b', titleFont: {size: 14}, bodyFont: {size: 14, weight: 'bold'}, padding: 12, cornerRadius: 4, displayColors: false} }, 
+                        scales: { y: {beginAtZero: true, border: {display: false}, grid: {color: '#e2e8f0'}, ticks: {font: {size: 12}, color: '#64748b'}}, x: {grid: {display: false}, ticks: {font: {size: 12, weight: 'bold'}, color: '#334155'}} } 
+                    }
+                });
+            }
+        }
+
+        function closeChartModal() {
+            modalWrapper.classList.remove('opacity-100');
+            modalBody.classList.remove('scale-100');
+            modalBody.classList.add('scale-95');
+            setTimeout(() => { modalWrapper.classList.add('hidden'); if (modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } }, 300);
+        }
+    </script>
+</body>
+</html>
