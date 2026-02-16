@@ -261,6 +261,11 @@
       serviceRequests: 0,
       licenses: 0,
       permits: 0,
+      licenseStatus: {
+        pending: 0,
+        rejected: 0,
+        approved: 0
+      },
       applicationStatus: {
         pending: 0,
         rejected: 0,
@@ -298,23 +303,34 @@
 
     function renderTable() {
       const s = data.applicationStatus;
+      const l = data.licenseStatus;
       const rows = [
         { metric: "Service Requests", desc: "All service request submissions", total: data.serviceRequests },
-        { metric: "Licenses", desc: "All license applications/issuances", total: data.licenses },
-        { metric: "Permits", desc: "All permit applications/issuances", total: data.permits },
-        { metric: "Pending", desc: "Applications currently pending", total: s.pending },
-        { metric: "To Review", desc: "Applications waiting for review", total: s.toReview },
-        { metric: "Approved", desc: "Applications approved", total: s.approved },
-        { metric: "Rejected", desc: "Applications rejected", total: s.rejected },
+        { metric: "Licenses/Permits", desc: "All license/permit applications", total: data.licenses },
+        { metric: "Transactions", desc: "All payment transactions", total: data.permits },
+        { heading: true },
+        { metric: "📋 App: Pending", desc: "Applications pending review", total: s.pending },
+        { metric: "📋 App: To Review", desc: "Applications awaiting review", total: s.toReview },
+        { metric: "📋 App: Approved", desc: "Applications approved", total: s.approved },
+        { metric: "📋 App: Rejected", desc: "Applications rejected", total: s.rejected },
+        { heading: true },
+        { metric: "🪪 License: Pending", desc: "License applications pending", total: l.pending },
+        { metric: "🪪 License: Approved", desc: "License applications approved", total: l.approved },
+        { metric: "🪪 License: Rejected", desc: "License applications rejected", total: l.rejected },
       ];
 
-      els.analyticsTbody.innerHTML = rows.map(r => `
+      els.analyticsTbody.innerHTML = rows.map(r => {
+        if (r.heading) {
+          return '<tr class="bg-slate-100"><td colspan="3" class="px-4 py-2"></td></tr>';
+        }
+        return `
         <tr>
           <td class="border-b border-gov-border px-4 py-3 font-bold text-slate-900">${r.metric}</td>
           <td class="border-b border-gov-border px-4 py-3 text-slate-800">${r.desc}</td>
           <td class="border-b border-gov-border px-4 py-3 font-bold text-slate-900">${r.total}</td>
         </tr>
-      `).join("");
+      `
+      }).join("");
     }
 
 
@@ -350,13 +366,23 @@
       });
 
       const s = data.applicationStatus;
+      const l = data.licenseStatus;
 
       statusChart = new Chart(statusCtx, {
         type: "doughnut",
         data: {
-          labels: ["Pending", "Rejected", "To Review", "Approved"],
+          labels: ["App: Pending", "App: Rejected", "App: To Review", "App: Approved", "Lic: Pending", "Lic: Approved", "Lic: Rejected"],
           datasets: [{
-            data: [s.pending, s.rejected, s.toReview, s.approved],
+            data: [s.pending, s.rejected, s.toReview, s.approved, l.pending, l.approved, l.rejected],
+            backgroundColor: [
+              '#f59e0b', // amber pending app
+              '#ef4444', // red rejected app
+              '#8b5cf6', // purple to-review app
+              '#10b981', // green approved app
+              '#fbbf24', // amber pending license
+              '#34d399', // green approved license
+              '#f87171'  // red rejected license
+            ],
             borderWidth: 1
           }]
         },
@@ -384,12 +410,21 @@
           return;
         }
         
+        console.log('Current user:', currentUser.email, currentUser.uid);
+        
         // Get admin's municipality
         const adminDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (adminDoc.exists()) {
           const adminData = adminDoc.data();
           currentAdminMunicipality = adminData.municipality;
-          console.log('Current admin municipality:', currentAdminMunicipality);
+          console.log('Admin details:', {
+            email: adminData.email,
+            municipality: currentAdminMunicipality,
+            firstName: adminData.firstName,
+            lastName: adminData.lastName
+          });
+        } else {
+          console.warn('Admin user document not found');
         }
         
         // Create a map of users with their municipalities
@@ -404,12 +439,15 @@
           };
         });
         
-        console.log('Users loaded:', Object.keys(usersMap).length);
+        console.log('Users map created with', Object.keys(usersMap).length, 'users');
         
         // Reset counts
         data.serviceRequests = 0;
         data.licenses = 0;
         data.permits = 0;
+        data.licenseStatus.pending = 0;
+        data.licenseStatus.rejected = 0;
+        data.licenseStatus.approved = 0;
         data.applicationStatus.pending = 0;
         data.applicationStatus.rejected = 0;
         data.applicationStatus.toReview = 0;
@@ -467,25 +505,50 @@
           data.serviceRequests++;
         });
         
-        // Fetch licenses/permits
-        const licensePermitsRef = collection(db, 'licensePermits');
+        // Fetch licenses/permits from license_applications collection
+        const licensePermitsRef = collection(db, 'license_applications');
         const licensePermitsSnapshot = await getDocs(licensePermitsRef);
         
-        console.log('Total license/permits found:', licensePermitsSnapshot.size);
+        console.log('Total license/permits found in DB:', licensePermitsSnapshot.size);
         
         licensePermitsSnapshot.forEach(doc => {
           const licData = doc.data();
           const userInfo = usersMap[licData.userId];
           const userMunicipality = userInfo?.municipality;
           
-          // Filter by municipality - only skip if both are set and don't match
+          console.log(`License ${doc.id}:`, {
+            userId: licData.userId,
+            userMunicipality,
+            adminMunicipality: currentAdminMunicipality,
+            status: licData.status,
+            applicationType: licData.applicationType
+          });
+          
+          // Filter by municipality (case-insensitive)
           if (currentAdminMunicipality && userMunicipality) {
             if (userMunicipality.toLowerCase() !== currentAdminMunicipality.toLowerCase()) {
+              console.log(`⛔ SKIPPED: License ${doc.id} - municipality mismatch`);
               return; // Skip this record
             }
           }
           
+          console.log(`✅ INCLUDED: License ${doc.id}`);
           data.licenses++;
+          
+          // Count by status
+          const status = licData.status || 'pending';
+          if (status === 'approved' || status === 'accepted') {
+            data.licenseStatus.approved++;
+          } else if (status === 'rejected') {
+            data.licenseStatus.rejected++;
+          } else {
+            data.licenseStatus.pending++;
+          }
+        });
+        
+        console.log('Filtered licenses data:', {
+          total: data.licenses,
+          status: data.licenseStatus
         });
         
         // Fetch transactions
@@ -512,7 +575,9 @@
         console.log('Final data counts:', {
           serviceRequests: data.serviceRequests,
           licenses: data.licenses,
-          permits: data.permits
+          permits: data.permits,
+          licenseStatus: data.licenseStatus,
+          applicationStatus: data.applicationStatus
         });
         
         refreshAll();

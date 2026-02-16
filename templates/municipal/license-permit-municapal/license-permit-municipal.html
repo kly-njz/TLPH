@@ -7,6 +7,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -120,7 +121,78 @@
       </button>
     </section>
 
-    <section class="mt-4 rounded-[6px] border border-gov-border bg-gov-panel p-3 shadow-none print:border">
+    <!-- Total Count Card -->
+    <div class="mt-4 rounded-[6px] border border-gov-border bg-gov-panel p-4 shadow-none print:border">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-[12px] font-bold uppercase tracking-gov2 text-slate-600">Total License/Permit Applications</p>
+          <p class="mt-2 text-4xl font-bold text-slate-900" id="totalCount">0</p>
+          <p class="mt-1 text-[12px] text-slate-500">In Your Municipality</p>
+        </div>
+        <span class="material-icons-round text-6xl text-slate-300 opacity-50">fact_check</span>
+      </div>
+    </div>
+
+    <!-- Analytics Section -->
+    <div class="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div class="rounded-[6px] border border-gov-border bg-gov-panel p-4 shadow-none print:border">
+        <div class="mb-4">
+          <h3 class="m-0 text-lg font-bold text-slate-900">Status Distribution</h3>
+          <p class="mt-1 text-[13px] text-gov-muted">Application status breakdown</p>
+        </div>
+        <div class="h-[280px]" id="statusChartContainer">
+          <canvas id="statusChart"></canvas>
+        </div>
+        <div class="mt-4 space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-slate-600">Approved:</span>
+            <span class="font-bold text-teal-700" id="statApprovedCount">0</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-600">Rejected:</span>
+            <span class="font-bold text-rose-700" id="statRejectedCount">0</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-600">Pending:</span>
+            <span class="font-bold text-amber-700" id="statPendingCount">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-[6px] border border-gov-border bg-gov-panel p-4 shadow-none print:border">
+        <div class="mb-4">
+          <h3 class="m-0 text-lg font-bold text-slate-900">Top Categories</h3>
+          <p class="mt-1 text-[13px] text-gov-muted">Most applied permit types</p>
+        </div>
+        <div class="h-[280px]" id="categoryChartContainer">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analytics Table -->
+    <div class="mt-6 rounded-[6px] border border-gov-border bg-gov-panel p-4 shadow-none print:border">
+      <div class="mb-4">
+        <h3 class="m-0 text-lg font-bold text-slate-900">Analytics Breakdown</h3>
+        <p class="mt-1 text-[13px] text-gov-muted">Detailed statistics by permit type and status</p>
+      </div>
+      <div class="overflow-x-auto rounded-[6px] border border-gov-border">
+        <table class="w-full border-collapse">
+          <thead>
+            <tr class="bg-slate-50">
+              <th class="border-b border-gov-border px-4 py-3 text-left text-[12px] font-bold uppercase tracking-gov text-slate-900">Permit Type</th>
+              <th class="border-b border-gov-border px-4 py-3 text-center text-[12px] font-bold uppercase tracking-gov text-slate-900">Total</th>
+              <th class="border-b border-gov-border px-4 py-3 text-center text-[12px] font-bold uppercase tracking-gov text-slate-900">Approved</th>
+              <th class="border-b border-gov-border px-4 py-3 text-center text-[12px] font-bold uppercase tracking-gov text-slate-900">Rejected</th>
+              <th class="border-b border-gov-border px-4 py-3 text-center text-[12px] font-bold uppercase tracking-gov text-slate-900">Pending</th>
+            </tr>
+          </thead>
+          <tbody id="analyticsTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <section class="mt-6 rounded-[6px] border border-gov-border bg-gov-panel p-3 shadow-none print:border">
       <div class="flex flex-col gap-3 md:flex-row md:items-center">
         <button
           id="btnAllTypes"
@@ -251,6 +323,14 @@
     const statAccepted = document.getElementById("statAccepted");
     const statRejected = document.getElementById("statRejected");
     const statPending = document.getElementById("statPending");
+    const totalCountEl = document.getElementById("totalCount");
+    const statApprovedCountEl = document.getElementById("statApprovedCount");
+    const statRejectedCountEl = document.getElementById("statRejectedCount");
+    const statPendingCountEl = document.getElementById("statPendingCount");
+    const analyticsTbody = document.getElementById("analyticsTbody");
+    
+    let statusChart = null;
+    let categoryChart = null;
 
     async function loadLicensePermits() {
       try {
@@ -359,6 +439,12 @@
         statRejected.textContent = rejectedCount;
         statPending.textContent = pendingCount;
         
+        // Update total count
+        totalCountEl.textContent = applicants.length;
+        
+        // Build analytics
+        buildAnalytics(applicants);
+        
         render(applicants);
         
       } catch (error) {
@@ -368,6 +454,135 @@
 
     function normalize(str) {
       return (str || "").toString().toLowerCase().trim();
+    }
+
+    function buildAnalytics(data) {
+      // Count by status
+      let approvedCount = 0, rejectedCount = 0, pendingCount = 0;
+      const categoryStats = {};
+      
+      data.forEach(item => {
+        if (item.statusKey === 'accepted') approvedCount++;
+        else if (item.statusKey === 'rejected') rejectedCount++;
+        else pendingCount++;
+        
+        // Count by category
+        const cat = item.categoryValue || 'Other';
+        if (!categoryStats[cat]) {
+          categoryStats[cat] = { label: item.categoryLabel, total: 0, approved: 0, rejected: 0, pending: 0 };
+        }
+        categoryStats[cat].total++;
+        
+        if (item.statusKey === 'accepted') categoryStats[cat].approved++;
+        else if (item.statusKey === 'rejected') categoryStats[cat].rejected++;
+        else categoryStats[cat].pending++;
+      });
+      
+      // Update count displays
+      statApprovedCountEl.textContent = approvedCount;
+      statRejectedCountEl.textContent = rejectedCount;
+      statPendingCountEl.textContent = pendingCount;
+      
+      // Create status chart
+      createStatusChart(approvedCount, rejectedCount, pendingCount);
+      
+      // Create category chart
+      const topCategories = Object.entries(categoryStats)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 10);
+      
+      createCategoryChart(topCategories);
+      
+      // Populate analytics table
+      populateAnalyticsTable(categoryStats);
+    }
+
+    function createStatusChart(approved, rejected, pending) {
+      const ctx = document.getElementById('statusChart');
+      
+      if (statusChart) {
+        statusChart.destroy();
+      }
+      
+      statusChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Approved', 'Rejected', 'Pending'],
+          datasets: [{
+            data: [approved, rejected, pending],
+            backgroundColor: ['#10b981', '#ef4444', '#f59e0b'],
+            borderColor: '#ffffff',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            }
+          }
+        }
+      });
+    }
+
+    function createCategoryChart(categories) {
+      const ctx = document.getElementById('categoryChart');
+      
+      if (categoryChart) {
+        categoryChart.destroy();
+      }
+      
+      categoryChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: categories.map(c => c[1].label),
+          datasets: [{
+            label: 'Applications',
+            data: categories.map(c => c[1].total),
+            backgroundColor: '#0f172a',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              ticks: {
+                stepSize: 1
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function populateAnalyticsTable(categoryStats) {
+      analyticsTbody.innerHTML = '';
+      
+      const rows = Object.entries(categoryStats)
+        .sort((a, b) => b[1].total - a[1].total);
+      
+      rows.forEach(([key, stats]) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="border-b border-gov-border px-4 py-3 text-sm font-semibold text-slate-900">${stats.label}</td>
+          <td class="border-b border-gov-border px-4 py-3 text-center text-sm font-bold text-slate-900">${stats.total}</td>
+          <td class="border-b border-gov-border px-4 py-3 text-center text-sm font-bold text-teal-700">${stats.approved}</td>
+          <td class="border-b border-gov-border px-4 py-3 text-center text-sm font-bold text-rose-700">${stats.rejected}</td>
+          <td class="border-b border-gov-border px-4 py-3 text-center text-sm font-bold text-amber-700">${stats.pending}</td>
+        `;
+        analyticsTbody.appendChild(row);
+      });
     }
 
     function statusBadge(statusKey, statusText) {
