@@ -250,18 +250,45 @@ def permit_national_view():
                 # Get form data
                 form_data = data.get('formData', {})
                 
+                # Extract permit details
+                full_name = form_data.get('fullName', 'N/A')
+                municipality = form_data.get('municipality', 'N/A')
+                
                 # Extract location from form data
                 region = form_data.get('region', 'N/A')
+                location = f"{region} / {municipality}"
                 
                 # Count by region
                 if region and region != 'N/A':
                     region_count[region] += 1
                 
+                # Map applicationType to classification
+                app_type = data.get('applicationType', 'N/A')
+                classification_map = {
+                    'farm-visit': 'Farm Permit',
+                    'fishery-permit': 'Fishery License',
+                    'livestock': 'Livestock Permit',
+                    'forest': 'Forestry Permit',
+                    'wildlife': 'Wildlife Permit',
+                    'environment': 'ECC Permit'
+                }
+                classification = classification_map.get(app_type.lower(), app_type.upper())
+                
+                # Get issue and expiry dates
+                issue_date = data.get('issueDate', '—')
+                expiry_date = data.get('expiryDate', '—')
+                
                 permits.append({
                     'id': doc.id,
+                    'reference_id': doc.id[:12].upper(),
+                    'applicant_name': full_name,
+                    'classification': classification,
+                    'location': location,
+                    'region': region,
                     'date_filed': date_filed,
                     'status': national_status,
-                    'region': region
+                    'issue_date': issue_date,
+                    'expiry_date': expiry_date
                 })
         
         # Sort by most recent first
