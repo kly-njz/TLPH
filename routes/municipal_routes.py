@@ -42,6 +42,10 @@ def user_inventory():
 def license_permit():
     return render_template('municipal/license-permit-municapal/license-permit-municipal.html')
 
+@bp.route('/license-permit/details/<license_id>')
+def license_details(license_id):
+    return render_template('municipal/license-permit-municapal/license-details.html')
+
 @bp.route('/transactions')
 def transactions():
     return render_template('municipal/transaction-municipal/transaction-municipal.html')

@@ -285,8 +285,8 @@
         
         console.log('Users loaded:', Object.keys(usersMap).length);
         
-        // Fetch license permits from applications collection (assuming they have a type field)
-        const applicationsRef = collection(db, 'licensePermits');
+        // Fetch license permits from applications collection
+        const applicationsRef = collection(db, 'license_applications');
         const applicationsSnapshot = await getDocs(applicationsRef);
         
         console.log('Total license/permit applications found:', applicationsSnapshot.size);
@@ -303,11 +303,13 @@
           const userName = userInfo?.name || 'Unknown User';
           const userMunicipality = userInfo?.municipality;
           
-          // Filter by municipality
+          // Filter by municipality (case-insensitive)
           console.log(`License/Permit ${docSnapshot.id}: User municipality="${userMunicipality}", Admin municipality="${currentAdminMunicipality}"`);
-          if (currentAdminMunicipality && userMunicipality !== currentAdminMunicipality) {
-            console.log(`⛔ SKIPPED: License/Permit ${docSnapshot.id} - municipality mismatch`);
-            return;
+          if (currentAdminMunicipality && userMunicipality) {
+            if (userMunicipality.toLowerCase() !== currentAdminMunicipality.toLowerCase()) {
+              console.log(`⛔ SKIPPED: License/Permit ${docSnapshot.id} - municipality mismatch`);
+              return;
+            }
           }
           
           console.log(`✅ INCLUDED: License/Permit ${docSnapshot.id}`);
@@ -333,12 +335,16 @@
             pendingCount++;
           }
           
+          // Extract permit type from applicationType
+          let permitType = data.applicationType || 'License Application';
+          permitType = permitType.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          
           applicants.push({
             id: docSnapshot.id,
             name: userName,
             reference: `DENR-${dateObj.getFullYear()}-${docSnapshot.id.substring(0, 4).toUpperCase()}`,
-            categoryLabel: data.permitType || data.category || 'N/A',
-            categoryValue: data.permitType || data.category || '',
+            categoryLabel: permitType,
+            categoryValue: data.applicationType || '',
             filedDate: filedDate,
             status: statusText,
             statusKey: statusKey
@@ -416,7 +422,7 @@
               class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white p-2.5 text-slate-700 hover:bg-gray-50 focus:outline-none focus:ring-4"
               style="--tw-ring-color: rgba(5,150,105,0.18);"
               type="button"
-              onclick="alert('View: ${a.reference}')"
+              onclick="window.location.href='/municipal/license-permit/details/${a.id}'"
               aria-label="View details"
             >
               <span class="material-icons-round text-[20px]">visibility</span>
