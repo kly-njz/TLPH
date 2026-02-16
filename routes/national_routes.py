@@ -543,7 +543,125 @@ def service_national_view():
 
 @bp.route('/inventory-national')
 def inventory_national_view():
-    return render_template('national/inventory-national.html')
+    try:
+        db = get_firestore_db()
+        
+        # Fetch license applications to build inventory from approved permits
+        inventory_ref = db.collection('license_applications')
+        docs = inventory_ref.stream()
+        
+        inventory_records = []
+        total_count = 0
+        
+        # For chart calculations
+        from collections import defaultdict
+        category_count = defaultdict(int)
+        region_count = defaultdict(int)
+        
+        for doc in docs:
+            data = doc.to_dict()
+            
+            # Get form data
+            form_data = data.get('formData', {})
+            
+            # Extract inventory details
+            full_name = form_data.get('fullName', 'N/A')
+            municipality = form_data.get('municipality', 'N/A')
+            region = form_data.get('region', 'N/A')
+            
+            # Map applicationType to category
+            app_type = data.get('applicationType', 'N/A')
+            category_map = {
+                'farm-visit': 'Chemical Inventory',
+                'fishery-permit': 'Natural Resources',
+                'livestock': 'Biodiversity Inventory',
+                'forest': 'Natural Resources',
+                'wildlife': 'Protected Area',
+                'environment': 'Natural Resources'
+            }
+            category = category_map.get(app_type.lower(), 'Chemical Inventory')
+            
+            # Count by category
+            category_count[category] += 1
+            
+            # Count by region
+            if region and region != 'N/A':
+                region_count[region] += 1
+            
+            total_count += 1
+            
+            # Get quantity (default to 1 for each record)
+            quantity = data.get('quantity', 1)
+            
+            # Build description from application type
+            description_map = {
+                'farm-visit': 'Registered Pesticide Stock',
+                'fishery-permit': 'Marine Resources',
+                'livestock': 'Animal Species Count',
+                'forest': 'Forest Resources',
+                'wildlife': 'Wildlife Species',
+                'environment': 'Environmental Data'
+            }
+            description = description_map.get(app_type.lower(), 'General Inventory')
+            
+            inventory_records.append({
+                'id': doc.id,
+                'category': category,
+                'description': description,
+                'quantity': quantity,
+                'region': region,
+                'municipality': municipality,
+                'applicant_name': full_name
+            })
+        
+        # Calculate category totals
+        chemical_count = category_count.get('Chemical Inventory', 0)
+        natural_resources_count = category_count.get('Natural Resources', 0)
+        protected_area_count = category_count.get('Protected Area', 0)
+        biodiversity_count = category_count.get('Biodiversity Inventory', 0)
+        
+        # Prepare category chart data
+        category_labels = ['Chemical', 'Natural Res.', 'Protected', 'Biodiversity']
+        category_data = [
+            chemical_count,
+            natural_resources_count,
+            protected_area_count,
+            biodiversity_count
+        ]
+        
+        # Prepare region chart data - Top 5 regions
+        top_regions = sorted(region_count.items(), key=lambda x: x[1], reverse=True)[:5]
+        region_labels = [item[0] for item in top_regions] if top_regions else ['N/A']
+        region_data = [item[1] for item in top_regions] if top_regions else [0]
+        
+        return render_template('national/inventory-national.html',
+                             inventory_records=inventory_records,
+                             total_count=total_count,
+                             chemical_count=chemical_count,
+                             natural_resources_count=natural_resources_count,
+                             protected_area_count=protected_area_count,
+                             biodiversity_count=biodiversity_count,
+                             # Chart data
+                             category_labels=category_labels,
+                             category_data=category_data,
+                             region_labels=region_labels,
+                             region_data=region_data)
+    except Exception as e:
+        print(f"Error fetching inventory: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Return empty data on error
+        return render_template('national/inventory-national.html',
+                             inventory_records=[],
+                             total_count=0,
+                             chemical_count=0,
+                             natural_resources_count=0,
+                             protected_area_count=0,
+                             biodiversity_count=0,
+                             category_labels=['Chemical', 'Natural Res.', 'Protected', 'Biodiversity'],
+                             category_data=[0, 0, 0, 0],
+                             region_labels=['N/A'],
+                             region_data=[0])
 
 @bp.route('/user-inventory-national')
 def user_inventory_national_view():
