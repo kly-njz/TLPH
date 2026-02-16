@@ -105,11 +105,6 @@
           <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Province Source</label>
           <select id="provinceFilter" class="w-full border border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase outline-none focus:border-govblue">
             <option value="all">All Provinces</option>
-            <option value="CAVITE">CAVITE</option>
-            <option value="LAGUNA">LAGUNA</option>
-            <option value="BATANGAS">BATANGAS</option>
-            <option value="RIZAL">RIZAL</option>
-            <option value="QUEZON">QUEZON</option>
           </select>
         </div>
         <div>
@@ -151,12 +146,21 @@
     import { auth, db } from '/static/js/firebase-config.js';
     import { collection, getDocs, doc, getDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { philippineLocations } from '/static/js/ph-locations.js';
 
     let allLogs = [];
     let barChart, donutChart;
     let userRegion = '';
     let userRegionName = '';
     let userProvinces = [];
+
+    // Helper function to convert uppercase province to proper case for philippineLocations lookup
+    function getProperCaseProvinceName(uppercaseProvince) {
+      // Find matching province key in philippineLocations (case-insensitive)
+      const provinceKeys = Object.keys(philippineLocations);
+      const matchedKey = provinceKeys.find(key => key.toUpperCase() === uppercaseProvince.toUpperCase());
+      return matchedKey || uppercaseProvince;
+    }
 
     async function loadUserRegion(user) {
       try {
@@ -179,19 +183,16 @@
 
     async function loadLogs() {
       try {
-        // Get users to populate municipality filter and map user data
+        // Get users to identify provinces with data
         const uSnap = await getDocs(collection(db, 'users'));
-        const munSet = new Set();
         const provSet = new Set();
         
         uSnap.forEach(doc => { 
           const userData = doc.data();
           const userProvince = (userData.province || '').toUpperCase();
-          const userMunicipality = (userData.municipality || '').toUpperCase();
           
-          // Only add provinces and municipalities from user's region
+          // Only add provinces from user's region
           if (userProvinces.length === 0 || userProvinces.includes(userProvince)) {
-            if (userMunicipality) munSet.add(userMunicipality);
             if (userProvince) provSet.add(userProvince);
           }
         });
@@ -211,10 +212,8 @@
           }
         }
         
-        // Populate municipality filter
-        const mFilter = document.getElementById("municipalityFilter");
-        mFilter.innerHTML = '<option value="all">All Municipalities</option>';
-        Array.from(munSet).sort().forEach(m => mFilter.innerHTML += `<option value="${m}">${m}</option>`);
+        // Populate municipality filter with all municipalities initially
+        updateMunicipalityFilter('all');
 
         // Fetch real audit logs from Firebase only
         const snap = await getDocs(query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc')));
@@ -246,6 +245,54 @@
         console.error('Error loading audit logs:', e); 
         allLogs = []; // Empty array if error - NO DUMMY DATA
         render(); 
+      }
+    }
+
+    function updateMunicipalityFilter(selectedProvince) {
+      const mFilter = document.getElementById("municipalityFilter");
+      const currentSelection = mFilter.value;
+      
+      mFilter.innerHTML = '<option value="all">All Municipalities</option>';
+      
+      if (selectedProvince === 'all') {
+        // Show all municipalities from user's provinces using philippineLocations
+        const allMunicipalities = new Set();
+        const provincesToShow = userProvinces.length > 0 ? userProvinces : Object.keys(philippineLocations);
+        
+        provincesToShow.forEach(prov => {
+          const properCaseProv = getProperCaseProvinceName(prov);
+          const municipalities = philippineLocations[properCaseProv];
+          if (municipalities) {
+            municipalities.forEach(mun => allMunicipalities.add(mun.toUpperCase()));
+          }
+        });
+        
+        Array.from(allMunicipalities).sort().forEach(m => {
+          mFilter.innerHTML += `<option value="${m}">${m}</option>`;
+        });
+      } else {
+        // Show only municipalities for the selected province from philippineLocations
+        const properCaseProv = getProperCaseProvinceName(selectedProvince);
+        const municipalities = philippineLocations[properCaseProv];
+        if (municipalities && municipalities.length > 0) {
+          console.log(`Loading ${municipalities.length} municipalities for ${selectedProvince} (${properCaseProv})`);
+          municipalities.sort().forEach(m => {
+            const munUpper = m.toUpperCase();
+            mFilter.innerHTML += `<option value="${munUpper}">${munUpper}</option>`;
+          });
+        } else {
+          console.warn(`No municipalities found for province: ${selectedProvince}`);
+        }
+      }
+      
+      // Try to restore previous selection if it's still available
+      if (currentSelection !== 'all') {
+        const options = Array.from(mFilter.options).map(opt => opt.value);
+        if (options.includes(currentSelection)) {
+          mFilter.value = currentSelection;
+        } else {
+          mFilter.value = 'all';
+        }
       }
     }
 
@@ -302,7 +349,10 @@
     };
 
     document.getElementById("refreshBtn").onclick = loadLogs;
-    document.getElementById("provinceFilter").onchange = render;
+    document.getElementById("provinceFilter").onchange = () => {
+      updateMunicipalityFilter(document.getElementById("provinceFilter").value);
+      render();
+    };
     document.getElementById("municipalityFilter").onchange = render;
     document.getElementById("searchInput").oninput = render;
 
