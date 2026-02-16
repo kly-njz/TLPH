@@ -305,11 +305,60 @@
   let inventoryStats = { count: 0, totalQty: 0 };
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
+  function normalizeStatus(status) {
+    const normalized = (status || '').toString().toLowerCase().trim();
+    if (normalized === 'accepted') return 'approved';
+    if (normalized === 'to-review') return 'under-review';
+    if (normalized === 'submitted') return 'pending';
+    return normalized || 'pending';
+  }
+
+  async function loadLicenseStatusMap(userId) {
+    const statusMap = new Map();
+    const statusKeys = [];
+    if (!userId) return statusMap;
+
+    try {
+      const q = query(collection(db, 'license_applications'), where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const externalId = (data.externalId || data.formData?.externalId || '').toString();
+        if (externalId) {
+          const normalizedStatus = normalizeStatus(data.status);
+          statusMap.set(externalId, normalizedStatus);
+          statusKeys.push(externalId);
+        }
+      });
+    } catch (error) {
+      console.error('Error loading license statuses:', error);
+    }
+
+    statusMap.__keys = statusKeys.sort((a, b) => b.length - a.length);
+    return statusMap;
+  }
+
+  function findLicenseStatus(externalId, statusMap) {
+    if (!externalId || !statusMap) return null;
+    if (statusMap.has(externalId)) return statusMap.get(externalId);
+
+    const keys = statusMap.__keys || [];
+    for (const key of keys) {
+      if (externalId.startsWith(key) || key.startsWith(externalId)) {
+        return statusMap.get(key);
+      }
+    }
+
+    return null;
+  }
+
   async function loadTransactions(userEmail, userId) {
     try {
       const response = await fetch(`/api/payments/transactions?email=${encodeURIComponent(userEmail)}`);
       const result = await response.json();
       
+      const licenseStatusMap = await loadLicenseStatusMap(userId);
+
       let paymentTransactions = [];
       if (result.status === 'success') {
         paymentTransactions = result.transactions.map(t => ({
@@ -317,7 +366,7 @@
           name_of_application: t.transaction_name || 'Unknown',
           type_of_application: mapApplicationType(t.transaction_name || '', 'payment'),
           payment_status: getActualPaymentStatus(t),
-          status: mapApplicationStatus(t.display_status || ''),
+          status: mapApplicationStatus(findLicenseStatus((t.external_id || t.reference || '').toString(), licenseStatusMap) || normalizeStatus(t.display_status || t.status || '')),
           amount: t.amount || 0,
           created_at: t.created_at || '',
           invoice_id: t.invoice_id,

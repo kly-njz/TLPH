@@ -376,6 +376,7 @@
 
     async function loadLicenseStatusMap(userId) {
       const statusMap = new Map();
+      const statusKeys = [];
       if (!userId) return statusMap;
 
       try {
@@ -385,14 +386,31 @@
           const data = doc.data();
           const externalId = (data.externalId || data.formData?.externalId || '').toString();
           if (externalId) {
-            statusMap.set(externalId, normalizeStatus(data.status));
+            const normalizedStatus = normalizeStatus(data.status);
+            statusMap.set(externalId, normalizedStatus);
+            statusKeys.push(externalId);
           }
         });
       } catch (error) {
         console.error('Error loading license statuses:', error);
       }
 
+      statusMap.__keys = statusKeys.sort((a, b) => b.length - a.length);
       return statusMap;
+    }
+
+    function findLicenseStatus(externalId, statusMap) {
+      if (!externalId || !statusMap) return null;
+      if (statusMap.has(externalId)) return statusMap.get(externalId);
+
+      const keys = statusMap.__keys || [];
+      for (const key of keys) {
+        if (externalId.startsWith(key) || key.startsWith(externalId)) {
+          return statusMap.get(key);
+        }
+      }
+
+      return null;
     }
 
     function isServiceTransaction(transaction) {
@@ -427,7 +445,7 @@
             allTransactions = filteredTransactions.map(t => {
                 const normalizedApiStatus = normalizeStatus(t.display_status || t.status || 'pending');
                 const externalId = (t.external_id || t.reference || '').toString();
-                const licenseStatus = licenseStatusMap.get(externalId);
+                      const licenseStatus = findLicenseStatus(externalId, licenseStatusMap);
                 const finalStatus = licenseStatus || normalizedApiStatus;
 
                 return ({
