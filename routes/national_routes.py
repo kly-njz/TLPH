@@ -372,8 +372,8 @@ def service_national_view():
     try:
         db = get_firestore_db()
         
-        # Fetch only APPROVED service requests from Regional (for National view)
-        service_requests_ref = db.collection('service_requests').where('status', '==', 'approved')
+        # Fetch service requests that Regional has approved OR marked for review by National
+        service_requests_ref = db.collection('service_requests')
         docs = service_requests_ref.stream()
         
         service_requests = []
@@ -391,13 +391,21 @@ def service_national_view():
         for doc in docs:
             data = doc.to_dict()
             
-            # National only sees approved service requests from Regional
+            # National sees approved AND to review from Regional (status: approved, to review, or review)
             status = data.get('status', 'pending').lower()
             
-            # Only include if approved by regional
-            if status == 'approved':
+            # Only include if approved or to review by regional
+            if status in ['approved', 'to review', 'review']:
                 total_count += 1
-                completed_count += 1
+                
+                # National status determines display and counts
+                national_status = data.get('nationalStatus', 'pending').lower()
+                if national_status == 'approved':
+                    completed_count += 1
+                elif national_status == 'rejected':
+                    rejected_count += 1
+                else:
+                    pending_count += 1
                 
                 # Format the service request data
                 created_at = data.get('createdAt')
@@ -431,9 +439,11 @@ def service_national_view():
                 # Count by service type
                 service_type_count[service_type] += 1
                 
-                # Count by status (for breakdown)
-                national_status = data.get('nationalStatus', 'pending').lower()
-                status_breakdown[national_status] += 1
+                # Count by status (for breakdown) - National only has approved/rejected/pending
+                if national_status in ['approved', 'rejected']:
+                    status_breakdown[national_status] += 1
+                else:
+                    status_breakdown['pending'] += 1
                 
                 # Get form data for additional details
                 full_name = data.get('fullName', data.get('applicantName', 'N/A'))
@@ -452,7 +462,8 @@ def service_national_view():
                     'applicant_name': full_name,
                     'service_type': service_type,
                     'location': location,
-                    'status': status,
+                    'status': national_status,  # Use nationalStatus for display
+                    'regional_status': status,  # Keep regional status for reference
                     'user_email': user_email,
                     'approved_by_regional': approved_by_regional,
                     'approval_date': approval_date
@@ -487,12 +498,11 @@ def service_national_view():
         service_labels = [item[0][:10] for item in top_service_types] if top_service_types else ['N/A']
         service_counts = [item[1] for item in top_service_types] if top_service_types else [0]
         
-        # Status breakdown
-        status_labels = ['Approved', 'Pending', 'Review', 'Rejected']
+        # Status breakdown - National only has Approved, Pending, Rejected (no "Review")
+        status_labels = ['Approved', 'Pending', 'Rejected']
         status_data = [
             status_breakdown.get('approved', 0),
             status_breakdown.get('pending', 0),
-            status_breakdown.get('review', 0),
             status_breakdown.get('rejected', 0)
         ]
         
@@ -524,8 +534,8 @@ def service_national_view():
                              trend_data=[0, 0, 0, 0, 0, 0],
                              service_labels=['N/A'],
                              service_counts=[0],
-                             status_labels=['Approved', 'Pending', 'Review', 'Rejected'],
-                             status_data=[0, 0, 0, 0])
+                             status_labels=['Approved', 'Pending', 'Rejected'],
+                             status_data=[0, 0, 0])
 
 @bp.route('/inventory-national')
 def inventory_national_view():
