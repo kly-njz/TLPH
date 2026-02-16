@@ -118,9 +118,59 @@
             color: white !important;
         }
 
+        .edit-mode .data-grid {
+            display: none;
+        }
+
+        .view-mode .edit-form {
+            display: none;
+        }
+
+        .edit-form {
+            display: none;
+        }
+
+        .edit-form .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .edit-form label {
+            font-size: 9px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .edit-form input,
+        .edit-form select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .edit-form input:focus,
+        .edit-form select:focus {
+            outline: none;
+            border-color: var(--denr-green);
+            box-shadow: 0 0 0 2px rgba(21, 90, 50, 0.1);
+        }
+
+        .edit-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem 2rem;
+            padding: 0 1rem;
+        }
+
         @media (max-width: 640px) {
             .profile-banner { flex-direction: column; text-align: center; gap: 1rem; }
             .data-grid { grid-template-columns: 1fr; gap: 0.75rem; }
+            .edit-grid { grid-template-columns: 1fr; }
             .action-bar { flex-direction: column-reverse; }
         }
     </style>
@@ -148,7 +198,7 @@
                 </div>
             </div>
 
-            <div class="p-3">
+            <div class="p-3 view-mode" id="profileContent">
                 <div class="gov-section">I. Personal Information</div>
                 <div class="data-grid">
                     <div>
@@ -188,14 +238,67 @@
                         <div class="data-value">Agricultural / Forestry</div>
                     </div>
                 </div>
+
+                <!-- Edit Form -->
+                <div class="edit-form" id="editForm">
+                    <div class="gov-section">I. Personal Information</div>
+                    <div class="edit-grid">
+                        <div class="form-group">
+                            <label for="editFirstName">First Name <span class="text-red-500">*</span></label>
+                            <input type="text" id="editFirstName" name="firstName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editLastName">Last Name <span class="text-red-500">*</span></label>
+                            <input type="text" id="editLastName" name="lastName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editPhone">Contact No. <span class="text-red-500">*</span></label>
+                            <input type="tel" id="editPhone" name="contactNumber" placeholder="+63 XXX XXX XXXX" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editNationality">Nationality</label>
+                            <input type="text" id="editNationality" name="nationality" value="Filipino" readonly style="background: #f1f5f9;">
+                        </div>
+                    </div>
+
+                    <div class="gov-section">II. Location & Property Details</div>
+                    <div class="edit-grid">
+                        <div class="form-group">
+                            <label for="editProvince">Province <span class="text-red-500">*</span></label>
+                            <select id="editProvince" name="province" required>
+                                <option value="">Select Province</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editMunicipality">Municipality <span class="text-red-500">*</span></label>
+                            <select id="editMunicipality" name="municipality" required>
+                                <option value="">Select Province First</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editFarmSize">Farm Area (Hectares)</label>
+                            <input type="number" id="editFarmSize" name="farmSize" placeholder="0.00" step="0.01" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="editPropertyClass">Property Class</label>
+                            <input type="text" id="editPropertyClass" name="propertyClass" value="Agricultural / Forestry" readonly style="background: #f1f5f9;">
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="action-bar flex justify-end gap-2 p-4 border-t border-slate-50 mt-4 bg-slate-50/50">
                 <a href="/user/dashboard" class="btn-gov bg-white border border-slate-300 text-slate-600 no-underline hover:bg-slate-50">
                     <i class="fas fa-chevron-left me-1"></i> Back
                 </a>
-                <button class="btn-gov btn-update shadow-sm hover:opacity-90">
-                    <i class="fas fa-edit me-1"></i> Update Profile
+                <button id="editBtn" class="btn-gov btn-update shadow-sm hover:opacity-90">
+                    <i class="fas fa-edit me-1"></i> Edit Profile
+                </button>
+                <button id="saveBtn" class="btn-gov btn-update shadow-sm hover:opacity-90" style="display: none;">
+                    <i class="fas fa-save me-1"></i> Save Changes
+                </button>
+                <button id="cancelBtn" class="btn-gov bg-white border border-slate-300 text-slate-600 hover:bg-slate-50" style="display: none;">
+                    <i class="fas fa-times me-1"></i> Cancel
                 </button>
             </div>
         </div>
@@ -204,22 +307,189 @@
     <script type="module">
         import { auth, db } from "{{ url_for('static', filename='js/firebase-config.js') }}";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
+        let currentUser = null;
+        let currentUserData = null;
+        let philippinesData = {};
+
+        // Load PH locations data
+        async function loadPhilippinesData() {
+            try {
+                const response = await fetch("{{ url_for('static', filename='js/ph-locations.js') }}");
+                const script = await response.text();
+                eval(script);
+                philippinesData = window.philippinesLocations || {};
+                console.log('PH locations loaded');
+            } catch (e) {
+                console.error('Error loading PH locations:', e);
+            }
+        }
+
+        // Populate province dropdown
+        function populateProvinces() {
+            const provinceSelect = document.getElementById('editProvince');
+            const currentProvince = document.getElementById('editProvince').value || currentUserData?.province;
+            
+            provinceSelect.innerHTML = '<option value="">Select Province</option>';
+            
+            if (philippinesData && philippinesData.provinces) {
+                Object.keys(philippinesData.provinces).forEach(province => {
+                    const option = document.createElement('option');
+                    option.value = province;
+                    option.textContent = province;
+                    if (province === currentProvince) {
+                        option.selected = true;
+                    }
+                    provinceSelect.appendChild(option);
+                });
+            }
+        }
+
+        // Populate municipality dropdown based on province
+        function populateMunicipalities(province) {
+            const municipalitySelect = document.getElementById('editMunicipality');
+            
+            if (!province) {
+                municipalitySelect.innerHTML = '<option value="">Select Province First</option>';
+                municipalitySelect.disabled = true;
+                return;
+            }
+
+            municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
+            municipalitySelect.disabled = false;
+            
+            if (philippinesData && philippinesData.provinces && philippinesData.provinces[province]) {
+                const municipalities = philippinesData.provinces[province];
+                municipalities.forEach(city => {
+                    const option = document.createElement('option');
+                    option.value = city;
+                    option.textContent = city;
+                    if (city === currentUserData?.municipality) {
+                        option.selected = true;
+                    }
+                    municipalitySelect.appendChild(option);
+                });
+            }
+        }
+
+        // Load user data from Firebase
+        async function loadUserData() {
+            try {
+                const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+                if (userDoc.exists()) {
+                    currentUserData = userDoc.data();
+                    displayUserData();
+                    populateEditForm();
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        }
+
+        // Display user data in view mode
+        function displayUserData() {
+            document.getElementById('userName').innerText = `${currentUserData.firstName} ${currentUserData.lastName}`;
+            document.getElementById('headerEmail').innerText = currentUserData.email;
+            document.getElementById('firstName').innerText = currentUserData.firstName || '---';
+            document.getElementById('lastName').innerText = currentUserData.lastName || '---';
+            document.getElementById('contactNumber').innerText = currentUserData.contactNumber || '---';
+            document.getElementById('municipality').innerText = currentUserData.municipality || '---';
+            document.getElementById('province').innerText = currentUserData.province || '---';
+            document.getElementById('farmSize').innerText = currentUserData.farmSize || 'N/A';
+        }
+
+        // Populate edit form with current data
+        function populateEditForm() {
+            document.getElementById('editFirstName').value = currentUserData.firstName || '';
+            document.getElementById('editLastName').value = currentUserData.lastName || '';
+            document.getElementById('editPhone').value = currentUserData.contactNumber || '';
+            document.getElementById('editFarmSize').value = currentUserData.farmSize || '';
+            
+            populateProvinces();
+            document.getElementById('editProvince').value = currentUserData.province || '';
+            
+            if (currentUserData.province) {
+                populateMunicipalities(currentUserData.province);
+            }
+        }
+
+        // Toggle edit mode
+        function toggleEditMode(enable) {
+            const profileContent = document.getElementById('profileContent');
+            const editBtn = document.getElementById('editBtn');
+            const saveBtn = document.getElementById('saveBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
+            
+            if (enable) {
+                profileContent.classList.add('edit-mode');
+                profileContent.classList.remove('view-mode');
+                document.getElementById('editForm').style.display = 'block';
+                editBtn.style.display = 'none';
+                saveBtn.style.display = 'inline-block';
+                cancelBtn.style.display = 'inline-block';
+            } else {
+                profileContent.classList.remove('edit-mode');
+                profileContent.classList.add('view-mode');
+                document.getElementById('editForm').style.display = 'none';
+                editBtn.style.display = 'inline-block';
+                saveBtn.style.display = 'none';
+                cancelBtn.style.display = 'none';
+            }
+        }
+
+        // Save changes to Firebase
+        async function saveChanges() {
+            try {
+                const saveBtn = document.getElementById('saveBtn');
+                saveBtn.disabled = true;
+                saveBtn.innerText = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+
+                const updatedData = {
+                    firstName: document.getElementById('editFirstName').value,
+                    lastName: document.getElementById('editLastName').value,
+                    contactNumber: document.getElementById('editPhone').value,
+                    province: document.getElementById('editProvince').value,
+                    municipality: document.getElementById('editMunicipality').value,
+                    farmSize: parseFloat(document.getElementById('editFarmSize').value) || 0
+                };
+
+                await updateDoc(doc(db, "users", currentUser.uid), updatedData);
+                
+                currentUserData = { ...currentUserData, ...updatedData };
+                displayUserData();
+                toggleEditMode(false);
+
+                // Show success message
+                alert('Profile updated successfully!');
+                
+            } catch (error) {
+                console.error('Error saving changes:', error);
+                alert('Error saving changes: ' + error.message);
+            } finally {
+                const saveBtn = document.getElementById('saveBtn');
+                saveBtn.disabled = false;
+                saveBtn.innerText = '<i class="fas fa-save me-1"></i> Save Changes';
+            }
+        }
+
+        // Event listeners
+        document.getElementById('editBtn').addEventListener('click', () => toggleEditMode(true));
+        document.getElementById('cancelBtn').addEventListener('click', () => {
+            populateEditForm();
+            toggleEditMode(false);
+        });
+        document.getElementById('saveBtn').addEventListener('click', saveChanges);
+        document.getElementById('editProvince').addEventListener('change', (e) => {
+            populateMunicipalities(e.target.value);
+        });
+
+        // Initialize
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                const userDoc = await getDoc(doc(db, "users", user.uid));
-                if (userDoc.exists()) {
-                    const data = userDoc.data();
-                    document.getElementById('userName').innerText = `${data.firstName} ${data.lastName}`;
-                    document.getElementById('headerEmail').innerText = data.email;
-                    document.getElementById('firstName').innerText = data.firstName || '---';
-                    document.getElementById('lastName').innerText = data.lastName || '---';
-                    document.getElementById('contactNumber').innerText = data.contactNumber || '---';
-                    document.getElementById('municipality').innerText = data.municipality || '---';
-                    document.getElementById('province').innerText = data.province || '---';
-                    document.getElementById('farmSize').innerText = data.farmSize || 'N/A';
-                }
+                currentUser = user;
+                await loadPhilippinesData();
+                await loadUserData();
             } else {
                 window.location.href = '/login';
             }
