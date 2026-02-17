@@ -8,10 +8,22 @@ def firebase_auth_required(f):
         # Check session
         if 'user_email' not in session:
             print(f'❌ No session found for {f.__name__}, redirecting to login')
-            return redirect(url_for('main.login'))
+            response = redirect(url_for('main.login'))
+            # Prevent caching to avoid flash of content
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response
         
         print(f'✅ Session found for {f.__name__}: {session.get("user_email")}')
-        return f(*args, **kwargs)
+        result = f(*args, **kwargs)
+        
+        # Add no-cache headers to protected pages
+        if hasattr(result, 'headers'):
+            result.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            result.headers['Pragma'] = 'no-cache'
+        
+        return result
     return decorated_function
 
 def role_required(*allowed_roles):
@@ -22,7 +34,11 @@ def role_required(*allowed_roles):
             # Check if user is logged in
             if 'user_email' not in session:
                 print(f'❌ No session found, redirecting to login')
-                return redirect(url_for('main.login'))
+                response = redirect(url_for('main.login'))
+                response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+                response.headers['Pragma'] = 'no-cache'
+                response.headers['Expires'] = '0'
+                return response
             
             # Check user role
             user_role = session.get('user_role', '')
@@ -42,9 +58,19 @@ def role_required(*allowed_roles):
                     'superadmin': '/superadmin/inventory'
                 }
                 dashboard_url = role_dashboards.get(user_role, '/login')
-                return redirect(dashboard_url)
+                response = redirect(dashboard_url)
+                response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+                response.headers['Pragma'] = 'no-cache'
+                return response
             
             print(f'✅ Access granted: {user_role} accessing {f.__name__}')
-            return f(*args, **kwargs)
+            result = f(*args, **kwargs)
+            
+            # Add no-cache headers to protected pages
+            if hasattr(result, 'headers'):
+                result.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+                result.headers['Pragma'] = 'no-cache'
+            
+            return result
         return decorated_function
     return decorator
