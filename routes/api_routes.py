@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, session
 from flask_mail import Message, Mail
 from datetime import datetime
 import random
+from firebase_auth_middleware import firebase_auth_required
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -256,6 +257,7 @@ def logout():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @bp.route('/submit-application', methods=['POST'])
+@firebase_auth_required
 def submit_application():
     """Handle application submission with file uploads"""
     try:
@@ -315,6 +317,7 @@ def submit_application():
         }), 500
 
 @bp.route('/get-applications/<user_id>', methods=['GET'])
+@firebase_auth_required
 def get_user_applications(user_id):
     """Get all applications for a specific user"""
     try:

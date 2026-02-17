@@ -17,10 +17,12 @@ def register():
     return render_template('signup.html')
 
 @bp.route('/create-municipal-admin')
+@role_required('regional','regional_admin')
 def create_municipal_admin():
     return render_template('create-municipal-admin.html')
 
 @bp.route('/create-regional-account')
+@role_required('super-admin','superadmin','national','national_admin')
 def create_regional_account():
     return render_template('create_regional_account.html')
 
@@ -248,14 +250,17 @@ def user_application_apply():
     return render_template('user/app-form.html')
 
 @bp.route('/approval-status')
+@firebase_auth_required
 def approval_status():
     return render_template('approval_status.html')
 
 @bp.route('/payment-success')
+@firebase_auth_required
 def payment_success():
     return render_template('payment-success.html')
 
 @bp.route('/payment-failed')
+@firebase_auth_required
 def payment_failed():
     return render_template('payment-failed.html')
 
