@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, redirect, url_for, session
+from firebase_auth_middleware import role_required, firebase_auth_required
 
 bp = Blueprint('main', __name__)
 
@@ -25,6 +26,7 @@ def create_regional_account():
 
 # Landing pages for different roles
 @bp.route('/national/dashboard')
+@role_required('national','national_admin')
 def national_dashboard():
     try:
         from firebase_config import get_firestore_db
@@ -186,26 +188,32 @@ def national_dashboard():
                              trend_data=[0, 0, 0, 0, 0, 0])
 
 @bp.route('/regional/dashboard')
+@role_required('regional','regional_admin')
 def regional_dashboard():
     return render_template('regional/landing-regional.html')
 
 @bp.route('/super-admin/dashboard')
+@role_required('super-admin','superadmin')
 def superadmin_dashboard():
     return render_template('super-admin/landing-superadmin.html')
 
 @bp.route('/farmer/dashboard')
+@firebase_auth_required
 def farmer_dashboard():
     return render_template('farmer_dashboard.html')
 
 @bp.route('/dashboard')
+@firebase_auth_required
 def dashboard():
     return render_template('dashboard.html')
 
 @bp.route('/user/dashboard')
+@role_required('user')
 def user_dashboard():
     return render_template('user/dashboard.html')
 
 @bp.route('/user/profile')
+@role_required('user')
 def user_profile():
     return render_template('user/profile.html')
 
