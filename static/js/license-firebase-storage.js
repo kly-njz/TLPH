@@ -290,10 +290,16 @@ export function collectLicenseFormData(formSelector = 'form', fieldsToExtract = 
             }
         });
         
-        // Set applicationType from categorySelect if present
-        const categorySelect = form.querySelector('#categorySelect');
-        if (categorySelect && categorySelect.value) {
-            data.applicationType = categoryToApplicationType[categorySelect.value] || categorySelect.value;
+        // Set applicationType from main heading if present
+        const mainHeading = form.querySelector('h1, h2, .main-title, .page-title h1');
+        if (mainHeading && mainHeading.textContent.trim()) {
+            data.applicationType = mainHeading.textContent.trim();
+        } else {
+            // Fallback to categorySelect if present
+            const categorySelect = form.querySelector('#categorySelect');
+            if (categorySelect && categorySelect.value) {
+                data.applicationType = categoryToApplicationType[categorySelect.value] || categorySelect.value;
+            }
         }
         
         // Collect file inputs separately (FileList objects)
