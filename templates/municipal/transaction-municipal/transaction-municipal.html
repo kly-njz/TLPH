@@ -135,7 +135,7 @@
         <div>
           <h3 class="text-lg font-bold text-slate-900">Transactions</h3>
           <p class="mt-1 text-sm text-slate-600">
-            Per-transaction view (ID, Payer, Type, Date, Status, Amount) in your municipality.
+            All user payment transactions recorded in your municipality (ID, Payer, Type, Date, Amount, Payment Status, Reference, Overall Status).
           </p>
         </div>
 
@@ -184,12 +184,14 @@
         <table class="min-w-full table-fixed border-collapse">
           <thead>
             <tr class="bg-gray-50">
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[14%]">ID</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[20%]">Payer</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[18%]">Type</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[16%]">Date</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[14%]">Status</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-right text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[18%]">Amount</th>
+              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[12%]">ID</th>
+              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[16%]">Payer</th>
+              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[14%]">Type</th>
+              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[12%]">Date</th>
+              <th class="border-y border-gray-300 px-3 py-3 text-right text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[12%]">Amount</th>
+              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[14%]">Payment Status</th>
+              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[14%]">Reference</th>
+              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[12%]">Overall Status</th>
             </tr>
           </thead>
           <tbody id="txBody"></tbody>
@@ -200,7 +202,7 @@
 
   <script type="module">
   import { auth, db } from '/static/js/firebase-config.js';
-  import { collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { collection, getDocs, doc, getDoc, query, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
   let CURRENT_MUNICIPALITY = null;
@@ -245,7 +247,9 @@
         q === "" ||
         (t.id || "").toLowerCase().includes(q) ||
         (t.payer || "").toLowerCase().includes(q) ||
-        (t.type || "").toLowerCase().includes(q);
+        (t.type || "").toLowerCase().includes(q) ||
+        (t.referenceNum || "").toLowerCase().includes(q) ||
+        (t.paymentStatus || "").toLowerCase().includes(q);
 
       const matchStatus = status === "all" || t.status === status;
       return matchQuery && matchStatus;
@@ -253,6 +257,15 @@
 
     resultsChip.textContent = `Showing ${filtered.length} of ${data.length}`;
     return filtered;
+  }
+
+  function normalizeStatus(status) {
+    if (!status) return 'Pending';
+    const s = String(status).toLowerCase();
+    if (s.includes('paid') || s.includes('completed')) return 'Paid';
+    if (s.includes('pending')) return 'Pending';
+    if (s.includes('failed') || s.includes('rejected')) return 'Failed';
+    return 'Pending';
   }
 
   function computeStats(data){
@@ -321,12 +334,14 @@
     for (const t of sorted){
       txBody.innerHTML += `
         <tr class="border-b border-gray-200">
-          <td class="px-3 py-3 text-sm text-slate-900" title="${t.id}">${t.id}</td>
+          <td class="px-3 py-3 text-sm text-slate-900" title="${t.id}">${t.id.substring(0, 12)}...</td>
           <td class="px-3 py-3 text-sm text-slate-900" title="${t.payer || ""}">${t.payer ? t.payer : "—"}</td>
           <td class="px-3 py-3 text-sm text-slate-900" title="${t.type}">${t.type}</td>
           <td class="px-3 py-3 text-sm text-slate-900" title="${t.date}">${formatDate(t.date)}</td>
+          <td class="px-3 py-3 text-right text-sm text-slate-900">${peso.format(Number(t.amount) || 0)}</td>
+          <td class="px-3 py-3 text-sm">${paymentStatusBadge(t.paymentStatus)}</td>
+          <td class="px-3 py-3 text-sm text-xs text-slate-600" title="${t.referenceNum}">${t.referenceNum.substring(0, 10)}...</td>
           <td class="px-3 py-3 text-sm">${statusBadge(t.status)}</td>
-          <td class="px-3 py-3 text-sm text-right text-slate-900">${peso.format(Number(t.amount) || 0)}</td>
         </tr>
       `;
     }
@@ -334,12 +349,24 @@
     if (txBody.innerHTML.trim() === "") {
       txBody.innerHTML = `
         <tr>
-          <td colspan="6" class="px-3 py-4 text-sm text-slate-600">
+          <td colspan="8" class="px-3 py-4 text-sm text-slate-600">
             No transactions found for the selected search/filter.
           </td>
         </tr>
       `;
     }
+  }
+  
+  function paymentStatusBadge(paymentStatus) {
+    const base = "inline-flex items-center rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-bold uppercase tracking-[0.12em]";
+    if (!paymentStatus || paymentStatus === 'N/A') return `<span class="${base} text-slate-600">—</span>`;
+    if (paymentStatus.toLowerCase().includes('paid') || paymentStatus.toLowerCase().includes('completed')) {
+      return `<span class="${base} text-emerald-800">✓ Paid</span>`;
+    }
+    if (paymentStatus.toLowerCase().includes('pending')) {
+      return `<span class="${base} text-amber-800">⏳ Pending</span>`;
+    }
+    return `<span class="${base} text-slate-600">${paymentStatus}</span>`;
   }
 
   async function loadTransactions() {
@@ -372,54 +399,107 @@
           name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.email || 'Unknown User',
           municipality: userData.municipality || null
         };
-      });
       
       console.log('Users loaded:', Object.keys(usersMap).length);
       
-      // Fetch transactions
-      const transactionsRef = collection(db, 'transactions');
-      const transactionsSnapshot = await getDocs(transactionsRef);
-      
-      console.log('Total transactions found:', transactionsSnapshot.size);
-      
+      // Fetch transactions from BOTH 'transactions' and 'transactionsHistory' collections
       allTransactions = [];
       
-      transactionsSnapshot.forEach(docSnapshot => {
-        const data = docSnapshot.data();
-        const userInfo = usersMap[data.userId];
-        const userName = userInfo?.name || 'Unknown User';
-        const userMunicipality = userInfo?.municipality;
+      try {
+        // Method 1: Load from 'transactions' collection
+        const transactionsRef = collection(db, 'transactions');
+        const transactionsSnapshot = await getDocs(transactionsRef);
         
-        // Filter by municipality
-        console.log(`Transaction ${docSnapshot.id}: User municipality="${userMunicipality}", Admin municipality="${CURRENT_MUNICIPALITY}"`);
-        if (CURRENT_MUNICIPALITY && userMunicipality !== CURRENT_MUNICIPALITY) {
-          console.log(`⛔ SKIPPED: Transaction ${docSnapshot.id} - municipality mismatch`);
-          return;
-        }
+        console.log('Transactions collection found:', transactionsSnapshot.size);
         
-        console.log(`✅ INCLUDED: Transaction ${docSnapshot.id}`);
-        
-        let dateStr = 'N/A';
-        if (data.createdAt) {
-          const dateObj = data.createdAt.toDate();
-          const year = dateObj.getFullYear();
-          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-          const day = String(dateObj.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        }
-        
-        allTransactions.push({
-          id: docSnapshot.id,
-          municipality: userMunicipality,
-          payer: userName,
-          type: data.transactionType || data.type || 'Other',
-          date: dateStr,
-          status: data.status || 'Pending',
-          amount: Number(data.amount) || 0
+        transactionsSnapshot.forEach(docSnapshot => {
+          const data = docSnapshot.data();
+          const userInfo = usersMap[data.userId];
+          const userName = userInfo?.name || 'Unknown User';
+          const userMunicipality = userInfo?.municipality;
+          
+          // Filter by municipality
+          if (CURRENT_MUNICIPALITY && userMunicipality !== CURRENT_MUNICIPALITY) {
+            return;
+          }
+          
+          let dateStr = 'N/A';
+          if (data.createdAt) {
+            const dateObj = data.createdAt.toDate();
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            dateStr = `${year}-${month}-${day}`;
+          }
+          
+          allTransactions.push({
+            id: docSnapshot.id,
+            municipality: userMunicipality,
+            payer: userName,
+            type: data.transactionType || data.type || data.name_of_application || 'Other',
+            date: dateStr,
+            status: normalizeStatus(data.status || data.payment_status) || 'Pending',
+            amount: Number(data.amount) || 0,
+            paymentStatus: data.payment_status || 'N/A',
+            referenceNum: data.reference_num || 'N/A'
+          });
         });
-      });
+      } catch (err) {
+        console.log('Transactions collection not found or empty');
+      }
       
-      console.log('Filtered transactions:', allTransactions.length);
+      try {
+        // Method 2: Load from 'transactionsHistory' collection
+        const historyRef = collection(db, 'transactionsHistory');
+        const historySnapshot = await getDocs(historyRef);
+        
+        console.log('TransactionsHistory collection found:', historySnapshot.size);
+        
+        historySnapshot.forEach(docSnapshot => {
+          const data = docSnapshot.data();
+          const userInfo = usersMap[data.userId];
+          const userName = userInfo?.name || 'Unknown User';
+          const userMunicipality = userInfo?.municipality;
+          
+          // Filter by municipality
+          if (CURRENT_MUNICIPALITY && userMunicipality !== CURRENT_MUNICIPALITY) {
+            return;
+          }
+          
+          let dateStr = 'N/A';
+          if (data.timestamp) {
+            const dateObj = data.timestamp.toDate?.() || new Date(data.timestamp);
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            dateStr = `${year}-${month}-${day}`;
+          }
+          
+          // Check if this transaction already exists (avoid duplicates)
+          const exists = allTransactions.some(t => t.id === docSnapshot.id);
+          if (!exists) {
+            allTransactions.push({
+              id: docSnapshot.id,
+              municipality: userMunicipality,
+              payer: userName,
+              type: data.type || data.transactionType || 'Payment',
+              date: dateStr,
+              status: normalizeStatus(data.status || data.payment_status) || 'Pending',
+              amount: Number(data.amount) || 0,
+              paymentStatus: data.payment_status || 'N/A',
+              referenceNum: data.reference_num || docSnapshot.id
+            });
+          }
+        });
+      } catch (err) {
+        console.log('TransactionsHistory collection not found or empty');
+      }
+      
+      // Remove duplicates and sort by date
+      allTransactions = allTransactions.filter((t, i, arr) => arr.findIndex(x => x.id === t.id) === i)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      
+      console.log('Total transactions after merging:', allTransactions.length);
       
       renderAll();
       
