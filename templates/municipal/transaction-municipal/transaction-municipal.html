@@ -669,6 +669,297 @@
     if (e.key === "Enter") renderAll();
   });
 
+  // Generate DENR Official Report
+  document.getElementById("exportBtn").addEventListener("click", function() {
+    generateMunicipalTransactionReport();
+  });
+
+  function generateMunicipalTransactionReport() {
+    if (allTransactions.length === 0) {
+      alert('No transactions to export. Please load transactions first.');
+      return;
+    }
+
+    const pdfContainer = document.createElement('div');
+    pdfContainer.style.padding = '25px';
+    pdfContainer.style.backgroundColor = '#ffffff';
+    pdfContainer.style.fontFamily = "'Times New Roman', Georgia, serif";
+    pdfContainer.style.lineHeight = '1.6';
+    pdfContainer.style.width = '210mm';
+
+    // Official DENR Header
+    const header = document.createElement('div');
+    header.style.textAlign = 'center';
+    header.style.paddingBottom = '15px';
+    header.style.borderBottom = '4px solid #1b5e20';
+    header.style.marginBottom = '25px';
+    header.innerHTML = `
+      <div style="text-align: center; margin-bottom: 10px;">
+        <img src="/static/DENR-LOGO.webp" 
+             alt="DENR Logo" 
+             style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto;" />
+      </div>
+      <p style="font-size: 11pt; margin: 5px 0 0; text-transform: uppercase; letter-spacing: 0.5px;">Republic of the Philippines</p>
+      <h1 style="font-size: 13pt; font-weight: bold; margin: 5px 0; text-transform: uppercase; color: #1b5e20; letter-spacing: 1px;">Department of Environment and Natural Resources</h1>
+      <p style="font-size: 10pt; margin: 3px 0; font-style: italic;">Office of the Secretary • TLPH Division</p>
+      <p style="font-size: 9pt; margin: 8px 0 0; line-height: 1.4;">
+        DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
+        Tel: (632) 8929-6626 | Fax: (632) 8920-4352 | Website: www.denr.gov.ph
+      </p>
+    `;
+    pdfContainer.appendChild(header);
+
+    // Document Title
+    const titleSection = document.createElement('div');
+    titleSection.style.textAlign = 'center';
+    titleSection.style.margin = '25px 0';
+    titleSection.innerHTML = `
+      <h1 style="font-size: 18pt; font-weight: bold; color: #1b5e20; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1.5px;">
+        MUNICIPAL TRANSACTION REPORT
+      </h1>
+      <p style="font-size: 11pt; color: #333; margin: 5px 0;">MUNICIPALITY OF ${CURRENT_MUNICIPALITY.toUpperCase()}</p>
+      <p style="font-size: 10pt; color: #666; margin: 10px 0; font-weight: bold;">
+        Document No. MTR-${new Date().getTime().toString().slice(-8)}<br>
+        Generated: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
+        Report Period: ${new Date().toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })}
+      </p>
+    `;
+    pdfContainer.appendChild(titleSection);
+
+    // Calculate Statistics
+    const stats = computeStats(allTransactions);
+
+    // Executive Summary
+    const execSummary = document.createElement('div');
+    execSummary.style.marginBottom = '20px';
+    execSummary.innerHTML = `
+      <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+        I. EXECUTIVE SUMMARY
+      </h2>
+      <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 10px; margin: 20px 0;">
+        <div style="text-align: center; padding: 15px; border: 2px solid #1b5e20; background: #f1f8e9; min-width: 120px;">
+          <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Transactions</p>
+          <p style="font-size: 24pt; color: #1b5e20; font-weight: bold; margin: 0;">${stats.totalTx}</p>
+        </div>
+        <div style="text-align: center; padding: 15px; border: 2px solid #2e7d32; background: #f1f8e9; min-width: 120px;">
+          <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Paid</p>
+          <p style="font-size: 24pt; color: #2e7d32; font-weight: bold; margin: 0;">${stats.paid}</p>
+        </div>
+        <div style="text-align: center; padding: 15px; border: 2px solid #f57f17; background: #f1f8e9; min-width: 120px;">
+          <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Pending</p>
+          <p style="font-size: 24pt; color: #f57f17; font-weight: bold; margin: 0;">${stats.pending}</p>
+        </div>
+        <div style="text-align: center; padding: 15px; border: 2px solid #558b2f; background: #f1f8e9; min-width: 120px;">
+          <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Paid</p>
+          <p style="font-size: 18pt; color: #558b2f; font-weight: bold; margin: 0;">${peso.format(stats.amountPaid)}</p>
+        </div>
+      </div>
+    `;
+    pdfContainer.appendChild(execSummary);
+
+    // Transaction Details Table
+    const details = document.createElement('div');
+    details.style.marginBottom = '20px';
+    details.innerHTML = `
+      <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+        II. TRANSACTION DETAILS
+      </h2>
+      <p style="font-size: 10pt; color: #666; margin-bottom: 10px;">
+        This section provides a comprehensive list of all recorded transactions for the municipality, including direct payments and approved applications.
+      </p>
+    `;
+
+    // Build transaction table
+    let tableHTML = `
+      <table style="width: 100%; border-collapse: collapse; font-size: 8pt; margin: 10px 0;">
+        <thead style="background: #1b5e20; color: white;">
+          <tr>
+            <th style="padding: 8px 5px; text-align: left; border: 1px solid #333; font-size: 8pt;">Type</th>
+            <th style="padding: 8px 5px; text-align: left; border: 1px solid #333; font-size: 8pt;">Payer</th>
+            <th style="padding: 8px 5px; text-align: center; border: 1px solid #333; font-size: 8pt;">Date</th>
+            <th style="padding: 8px 5px; text-align: right; border: 1px solid #333; font-size: 8pt;">Amount</th>
+            <th style="padding: 8px 5px; text-align: center; border: 1px solid #333; font-size: 8pt;">Status</th>
+            <th style="padding: 8px 5px; text-align: left; border: 1px solid #333; font-size: 8pt;">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    let rowNum = 0;
+    for (const t of allTransactions) {
+      rowNum++;
+      const bgColor = rowNum % 2 === 0 ? '#f9f9f9' : '#ffffff';
+      const statusColor = t.status === 'Paid' ? '#1b5e20' : (t.status === 'Pending' ? '#f57f17' : '#d32f2f');
+      
+      tableHTML += `
+        <tr style="background: ${bgColor};">
+          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: left;">${t.type}</td>
+          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: left; font-size: 7pt;">${t.payer}</td>
+          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: center;">${formatDate(t.date)}</td>
+          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: right;">${peso.format(t.amount)}</td>
+          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: center; color: ${statusColor}; font-weight: bold;">${t.status}</td>
+          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: left; font-size: 7pt;">${t.source || 'Payment'}</td>
+        </tr>
+      `;
+    }
+
+    tableHTML += `
+        <tr style="background: #f1f8e9; font-weight: bold;">
+          <td colspan="3" style="padding: 8px 5px; border: 1px solid #333; text-align: right;">TOTAL</td>
+          <td style="padding: 8px 5px; border: 1px solid #333; text-align: right;">${peso.format(stats.amountPaid)}</td>
+          <td colspan="2" style="padding: 8px 5px; border: 1px solid #333;"></td>
+        </tr>
+      </tbody>
+    </table>
+    `;
+
+    details.innerHTML += tableHTML;
+    pdfContainer.appendChild(details);
+
+    // Transaction Breakdown by Type
+    const breakdown = document.createElement('div');
+    breakdown.style.marginBottom = '20px';
+    breakdown.innerHTML = `
+      <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+        III. TRANSACTION BREAKDOWN BY TYPE
+      </h2>
+      <table style="width: 100%; border-collapse: collapse; font-size: 10pt; margin: 15px 0;">
+        <thead style="background: #1b5e20; color: white;">
+          <tr>
+            <th style="padding: 10px; text-align: left; border: 1px solid #333;">Type</th>
+            <th style="padding: 10px; text-align: center; border: 1px solid #333;">Count</th>
+            <th style="padding: 10px; text-align: right; border: 1px solid #333;">Percentage</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    const typeKeys = Object.keys(stats.byType).sort();
+    for (const type of typeKeys) {
+      const count = stats.byType[type];
+      const percentage = ((count / stats.totalTx) * 100).toFixed(1);
+      const bgColor = typeKeys.indexOf(type) % 2 === 0 ? '#f9f9f9' : '#ffffff';
+      
+      breakdown.innerHTML += `
+          <tr style="background: ${bgColor};">
+            <td style="padding: 8px 10px; border: 1px solid #999;">${type}</td>
+            <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">${count}</td>
+            <td style="padding: 8px 10px; border: 1px solid #999; text-align: right;">${percentage}%</td>
+          </tr>
+      `;
+    }
+
+    breakdown.innerHTML += `
+        </tbody>
+      </table>
+    `;
+    pdfContainer.appendChild(breakdown);
+
+    // Metadata Section
+    const metadata = document.createElement('div');
+    metadata.style.marginBottom = '20px';
+    metadata.style.padding = '15px';
+    metadata.style.background = '#f5f5f5';
+    metadata.style.borderLeft = '5px solid #1b5e20';
+    metadata.innerHTML = `
+      <h3 style="color: #1b5e20; font-size: 11pt; font-weight: bold; margin: 0 0 10px 0; text-transform: uppercase;">Report Information</h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 9pt;">
+        <tr>
+          <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Report Type:</td>
+          <td style="padding: 5px 10px;">Municipal Transaction Report</td>
+        </tr>
+        <tr style="background: #fff;">
+          <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Municipality:</td>
+          <td style="padding: 5px 10px;">${CURRENT_MUNICIPALITY || 'Unspecified'}</td>
+        </tr>
+        <tr>
+          <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Total Records:</td>
+          <td style="padding: 5px 10px;">${allTransactions.length}</td>
+        </tr>
+        <tr style="background: #fff;">
+          <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Generated:</td>
+          <td style="padding: 5px 10px;">${new Date().toLocaleString('en-PH')}</td>
+        </tr>
+        <tr>
+          <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Classification:</td>
+          <td style="padding: 5px 10px;">Official Government Document</td>
+        </tr>
+      </table>
+    `;
+    pdfContainer.appendChild(metadata);
+
+    // Closing Section
+    const closing = document.createElement('div');
+    closing.style.marginTop = '30px';
+    closing.innerHTML = `
+      <p style="font-size: 10pt; text-align: justify; text-indent: 40px;">
+        This Municipal Transaction Report contains a comprehensive summary of all payments and approved applications 
+        processed for ${CURRENT_MUNICIPALITY}. All data is accurate as of the date of generation and reflects the 
+        official records of the Department of Environment and Natural Resources.
+      </p>
+    `;
+    pdfContainer.appendChild(closing);
+
+    // Signature Section
+    const signature = document.createElement('div');
+    signature.style.marginTop = '40px';
+    signature.style.textAlign = 'right';
+    signature.style.marginRight = '50px';
+    signature.innerHTML = `
+      <div style="border-bottom: 2px solid #000; width: 250px; margin-left: auto; padding-top: 50px;"></div>
+      <p style="margin: 5px 0 0; font-size: 11pt; font-weight: bold; text-transform: uppercase;">Municipal Administrator</p>
+      <p style="margin: 0; font-size: 10pt;">DENR TLPH Division</p>
+      <p style="margin: 5px 0 0; font-size: 9pt; color: #666;">Date: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+    `;
+    pdfContainer.appendChild(signature);
+
+    // Security Notice
+    const security = document.createElement('div');
+    security.style.marginTop = '30px';
+    security.style.padding = '15px';
+    security.style.border = '2px solid #ffc107';
+    security.style.background = '#fff3cd';
+    security.innerHTML = `
+      <p style="margin: 0; font-size: 9pt; color: #856404; text-align: center;">
+        <strong>NOTICE:</strong> This is an electronically generated official document of the Department of Environment and Natural Resources. 
+        Any alteration or unauthorized use is punishable by law under relevant Philippine statutes.
+      </p>
+    `;
+    pdfContainer.appendChild(security);
+
+    // Footer
+    const footer = document.createElement('div');
+    footer.style.marginTop = '20px';
+    footer.style.paddingTop = '15px';
+    footer.style.borderTop = '3px solid #1b5e20';
+    footer.style.fontSize = '8pt';
+    footer.style.textAlign = 'center';
+    footer.style.color = '#666';
+    footer.innerHTML = `
+      <p style="margin: 0; line-height: 1.4;">
+        Department of Environment and Natural Resources<br>
+        DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
+        Telephone: (632) 8929-6626 | Fax: (632) 8920-4352<br>
+        Email: osec@denr.gov.ph | Website: www.denr.gov.ph
+      </p>
+      <p style="margin: 10px 0 0; font-style: italic; color: #999;">
+        Document Reference: MTR-${new Date().getTime().toString().slice(-8)} | ${new Date().toLocaleString('en-PH')}
+      </p>
+    `;
+    pdfContainer.appendChild(footer);
+
+    // Generate PDF
+    const opt = {
+      margin: 10,
+      filename: `DENR-Municipal-Transaction-Report-${CURRENT_MUNICIPALITY}-${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+    };
+
+    html2pdf().set(opt).from(pdfContainer).save();
+  }
+
   // Authentication check and data loading
   onAuthStateChanged(auth, (user) => {
     if (!user) {
