@@ -261,11 +261,25 @@
 
   function normalizeStatus(status) {
     if (!status) return 'Pending';
-    const s = String(status).toLowerCase();
-    if (s.includes('paid') || s.includes('completed')) return 'Paid';
-    if (s.includes('pending')) return 'Pending';
-    if (s.includes('failed') || s.includes('rejected')) return 'Failed';
-    return 'Pending';
+    const s = String(status).toLowerCase().trim();
+    
+    // Check for paid statuses (PAID, Paid, paid, COMPLETED, Completed, etc.)
+    if (s.includes('paid') || s.includes('completed') || s === 'success') {
+      return 'Paid';
+    }
+    
+    // Check for pending statuses
+    if (s.includes('pending') || s === 'await') {
+      return 'Pending';
+    }
+    
+    // Check for failed statuses
+    if (s.includes('failed') || s.includes('rejected') || s.includes('failed') || s === 'expired') {
+      return 'Failed';
+    }
+    
+    // Default to original status if unrecognized
+    return status;
   }
 
   function computeStats(data){
@@ -388,26 +402,28 @@
         scopeChip.textContent = `Municipality: ${CURRENT_MUNICIPALITY}`;
       }
       
-      // Create a map of users with their municipalities
+      // Create a map of users with their municipalities by email
       const usersRef = collection(db, 'users');
       const usersSnapshot = await getDocs(usersRef);
-      const usersMap = {};
+      const usersMapByEmail = {};
       
       usersSnapshot.forEach(userDoc => {
         const userData = userDoc.data();
-        usersMap[userDoc.id] = {
-          name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.email || 'Unknown User',
-          municipality: userData.municipality || null
-        };
+        const email = userData.email || userData.user_email;
+        if (email) {
+          usersMapByEmail[email.toLowerCase()] = {
+            name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || email || 'Unknown User',
+            municipality: userData.municipality || null
+          };
+        }
       });
       
-      console.log('Users loaded:', Object.keys(usersMap).length);
+      console.log('Users loaded:', Object.keys(usersMapByEmail).length);
       
-      // Fetch transactions from BOTH 'transactions' and 'transactionsHistory' collections
+      // Load transactions from Firestore 'transactions' collection
       allTransactions = [];
       
       try {
-        // Method 1: Load from 'transactions' collection
         const transactionsRef = collection(db, 'transactions');
         const transactionsSnapshot = await getDocs(transactionsRef);
         
@@ -415,92 +431,58 @@
         
         transactionsSnapshot.forEach(docSnapshot => {
           const data = docSnapshot.data();
-          const userInfo = usersMap[data.userId];
-          const userName = userInfo?.name || 'Unknown User';
-          const userMunicipality = userInfo?.municipality;
+          const userEmail = (data.user_email || '').toLowerCase();
+          const userInfo = usersMapByEmail[userEmail];
           
-          // Filter by municipality
-          if (CURRENT_MUNICIPALITY && userMunicipality !== CURRENT_MUNICIPALITY) {
+          // Skip if user not found or not in current municipality
+          if (!userInfo) {
+            console.log(`⚠️ User not found for email: ${userEmail}`);
+            return;
+          }
+          
+          if (CURRENT_MUNICIPALITY && userInfo.municipality !== CURRENT_MUNICIPALITY) {
             return;
           }
           
           let dateStr = 'N/A';
-          if (data.createdAt) {
-            const dateObj = data.createdAt.toDate();
+          if (data.created_at) {
+            const dateObj = data.created_at.toDate?.() || new Date(data.created_at);
             const year = dateObj.getFullYear();
             const month = String(dateObj.getMonth() + 1).padStart(2, '0');
             const day = String(dateObj.getDate()).padStart(2, '0');
             dateStr = `${year}-${month}-${day}`;
           }
+          
+          // Ensure we capture ALL transactions, including PAID ones
+          const txStatus = data.status || 'Pending';
+          console.log(`Transaction ${docSnapshot.id}: status="${txStatus}"`);
           
           allTransactions.push({
             id: docSnapshot.id,
-            municipality: userMunicipality,
-            payer: userName,
-            type: data.transactionType || data.type || data.name_of_application || 'Other',
+            municipality: userInfo.municipality,
+            payer: userInfo.name,
+            type: data.transaction_name || data.type || 'Payment',
             date: dateStr,
-            status: normalizeStatus(data.status || data.payment_status) || 'Pending',
             amount: Number(data.amount) || 0,
-            paymentStatus: data.payment_status || 'N/A',
-            referenceNum: data.reference_num || 'N/A'
+            status: normalizeStatus(txStatus),
+            paymentStatus: txStatus,
+            paymentMethod: data.payment_method || 'Online Payment',
+            referenceNum: data.reference || data.external_id || docSnapshot.id,
+            invoiceId: data.invoice_id || 'N/A',
+            paidDate: data.paid_at ? (data.paid_at.toDate?.() || new Date(data.paid_at)).toISOString().split('T')[0] : 'N/A'
           });
         });
+        
+        console.log(`Loaded ${allTransactions.length} transactions for municipality: ${CURRENT_MUNICIPALITY}`);
       } catch (err) {
-        console.log('Transactions collection not found or empty');
+        console.error('Error loading transactions from Firestore:', err);
       }
       
-      try {
-        // Method 2: Load from 'transactionsHistory' collection
-        const historyRef = collection(db, 'transactionsHistory');
-        const historySnapshot = await getDocs(historyRef);
-        
-        console.log('TransactionsHistory collection found:', historySnapshot.size);
-        
-        historySnapshot.forEach(docSnapshot => {
-          const data = docSnapshot.data();
-          const userInfo = usersMap[data.userId];
-          const userName = userInfo?.name || 'Unknown User';
-          const userMunicipality = userInfo?.municipality;
-          
-          // Filter by municipality
-          if (CURRENT_MUNICIPALITY && userMunicipality !== CURRENT_MUNICIPALITY) {
-            return;
-          }
-          
-          let dateStr = 'N/A';
-          if (data.timestamp) {
-            const dateObj = data.timestamp.toDate?.() || new Date(data.timestamp);
-            const year = dateObj.getFullYear();
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            dateStr = `${year}-${month}-${day}`;
-          }
-          
-          // Check if this transaction already exists (avoid duplicates)
-          const exists = allTransactions.some(t => t.id === docSnapshot.id);
-          if (!exists) {
-            allTransactions.push({
-              id: docSnapshot.id,
-              municipality: userMunicipality,
-              payer: userName,
-              type: data.type || data.transactionType || 'Payment',
-              date: dateStr,
-              status: normalizeStatus(data.status || data.payment_status) || 'Pending',
-              amount: Number(data.amount) || 0,
-              paymentStatus: data.payment_status || 'N/A',
-              referenceNum: data.reference_num || docSnapshot.id
-            });
-          }
-        });
-      } catch (err) {
-        console.log('TransactionsHistory collection not found or empty');
-      }
+      // Sort by date descending
+      allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
       
-      // Remove duplicates and sort by date
-      allTransactions = allTransactions.filter((t, i, arr) => arr.findIndex(x => x.id === t.id) === i)
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
-      
-      console.log('Total transactions after merging:', allTransactions.length);
+      console.log('Total transactions loaded:', allTransactions.length);
+      console.log('Transactions:', allTransactions);
       
       renderAll();
       
