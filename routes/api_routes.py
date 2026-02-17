@@ -259,6 +259,17 @@ def logout():
         print(f'Error logging out: {str(e)}')
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@bp.route('/check-session', methods=['GET'])
+def check_session():
+    """Quick session check for instant auth verification"""
+    if 'user_email' in session:
+        return jsonify({
+            'authenticated': True,
+            'role': session.get('user_role', ''),
+            'email': session.get('user_email', '')
+        })
+    return jsonify({'authenticated': False}), 401
+
 @bp.route('/submit-application', methods=['POST'])
 @firebase_auth_required
 def submit_application():
