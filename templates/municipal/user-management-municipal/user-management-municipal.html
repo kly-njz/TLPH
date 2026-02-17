@@ -216,6 +216,14 @@
         // Dynamically set municipality from localStorage or fallback
         let SUBADMIN_MUNICIPALITY = localStorage.getItem('denr_user_municipality') || "San Juan";
 
+        // Helper to update repo and UI when municipality changes
+        function setMunicipality(muni) {
+          SUBADMIN_MUNICIPALITY = muni;
+          localStorage.setItem('denr_user_municipality', muni);
+          repo.municipality = muni;
+          loadUsers();
+        }
+
         // Global users array
         let allUsers = [];
 
@@ -575,13 +583,33 @@
     });
 
     // Authentication check and data loading
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        console.log('No user authenticated, redirecting to login...');
-        window.location.href = '/login';
-      } else {
-        console.log('User authenticated:', user.email);
-        loadUsers();
-      }
-    });
+    // If using Firebase, fetch the user's municipality after login
+    if (typeof onAuthStateChanged === 'function' && typeof db !== 'undefined') {
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          console.log('No user authenticated, redirecting to login...');
+          window.location.href = '/login';
+        } else {
+          console.log('User authenticated:', user.email);
+          // Try to get municipality from Firestore user profile
+          try {
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              if (data.municipality) {
+                setMunicipality(data.municipality);
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn('Could not fetch user municipality:', e);
+          }
+          // fallback
+          loadUsers();
+        }
+      });
+    } else {
+      // fallback for non-Firebase or static demo
+      loadUsers();
+    }
 </script>
