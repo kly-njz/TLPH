@@ -241,6 +241,41 @@ export function collectLicenseFormData(formSelector = 'form', fieldsToExtract = 
             throw new Error(`Form not found with selector: ${formSelector}`);
         }
         
+        // Map select values to applicationType for Firebase
+        const categoryToApplicationType = {
+          "Import_Permit": "Import Permit",
+          "Wildlife_Trade_Permit": "Wildlife Trade Permit",
+          "Transport_Local_Permit": "Transport Local Permit",
+          "Harvest_Permit": "Harvest Permit",
+          "Meat_Transport_Shipping_Permit": "Meat Transport / Shipping Permit",
+          "Slaughterhouse_Accreditation_Permit": "Slaughterhouse Accreditation Permit",
+          "Poultry_Farm_Registration": "Poultry Farm Registration",
+          "Animal_Health_Veterinary_Clearance": "Animal Health Veterinary Clearance",
+          "Wildlife_Possession_Ownership_Permit": "Wildlife Possession & Ownership Permit",
+          "Wildlife_Transport_Licensing_Permit": "Wildlife Transport Licensing Permit",
+          "Wildlife_Collection_Licensing_Permit": "Wildlife Collection Licensing Permit",
+          "Wildlife_Farm_&_Breeding_Registration": "Wildlife Farm & Breeding Registration",
+          "Tree_Cutting_Permit": "Tree Cutting Permit",
+          "Timber_Wood_/_Transfer_Permit": "Timber Wood / Transfer Permit",
+          "Reforestation_Agreement": "Reforestation Agreement",
+          "Nursery_Accreditation": "Nursery Accreditation",
+          "Non_Timber_Collection_Permit": "Non-Timber Collection Permit",
+          "Environment_Compliance_Certificate_(ECC)": "Environment Compliance Certificate (ECC)",
+          "Waste_Management_Permit": "Waste Management Permit",
+          "Hazardous_Material_Handling_Clearance": "Hazardous Material Handling Clearance",
+          "Aquaculture_Farm_Registration": "Aquaculture Farm Registration",
+          "Fish_Transport_Permit": "Fish Transport Permit",
+          "Fish_Dealer_/_Trade_License": "Fish Dealer / Trade License",
+          "Collection_/_Harvest_Permit": "Collection / Harvest Permit",
+          "Wastewater_Discharge_Permit_(WWDP)": "Wastewater Discharge Permit (WWDP)",
+          "Permit_to_Operate_(PTO)_Air_Pollution_Source_Installation/Equipment": "Permit to Operate (PTO) Air Pollution Source",
+          "Hazardous_Waste_Generator_(HWG)_Registration_/_HWG_ID": "Hazardous Waste Generator (HWG) Registration",
+          "PICCS_Validation_/_PICCS_Tool_Certificate": "PICCS validation / PICCS Tool certificate",
+          "PCL_Compliance_Certificate": "PCL Compliance Certificate",
+          "Chemical_Control_Orders_(CCOs)": "Chemical Control Orders (CCOs)",
+          "Certificate_of_Tree_Plantation_Ownership_(CTPO)": "Certificate of Tree Plantation Ownership"
+        };
+        
         const data = {
             applicationType: 'license',
             submittedAt: new Date().toISOString(),
@@ -254,6 +289,24 @@ export function collectLicenseFormData(formSelector = 'form', fieldsToExtract = 
                 data.formFields[key] = field.value;
             }
         });
+        
+        // Force applicationType from hidden input if present
+        const appTypeInput = form.querySelector('#applicationType');
+        if (appTypeInput && appTypeInput.value) {
+            data.applicationType = appTypeInput.value.trim();
+        } else {
+            // Set applicationType from main heading if present
+            const mainHeading = form.querySelector('h1, h2, .main-title, .page-title h1');
+            if (mainHeading && mainHeading.textContent.trim()) {
+                data.applicationType = mainHeading.textContent.trim();
+            } else {
+                // Fallback to categorySelect if present
+                const categorySelect = form.querySelector('#categorySelect');
+                if (categorySelect && categorySelect.value) {
+                    data.applicationType = categoryToApplicationType[categorySelect.value] || categorySelect.value;
+                }
+            }
+        }
         
         // Collect file inputs separately (FileList objects)
         let mainProofFound = false;
@@ -276,12 +329,12 @@ export function collectLicenseFormData(formSelector = 'form', fieldsToExtract = 
             data.amount = parseInt(xenditAmount.value) || 0;
         }
         
-        // Detect application type from page heading
+        // Detect application type from page heading (fallback)
         const pageHeading = Array.from(document.querySelectorAll("h1, h2")).find(
             (heading) => !heading.closest("header")
         );
         
-        if (pageHeading) {
+        if (!data.applicationType && pageHeading) {
             const heading = pageHeading.textContent.toLowerCase();
             if (heading.includes('environment') || heading.includes('clearance')) {
                 data.applicationType = 'environmental-clearance';

@@ -1,586 +1,323 @@
-
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DENR | User Management (Municipality View)</title>
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 
-  <style>
-    :root{ --gov-font: Verdana, Arial, Tahoma, sans-serif; }
-    html, body{ font-family: var(--gov-font); font-size:16px; }
-    body::before{
-      content:"";
-      position: fixed;
-      inset: 0;
-      background-image: url('/static/images/denr.jpg');
-      background-repeat: no-repeat;
-      background-position: center 30%;
-      background-size: 520px;
-      opacity: 0.035;
-      pointer-events: none;
-      z-index: -1;
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            gov: ['Verdana', 'Arial', 'Tahoma', 'sans-serif'],
+          },
+          colors: {
+            gov: {
+              text: '#111827',
+              muted: '#4b5563',
+              border: '#d1d5db',
+              bg: '#f3f4f6',
+              panel: '#ffffff',
+              primary: '#0f172a',
+            }
+          },
+          letterSpacing: {
+            gov: '0.12em',
+            gov2: '0.14em',
+            gov3: '0.18em',
+          }
+        }
+      }
     }
+  </script>
+
+  <style>
+    /* Proteksyon para sa Material Icons mula sa font override */
+    *:not(.material-icons-round):not(i) { 
+        font-family: 'Verdana', 'Arial', 'Tahoma', sans-serif !important; 
+    }
+    
+    .material-icons-round {
+        font-family: 'Material Icons Round' !important;
+        font-weight: normal !important;
+        font-style: normal !important;
+        line-height: 1 !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        display: inline-block;
+        white-space: nowrap;
+        word-wrap: normal;
+        direction: ltr;
+        font-feature-settings: 'liga';
+        -webkit-font-smoothing: antialiased;
+    }
+
+    /* Custom Scrollbar */
+    .custom-scroll::-webkit-scrollbar { width: 5px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+    @media print{ .print\:hidden { display:none !important; } }
   </style>
 </head>
 
-<body class="min-h-screen bg-gray-100 text-slate-900">
-  {% include 'municipal/header.html' %}
-  {% include 'municipal/sidenav.html' %}
+<body class="h-screen w-full bg-gov-bg font-gov text-gov-text flex flex-col overflow-hidden">
+  
+  <div class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]"
+    style="background-image:url('/static/images/denr.jpg'); background-position:center 30%; background-size:520px;"
+    aria-hidden="true"></div>
 
-  <main class="mx-auto w-full max-w-[1400px] px-4 py-5">
+  <div class="shrink-0">
+    {% include 'municipal/header.html' %}
+  </div>
 
-    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-4">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight">User Management</h1>
-        <p class="mt-1 text-sm text-slate-600">
-          View, disable, and remove user accounts within your municipality only. (Sub-admin scoped)
-        </p>
-      </div>
+  <div class="flex flex-1 overflow-hidden">
+    {% include 'municipal/sidenav.html' %}
 
-      <div class="flex flex-wrap items-center gap-2 md:justify-end">
-        <div id="scopeChip"
-             class="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
-          Municipality: —
-        </div>
-
-        <button id="btnRefresh"
-                class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-800 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-emerald-100"
-                type="button">
-          <span class="material-icons-round text-[18px]">refresh</span>
-          Refresh
-        </button>
-      </div>
-    </div>
-
-    <div class="mb-4 rounded-md border border-gray-300 bg-white p-3">
-      <div class="flex items-start gap-2">
-        <span class="material-icons-round text-slate-700">lock</span>
+    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden">
+      
+      <div class="shrink-0 mb-2 flex flex-col md:flex-row md:items-end justify-between border-b-2 border-emerald-800 pb-1.5 gap-2">
         <div>
-          <p class="text-sm font-bold text-slate-900">Restricted View</p>
-          <p class="mt-1 text-sm text-slate-600">
-            You can only view/disable/remove users whose <span class="font-bold">municipality</span> matches your account scope.
-            Production must enforce this server-side.
-          </p>
+          <h1 class="text-base font-bold uppercase tracking-gov3 text-gov-primary leading-none">User Management</h1>
+          <p class="mt-1 text-[10px] font-bold text-gov-muted uppercase tracking-gov2 leading-none">View, disable, and remove user accounts within your municipality.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <div id="scopeChip" class="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-50 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-700">
+                Municipality: —
+            </div>
+            <button id="btnRefresh" class="print:hidden inline-flex items-center justify-center gap-1 rounded-[3px] border border-gray-400 bg-white px-2 py-1 text-[9px] font-bold uppercase tracking-gov text-slate-700 hover:bg-slate-50 transition-colors">
+                <span class="material-icons-round text-[12px]">refresh</span> Refresh
+            </button>
         </div>
       </div>
-    </div>
 
-    <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-4">
-      <div class="rounded-md border border-gray-300 bg-white p-4">
-        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Total Users</div>
-        <div class="mt-2 text-3xl font-bold" id="kpiTotal">0</div>
-        <div class="mt-1 text-sm text-slate-600">In your municipality</div>
-      </div>
-
-      <div class="rounded-md border border-gray-300 bg-white p-4">
-        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Active</div>
-        <div class="mt-2 text-3xl font-bold" id="kpiActive">0</div>
-        <div class="mt-1 text-sm text-slate-600">Status: Active</div>
-      </div>
-
-      <div class="rounded-md border border-gray-300 bg-white p-4">
-        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Disabled</div>
-        <div class="mt-2 text-3xl font-bold" id="kpiDisabled">0</div>
-        <div class="mt-1 text-sm text-slate-600">Status: Disabled</div>
-      </div>
-
-      <div class="rounded-md border border-gray-300 bg-white p-4">
-        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Actions (Session)</div>
-        <div class="mt-2 text-3xl font-bold" id="kpiActions">0</div>
-        <div class="mt-1 text-sm text-slate-600">Disable/Remove count</div>
-      </div>
-    </section>
-
-    <section class="rounded-md border border-gray-300 bg-white p-4 mb-4">
-      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div class="flex flex-col gap-2 md:flex-row md:items-center md:flex-wrap">
-          <div class="flex items-center gap-2 rounded-md border border-gray-300 bg-gray-50 px-3 py-2 focus-within:ring-4 focus-within:ring-emerald-100 focus-within:border-emerald-400">
-            <span class="material-icons-round text-slate-500">search</span>
-            <input
-              id="searchInput"
-              type="text"
-              placeholder="Search by name or email…"
-              class="w-[280px] max-w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-500"
-            />
+      <div class="shrink-0 mb-2 rounded-[3px] border border-gray-300 bg-white p-2">
+        <div class="flex items-start gap-2">
+          <span class="material-icons-round text-slate-700 text-[18px]">lock</span>
+          <div>
+            <p class="text-[10px] font-bold text-slate-900 leading-none">Restricted View</p>
+            <p class="mt-1 text-[9px] text-slate-600 leading-tight">
+              You can only view accounts whose municipality matches your account scope.
+            </p>
           </div>
-
-          <div class="relative">
-            <select id="statusSelect"
-                    class="h-[42px] rounded-md border border-gray-300 bg-gray-50 px-3 pr-10 text-xs font-bold uppercase tracking-[0.12em] text-slate-800 outline-none hover:bg-white focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100">
-              <option value="all">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Disabled">Disabled</option>
-            </select>
-            <span class="material-icons-round pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">expand_more</span>
-          </div>
-
-          <button id="btnClear"
-                  class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-800 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-emerald-100"
-                  type="button">
-            Clear
-          </button>
-        </div>
-
-        <div id="resultsChip"
-             class="inline-flex items-center rounded-full border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
-          Showing 0 of 0
         </div>
       </div>
-    </section>
 
-    <section class="rounded-md border border-gray-300 bg-white p-4">
-      <div class="flex items-start justify-between gap-3 mb-3">
+      <section class="shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+        <div class="rounded-[3px] border border-gov-border bg-white px-3 py-2 shadow-sm flex flex-col justify-center">
+          <p class="text-[8px] font-bold uppercase tracking-gov text-slate-500 leading-none">Total Users</p>
+          <p class="mt-1 text-base font-black text-slate-900 leading-none" id="kpiTotal">0</p>
+        </div>
+        <div class="rounded-[3px] border border-gov-border bg-white px-3 py-2 shadow-sm flex flex-col justify-center border-l-4 border-l-emerald-500">
+          <p class="text-[8px] font-bold uppercase tracking-gov text-slate-500 leading-none">Active</p>
+          <p class="mt-1 text-base font-black text-emerald-700 leading-none" id="kpiActive">0</p>
+        </div>
+        <div class="rounded-[3px] border border-gov-border bg-white px-3 py-2 shadow-sm flex flex-col justify-center border-l-4 border-l-rose-500">
+          <p class="text-[8px] font-bold uppercase tracking-gov text-slate-500 leading-none">Disabled</p>
+          <p class="mt-1 text-base font-black text-rose-700 leading-none" id="kpiDisabled">0</p>
+        </div>
+        <div class="rounded-[3px] border border-gov-border bg-white px-3 py-2 shadow-sm flex flex-col justify-center">
+          <p class="text-[8px] font-bold uppercase tracking-gov text-slate-500 leading-none">Actions (Session)</p>
+          <p class="mt-1 text-base font-black text-blue-800 leading-none" id="kpiActions">0</p>
+        </div>
+      </section>
+
+      <section class="shrink-0 mb-2 rounded-[3px] border border-gov-border bg-white p-2 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-2">
+        <div class="flex items-center gap-2 flex-1">
+            <div class="flex flex-1 max-w-[350px] items-center gap-1 rounded-[2px] border border-gov-border bg-slate-50 px-2 py-0.5 focus-within:border-emerald-600 focus-within:bg-white transition-all">
+                <span class="material-icons-round text-[14px] text-slate-400">search</span>
+                <input id="searchInput" class="w-full bg-transparent outline-none text-[10px] font-semibold text-gov-text placeholder:text-slate-400" type="text" placeholder="Search by name or email..." />
+            </div>
+            <div class="relative w-[130px] shrink-0">
+                <select id="statusSelect" class="w-full appearance-none rounded-[2px] border border-gov-border bg-slate-50 px-2 py-1 pr-6 text-[9px] font-bold uppercase tracking-gov text-slate-700 outline-none focus:border-emerald-600 focus:bg-white truncate">
+                  <option value="all">All Status</option>
+                  <option value="Active">Active</option>
+                  <option value="Disabled">Disabled</option>
+                </select>
+                <span class="material-icons-round pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[12px] text-slate-500">expand_more</span>
+            </div>
+            <button id="btnClear" class="text-[9px] font-bold uppercase tracking-widest text-blue-700 hover:underline">Clear</button>
+        </div>
+        <div id="resultsChip" class="shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-500">Showing 0 of 0</div>
+      </section>
+
+      <section class="flex-1 flex flex-col min-h-0 rounded-[3px] border border-gov-border bg-white shadow-sm overflow-hidden relative">
+        <div class="shrink-0 hidden grid-cols-12 gap-2 border-b-2 border-gray-400 bg-slate-100 px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-600 md:grid">
+          <div class="col-span-3">Name / User ID</div>
+          <div class="col-span-3">Email Address</div>
+          <div class="col-span-2">Municipality</div>
+          <div class="col-span-1 text-center">Status</div>
+          <div class="col-span-3 text-right">Actions</div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto custom-scroll bg-white">
+            <table class="w-full border-collapse">
+                <tbody id="usersTbody" class="divide-y divide-gray-100">
+                    </tbody>
+            </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div id="viewModal" class="fixed inset-0 z-[100] hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-[4px] shadow-2xl w-full max-w-lg flex flex-col border-t-4 border-emerald-800">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-slate-50">
         <div>
-          <h2 class="text-lg font-bold text-slate-900">Users</h2>
-          <p class="mt-1 text-sm text-slate-600">
-            View-only details with restricted disable/remove actions (municipality-scoped).
-          </p>
+          <h3 class="text-xs font-bold uppercase tracking-widest text-slate-800 m-0">User Details</h3>
+          <p class="text-[8px] text-slate-500 uppercase tracking-widest">Official Record View</p>
         </div>
-
-        <div class="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
-          <span class="material-icons-round text-[18px]">verified_user</span>
-          Sub-admin
+        <button id="btnCloseModal" class="text-slate-400 hover:text-rose-600 transition-colors"><span class="material-icons-round text-xl">close</span></button>
+      </div>
+      <div class="p-4 space-y-2">
+        <div class="rounded-md border border-gray-200 bg-gray-50 p-2">
+            <span class="text-[8px] font-bold uppercase text-slate-500">Full Name</span>
+            <p id="viewName" class="text-xs font-black text-slate-900 m-0">—</p>
         </div>
-      </div>
-
-      <div class="overflow-x-auto">
-        <table class="min-w-full table-fixed border-collapse">
-          <thead>
-            <tr class="bg-gray-50">
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[22%]">Name</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[26%]">Email</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[18%]">Municipality</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[14%]">Status</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[20%]">Action</th>
-            </tr>
-          </thead>
-          <tbody id="usersTbody"></tbody>
-        </table>
-      </div>
-    </section>
-  </main>
-
-  <div id="viewModal" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-black/40"></div>
-
-    <div class="relative mx-auto mt-24 w-[92%] max-w-xl rounded-md border border-gray-300 bg-white shadow-lg">
-      <div class="flex items-start justify-between border-b border-gray-200 px-4 py-3">
-        <div>
-          <h3 class="text-lg font-bold text-slate-900">User Details</h3>
-          <p class="mt-1 text-sm text-slate-600">Municipality-scoped view</p>
+        <div class="rounded-md border border-gray-200 bg-gray-50 p-2">
+            <span class="text-[8px] font-bold uppercase text-slate-500">Email Address</span>
+            <p id="viewEmail" class="text-xs font-semibold text-slate-700 m-0">—</p>
         </div>
-
-        <button id="btnCloseModal"
-                type="button"
-                class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-800 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-emerald-100">
-          <span class="material-icons-round text-[18px]">close</span>
-          Close
-        </button>
-      </div>
-
-      <div class="px-4 py-4">
-        <dl class="grid grid-cols-1 gap-3 text-sm">
-          <div class="rounded-md border border-gray-200 bg-gray-50 p-3">
-            <dt class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Name</dt>
-            <dd id="viewName" class="mt-1 font-bold text-slate-900">—</dd>
-          </div>
-
-          <div class="rounded-md border border-gray-200 bg-gray-50 p-3">
-            <dt class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Email</dt>
-            <dd id="viewEmail" class="mt-1 text-slate-900">—</dd>
-          </div>
-
-          <div class="rounded-md border border-gray-200 bg-gray-50 p-3">
-            <dt class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">User ID</dt>
-            <dd id="viewId" class="mt-1 text-slate-900">—</dd>
-          </div>
-
-          <div class="rounded-md border border-gray-200 bg-gray-50 p-3">
-            <dt class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Municipality</dt>
-            <dd id="viewMunicipality" class="mt-1 text-slate-900">—</dd>
-          </div>
-
-          <div class="rounded-md border border-gray-200 bg-gray-50 p-3">
-            <dt class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Status</dt>
-            <dd id="viewStatus" class="mt-1 text-slate-900">—</dd>
-          </div>
-        </dl>
+        <div class="grid grid-cols-2 gap-2">
+            <div class="rounded-md border border-gray-200 bg-gray-50 p-2">
+                <span class="text-[8px] font-bold uppercase text-slate-500">Municipality</span>
+                <p id="viewMunicipality" class="text-xs font-bold text-emerald-800 m-0">—</p>
+            </div>
+            <div class="rounded-md border border-gray-200 bg-gray-50 p-2">
+                <span class="text-[8px] font-bold uppercase text-slate-500">Status</span>
+                <p id="viewStatus" class="text-xs font-bold m-0">—</p>
+            </div>
+        </div>
+        <div class="rounded-md border border-gray-200 bg-gray-50 p-2">
+            <span class="text-[8px] font-bold uppercase text-slate-500">Unique User ID (UID)</span>
+            <p id="viewId" class="text-[9px] font-mono text-slate-400 m-0">—</p>
+        </div>
       </div>
     </div>
   </div>
 
   <script type="module">
     import { db, auth } from '/static/js/firebase-config.js';
-    import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        // Dynamically set municipality from localStorage or fallback
 
-        let SUBADMIN_MUNICIPALITY = localStorage.getItem('denr_user_municipality') || "San Juan";
-
-        // Helper to update UI when municipality changes
-        function setMunicipality(muni) {
-          SUBADMIN_MUNICIPALITY = muni;
-          localStorage.setItem('denr_user_municipality', muni);
-          loadUsers();
-        }
-
-        // Global users array
-        let allUsers = [];
-
-
-        // Load users from Firestore for the current municipality
-        async function loadUsers() {
-          if (typeof db !== 'undefined' && typeof collection === 'function' && typeof query === 'function' && typeof where === 'function' && typeof getDocs === 'function') {
-            // Firestore query for users in the current municipality and status 'approved'
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('municipality', '==', SUBADMIN_MUNICIPALITY));
-            const snapshot = await getDocs(q);
-            allUsers = [];
-            snapshot.forEach(doc => {
-              const data = doc.data();
-              allUsers.push({
-                id: doc.id,
-                name: (data.firstName || '') + ' ' + (data.lastName || ''),
-                email: data.email || '',
-                municipality: data.municipality || '',
-                status: data.status || '',
-                role: data.role || '',
-                userType: data.userType || '',
-              });
-            });
-            renderAll();
-          } else {
-            // Firestore not available, show empty
-            allUsers = [];
-            renderAll();
-          }
-        }
-
-
-        // Do not auto-load users on DOMContentLoaded; handled after login/municipality set
+    let SUBADMIN_MUNICIPALITY = "";
+    let allUsers = [];
+    let actionCount = 0;
 
     const $ = (id) => document.getElementById(id);
-    const normalize = (s) => (s || "").toString().toLowerCase().trim();
 
-    function inScope(user) {
-      return !!user && user.municipality === SUBADMIN_MUNICIPALITY;
+    async function loadUsers() {
+      if (!SUBADMIN_MUNICIPALITY) return;
+      try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('municipality', '==', SUBADMIN_MUNICIPALITY));
+        const snapshot = await getDocs(q);
+        allUsers = snapshot.docs.map(d => ({ 
+            id: d.id, 
+            ...d.data(), 
+            name: (d.data().firstName || '') + ' ' + (d.data().lastName || ''),
+            status: d.data().status || 'Active'
+        }));
+        renderAll();
+      } catch (err) { console.error("Error loading users:", err); }
     }
 
-    function getUserById(id) {
-      return allUsers.find(u => u.id === id) || null;
-    }
-
-    function statusPill(status){
-      const base = "inline-flex items-center rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-bold uppercase tracking-[0.12em]";
-      if (status === "Active") return `<span class="${base} text-emerald-800">Active</span>`;
-      return `<span class="${base} text-slate-700">Disabled</span>`;
-    }
-
-    function applyFilters(list, { query, status }) {
-      const q = normalize(query);
-      return list.filter(u => {
-        const matchQ = !q || normalize(u.name).includes(q) || normalize(u.email).includes(q);
-        const matchStatus = status === "all" || u.status === status;
-        return matchQ && matchStatus;
-      });
-    }
-
-    const scopeChip    = $("scopeChip");
-    const resultsChip  = $("resultsChip");
-
-    const kpiTotal     = $("kpiTotal");
-    const kpiActive    = $("kpiActive");
-    const kpiDisabled  = $("kpiDisabled");
-    const kpiActions   = $("kpiActions");
-
-    const searchInput  = $("searchInput");
-    const statusSelect = $("statusSelect");
-    const btnClear     = $("btnClear");
-    const btnRefresh   = $("btnRefresh");
-    const usersTbody   = $("usersTbody");
-
-    // Modal DOM
-    const viewModal         = $("viewModal");
-    const btnCloseModal     = $("btnCloseModal");
-    const viewName          = $("viewName");
-    const viewEmail         = $("viewEmail");
-    const viewId            = $("viewId");
-    const viewMunicipality  = $("viewMunicipality");
-    const viewStatus        = $("viewStatus");
-
-
-    function openViewModal(user){
-      viewName.textContent = user.name || "—";
-      viewEmail.textContent = user.email || "—";
-      viewId.textContent = user.id || "—";
-      viewMunicipality.textContent = user.municipality || "—";
-      viewStatus.textContent = user.status || "—";
-      viewModal.classList.remove("hidden");
-    }
-
-    function closeViewModal(){
-      viewModal.classList.add("hidden");
-    }
-
-    function rowHtml(u){
-      const isDisabled = u.status === "Disabled";
-
-      const viewBtn = `
-        <button
-          class="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-800 hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-emerald-100 whitespace-nowrap"
-          type="button"
-          data-action="view"
-          data-id="${u.id}">
-          <span class="material-icons-round text-[18px]">visibility</span>
-          View
-        </button>
-      `;
-
-      const toggleBtn = isDisabled
-        ? `
-          <button
-            class="inline-flex items-center justify-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900 hover:bg-emerald-100 focus:outline-none focus:ring-4 focus:ring-emerald-100 whitespace-nowrap"
-            type="button"
-            data-action="enable"
-            data-id="${u.id}">
-            <span class="material-icons-round text-[18px]">person_add</span>
-            Enable
-          </button>
-        `
-        : `
-          <button
-            class="inline-flex items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-900 hover:bg-amber-100 focus:outline-none focus:ring-4 focus:ring-amber-100 whitespace-nowrap"
-            type="button"
-            data-action="disable"
-            data-id="${u.id}">
-            <span class="material-icons-round text-[18px]">person_off</span>
-            Disable
-          </button>
-        `;
-
-      const removeBtn = `
-        <button
-          class="inline-flex items-center justify-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-rose-800 hover:bg-rose-100 focus:outline-none focus:ring-4 focus:ring-rose-100 whitespace-nowrap"
-          type="button"
-          data-action="remove"
-          data-id="${u.id}">
-          <span class="material-icons-round text-[18px]">person_remove</span>
-          Remove
-        </button>
-      `;
-
-      return `
-        <tr class="border-b border-gray-200">
-          <td class="px-3 py-3 text-sm text-slate-900" title="${u.name}">
-            <div class="font-bold">${u.name}</div>
-            <div class="text-xs text-slate-600">ID: ${u.id}</div>
+    function renderTable(list) {
+      const tbody = $('usersTbody');
+      tbody.innerHTML = list.length === 0 
+        ? `<tr><td class="p-6 text-center text-[10px] font-bold uppercase text-slate-400 tracking-widest">No users matching current filters.</td></tr>`
+        : list.map(u => `
+        <tr class="grid grid-cols-12 gap-2 px-3 py-1 hover:bg-slate-50 items-center border-b border-gray-100 transition-colors">
+          <td class="col-span-3 min-w-0">
+            <div class="text-[10px] font-bold text-slate-900 truncate">${u.name}</div>
+            <div class="text-[8px] font-mono text-slate-400 truncate">ID: ${u.id.substring(0,8)}...</div>
           </td>
-          <td class="px-3 py-3 text-sm text-slate-900" title="${u.email}">${u.email}</td>
-          <td class="px-3 py-3 text-sm text-slate-900" title="${u.municipality}">${u.municipality}</td>
-          <td class="px-3 py-3 text-sm">${statusPill(u.status)}</td>
-          <td class="px-3 py-3">
-            <div class="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-              ${viewBtn}
-              ${toggleBtn}
-              ${removeBtn}
-            </div>
+          <td class="col-span-3 text-[10px] font-semibold text-slate-700 truncate">${u.email}</td>
+          <td class="col-span-2 text-[10px] font-bold text-slate-500 uppercase truncate">${u.municipality}</td>
+          <td class="col-span-1 text-center">
+            <span class="material-icons-round text-[18px] ${u.status === 'Active' ? 'text-emerald-500' : 'text-slate-400'}" title="${u.status}">
+              ${u.status === 'Active' ? 'check_circle' : 'do_not_disturb_on'}
+            </span>
           </td>
-        </tr>
-      `;
+          <td class="col-span-3 text-right flex justify-end gap-1">
+            <button data-action="view" data-id="${u.id}" class="p-1 rounded-full text-blue-600 hover:bg-blue-100 transition-all" title="View Profile">
+                <span class="material-icons-round text-[18px]">visibility</span>
+            </button>
+            <button data-action="${u.status === 'Disabled' ? 'enable' : 'disable'}" data-id="${u.id}" class="p-1 rounded-full ${u.status === 'Disabled' ? 'text-emerald-600 hover:bg-emerald-100' : 'text-amber-600 hover:bg-amber-100'} transition-all" title="Toggle Access">
+                <span class="material-icons-round text-[18px]">${u.status === 'Disabled' ? 'person_add' : 'person_off'}</span>
+            </button>
+            <button data-action="remove" data-id="${u.id}" class="p-1 rounded-full text-rose-600 hover:bg-rose-100 transition-all" title="Delete User">
+                <span class="material-icons-round text-[18px]">delete_forever</span>
+            </button>
+          </td>
+        </tr>`).join("");
     }
 
-    function renderTable(list){
-      usersTbody.innerHTML = "";
-
-      if (list.length === 0){
-        usersTbody.innerHTML = `
-          <tr>
-            <td colspan="5" class="px-3 py-5 text-sm text-slate-600">
-              No users found for the selected filters.
-            </td>
-          </tr>
-        `;
-        return;
-      }
-
-      usersTbody.innerHTML = list.map(rowHtml).join("");
-    }
-
-    // Track session action count for disables/removes/enables
-    let actionCount = 0;
-    function renderKpis(scopedList){
-      const total = scopedList.length;
-      const active = scopedList.filter(u => u.status === "Active").length;
-      const disabled = scopedList.filter(u => u.status === "Disabled").length;
-
-      kpiTotal.textContent = total;
-      kpiActive.textContent = active;
-      kpiDisabled.textContent = disabled;
-      kpiActions.textContent = actionCount;
-    }
-
-    async function renderAll(){
-      if (!SUBADMIN_MUNICIPALITY) {
-        scopeChip.textContent = 'Municipality: —';
-        return;
-      }
+    function renderAll() {
+      const muniPill = $('scopeChip');
+      muniPill.textContent = `Municipality: ${SUBADMIN_MUNICIPALITY}`;
       
-      scopeChip.textContent = `Municipality: ${SUBADMIN_MUNICIPALITY}`;
+      const q = ($('searchInput').value || "").toLowerCase().trim();
+      const s = $('statusSelect').value;
+      const filtered = allUsers.filter(u => (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) && (s === "all" || u.status === s));
 
-      const scoped = allUsers;
-
-      const filtered = applyFilters(scoped, {
-        query: searchInput.value,
-        status: statusSelect.value
-      });
-
-      resultsChip.textContent = `Showing ${filtered.length} of ${scoped.length}`;
-
-      renderKpis(scoped);
+      $('resultsChip').textContent = `Showing ${filtered.length} of ${allUsers.length}`;
+      $('kpiTotal').textContent = allUsers.length;
+      $('kpiActive').textContent = allUsers.filter(u => u.status === "Active").length;
+      $('kpiDisabled').textContent = allUsers.filter(u => u.status === "Disabled").length;
+      $('kpiActions').textContent = actionCount;
       renderTable(filtered);
     }
 
-    async function handleView(id){
-      const user = getUserById(id);
-      if (!user || !inScope(user)) return alert("User not found or out of scope.");
-      openViewModal(user);
-    }
-
-    async function handleDisable(id){
-      const user = getUserById(id);
-      if (!inScope(user)) return alert("Access denied: out of scope.");
-      if (user.status === "Disabled") return alert("User is already disabled.");
-
-      const ok = confirm(
-        `Disable user?\n\nName: ${user.name}\nEmail: ${user.email}\nMunicipality: ${user.municipality}\n\n` +
-        `This will update the user status in Firestore.`
-      );
-      if (!ok) return;
-
-      try {
-        await updateDoc(doc(db, 'users', id), { status: 'Disabled' });
-        actionCount++;
-        await loadUsers();
-      } catch (error) {
-        console.error('Error disabling user:', error);
-        alert('Failed to disable user: ' + error.message);
-      }
-    }
-
-    async function handleEnable(id){
-      const user = getUserById(id);
-      if (!inScope(user)) return alert("Access denied: out of scope.");
-      if (user.status === "Active") return alert("User is already active.");
-
-      const ok = confirm(
-        `Enable user?\n\nName: ${user.name}\nEmail: ${user.email}\nMunicipality: ${user.municipality}`
-      );
-      if (!ok) return;
-
-      try {
-        await updateDoc(doc(db, 'users', id), { status: 'Active' });
-        actionCount++;
-        await loadUsers();
-      } catch (error) {
-        console.error('Error enabling user:', error);
-        alert('Failed to enable user: ' + error.message);
-      }
-    }
-
-    async function handleRemove(id){
-      const user = getUserById(id);
-      if (!inScope(user)) return alert("Access denied: out of scope.");
-
-      const ok = confirm(
-        `Remove user account?\n\nName: ${user.name}\nEmail: ${user.email}\nMunicipality: ${user.municipality}\n\n` +
-        `This will permanently delete the user from Firestore. This action cannot be undone.`
-      );
-      if (!ok) return;
-
-      try {
-        await deleteDoc(doc(db, 'users', id));
-        actionCount++;
-        await loadUsers();
-      } catch (error) {
-        console.error('Error removing user:', error);
-        alert('Failed to remove user: ' + error.message);
-      }
-    }
-
-    usersTbody.addEventListener("click", (e) => {
+    $('usersTbody').addEventListener("click", async (e) => {
       const btn = e.target.closest("button[data-action]");
       if (!btn) return;
+      const id = btn.dataset.id;
+      const user = allUsers.find(u => u.id === id);
+      const action = btn.dataset.action;
 
-      const action = btn.getAttribute("data-action");
-      const id = btn.getAttribute("data-id");
-
-      if (action === "view") return handleView(id);
-      if (action === "disable") return handleDisable(id);
-      if (action === "enable") return handleEnable(id);
-      if (action === "remove") return handleRemove(id);
-    });
-
-    let debounce;
-    searchInput.addEventListener("input", () => {
-      clearTimeout(debounce);
-      debounce = setTimeout(() => renderAll(), 150);
-    });
-
-    statusSelect.addEventListener("change", () => renderAll());
-
-    btnClear.addEventListener("click", () => {
-      searchInput.value = "";
-      statusSelect.value = "all";
-      renderAll();
-    });
-
-    btnRefresh.addEventListener("click", () => loadUsers());
-    btnCloseModal.addEventListener("click", closeViewModal);
-
-    viewModal.addEventListener("click", (e) => {
-      if (e.target === viewModal.firstElementChild) closeViewModal();
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeViewModal();
-    });
-
-    // Authentication check and data loading
-    // If using Firebase, fetch the user's municipality after login
-    if (typeof onAuthStateChanged === 'function' && typeof db !== 'undefined') {
-      onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          console.log('No user authenticated, redirecting to login...');
-          window.location.href = '/login';
-        } else {
-          console.log('User authenticated:', user.email);
-          // Try to get municipality and status from Firestore user profile
-          try {
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            if (userDoc.exists()) {
-              const data = userDoc.data();
-              if (data.status && data.status.toLowerCase() === 'disabled') {
-                // Force redirect to disabled account page
-                window.location.replace('/account-disabled');
-                return;
-              }
-              if (data.municipality) {
-                setMunicipality(data.municipality);
-                return;
-              }
-            }
-          } catch (e) {
-            console.warn('Could not fetch user municipality:', e);
+      if (action === "view") {
+          $('viewName').textContent = user.name; $('viewEmail').textContent = user.email;
+          $('viewId').textContent = user.id; $('viewStatus').textContent = user.status;
+          $('viewMunicipality').textContent = user.municipality;
+          $('viewModal').classList.remove('hidden');
+      } else if (action === "disable" || action === "enable") {
+          const next = action === "disable" ? "Disabled" : "Active";
+          if (confirm(`Set status of ${user.name} to ${next}?`)) { 
+              await updateDoc(doc(db, 'users', id), { status: next }); 
+              actionCount++; 
+              loadUsers(); 
           }
-          // fallback
-          loadUsers();
+      } else if (action === "remove") {
+          if (confirm(`Permanently delete account for ${user.name}? This cannot be undone.`)) { 
+              await deleteDoc(doc(db, 'users', id)); 
+              actionCount++; 
+              loadUsers(); 
+          }
+      }
+    });
+
+    $('searchInput').addEventListener("input", renderAll);
+    $('statusSelect').addEventListener("change", renderAll);
+    $('btnClear').addEventListener("click", () => { $('searchInput').value = ""; $('statusSelect').value = "all"; renderAll(); });
+    $('btnRefresh').addEventListener("click", loadUsers);
+    $('btnCloseModal').addEventListener("click", () => $('viewModal').classList.add('hidden'));
+
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const uDoc = await getDoc(doc(db, 'users', user.uid));
+        if (uDoc.exists()) { 
+            SUBADMIN_MUNICIPALITY = uDoc.data().municipality || "Unknown"; 
+            loadUsers(); 
         }
-      });
-    } else {
-      // fallback for non-Firebase or static demo
-      loadUsers();
-    }
-</script>
+      } else { window.location.href = '/login'; }
+    });
+  </script>
+</body>
+</html>

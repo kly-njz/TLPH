@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Inventory Dashboard</title>
+  <title>User Inventory Dashboard | Official View</title>
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -30,7 +31,12 @@
             gov: ["Verdana", "Arial", "Tahoma", "sans-serif"],
           },
           boxShadow: {
-            focus: "0 0 0 4px rgba(16,185,129,0.22)",
+            focus: "0 0 0 3px rgba(16,185,129,0.2)",
+          },
+          letterSpacing: {
+            gov: '0.12em',
+            gov2: '0.14em',
+            gov3: '0.18em',
           }
         }
       }
@@ -38,208 +44,194 @@
   </script>
 
   <style>
-    html, body { font-family: Verdana, Arial, Tahoma, sans-serif; background: #f3f4f6; color: #0f172a; }
-    @media print { .no-print { display: none !important; } body { background: #fff !important; } }
+    /* Protect Material Icons from global font override */
+    *:not(.material-icons-round):not(i) { 
+        font-family: 'Verdana', 'Arial', 'Tahoma', sans-serif !important; 
+    }
+    
+    .material-icons-round {
+        font-family: 'Material Icons Round' !important;
+        font-weight: normal !important;
+        font-style: normal !important;
+        line-height: 1 !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        display: inline-block;
+        white-space: nowrap;
+        word-wrap: normal;
+        direction: ltr;
+        font-feature-settings: 'liga';
+        -webkit-font-smoothing: antialiased;
+    }
+
+    body { background: #f3f4f6; color: #0f172a; }
+    
+    @media print { 
+      .no-print { display: none !important; } 
+      body { background: #fff !important; } 
+      .print\:border { border: 1px solid #999 !important; }
+    }
   </style>
 </head>
 
-<body class="bg-govbg text-govtext">
-  {% include 'municipal/sidenav.html' %}
-  {% include 'municipal/header.html' %}
+<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-hidden">
+  
+  <div
+    class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]"
+    style="background-image:url('/static/images/denr.jpg'); background-position:center 30%; background-size:520px;"
+    aria-hidden="true"
+  ></div>
 
-  <main class="p-4 sm:p-6">
-    <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
-      <div>
-        <h1 class="text-2xl md:text-3xl font-extrabold tracking-[0.2px]">Inventory Dashboard</h1>
-        <p class="text-govmuted mt-1">Agriculture inventory overview with charts, daily activity, and live filtering.</p>
-      </div>
+  <div class="shrink-0">
+    {% include 'municipal/header.html' %}
+  </div>
 
-      <div class="no-print inline-flex items-center gap-2 rounded-full border border-govborder bg-white/60 px-3 py-2 text-[12px] font-extrabold uppercase tracking-[0.10em] text-slate-700 w-fit">
-        <span class="material-icons-round text-g800" style="font-size:18px;">today</span>
-        <span id="todayLabel"></span>
-      </div>
-    </header>
-    
-    <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-      <div class="rounded-xl border border-govborder bg-govpanel p-4">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="text-govmuted font-extrabold uppercase text-[12px] tracking-[0.12em]">Total Products</div>
-            <div class="text-3xl font-extrabold mt-2" id="kpiTotalProducts">0</div>
-            <div class="text-govmuted text-sm mt-1">Unique product records</div>
-          </div>
-          <div class="h-11 w-11 grid place-items-center rounded-xl border border-govborder bg-g100 text-g900">
-            <span class="material-icons-round" style="font-size:22px;">inventory_2</span>
-          </div>
-        </div>
-      </div>
+  <div class="flex flex-1 overflow-hidden">
+    {% include 'municipal/sidenav.html' %}
 
-      <div class="rounded-xl border border-govborder bg-govpanel p-4">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="text-govmuted font-extrabold uppercase text-[12px] tracking-[0.12em]">Total Quantity</div>
-            <div class="text-3xl font-extrabold mt-2" id="kpiTotalQty">0</div>
-            <div class="text-govmuted text-sm mt-1">Sum of current quantity</div>
-          </div>
-          <div class="h-11 w-11 grid place-items-center rounded-xl border border-govborder bg-g100 text-g900">
-            <span class="material-icons-round" style="font-size:22px;">stacked_bar_chart</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="rounded-xl border border-govborder bg-govpanel p-4">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="text-govmuted font-extrabold uppercase text-[12px] tracking-[0.12em]">Added Today</div>
-            <div class="text-3xl font-extrabold mt-2" id="kpiAddedToday">0</div>
-            <div class="text-govmuted text-sm mt-1">Created today</div>
-          </div>
-          <div class="h-11 w-11 grid place-items-center rounded-xl border border-govborder bg-g100 text-g900">
-            <span class="material-icons-round" style="font-size:22px;">add_circle</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="rounded-xl border border-govborder bg-govpanel p-4">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="text-govmuted font-extrabold uppercase text-[12px] tracking-[0.12em]">Removed Today</div>
-            <div class="text-3xl font-extrabold mt-2" id="kpiRemovedToday">0</div>
-            <div class="text-govmuted text-sm mt-1">Removed today</div>
-          </div>
-          <div class="h-11 w-11 grid place-items-center rounded-xl border border-govborder bg-g100 text-g900">
-            <span class="material-icons-round" style="font-size:22px;">remove_circle</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
-      <div class="rounded-xl border border-govborder bg-govpanel p-4">
-        <div class="flex items-start justify-between gap-3 mb-2">
-          <div>
-            <h2 class="text-xl font-extrabold">Total Quantity Trend</h2>
-            <p class="text-govmuted mt-1">Last 7 days (demo trend)</p>
-          </div>
-          <span class="hidden sm:inline-flex items-center gap-2 rounded-full border border-govborder bg-white/60 px-3 py-2 text-[12px] font-extrabold uppercase tracking-[0.10em] text-slate-700">
-            <span class="material-icons-round text-g800" style="font-size:18px;">show_chart</span>
-            Trend
-          </span>
-        </div>
-
-        <p class="text-xs text-govmuted mb-2">This is mock daily totals to demonstrate the graph.</p>
-
-        <div class="relative h-[240px] sm:h-[240px] max-sm:h-[200px]">
-          <canvas id="chartTotal"></canvas>
-        </div>
-      </div>
-
-      <div class="rounded-xl border border-govborder bg-govpanel p-4">
-        <div class="flex items-start justify-between gap-3 mb-2">
-          <div>
-            <h2 class="text-xl font-extrabold">Category Distribution</h2>
-            <p class="text-govmuted mt-1">Based on current quantity</p>
-          </div>
-          <span class="hidden sm:inline-flex items-center gap-2 rounded-full border border-govborder bg-white/60 px-3 py-2 text-[12px] font-extrabold uppercase tracking-[0.10em] text-slate-700">
-            <span class="material-icons-round text-g800" style="font-size:18px;">donut_large</span>
-            Categories
-          </span>
-        </div>
-
-        <p class="text-xs text-govmuted mb-2">Shows how current quantity is split across categories.</p>
-
-        <div class="relative h-[240px] sm:h-[240px] max-sm:h-[200px]">
-          <canvas id="chartCategories"></canvas>
-        </div>
-      </div>
-    </section>
-
-    <section class="no-print rounded-xl border border-govborder bg-govpanel p-4 mb-6">
-      <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-        <div class="w-full lg:max-w-[520px]">
-          <label class="block text-[12px] font-extrabold uppercase tracking-[0.12em] text-govmuted mb-2">Search</label>
-          <div id="searchWrap" class="flex items-center gap-2 rounded-xl border border-govborder bg-slate-50 px-3 py-2 focus-within:border-g500 focus-within:shadow-focus focus-within:bg-white">
-            <span class="material-icons-round text-slate-500" style="font-size:20px;">search</span>
-            <input
-              id="searchInput"
-              class="w-full bg-transparent outline-none text-[14px] text-govtext"
-              type="text"
-              placeholder="Type to filter (product name, category, owner)..."
-            />
-          </div>
-        </div>
-
-        <div class="w-full lg:max-w-[620px]">
-          <label class="block text-[12px] font-extrabold uppercase tracking-[0.12em] text-govmuted mb-2">Category</label>
-          <select
-            id="filterCategory"
-            class="w-full rounded-xl border border-govborder bg-slate-50 px-3 py-2 font-bold text-govtext outline-none focus:border-g500 focus:shadow-focus focus:bg-white"
-          >
-            <option value="All" selected>All</option>
-            <option value="Agriculture">Agriculture</option>
-            <option value="Crop & Plant">Crop & Plant</option>
-            <option value="Livestock & Poultry">Livestock & Poultry</option>
-            <option value="Fisheries & Aquaculture">Fisheries & Aquaculture</option>
-            <option value="Agribusiness & Agro-Processing">Agribusiness & Agro-Processing</option>
-            <option value="Agricultural Trade (Import & Export)">Agricultural Trade (Import & Export)</option>
-            <option value="Land Use & Farm Development infrastracture">Land Use & Farm Development infrastracture</option>
-            <option value="Research, Technology & Innovation">Research, Technology & Innovation</option>
-            <option value="Farmer Support, Subsidies & Insurance">Farmer Support, Subsidies & Insurance</option>
-            <option value="Food Safety & Quality Regulation">Food Safety & Quality Regulation</option>
-            <option value="Extension Services & Capacity Building">Extension Services & Capacity Building</option>
-            <option value="Climate Change, Disaster & Risk Management">Climate Change, Disaster & Risk Management</option>
-            <option value="Data, Monitoring & Digital Agriculture">Data, Monitoring & Digital Agriculture</option>
-            <option value="Compliance, Inspection & Enforcement">Compliance, Inspection & Enforcement</option>
-            <option value="Institutional & Cooperative Development">Institutional & Cooperative Development</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="mt-4 flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-2 rounded-full border border-govborder bg-white/60 px-3 py-2 text-[12px] font-extrabold uppercase tracking-[0.10em] text-slate-700">
-          <span class="material-icons-round text-g800" style="font-size:18px;">filter_alt</span>
-          Active Filters
-        </span>
-        <span class="inline-flex items-center rounded-full border border-govborder bg-white/60 px-3 py-2 text-[12px] font-extrabold uppercase tracking-[0.10em] text-slate-700" id="pillCategory">Category: All</span>
-        <span class="inline-flex items-center rounded-full border border-govborder bg-white/60 px-3 py-2 text-[12px] font-extrabold uppercase tracking-[0.10em] text-slate-700 break-all" id="pillSearch">Search: —</span>
-
-        <div class="lg:ml-auto text-govmuted font-bold" id="resultsCount">Showing 0 items</div>
-      </div>
-    </section>
-
-    <section class="rounded-xl border border-govborder bg-govpanel p-4">
-      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden">
+      
+      <div class="shrink-0 mb-2 flex items-end justify-between border-b-2 border-emerald-800 pb-1.5">
         <div>
-          <h2 class="text-xl font-extrabold">Products</h2>
-          <p class="text-govmuted mt-1">Name, category, owner, and quantities.</p>
+          <h1 class="text-base font-bold uppercase tracking-gov3 text-govtext leading-none">
+            User Inventory Dashboard
+          </h1>
+          <p class="mt-1 text-[10px] font-bold text-govmuted uppercase tracking-gov2 leading-none">
+            Agriculture Inventory • Live Records
+          </p>
+        </div>
+        <div class="no-print inline-flex items-center gap-1.5 rounded-[2px] border border-govborder bg-slate-100 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-slate-700">
+          <span class="material-icons-round text-g800 text-[14px]">today</span>
+          <span id="todayLabel"></span>
+        </div>
+      </div>
+      
+      <section class="shrink-0 grid grid-cols-2 xl:grid-cols-4 gap-2 mb-2">
+        <div class="rounded-[4px] border border-govborder bg-white px-3 py-2 shadow-sm flex items-center justify-between print:border">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-round text-[18px] text-slate-600">inventory_2</span>
+            <div>
+              <p class="text-[9px] font-bold uppercase tracking-gov text-slate-500 leading-none">Total Products</p>
+              <p class="mt-0.5 text-base font-black text-slate-900 leading-none" id="kpiTotalProducts">0</p>
+            </div>
+          </div>
         </div>
 
-        <button
-          id="btnPrint"
-          type="button"
-          class="no-print inline-flex items-center gap-2 rounded-xl border border-g600 px-3 py-2 text-g700 font-extrabold hover:bg-g100"
-        >
-          <span class="material-icons-round" style="font-size:18px;">print</span>
-          Print
-        </button>
-      </div>
+        <div class="rounded-[4px] border border-govborder bg-white px-3 py-2 shadow-sm flex items-center justify-between print:border">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-round text-[18px] text-slate-600">stacked_bar_chart</span>
+            <div>
+              <p class="text-[9px] font-bold uppercase tracking-gov text-slate-500 leading-none">Total Qty</p>
+              <p class="mt-0.5 text-base font-black text-slate-900 leading-none" id="kpiTotalQty">0</p>
+            </div>
+          </div>
+        </div>
 
-      <div class="overflow-x-auto">
-        <table class="w-full text-[15px]">
-          <thead>
-            <tr class="bg-slate-50">
-              <th class="text-left px-3 py-3 border-b border-govborder uppercase tracking-[0.10em] text-[12px] font-extrabold text-slate-700 whitespace-nowrap min-w-[220px]">Product Name</th>
-              <th class="text-left px-3 py-3 border-b border-govborder uppercase tracking-[0.10em] text-[12px] font-extrabold text-slate-700 whitespace-nowrap min-w-[280px]">Category</th>
-              <th class="text-left px-3 py-3 border-b border-govborder uppercase tracking-[0.10em] text-[12px] font-extrabold text-slate-700 whitespace-nowrap min-w-[200px]">Owner</th>
-              <th class="text-left px-3 py-3 border-b border-govborder uppercase tracking-[0.10em] text-[12px] font-extrabold text-slate-700 whitespace-nowrap min-w-[140px]">Initial Qty</th>
-              <th class="text-left px-3 py-3 border-b border-govborder uppercase tracking-[0.10em] text-[12px] font-extrabold text-slate-700 whitespace-nowrap min-w-[140px]">Current Qty</th>
-            </tr>
-          </thead>
-          <tbody id="itemsTbody"></tbody>
-        </table>
-      </div>
-    </section>
-  </main>
+        <div class="rounded-[4px] border border-govborder bg-white px-3 py-2 shadow-sm flex items-center justify-between print:border">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-round text-[18px] text-emerald-600">add_circle</span>
+            <div>
+              <p class="text-[9px] font-bold uppercase tracking-gov text-slate-500 leading-none">Added Today</p>
+              <p class="mt-0.5 text-base font-black text-slate-900 leading-none" id="kpiAddedToday">0</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-[4px] border border-govborder bg-white px-3 py-2 shadow-sm flex items-center justify-between print:border">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-round text-[18px] text-rose-600">remove_circle</span>
+            <div>
+              <p class="text-[9px] font-bold uppercase tracking-gov text-slate-500 leading-none">Removed Today</p>
+              <p class="mt-0.5 text-base font-black text-slate-900 leading-none" id="kpiRemovedToday">0</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="shrink-0 grid grid-cols-1 xl:grid-cols-2 gap-2 mb-2">
+        <div class="rounded-[4px] border border-govborder bg-white p-2 shadow-sm print:border">
+          <div class="flex items-center justify-between mb-1">
+            <h2 class="text-[10px] font-bold uppercase tracking-widest text-slate-700">Quantity Trend (7 Days)</h2>
+          </div>
+          <div class="relative h-[130px] w-full">
+            <canvas id="chartTotal"></canvas>
+          </div>
+        </div>
+
+        <div class="rounded-[4px] border border-govborder bg-white p-2 shadow-sm print:border">
+          <div class="flex items-center justify-between mb-1">
+            <h2 class="text-[10px] font-bold uppercase tracking-widest text-slate-700">Category Distribution</h2>
+          </div>
+          <div class="relative h-[130px] w-full">
+            <canvas id="chartCategories"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="no-print shrink-0 rounded-[4px] border border-govborder bg-white p-2 mb-2 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center gap-2">
+          
+          <div class="relative w-full md:w-[240px] shrink-0">
+            <select id="filterCategory" class="w-full appearance-none rounded-[3px] border border-govborder bg-slate-50 px-2 py-1 text-[9px] font-bold uppercase tracking-gov text-slate-700 outline-none focus:border-g600 focus:bg-white pr-6 truncate">
+              <option value="All" selected>All Categories</option>
+              <option value="Agriculture">Agriculture</option>
+              <option value="Crop & Plant">Crop & Plant</option>
+              <option value="Livestock & Poultry">Livestock & Poultry</option>
+              <option value="Fisheries & Aquaculture">Fisheries & Aquaculture</option>
+              <option value="Agribusiness & Agro-Processing">Agribusiness & Agro-Processing</option>
+              <option value="Agricultural Trade (Import & Export)">Agricultural Trade (Import & Export)</option>
+              <option value="Land Use & Farm Development infrastracture">Land Use & Farm Development infrastracture</option>
+              <option value="Research, Technology & Innovation">Research, Technology & Innovation</option>
+              <option value="Farmer Support, Subsidies & Insurance">Farmer Support, Subsidies & Insurance</option>
+              <option value="Food Safety & Quality Regulation">Food Safety & Quality Regulation</option>
+              <option value="Extension Services & Capacity Building">Extension Services & Capacity Building</option>
+              <option value="Climate Change, Disaster & Risk Management">Climate Change, Disaster & Risk Management</option>
+              <option value="Data, Monitoring & Digital Agriculture">Data, Monitoring & Digital Agriculture</option>
+              <option value="Compliance, Inspection & Enforcement">Compliance, Inspection & Enforcement</option>
+              <option value="Institutional & Cooperative Development">Institutional & Cooperative Development</option>
+            </select>
+            <span class="material-icons-round pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[14px] text-slate-500">expand_more</span>
+          </div>
+
+          <div class="flex w-full flex-1 items-center gap-1 rounded-[3px] border border-govborder bg-slate-50 px-2 py-0.5 focus-within:border-g600 focus-within:bg-white transition-all">
+            <span class="material-icons-round text-[14px] text-slate-400">search</span>
+            <input id="searchInput" class="w-full bg-transparent outline-none text-[10px] font-semibold text-govtext placeholder:font-semibold placeholder:text-slate-400" type="text" placeholder="Search product, category, owner..." />
+          </div>
+
+          <button id="btnPrint" type="button" class="shrink-0 inline-flex items-center justify-center gap-1 rounded-[3px] border border-g600 bg-white px-3 py-1 text-[9px] font-bold uppercase tracking-widest text-g700 hover:bg-emerald-50 focus:outline-none transition-colors">
+            <span class="material-icons-round text-[14px]">print</span>
+            Print
+          </button>
+        </div>
+
+        <div class="mt-1.5 flex items-center justify-between border-t border-gray-100 pt-1.5 px-1">
+          <div class="flex gap-2 items-center">
+            <span class="text-[9px] font-bold uppercase tracking-widest text-slate-500" id="resultsCount">Records: 0</span>
+            <span class="text-[8px] font-bold uppercase tracking-widest text-g600 border-l border-gray-300 pl-2" id="pillCategory">Cat: All</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="flex-1 flex flex-col min-h-0 rounded-[4px] border border-govborder bg-white shadow-sm overflow-hidden print:border">
+        <div class="flex-1 overflow-y-auto bg-white relative">
+          <table class="w-full text-left border-collapse">
+            <thead class="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_0_#d1d5db]">
+              <tr>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[25%] whitespace-nowrap">Product Name</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[30%] whitespace-nowrap">Category</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[25%] whitespace-nowrap">Owner</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[10%] whitespace-nowrap">Initial Qty</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[10%] whitespace-nowrap">Current Qty</th>
+              </tr>
+            </thead>
+            <tbody id="itemsTbody" class="divide-y divide-gray-200">
+              </tbody>
+          </table>
+        </div>
+      </section>
+      
+    </main>
+  </div>
 
   <script type="module">
     import { auth, db } from '/static/js/firebase-config.js';
@@ -256,7 +248,7 @@
     const TODAY_ISO = fmtDateISO(TODAY);
 
     document.getElementById("todayLabel").textContent =
-      TODAY.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+      TODAY.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
     class Product {
       constructor({ id, name, category, owner, initialQty, currentQty, addedDate, removedDate, userId, municipality }) {
@@ -281,13 +273,9 @@
 
       async getAll() {
         try {
-          console.log('Fetching user inventory from Firestore...');
           const productsRef = collection(this.db, this.collectionName);
           const snapshot = await getDocs(productsRef);
           
-          console.log('Total inventory items found:', snapshot.size);
-          
-          // Get users map for municipality and names
           const usersRef = collection(this.db, 'users');
           const usersSnapshot = await getDocs(usersRef);
           const usersMap = {};
@@ -306,14 +294,9 @@
             const userInfo = usersMap[data.userId];
             const userMunicipality = userInfo?.municipality;
             
-            // Filter by municipality
-            console.log(`Inventory ${docSnapshot.id}: User municipality="${userMunicipality}", Admin municipality="${currentAdminMunicipality}"`);
             if (currentAdminMunicipality && userMunicipality !== currentAdminMunicipality) {
-              console.log(`⛔ SKIPPED: Inventory ${docSnapshot.id} - municipality mismatch`);
               return;
             }
-            
-            console.log(`✅ INCLUDED: Inventory ${docSnapshot.id}`);
             
             let addedDate = '';
             if (data.createdAt) {
@@ -341,7 +324,6 @@
             }));
           });
           
-          console.log('Filtered inventory items:', products.length);
           return products;
         } catch (error) {
           console.error('Error fetching user inventory:', error);
@@ -356,7 +338,6 @@
     const GREEN_SERIES = [
       "#064e3b", "#065f46", "#047857", "#059669", "#10b981",
       "#34d399", "#6ee7b7", "#a7f3d0", "#d1fae5", "#0f766e",
-      "#14532d", "#166534", "#22c55e", "#16a34a", "#4ade80"
     ];
 
     const dailyTotals = [
@@ -366,36 +347,44 @@
       { date: "2026-02-08", totalQty: 2810 },
       { date: "2026-02-09", totalQty: 2960 },
       { date: "2026-02-10", totalQty: 3055 },
-      { date: TODAY_ISO,   totalQty: 3120 },
+      { date: TODAY_ISO,    totalQty: 3120 },
     ];
 
     function buildCharts(filteredList) {
-      const labels = dailyTotals.map(d => d.date);
+      const labels = dailyTotals.map(d => {
+          // Format date to mm/dd for compact view
+          const [y, m, dNum] = d.date.split('-');
+          return `${m}/${dNum}`;
+      });
       const totals = dailyTotals.map(d => d.totalQty);
 
       if (chartTotal) chartTotal.destroy();
       chartTotal = new Chart(document.getElementById("chartTotal"), {
-        type: "bar",
+        type: "line", // Switched to line to save visual weight
         data: {
           labels,
           datasets: [{
-            label: "Total Quantity",
+            label: "Total Qty",
             data: totals,
-            backgroundColor: "rgba(16, 185, 129, 0.35)",
-            borderColor: "rgba(6, 95, 70, 0.9)",
-            borderWidth: 1,
-            borderRadius: 6,
-            maxBarThickness: 38
+            backgroundColor: "rgba(5, 150, 105, 0.1)",
+            borderColor: "rgba(5, 150, 105, 1)",
+            borderWidth: 2,
+            pointRadius: 2,
+            fill: true,
+            tension: 0.2
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { display: true, labels: { boxWidth: 12 } } },
+          plugins: { 
+            legend: { display: false } // Hide legend for space
+          },
           scales: {
-            x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } },
-            y: { beginAtZero: true, ticks: { maxTicksLimit: 5 } }
-          }
+            x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+            y: { beginAtZero: false, ticks: { font: { size: 9 }, maxTicksLimit: 4 } }
+          },
+          layout: { padding: 0 }
         }
       });
 
@@ -412,13 +401,12 @@
         data: {
           labels: catLabels,
           datasets: [{
-            label: "Current Quantity",
             data: catValues,
             backgroundColor: catLabels.map((_, i) => GREEN_SERIES[i % GREEN_SERIES.length]),
             borderColor: "#ffffff",
-            borderWidth: 2,
-            hoverOffset: 6,
-            cutout: "68%"
+            borderWidth: 1,
+            hoverOffset: 2,
+            cutout: "75%" // Thinner doughnut
           }]
         },
         options: {
@@ -426,14 +414,15 @@
           maintainAspectRatio: false,
           plugins: {
             legend: {
-              position: "bottom",
+              position: "right", // Move legend to right for vertical space saving
               labels: {
-                boxWidth: 12,
-                padding: 12,
-                font: { size: window.innerWidth <= 640 ? 10 : 11 }
+                boxWidth: 8,
+                padding: 8,
+                font: { size: 9 }
               }
             }
-          }
+          },
+          layout: { padding: 0 }
         }
       });
     }
@@ -471,10 +460,10 @@
       const addedToday = list.filter(p => p.addedDate === TODAY_ISO).length;
       const removedToday = list.filter(p => p.removedDate === TODAY_ISO).length;
 
-      els.kpiTotalProducts.textContent = totalProducts;
-      els.kpiTotalQty.textContent = totalQty;
-      els.kpiAddedToday.textContent = addedToday;
-      els.kpiRemovedToday.textContent = removedToday;
+      els.kpiTotalProducts.textContent = totalProducts.toLocaleString();
+      els.kpiTotalQty.textContent = totalQty.toLocaleString();
+      els.kpiAddedToday.textContent = addedToday.toLocaleString();
+      els.kpiRemovedToday.textContent = removedToday.toLocaleString();
     }
 
     function renderTable(list) {
@@ -483,36 +472,36 @@
       if (list.length === 0) {
         els.itemsTbody.innerHTML = `
           <tr>
-            <td colspan="5" class="px-3 py-6 text-center text-govmuted font-bold">
+            <td colspan="5" class="px-3 py-6 text-center text-[10px] text-govmuted font-bold uppercase tracking-widest">
               No products found for the selected filters.
             </td>
           </tr>
         `;
-        els.resultsCount.textContent = "Showing 0 items";
+        els.resultsCount.textContent = "Records: 0";
         return;
       }
 
       for (const p of list) {
         const tr = document.createElement("tr");
+        tr.className = "hover:bg-emerald-50 transition-colors";
         tr.innerHTML = `
-          <td class="px-3 py-3 border-b border-govborder font-extrabold text-slate-900">${p.name}</td>
-          <td class="px-3 py-3 border-b border-govborder text-slate-700">${p.category}</td>
-          <td class="px-3 py-3 border-b border-govborder text-slate-700">${p.owner}</td>
-          <td class="px-3 py-3 border-b border-govborder font-extrabold text-slate-900">${p.initialQty}</td>
-          <td class="px-3 py-3 border-b border-govborder font-extrabold text-slate-900">${p.currentQty}</td>
+          <td class="px-3 py-1.5 text-[10px] font-bold text-slate-900 truncate">${p.name}</td>
+          <td class="px-3 py-1.5 text-[9px] font-bold text-slate-600 uppercase tracking-widest truncate">${p.category}</td>
+          <td class="px-3 py-1.5 text-[10px] font-semibold text-slate-800 truncate">${p.owner}</td>
+          <td class="px-3 py-1.5 text-[10px] font-bold text-slate-900">${p.initialQty.toLocaleString()}</td>
+          <td class="px-3 py-1.5 text-[10px] font-black text-emerald-800">${p.currentQty.toLocaleString()}</td>
         `;
         els.itemsTbody.appendChild(tr);
       }
 
-      els.resultsCount.textContent = `Showing ${list.length} item${list.length === 1 ? "" : "s"}`;
+      els.resultsCount.textContent = `Records: ${list.length}`;
     }
 
     function refresh() {
       const filtered = allProducts.filter(matchesFilters);
 
-      els.pillCategory.textContent = `Category: ${els.filterCategory.value}`;
-      els.pillSearch.textContent = `Search: ${els.searchInput.value.trim() ? els.searchInput.value.trim() : "—"}`;
-
+      els.pillCategory.textContent = `Cat: ${els.filterCategory.value}`;
+      
       computeKpis(filtered);
       renderTable(filtered);
       buildCharts(filtered);
@@ -520,32 +509,23 @@
 
     async function initDashboard() {
       try {
-        console.log('Initializing user inventory dashboard...');
-        
         const currentUser = auth.currentUser;
         if (!currentUser) {
-          console.error('No user logged in');
           window.location.href = '/login';
           return;
         }
         
-        // Get admin's municipality
         const adminDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (adminDoc.exists()) {
           const adminData = adminDoc.data();
           currentAdminMunicipality = adminData.municipality;
-          console.log('Current admin municipality:', currentAdminMunicipality);
         }
 
         const repo = new FirebaseProductRepository({ db });
-
         allProducts = await repo.getAll();
-        console.log('All products loaded:', allProducts.length);
-        
         refresh();
       } catch (error) {
         console.error('Error initializing dashboard:', error);
-        throw error;
       }
     }
 
@@ -564,20 +544,17 @@
 
     els.btnPrint.addEventListener("click", () => window.print());
 
-    // Initialize with authentication
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log('User authenticated:', user.email);
         initDashboard().catch((err) => {
           console.error(err);
           els.itemsTbody.innerHTML = `
-            <tr><td colspan="5" class="px-3 py-6 text-center text-red-700 font-bold">
+            <tr><td colspan="5" class="px-3 py-6 text-center text-[10px] text-red-700 font-bold uppercase tracking-widest">
               Failed to load products. Check console for details.
             </td></tr>
           `;
         });
       } else {
-        console.log('No user authenticated, redirecting...');
         window.location.href = '/login';
       }
     });

@@ -10,254 +10,277 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            gov: ['Verdana', 'Arial', 'Tahoma', 'sans-serif'],
+          },
+          colors: {
+            gov: {
+              text: '#111827',
+              muted: '#4b5563',
+              border: '#d1d5db',
+              bg: '#f3f4f6',
+              panel: '#ffffff',
+              primary: '#0f172a',
+              focus: 'rgba(5, 150, 105, 0.18)',
+            }
+          },
+          letterSpacing: {
+            gov: '0.12em',
+            gov2: '0.14em',
+            gov3: '0.18em',
+          }
+        }
+      }
+    }
+  </script>
+
   <style>
-    :root{
-      --gov-font: Verdana, Arial, Tahoma, sans-serif;
+    /* Protect Material Icons from being rendered as Arial */
+    *:not(.material-icons-round):not(i) { 
+        font-family: 'Verdana', 'Arial', 'Tahoma', sans-serif !important; 
     }
-    html, body{
-      font-family: var(--gov-font);
-      font-size: 16px; /* ~12pt */
+    
+    .material-icons-round {
+        font-family: 'Material Icons Round' !important;
+        font-weight: normal !important;
+        font-style: normal !important;
+        line-height: 1 !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        display: inline-block;
+        white-space: nowrap;
+        word-wrap: normal;
+        direction: ltr;
+        font-feature-settings: 'liga';
+        -webkit-font-smoothing: antialiased;
     }
-    body::before{
-      content:"";
-      position: fixed;
-      inset: 0;
-      background-image: url('/static/images/denr.jpg');
-      background-repeat: no-repeat;
-      background-position: center 30%;
-      background-size: 520px;
-      opacity: 0.035;
-      pointer-events: none;
-      z-index: -1;
+
+    body { background: #f3f4f6; color: #111827; }
+
+    /* Compact scrollbar for the table container */
+    .custom-scroll::-webkit-scrollbar { width: 5px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* Chart Hover Effect */
+    .clickable-chart:hover {
+        background-color: #f8fafc;
+        border-radius: 4px;
+        box-shadow: inset 0 0 0 1px #cbd5e1;
+    }
+
+    @media print{
+      .print\:hidden { display:none !important; }
+      body{ background:#fff !important; }
+      .print\:border { border:1px solid #999 !important; }
     }
   </style>
 </head>
 
-<body class="min-h-screen bg-gray-100 text-slate-900">
-  {% include 'municipal/header.html' %}
-  {% include 'municipal/sidenav.html' %}
+<body class="h-screen w-full bg-gov-bg font-gov text-gov-text flex flex-col overflow-hidden">
+  
+  <div
+    class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]"
+    style="background-image:url('/static/images/denr.jpg'); background-position:center 30%; background-size:520px;"
+    aria-hidden="true"
+  ></div>
 
-  <div class="mx-auto w-full max-w-[1400px] px-4 py-5">
-    <!-- Topbar -->
-    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-4">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight text-slate-900">
-          DENR Transactions Analytics
-        </h1>
-        <p class="mt-1 text-sm text-slate-600">
-          Graphs and analytics for payments and transaction status (Municipality-scoped view).
-        </p>
-      </div>
+  <div class="shrink-0">
+    {% include 'municipal/header.html' %}
+  </div>
 
-      <div class="flex flex-wrap items-center gap-2 md:justify-end">
-        <div id="scopeChip"
-             class="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
-          Municipality: —
+  <div class="flex flex-1 overflow-hidden">
+    {% include 'municipal/sidenav.html' %}
+
+    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden">
+      
+      <div class="shrink-0 mb-2 flex flex-col md:flex-row md:items-end justify-between border-b-2 border-emerald-800 pb-1.5 gap-2">
+        <div>
+          <h1 class="text-base font-bold uppercase tracking-gov3 text-gov-primary leading-none">
+            Transactions Analytics
+          </h1>
+          <div class="mt-1.5 flex items-center gap-2">
+            <span class="text-[10px] font-bold text-gov-muted uppercase tracking-gov2 leading-none">
+                Financial Overview
+            </span>
+            <span id="scopeChip" class="inline-flex items-center rounded-[2px] bg-slate-200 border border-slate-300 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-700 leading-none">
+                Mun: —
+            </span>
+          </div>
         </div>
 
-        <button id="demoRefreshBtn"
-                class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-800 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-emerald-100"
-                type="button">
-          <span class="material-icons-round text-[18px]">refresh</span>
-          Refresh
-        </button>
+        <div class="flex items-center gap-2">
+            <button id="demoRefreshBtn" class="print:hidden inline-flex items-center justify-center gap-1 rounded-[3px] border border-gray-400 bg-white px-2 py-1 text-[9px] font-bold uppercase tracking-gov text-slate-700 hover:bg-slate-50 focus:outline-none transition-colors" type="button">
+                <span class="material-icons-round text-[12px]">refresh</span> Refresh
+            </button>
+            <button id="exportBtn" class="print:hidden inline-flex items-center justify-center gap-1 rounded-[3px] border border-slate-800 bg-slate-800 px-2 py-1 text-[9px] font-bold uppercase tracking-gov text-white hover:bg-slate-700 focus:outline-none transition-colors" type="button">
+                <span class="material-icons-round text-[12px]">file_download</span> Official Report
+            </button>
+        </div>
+      </div>
 
-        <button id="exportBtn"
-                class="inline-flex items-center gap-2 rounded-md border border-slate-900 bg-slate-900 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-white hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-emerald-100"
-                type="button">
-          <span class="material-icons-round text-[18px]">file_download</span>
-          Export Report
+      <section class="shrink-0 grid gap-2 grid-cols-2 lg:grid-cols-4 mb-2">
+        <div class="rounded-[4px] border border-gov-border bg-gov-panel px-3 py-1.5 shadow-sm flex flex-col justify-center print:border">
+          <p class="text-[8px] font-bold uppercase tracking-gov text-slate-500 leading-none">Total Transactions</p>
+          <p class="mt-1 text-base font-black text-slate-900 leading-none" id="kpiTotalTx">0</p>
+        </div>
+
+        <div class="rounded-[4px] border border-gov-border bg-gov-panel px-3 py-1.5 shadow-sm flex flex-col justify-center print:border">
+          <p class="text-[8px] font-bold uppercase tracking-gov text-slate-500 leading-none">Total Paid</p>
+          <p class="mt-1 text-base font-black text-emerald-700 leading-none" id="kpiPaid">0</p>
+        </div>
+
+        <div class="rounded-[4px] border border-gov-border bg-gov-panel px-3 py-1.5 shadow-sm flex flex-col justify-center print:border">
+          <p class="text-[8px] font-bold uppercase tracking-gov text-slate-500 leading-none">Total Pending</p>
+          <p class="mt-1 text-base font-black text-amber-600 leading-none" id="kpiPending">0</p>
+        </div>
+
+        <div class="rounded-[4px] border border-emerald-600 bg-emerald-50 px-3 py-1.5 shadow-sm flex flex-col justify-center print:border">
+          <p class="text-[8px] font-bold uppercase tracking-gov text-emerald-800 leading-none">Total Revenue</p>
+          <p class="mt-1 text-base font-black text-emerald-900 leading-none" id="kpiAmount">₱0.00</p>
+        </div>
+      </section>
+
+      <section class="shrink-0 grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2 lg:h-[130px]">
+        
+        <div class="rounded-[4px] border border-gov-border bg-gov-panel p-2 shadow-sm print:border flex flex-col h-full overflow-hidden clickable-chart cursor-pointer transition-all" onclick="openChartModal('type')" title="Click to expand chart">
+          <div class="shrink-0 flex justify-between items-center mb-1">
+              <h3 class="text-[10px] font-bold uppercase tracking-widest text-slate-800">Volume by Type</h3>
+              <span class="material-icons-round text-[12px] text-slate-400">zoom_in</span>
+          </div>
+          <div class="relative flex-1 min-h-0 w-full pointer-events-none">
+            <canvas id="typeBar"></canvas>
+          </div>
+        </div>
+
+        <div class="rounded-[4px] border border-gov-border bg-gov-panel p-2 shadow-sm print:border flex flex-col h-full overflow-hidden clickable-chart cursor-pointer transition-all" onclick="openChartModal('status')" title="Click to expand chart">
+          <div class="shrink-0 flex justify-between items-center mb-1">
+              <h3 class="text-[10px] font-bold uppercase tracking-widest text-slate-800">Transaction Status</h3>
+              <span class="material-icons-round text-[12px] text-slate-400">zoom_in</span>
+          </div>
+          <div class="relative flex-1 min-h-0 w-full pointer-events-none">
+            <canvas id="statusDonut"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="shrink-0 mb-2 rounded-[4px] border border-gov-border bg-gov-panel p-2 shadow-sm print:border flex flex-col md:flex-row md:items-center justify-between gap-2">
+        
+        <div class="flex flex-1 items-center gap-2">
+            <div class="relative w-[150px] shrink-0">
+                <select id="statusSelect" class="w-full appearance-none rounded-[3px] border border-gov-border bg-slate-50 px-2 py-1 pr-6 text-[9px] font-bold uppercase tracking-gov text-slate-700 outline-none focus:border-emerald-600 focus:bg-white truncate">
+                <option value="all">All Status</option>
+                <option value="Paid">Paid</option>
+                <option value="Pending">Pending</option>
+                <option value="Failed">Failed</option>
+                </select>
+                <span class="material-icons-round pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-[12px] text-slate-500">expand_more</span>
+            </div>
+
+            <div class="flex w-full max-w-[300px] items-center gap-1 rounded-[3px] border border-gov-border bg-slate-50 px-2 py-0.5 focus-within:border-emerald-600 focus-within:bg-white transition-all">
+                <span class="material-icons-round text-[14px] text-slate-400">search</span>
+                <input id="searchInput" class="w-full bg-transparent outline-none text-[10px] font-semibold text-gov-text placeholder:font-semibold placeholder:text-slate-400" type="text" placeholder="Search ID, Payer, Ref..." />
+            </div>
+
+            <button id="searchBtn" class="print:hidden flex-none rounded-[2px] border border-gov-primary bg-gov-primary px-2 py-0.5 text-[8px] font-bold uppercase tracking-gov text-white hover:brightness-105 focus:outline-none" type="button">
+                Search
+            </button>
+        </div>
+
+        <div id="resultsChip" class="shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-600">
+            Showing 0 of 0
+        </div>
+      </section>
+
+      <section class="flex-1 flex flex-col min-h-0 rounded-[4px] border border-gov-border bg-gov-panel shadow-sm overflow-hidden print:border relative">
+        
+        <div class="shrink-0 hidden grid-cols-12 gap-2 border-b-2 border-gray-400 bg-slate-100 px-3 py-1.5 text-[8px] font-bold uppercase tracking-gov2 text-slate-600 md:grid">
+          <div class="col-span-1 truncate">ID</div>
+          <div class="col-span-2 truncate">Payer</div>
+          <div class="col-span-2 truncate">Type</div>
+          <div class="col-span-1 truncate">Source</div>
+          <div class="col-span-1 truncate">Date</div>
+          <div class="col-span-1 text-right truncate">Amount</div>
+          <div class="col-span-2 truncate text-center">Pay Status</div>
+          <div class="col-span-1 truncate">Ref</div>
+          <div class="col-span-1 truncate text-center">Status</div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto min-h-0 custom-scroll bg-white">
+            <div id="txBody" class="flex flex-col">
+                </div>
+        </div>
+        
+      </section>
+
+    </main>
+  </div>
+
+  <div id="chartModal" class="fixed inset-0 z-[100] hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity">
+    <div class="bg-white rounded-[4px] shadow-2xl w-full max-w-3xl flex flex-col border-t-4 border-emerald-800">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-slate-50">
+        <div>
+            <h3 id="modalChartTitle" class="text-xs font-bold uppercase tracking-widest text-slate-800 m-0">Expanded Chart</h3>
+            <p id="modalChartSubtitle" class="text-[9px] text-slate-500 uppercase tracking-widest m-0 mt-1">Detailed View</p>
+        </div>
+        <button onclick="closeChartModal()" class="text-slate-400 hover:text-rose-600 focus:outline-none transition-colors">
+          <span class="material-icons-round text-xl">close</span>
         </button>
+      </div>
+      <div class="p-6 bg-white w-full h-[400px] relative">
+        <canvas id="modalCanvas"></canvas>
       </div>
     </div>
-
-    <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-4">
-      <div class="rounded-md border border-gray-300 bg-white p-4">
-        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Total Transactions</div>
-        <div class="mt-2 text-3xl font-bold text-slate-900" id="kpiTotalTx">0</div>
-        <div class="mt-1 text-sm text-slate-600">In your municipality</div>
-      </div>
-
-      <div class="rounded-md border border-gray-300 bg-white p-4">
-        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Total Paid</div>
-        <div class="mt-2 text-3xl font-bold text-slate-900" id="kpiPaid">0</div>
-        <div class="mt-1 text-sm text-slate-600">Paid transactions</div>
-      </div>
-
-      <div class="rounded-md border border-gray-300 bg-white p-4">
-        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Total Pending</div>
-        <div class="mt-2 text-3xl font-bold text-slate-900" id="kpiPending">0</div>
-        <div class="mt-1 text-sm text-slate-600">Awaiting payment</div>
-      </div>
-
-      <div class="rounded-md border border-gray-300 bg-white p-4">
-        <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Total Amount Paid</div>
-        <div class="mt-2 text-3xl font-bold text-slate-900" id="kpiAmount">₱0.00</div>
-        <div class="mt-1 text-sm text-slate-600">Sum of paid amounts</div>
-      </div>
-    </section>
-
-    <section class="grid grid-cols-1 gap-3 xl:grid-cols-2 mb-4">
-      <div class="rounded-md border border-gray-300 bg-white p-4">
-        <div class="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <h2 class="text-base font-bold text-slate-900">Volume by Type</h2>
-            <p class="mt-1 text-sm text-slate-600">Import Permit, Licensing Fees, Service Fees, Others</p>
-          </div>
-          <span class="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
-            <span class="material-icons-round text-[18px]">insights</span>
-            Summary
-          </span>
-        </div>
-        <div class="relative h-[320px]">
-          <canvas id="typeBar"></canvas>
-        </div>
-      </div>
-
-      <div class="rounded-md border border-gray-300 bg-white p-4">
-        <div class="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <h2 class="text-base font-bold text-slate-900">Transaction Status</h2>
-            <p class="mt-1 text-sm text-slate-600">Paid, Pending, Failed</p>
-          </div>
-          <span class="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
-            <span class="material-icons-round text-[18px]">donut_large</span>
-            Status Split
-          </span>
-        </div>
-        <div class="relative h-[320px]">
-          <canvas id="statusDonut"></canvas>
-        </div>
-      </div>
-    </section>
-
-    <section class="rounded-md border border-gray-300 bg-white p-4">
-      <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between mb-3">
-        <div>
-          <h3 class="text-lg font-bold text-slate-900">All Payment Transactions</h3>
-          <p class="mt-1 text-sm text-slate-600">
-            All user payments and approved applications from your municipality including direct payments, licenses, permits, and service requests (ID, Payer, Type, Source, Date, Amount, Payment Status, Reference, Overall Status).
-          </p>
-        </div>
-
-        <div class="inline-flex items-center rounded-full border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
-          Currency: Philippine Peso (₱)
-        </div>
-      </div>
-
-      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
-        <div class="flex flex-col gap-2 md:flex-row md:items-center md:flex-wrap">
-          <div class="flex items-center gap-2 rounded-md border border-gray-300 bg-gray-50 px-3 py-2 focus-within:ring-4 focus-within:ring-emerald-100 focus-within:border-emerald-400">
-            <span class="material-icons-round text-slate-500">search</span>
-            <input
-              id="searchInput"
-              type="text"
-              placeholder="Search by ID, Payer, or Type…"
-              class="w-[260px] max-w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-500"
-            />
-          </div>
-
-          <div class="relative">
-            <select id="statusSelect"
-                    class="h-[42px] rounded-md border border-gray-300 bg-gray-50 px-3 pr-10 text-xs font-bold uppercase tracking-[0.12em] text-slate-800 outline-none hover:bg-white focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100">
-              <option value="all">All Status</option>
-              <option value="Paid">Paid</option>
-              <option value="Pending">Pending</option>
-              <option value="Failed">Failed</option>
-            </select>
-            <span class="material-icons-round pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">expand_more</span>
-          </div>
-
-          <button id="searchBtn"
-                  class="inline-flex items-center justify-center rounded-md border border-slate-900 bg-slate-900 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-white hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-emerald-100"
-                  type="button">
-            Search
-          </button>
-        </div>
-
-        <div id="resultsChip"
-             class="inline-flex items-center rounded-full border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
-          Showing 0 of 0
-        </div>
-      </div>
-
-      <div class="overflow-x-auto">
-        <table class="min-w-full table-fixed border-collapse">
-          <thead>
-            <tr class="bg-gray-50">
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[10%]">ID</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[14%]">Payer</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[13%]">Type</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[11%]">Source</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[10%]">Date</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-right text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[11%]">Amount</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[12%]">Payment Status</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[11%]">Reference</th>
-              <th class="border-y border-gray-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-600 w-[8%]">Status</th>
-            </tr>
-          </thead>
-          <tbody id="txBody"></tbody>
-        </table>
-      </div>
-    </section>
   </div>
 
   <script type="module">
   import { auth, db } from '/static/js/firebase-config.js';
-  import { collection, getDocs, doc, getDoc, query, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
   let CURRENT_MUNICIPALITY = null;
   let allTransactions = [];
+  let barChart, donutChart, modalChartInstance;
 
-  const peso = new Intl.NumberFormat("en-PH", {
-    style: "currency", currency: "PHP", minimumFractionDigits: 2
-  });
+  // COLOR PALETTE PARA SA BARS
+  const CHART_COLORS = [
+      '#059669', '#0284c7', '#d97706', '#dc2626', 
+      '#7c3aed', '#0d9488', '#ea580c', '#0891b2', 
+      '#4f46e5', '#65a30d', '#0f766e', '#b45309'
+  ];
 
-  const dateFmt = new Intl.DateTimeFormat("en-PH", {
-    year: "numeric", month: "short", day: "2-digit"
-  });
+  const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2 });
+  const dateFmt = new Intl.DateTimeFormat("en-PH", { year: "numeric", month: "short", day: "2-digit" });
 
   function formatDate(iso){
     const d = new Date(iso + "T00:00:00");
     return isNaN(d.getTime()) ? iso : dateFmt.format(d);
   }
 
-  // DOM
   const scopeChip = document.getElementById("scopeChip");
   const resultsChip = document.getElementById("resultsChip");
-
   const searchInput = document.getElementById("searchInput");
   const statusSelect = document.getElementById("statusSelect");
   const searchBtn = document.getElementById("searchBtn");
-
   const kpiTotalTx = document.getElementById("kpiTotalTx");
   const kpiPaid = document.getElementById("kpiPaid");
   const kpiPending = document.getElementById("kpiPending");
   const kpiAmount = document.getElementById("kpiAmount");
-
   const txBody = document.getElementById("txBody");
-
-  let barChart, donutChart;
 
   function applySearchAndStatus(data){
     const q = searchInput.value.trim().toLowerCase();
     const status = statusSelect.value;
-
     const filtered = data.filter(t => {
-      const matchQuery =
-        q === "" ||
-        (t.id || "").toLowerCase().includes(q) ||
-        (t.payer || "").toLowerCase().includes(q) ||
-        (t.type || "").toLowerCase().includes(q) ||
-        (t.referenceNum || "").toLowerCase().includes(q) ||
-        (t.paymentStatus || "").toLowerCase().includes(q) ||
-        (t.source || "").toLowerCase().includes(q);
-
+      const matchQuery = q === "" || (t.id || "").toLowerCase().includes(q) || (t.payer || "").toLowerCase().includes(q) || (t.type || "").toLowerCase().includes(q) || (t.referenceNum || "").toLowerCase().includes(q) || (t.paymentStatus || "").toLowerCase().includes(q) || (t.source || "").toLowerCase().includes(q);
       const matchStatus = status === "all" || t.status === status;
       return matchQuery && matchStatus;
     });
-
     resultsChip.textContent = `Showing ${filtered.length} of ${data.length}`;
     return filtered;
   }
@@ -265,23 +288,9 @@
   function normalizeStatus(status) {
     if (!status) return 'Pending';
     const s = String(status).toLowerCase().trim();
-    
-    // Check for paid statuses (PAID, Paid, paid, COMPLETED, Completed, etc.)
-    if (s.includes('paid') || s.includes('completed') || s === 'success') {
-      return 'Paid';
-    }
-    
-    // Check for pending statuses
-    if (s.includes('pending') || s === 'await') {
-      return 'Pending';
-    }
-    
-    // Check for failed statuses
-    if (s.includes('failed') || s.includes('rejected') || s.includes('failed') || s === 'expired') {
-      return 'Failed';
-    }
-    
-    // Default to original status if unrecognized
+    if (s.includes('paid') || s.includes('completed') || s === 'success') return 'Paid';
+    if (s.includes('pending') || s === 'await') return 'Pending';
+    if (s.includes('failed') || s.includes('rejected') || s === 'expired') return 'Failed';
     return status;
   }
 
@@ -290,16 +299,9 @@
     const paid = data.filter(x => x.status === "Paid").length;
     const pending = data.filter(x => x.status === "Pending").length;
     const failed = data.filter(x => x.status === "Failed").length;
-
-    const amountPaid = data
-      .filter(x => x.status === "Paid")
-      .reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
-
+    const amountPaid = data.filter(x => x.status === "Paid").reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
     const byType = {};
-    for (const t of data){
-      byType[t.type] = (byType[t.type] || 0) + 1;
-    }
-
+    for (const t of data){ byType[t.type] = (byType[t.type] || 0) + 1; }
     return { totalTx, paid, pending, failed, amountPaid, byType };
   }
 
@@ -311,663 +313,341 @@
   }
 
   function renderCharts(stats){
-    const typeLabels = Object.keys(stats.byType);
+    const typeLabels = Object.keys(stats.byType).map(l => l.length > 15 ? l.substring(0, 15) + '...' : l);
     const typeValues = Object.values(stats.byType);
+    
+    // Assigning colors from the palette to each bar
+    const barColors = typeLabels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]);
 
     if (barChart) barChart.destroy();
-    barChart = new Chart(document.getElementById("typeBar"), {
-      type: "bar",
-      data: { labels: typeLabels, datasets: [{ label: "Transactions", data: typeValues }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { grid: { display: false } }, y: { beginAtZero: true } }
-      }
-    });
+    if(typeLabels.length > 0) {
+        barChart = new Chart(document.getElementById("typeBar"), {
+        type: "bar",
+        data: { 
+            labels: typeLabels, 
+            datasets: [{ 
+                label: "Transactions", 
+                data: typeValues, 
+                backgroundColor: barColors, // Color mapping here
+                borderRadius: 2 
+            }] 
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 8 } } }, y: { beginAtZero: true, ticks: { font: { size: 8 } } } },
+            layout: { padding: 0 }
+        }
+        });
+    }
 
     if (donutChart) donutChart.destroy();
+    const hasStatusData = stats.paid > 0 || stats.pending > 0 || stats.failed > 0;
     donutChart = new Chart(document.getElementById("statusDonut"), {
       type: "doughnut",
       data: {
-        labels: ["Paid","Pending","Failed"],
-        datasets: [{ data: [stats.paid, stats.pending, stats.failed], cutout: "60%" }]
+        labels: hasStatusData ? ["Paid","Pending","Failed"] : ["No Data"],
+        datasets: [{ 
+            data: hasStatusData ? [stats.paid, stats.pending, stats.failed] : [1], 
+            backgroundColor: hasStatusData ? ['#10b981', '#f59e0b', '#ef4444'] : ['#e2e8f0'],
+            borderWidth: 1, cutout: "70%" 
+        }]
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: hasStatusData } }, layout: { padding: 0 } }
     });
   }
 
+  // Pop-up logic for charts
+  window.openChartModal = function(type) {
+        const modal = document.getElementById('chartModal');
+        const modalTitle = document.getElementById('modalChartTitle');
+        const modalSub = document.getElementById('modalChartSubtitle');
+        const ctx = document.getElementById('modalCanvas');
+
+        if (modalChartInstance) { modalChartInstance.destroy(); }
+        modal.classList.remove('hidden');
+
+        if (type === 'status' && donutChart) {
+            modalTitle.textContent = "Transaction Status";
+            modalSub.textContent = "Distribution of Payment Statuses";
+            modalChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: donutChart.data,
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'right', labels: { font: { size: 12, family: 'Verdana' } } }, tooltip: { bodyFont: { size: 14 } } }
+                }
+            });
+        } else if (type === 'type' && barChart) {
+            modalTitle.textContent = "Volume by Type";
+            modalSub.textContent = "Transactions grouped by Category";
+            
+            // Re-apply the colors for the popup chart
+            const fullLabels = Object.keys(computeStats(applySearchAndStatus(allTransactions)).byType);
+            const popBarColors = fullLabels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]);
+
+            modalChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: fullLabels, 
+                    datasets: [{
+                        label: 'Transactions',
+                        data: barChart.data.datasets[0].data,
+                        backgroundColor: popBarColors, // Apply colors in popup
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { bodyFont: { size: 14 } } },
+                    scales: { x: { beginAtZero: true, ticks: { font: { size: 12 } } }, y: { ticks: { font: { size: 11, family: 'Verdana' } } } }
+                }
+            });
+        }
+    };
+
+    window.closeChartModal = function() {
+        document.getElementById('chartModal').classList.add('hidden');
+        if (modalChartInstance) {
+            modalChartInstance.destroy();
+            modalChartInstance = null;
+        }
+    };
+
   function statusBadge(status) {
-    const base = "inline-flex items-center rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-bold uppercase tracking-[0.12em]";
-    if (status === "Paid") return `<span class="${base} text-emerald-800">Paid</span>`;
-    if (status === "Pending") return `<span class="${base} text-amber-800">Pending</span>`;
-    return `<span class="${base} text-rose-800">Failed</span>`;
+    const base = "inline-flex items-center rounded-[2px] border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest";
+    if (status === "Paid") return `<span class="${base} border-teal-300 bg-teal-50 text-teal-800">Paid</span>`;
+    if (status === "Pending") return `<span class="${base} border-amber-300 bg-amber-50 text-amber-800">Pend</span>`;
+    return `<span class="${base} border-rose-300 bg-rose-50 text-rose-800">Fail</span>`;
+  }
+
+  function paymentStatusBadge(paymentStatus) {
+    const base = "inline-flex items-center rounded-[2px] border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest";
+    if (!paymentStatus || paymentStatus === 'N/A') return `<span class="${base} border-gray-300 bg-gray-50 text-gray-600">—</span>`;
+    if (paymentStatus.toLowerCase().includes('paid') || paymentStatus.toLowerCase().includes('completed')) {
+      return `<span class="${base} border-emerald-300 bg-emerald-50 text-emerald-800">✓ Paid</span>`;
+    }
+    if (paymentStatus.toLowerCase().includes('pending')) {
+      return `<span class="${base} border-amber-300 bg-amber-50 text-amber-800">⏳ Pend</span>`;
+    }
+    return `<span class="${base} border-gray-300 bg-gray-50 text-gray-700">${paymentStatus.substring(0,8)}</span>`;
   }
 
   function renderTransactionsTable(data){
     const sorted = [...data].sort((a,b) => (b.date || "").localeCompare(a.date || ""));
     txBody.innerHTML = "";
 
-    for (const t of sorted){
-      txBody.innerHTML += `
-        <tr class="border-b border-gray-200">
-          <td class="px-3 py-3 text-sm text-slate-900" title="${t.id}">${t.id.substring(0, 10)}...</td>
-          <td class="px-3 py-3 text-sm text-slate-900" title="${t.payer || ""}">${t.payer ? t.payer : "—"}</td>
-          <td class="px-3 py-3 text-sm text-slate-900" title="${t.type}">${t.type}</td>
-          <td class="px-3 py-3 text-sm text-slate-700 font-medium" title="${t.source || ''}">${t.source || 'Payment'}</td>
-          <td class="px-3 py-3 text-sm text-slate-900" title="${t.date}">${formatDate(t.date)}</td>
-          <td class="px-3 py-3 text-right text-sm text-slate-900">${peso.format(Number(t.amount) || 0)}</td>
-          <td class="px-3 py-3 text-sm">${paymentStatusBadge(t.paymentStatus)}</td>
-          <td class="px-3 py-3 text-sm text-xs text-slate-600" title="${t.referenceNum}">${t.referenceNum.substring(0, 12)}...</td>
-          <td class="px-3 py-3 text-sm">${statusBadge(t.status)}</td>
-        </tr>
+    if (sorted.length === 0) {
+      txBody.innerHTML = `
+        <div class="p-6 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          No transactions found.
+        </div>
       `;
+      return;
     }
 
-    if (txBody.innerHTML.trim() === "") {
-      txBody.innerHTML = `
-        <tr>
-          <td colspan="9" class="px-3 py-4 text-sm text-slate-600">
-            No transactions found for the selected search/filter.
-          </td>
-        </tr>
+    for (const t of sorted){
+      txBody.innerHTML += `
+        <div class="grid grid-cols-12 gap-2 border-b border-gray-200 px-3 py-1.5 hover:bg-slate-50 items-center transition-colors">
+          <div class="col-span-1 text-[9px] font-bold text-slate-900 truncate" title="${t.id}">${t.id.substring(0, 6)}</div>
+          <div class="col-span-2 text-[9px] font-semibold text-slate-700 truncate" title="${t.payer || ""}">${t.payer ? t.payer : "—"}</div>
+          <div class="col-span-2 text-[8px] font-bold uppercase tracking-widest text-slate-500 truncate" title="${t.type}">${t.type}</div>
+          <div class="col-span-1 text-[8px] text-slate-600 truncate" title="${t.source || ''}">${t.source || 'Payment'}</div>
+          <div class="col-span-1 text-[9px] text-slate-900 truncate" title="${t.date}">${formatDate(t.date)}</div>
+          <div class="col-span-1 text-right text-[9px] font-black text-emerald-800 truncate">${peso.format(Number(t.amount) || 0)}</div>
+          <div class="col-span-2 text-center truncate">${paymentStatusBadge(t.paymentStatus)}</div>
+          <div class="col-span-1 text-[8px] text-slate-400 truncate" title="${t.referenceNum}">${t.referenceNum.substring(0, 8)}</div>
+          <div class="col-span-1 text-center truncate">${statusBadge(t.status)}</div>
+        </div>
       `;
     }
   }
   
-  function paymentStatusBadge(paymentStatus) {
-    const base = "inline-flex items-center rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-bold uppercase tracking-[0.12em]";
-    if (!paymentStatus || paymentStatus === 'N/A') return `<span class="${base} text-slate-600">—</span>`;
-    if (paymentStatus.toLowerCase().includes('paid') || paymentStatus.toLowerCase().includes('completed')) {
-      return `<span class="${base} text-emerald-800">✓ Paid</span>`;
-    }
-    if (paymentStatus.toLowerCase().includes('pending')) {
-      return `<span class="${base} text-amber-800">⏳ Pending</span>`;
-    }
-    return `<span class="${base} text-slate-600">${paymentStatus}</span>`;
-  }
-
   async function loadTransactions() {
     try {
-      console.log('Loading transactions...');
-      
       const currentUser = auth.currentUser;
-      if (!currentUser) {
-        console.error('No user logged in');
-        return;
-      }
+      if (!currentUser) return;
       
-      // Get admin's municipality
       const adminDoc = await getDoc(doc(db, 'users', currentUser.uid));
       if (adminDoc.exists()) {
-        const adminData = adminDoc.data();
-        CURRENT_MUNICIPALITY = adminData.municipality;
-        console.log('Current admin municipality:', CURRENT_MUNICIPALITY);
-        scopeChip.textContent = `Municipality: ${CURRENT_MUNICIPALITY}`;
+        CURRENT_MUNICIPALITY = adminDoc.data().municipality;
+        scopeChip.textContent = `Mun: ${CURRENT_MUNICIPALITY}`;
       }
       
-      // Create a map of users with their municipalities by email
       const usersRef = collection(db, 'users');
       const usersSnapshot = await getDocs(usersRef);
       const usersMapByEmail = {};
-      
       usersSnapshot.forEach(userDoc => {
         const userData = userDoc.data();
         const email = userData.email || userData.user_email;
-        if (email) {
-          usersMapByEmail[email.toLowerCase()] = {
-            name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || email || 'Unknown User',
-            municipality: userData.municipality || null
-          };
-        }
+        if (email) usersMapByEmail[email.toLowerCase()] = { name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || email, municipality: userData.municipality };
       });
       
-      console.log('Users loaded:', Object.keys(usersMapByEmail).length);
-      
-      // Load transactions from Firestore 'transactions' collection
       allTransactions = [];
       
       try {
         const transactionsRef = collection(db, 'transactions');
         const transactionsSnapshot = await getDocs(transactionsRef);
-        
-        console.log('Transactions collection found:', transactionsSnapshot.size);
-        
         transactionsSnapshot.forEach(docSnapshot => {
           const data = docSnapshot.data();
           const userEmail = (data.user_email || '').toLowerCase();
           const userInfo = usersMapByEmail[userEmail];
-          
-          // Skip if user not found or not in current municipality
-          if (!userInfo) {
-            console.log(`⚠️ User not found for email: ${userEmail}`);
-            return;
-          }
-          
-          if (CURRENT_MUNICIPALITY && userInfo.municipality !== CURRENT_MUNICIPALITY) {
-            return;
-          }
+          if (!userInfo || (CURRENT_MUNICIPALITY && userInfo.municipality !== CURRENT_MUNICIPALITY)) return;
           
           let dateStr = 'N/A';
           if (data.created_at) {
             const dateObj = data.created_at.toDate?.() || new Date(data.created_at);
-            const year = dateObj.getFullYear();
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            dateStr = `${year}-${month}-${day}`;
+            dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
           }
-          
-          // Ensure we capture ALL transactions, including PAID ones
           const txStatus = data.status || 'Pending';
-          console.log(`Transaction ${docSnapshot.id}: status="${txStatus}"`);
-          
           allTransactions.push({
-            id: docSnapshot.id,
-            municipality: userInfo.municipality,
-            payer: userInfo.name,
-            type: data.transaction_name || data.type || 'Payment',
-            date: dateStr,
-            amount: Number(data.amount) || 0,
-            status: normalizeStatus(txStatus),
-            paymentStatus: txStatus,
-            paymentMethod: data.payment_method || 'Online Payment',
-            referenceNum: data.reference || data.external_id || docSnapshot.id,
-            invoiceId: data.invoice_id || 'N/A',
-            paidDate: data.paid_at ? (data.paid_at.toDate?.() || new Date(data.paid_at)).toISOString().split('T')[0] : 'N/A',
-            source: 'Payment Transaction'
+            id: docSnapshot.id, municipality: userInfo.municipality, payer: userInfo.name, type: data.transaction_name || data.type || 'Payment',
+            date: dateStr, amount: Number(data.amount) || 0, status: normalizeStatus(txStatus), paymentStatus: txStatus,
+            paymentMethod: data.payment_method || 'Online', referenceNum: data.reference || data.external_id || docSnapshot.id,
+            invoiceId: data.invoice_id || 'N/A', paidDate: data.paid_at ? (data.paid_at.toDate?.() || new Date(data.paid_at)).toISOString().split('T')[0] : 'N/A',
+            source: 'Payment'
           });
         });
-        
-        console.log(`Loaded ${allTransactions.length} from transactions collection`);
-      } catch (err) {
-        console.error('Error loading transactions from Firestore:', err);
-      }
+      } catch (err) { console.error(err); }
       
-      // Load APPROVED license applications as paid transactions
       try {
         const applicationsRef = collection(db, 'license_applications');
         const applicationsSnapshot = await getDocs(applicationsRef);
-        
-        console.log('License applications found:', applicationsSnapshot.size);
-        
         applicationsSnapshot.forEach(docSnapshot => {
           const data = docSnapshot.data();
-          const userId = data.userId;
+          if (data.status !== 'approved' && data.status !== 'Approved') return;
           
-          // Only include APPROVED applications (these represent paid items)
-          if (data.status !== 'approved' && data.status !== 'Approved') {
-            return;
-          }
-          
-          // Get user info from users map
-          let userEmail = '';
-          let userInfo = null;
-          
-          // Try to find user by userId in the original users collection
+          let userEmail = ''; let userInfo = null;
           for (const [email, info] of Object.entries(usersMapByEmail)) {
-            if (info.id === userId || email.includes(data.userEmail?.toLowerCase())) {
-              userEmail = email;
-              userInfo = info;
-              break;
-            }
+            if (info.id === data.userId || email.includes(data.userEmail?.toLowerCase())) { userEmail = email; userInfo = info; break; }
           }
-          
-          if (!userInfo) {
-            console.log(`⚠️ User not found for license application: ${docSnapshot.id}`);
-            return;
-          }
-          
-          if (CURRENT_MUNICIPALITY && userInfo.municipality !== CURRENT_MUNICIPALITY) {
-            return;
-          }
+          if (!userInfo || (CURRENT_MUNICIPALITY && userInfo.municipality !== CURRENT_MUNICIPALITY)) return;
           
           let dateStr = 'N/A';
           if (data.createdAt) {
             const dateObj = data.createdAt.toDate?.() || new Date(data.createdAt);
-            const year = dateObj.getFullYear();
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            dateStr = `${year}-${month}-${day}`;
+            dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
           }
-          
           const txId = `lic-${docSnapshot.id}`;
-          const exists = allTransactions.some(t => t.id === txId);
-          
-          if (!exists) {
+          if (!allTransactions.some(t => t.id === txId)) {
             allTransactions.push({
-              id: txId,
-              municipality: userInfo.municipality,
-              payer: userInfo.name,
-              type: data.name_of_application || data.permit_type || 'License/Permit',
-              date: dateStr,
-              amount: Number(data.amount) || Number(data.fee) || 0,
-              status: 'Paid', // Approved = Paid
-              paymentStatus: 'PAID',
-              paymentMethod: 'Online Payment',
-              referenceNum: data.reference_num || txId,
-              invoiceId: data.invoice_id || 'N/A',
+              id: txId, municipality: userInfo.municipality, payer: userInfo.name, type: data.name_of_application || data.permit_type || 'License/Permit',
+              date: dateStr, amount: Number(data.amount) || Number(data.fee) || 0, status: 'Paid', paymentStatus: 'PAID',
+              paymentMethod: 'Online', referenceNum: data.reference_num || txId, invoiceId: data.invoice_id || 'N/A',
               paidDate: data.approvedAt ? (data.approvedAt.toDate?.() || new Date(data.approvedAt)).toISOString().split('T')[0] : dateStr,
-              source: 'License/Permit Application'
+              source: 'License/Permit'
             });
           }
         });
-        
-        console.log(`Loaded ${allTransactions.length} total after license applications`);
-      } catch (err) {
-        console.error('Error loading license applications:', err);
-      }
+      } catch (err) { console.error(err); }
       
-      // Load APPROVED service requests as paid transactions
       try {
         const servicesRef = collection(db, 'service_requests');
         const servicesSnapshot = await getDocs(servicesRef);
-        
-        console.log('Service requests found:', servicesSnapshot.size);
-        
         servicesSnapshot.forEach(docSnapshot => {
           const data = docSnapshot.data();
-          
-          // Only include APPROVED service requests
-          if (data.status !== 'approved' && data.status !== 'Approved') {
-            return;
-          }
-          
+          if (data.status !== 'approved' && data.status !== 'Approved') return;
           const userEmail = (data.userEmail || data.user_email || '').toLowerCase();
           const userInfo = usersMapByEmail[userEmail];
-          
-          if (!userInfo) {
-            return;
-          }
-          
-          if (CURRENT_MUNICIPALITY && userInfo.municipality !== CURRENT_MUNICIPALITY) {
-            return;
-          }
+          if (!userInfo || (CURRENT_MUNICIPALITY && userInfo.municipality !== CURRENT_MUNICIPALITY)) return;
           
           let dateStr = 'N/A';
           if (data.createdAt) {
             const dateObj = data.createdAt.toDate?.() || new Date(data.createdAt);
-            const year = dateObj.getFullYear();
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            dateStr = `${year}-${month}-${day}`;
+            dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
           }
-          
           const txId = `srv-${docSnapshot.id}`;
-          const exists = allTransactions.some(t => t.id === txId);
-          
-          if (!exists) {
+          if (!allTransactions.some(t => t.id === txId)) {
             allTransactions.push({
-              id: txId,
-              municipality: userInfo.municipality,
-              payer: userInfo.name,
-              type: data.service_type || data.type || 'Service Request',
-              date: dateStr,
-              amount: Number(data.amount) || Number(data.fee) || 0,
-              status: 'Paid',
-              paymentStatus: 'PAID',
-              paymentMethod: 'Online Payment',
-              referenceNum: data.reference_num || txId,
-              invoiceId: data.invoice_id || 'N/A',
+              id: txId, municipality: userInfo.municipality, payer: userInfo.name, type: data.service_type || data.type || 'Service Request',
+              date: dateStr, amount: Number(data.amount) || Number(data.fee) || 0, status: 'Paid', paymentStatus: 'PAID',
+              paymentMethod: 'Online', referenceNum: data.reference_num || txId, invoiceId: data.invoice_id || 'N/A',
               paidDate: data.approvedAt ? (data.approvedAt.toDate?.() || new Date(data.approvedAt)).toISOString().split('T')[0] : dateStr,
               source: 'Service Request'
             });
           }
         });
-        
-        console.log(`Loaded ${allTransactions.length} total after service requests`);
-      } catch (err) {
-        console.error('Error loading service requests:', err);
-      }
+      } catch (err) { console.error(err); }
       
-      // Sort by date descending
       allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-      
-      console.log('Total transactions loaded:', allTransactions.length);
-      console.log('Transactions:', allTransactions);
-      
       renderAll();
-      
-    } catch (error) {
-      console.error('Error loading transactions:', error);
-    }
+    } catch (error) { console.error(error); }
   }
 
   async function renderAll(){
-    if (!CURRENT_MUNICIPALITY) {
-      scopeChip.textContent = 'Municipality: —';
-      return;
-    }
-    
-    scopeChip.textContent = `Municipality: ${CURRENT_MUNICIPALITY}`;
-
+    if (!CURRENT_MUNICIPALITY) { scopeChip.textContent = 'Mun: —'; return; }
+    scopeChip.textContent = `Mun: ${CURRENT_MUNICIPALITY}`;
     const filtered = applySearchAndStatus(allTransactions);
-
     const stats = computeStats(filtered);
     renderKpis(stats);
     renderCharts(stats);
     renderTransactionsTable(filtered);
   }
 
-  document.getElementById("demoRefreshBtn").addEventListener("click", async () => {
-    await loadTransactions();
-  });
-
-  document.getElementById("exportBtn").addEventListener("click", () => {
-    alert("Demo export. In production, export only municipality-scoped & filtered data.");
-  });
-
+  document.getElementById("demoRefreshBtn").addEventListener("click", async () => { await loadTransactions(); });
+  
   let debounce;
-  searchInput.addEventListener("input", () => {
-    clearTimeout(debounce);
-    debounce = setTimeout(() => renderAll(), 150);
-  });
-
+  searchInput.addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(() => renderAll(), 150); });
   statusSelect.addEventListener("change", () => renderAll());
   searchBtn.addEventListener("click", () => renderAll());
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") renderAll(); });
 
-  searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") renderAll();
-  });
-
-  // Generate DENR Official Report
-  document.getElementById("exportBtn").addEventListener("click", function() {
-    generateMunicipalTransactionReport();
-  });
+  // PDF EXPORT
+  document.getElementById("exportBtn").addEventListener("click", function() { generateMunicipalTransactionReport(); });
 
   function generateMunicipalTransactionReport() {
-    if (allTransactions.length === 0) {
-      alert('No transactions to export. Please load transactions first.');
-      return;
-    }
-
+    if (allTransactions.length === 0) { alert('No transactions to export. Please load transactions first.'); return; }
     const pdfContainer = document.createElement('div');
-    pdfContainer.style.padding = '25px';
-    pdfContainer.style.backgroundColor = '#ffffff';
-    pdfContainer.style.fontFamily = "'Times New Roman', Georgia, serif";
-    pdfContainer.style.lineHeight = '1.6';
-    pdfContainer.style.width = '210mm';
-
-    // Official DENR Header
-    const header = document.createElement('div');
-    header.style.textAlign = 'center';
-    header.style.paddingBottom = '15px';
-    header.style.borderBottom = '4px solid #1b5e20';
-    header.style.marginBottom = '25px';
+    pdfContainer.style.padding = '25px'; pdfContainer.style.backgroundColor = '#ffffff'; pdfContainer.style.fontFamily = "'Times New Roman', Georgia, serif"; pdfContainer.style.lineHeight = '1.6'; pdfContainer.style.width = '210mm';
+    const header = document.createElement('div'); header.style.textAlign = 'center'; header.style.paddingBottom = '15px'; header.style.borderBottom = '4px solid #1b5e20'; header.style.marginBottom = '25px';
     header.innerHTML = `
       <div style="text-align: center; margin-bottom: 10px;">
-        <img src="/static/DENR-LOGO.webp" 
-             alt="DENR Logo" 
-             style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto;" />
+        <img src="/static/DENR-LOGO.webp" alt="DENR Logo" style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto;" />
       </div>
       <p style="font-size: 11pt; margin: 5px 0 0; text-transform: uppercase; letter-spacing: 0.5px;">Republic of the Philippines</p>
       <h1 style="font-size: 13pt; font-weight: bold; margin: 5px 0; text-transform: uppercase; color: #1b5e20; letter-spacing: 1px;">Department of Environment and Natural Resources</h1>
       <p style="font-size: 10pt; margin: 3px 0; font-style: italic;">Office of the Secretary • TLPH Division</p>
-      <p style="font-size: 9pt; margin: 8px 0 0; line-height: 1.4;">
-        DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
-        Tel: (632) 8929-6626 | Fax: (632) 8920-4352 | Website: www.denr.gov.ph
-      </p>
+      <p style="font-size: 9pt; margin: 8px 0 0; line-height: 1.4;">DENR Building, Visayas Avenue, Diliman, Quezon City 1100<br>Tel: (632) 8929-6626 | Fax: (632) 8920-4352 | Website: www.denr.gov.ph</p>
     `;
     pdfContainer.appendChild(header);
-
-    // Document Title
-    const titleSection = document.createElement('div');
-    titleSection.style.textAlign = 'center';
-    titleSection.style.margin = '25px 0';
+    const titleSection = document.createElement('div'); titleSection.style.textAlign = 'center'; titleSection.style.margin = '25px 0';
     titleSection.innerHTML = `
-      <h1 style="font-size: 18pt; font-weight: bold; color: #1b5e20; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1.5px;">
-        MUNICIPAL TRANSACTION REPORT
-      </h1>
+      <h1 style="font-size: 18pt; font-weight: bold; color: #1b5e20; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1.5px;">MUNICIPAL TRANSACTION REPORT</h1>
       <p style="font-size: 11pt; color: #333; margin: 5px 0;">MUNICIPALITY OF ${CURRENT_MUNICIPALITY.toUpperCase()}</p>
-      <p style="font-size: 10pt; color: #666; margin: 10px 0; font-weight: bold;">
-        Document No. MTR-${new Date().getTime().toString().slice(-8)}<br>
-        Generated: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
-        Report Period: ${new Date().toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })}
-      </p>
+      <p style="font-size: 10pt; color: #666; margin: 10px 0; font-weight: bold;">Document No. MTR-${new Date().getTime().toString().slice(-8)}<br>Generated: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
     `;
     pdfContainer.appendChild(titleSection);
-
-    // Calculate Statistics
     const stats = computeStats(allTransactions);
-
-    // Executive Summary
-    const execSummary = document.createElement('div');
-    execSummary.style.marginBottom = '20px';
+    const execSummary = document.createElement('div'); execSummary.style.marginBottom = '20px';
     execSummary.innerHTML = `
-      <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
-        I. EXECUTIVE SUMMARY
-      </h2>
+      <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase;">I. EXECUTIVE SUMMARY</h2>
       <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 10px; margin: 20px 0;">
-        <div style="text-align: center; padding: 15px; border: 2px solid #1b5e20; background: #f1f8e9; min-width: 120px;">
-          <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Transactions</p>
-          <p style="font-size: 24pt; color: #1b5e20; font-weight: bold; margin: 0;">${stats.totalTx}</p>
-        </div>
-        <div style="text-align: center; padding: 15px; border: 2px solid #2e7d32; background: #f1f8e9; min-width: 120px;">
-          <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Paid</p>
-          <p style="font-size: 24pt; color: #2e7d32; font-weight: bold; margin: 0;">${stats.paid}</p>
-        </div>
-        <div style="text-align: center; padding: 15px; border: 2px solid #f57f17; background: #f1f8e9; min-width: 120px;">
-          <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Pending</p>
-          <p style="font-size: 24pt; color: #f57f17; font-weight: bold; margin: 0;">${stats.pending}</p>
-        </div>
-        <div style="text-align: center; padding: 15px; border: 2px solid #558b2f; background: #f1f8e9; min-width: 120px;">
-          <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Paid</p>
-          <p style="font-size: 18pt; color: #558b2f; font-weight: bold; margin: 0;">${peso.format(stats.amountPaid)}</p>
-        </div>
+        <div style="text-align: center; padding: 15px; border: 2px solid #1b5e20; background: #f1f8e9; min-width: 120px;"><p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Transactions</p><p style="font-size: 24pt; color: #1b5e20; font-weight: bold; margin: 0;">${stats.totalTx}</p></div>
+        <div style="text-align: center; padding: 15px; border: 2px solid #2e7d32; background: #f1f8e9; min-width: 120px;"><p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Paid</p><p style="font-size: 24pt; color: #2e7d32; font-weight: bold; margin: 0;">${stats.paid}</p></div>
+        <div style="text-align: center; padding: 15px; border: 2px solid #f57f17; background: #f1f8e9; min-width: 120px;"><p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Pending</p><p style="font-size: 24pt; color: #f57f17; font-weight: bold; margin: 0;">${stats.pending}</p></div>
+        <div style="text-align: center; padding: 15px; border: 2px solid #558b2f; background: #f1f8e9; min-width: 120px;"><p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Revenue</p><p style="font-size: 18pt; color: #558b2f; font-weight: bold; margin: 0;">${peso.format(stats.amountPaid)}</p></div>
       </div>
     `;
     pdfContainer.appendChild(execSummary);
-
-    // Transaction Details Table
-    const details = document.createElement('div');
-    details.style.marginBottom = '20px';
-    details.innerHTML = `
-      <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
-        II. TRANSACTION DETAILS
-      </h2>
-      <p style="font-size: 10pt; color: #666; margin-bottom: 10px;">
-        This section provides a comprehensive list of all recorded transactions for the municipality, including direct payments and approved applications.
-      </p>
-    `;
-
-    // Build transaction table
-    let tableHTML = `
-      <table style="width: 100%; border-collapse: collapse; font-size: 8pt; margin: 10px 0;">
-        <thead style="background: #1b5e20; color: white;">
-          <tr>
-            <th style="padding: 8px 5px; text-align: left; border: 1px solid #333; font-size: 8pt;">Type</th>
-            <th style="padding: 8px 5px; text-align: left; border: 1px solid #333; font-size: 8pt;">Payer</th>
-            <th style="padding: 8px 5px; text-align: center; border: 1px solid #333; font-size: 8pt;">Date</th>
-            <th style="padding: 8px 5px; text-align: right; border: 1px solid #333; font-size: 8pt;">Amount</th>
-            <th style="padding: 8px 5px; text-align: center; border: 1px solid #333; font-size: 8pt;">Status</th>
-            <th style="padding: 8px 5px; text-align: left; border: 1px solid #333; font-size: 8pt;">Source</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-
+    const details = document.createElement('div'); details.style.marginBottom = '20px';
+    details.innerHTML = `<h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase;">II. TRANSACTION DETAILS</h2>`;
+    let tableHTML = `<table style="width: 100%; border-collapse: collapse; font-size: 8pt; margin: 10px 0;"><thead style="background: #1b5e20; color: white;"><tr><th style="padding: 8px 5px; text-align: left; border: 1px solid #333;">Type</th><th style="padding: 8px 5px; text-align: left; border: 1px solid #333;">Payer</th><th style="padding: 8px 5px; text-align: center; border: 1px solid #333;">Date</th><th style="padding: 8px 5px; text-align: right; border: 1px solid #333;">Amount</th><th style="padding: 8px 5px; text-align: center; border: 1px solid #333;">Status</th><th style="padding: 8px 5px; text-align: left; border: 1px solid #333;">Source</th></tr></thead><tbody>`;
     let rowNum = 0;
     for (const t of allTransactions) {
-      rowNum++;
-      const bgColor = rowNum % 2 === 0 ? '#f9f9f9' : '#ffffff';
-      const statusColor = t.status === 'Paid' ? '#1b5e20' : (t.status === 'Pending' ? '#f57f17' : '#d32f2f');
-      
-      tableHTML += `
-        <tr style="background: ${bgColor};">
-          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: left;">${t.type}</td>
-          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: left; font-size: 7pt;">${t.payer}</td>
-          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: center;">${formatDate(t.date)}</td>
-          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: right;">${peso.format(t.amount)}</td>
-          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: center; color: ${statusColor}; font-weight: bold;">${t.status}</td>
-          <td style="padding: 6px 5px; border: 1px solid #ddd; text-align: left; font-size: 7pt;">${t.source || 'Payment'}</td>
-        </tr>
-      `;
+      rowNum++; const bgColor = rowNum % 2 === 0 ? '#f9f9f9' : '#ffffff'; const statusColor = t.status === 'Paid' ? '#1b5e20' : (t.status === 'Pending' ? '#f57f17' : '#d32f2f');
+      tableHTML += `<tr style="background: ${bgColor};"><td style="padding: 6px 5px; border: 1px solid #ddd; text-align: left;">${t.type}</td><td style="padding: 6px 5px; border: 1px solid #ddd; text-align: left; font-size: 7pt;">${t.payer}</td><td style="padding: 6px 5px; border: 1px solid #ddd; text-align: center;">${formatDate(t.date)}</td><td style="padding: 6px 5px; border: 1px solid #ddd; text-align: right;">${peso.format(t.amount)}</td><td style="padding: 6px 5px; border: 1px solid #ddd; text-align: center; color: ${statusColor}; font-weight: bold;">${t.status}</td><td style="padding: 6px 5px; border: 1px solid #ddd; text-align: left; font-size: 7pt;">${t.source || 'Payment'}</td></tr>`;
     }
-
-    tableHTML += `
-        <tr style="background: #f1f8e9; font-weight: bold;">
-          <td colspan="3" style="padding: 8px 5px; border: 1px solid #333; text-align: right;">TOTAL</td>
-          <td style="padding: 8px 5px; border: 1px solid #333; text-align: right;">${peso.format(stats.amountPaid)}</td>
-          <td colspan="2" style="padding: 8px 5px; border: 1px solid #333;"></td>
-        </tr>
-      </tbody>
-    </table>
-    `;
-
-    details.innerHTML += tableHTML;
-    pdfContainer.appendChild(details);
-
-    // Transaction Breakdown by Type
-    const breakdown = document.createElement('div');
-    breakdown.style.marginBottom = '20px';
-    breakdown.innerHTML = `
-      <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
-        III. TRANSACTION BREAKDOWN BY TYPE
-      </h2>
-      <table style="width: 100%; border-collapse: collapse; font-size: 10pt; margin: 15px 0;">
-        <thead style="background: #1b5e20; color: white;">
-          <tr>
-            <th style="padding: 10px; text-align: left; border: 1px solid #333;">Type</th>
-            <th style="padding: 10px; text-align: center; border: 1px solid #333;">Count</th>
-            <th style="padding: 10px; text-align: right; border: 1px solid #333;">Percentage</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-
-    const typeKeys = Object.keys(stats.byType).sort();
-    for (const type of typeKeys) {
-      const count = stats.byType[type];
-      const percentage = ((count / stats.totalTx) * 100).toFixed(1);
-      const bgColor = typeKeys.indexOf(type) % 2 === 0 ? '#f9f9f9' : '#ffffff';
-      
-      breakdown.innerHTML += `
-          <tr style="background: ${bgColor};">
-            <td style="padding: 8px 10px; border: 1px solid #999;">${type}</td>
-            <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">${count}</td>
-            <td style="padding: 8px 10px; border: 1px solid #999; text-align: right;">${percentage}%</td>
-          </tr>
-      `;
-    }
-
-    breakdown.innerHTML += `
-        </tbody>
-      </table>
-    `;
-    pdfContainer.appendChild(breakdown);
-
-    // Metadata Section
-    const metadata = document.createElement('div');
-    metadata.style.marginBottom = '20px';
-    metadata.style.padding = '15px';
-    metadata.style.background = '#f5f5f5';
-    metadata.style.borderLeft = '5px solid #1b5e20';
-    metadata.innerHTML = `
-      <h3 style="color: #1b5e20; font-size: 11pt; font-weight: bold; margin: 0 0 10px 0; text-transform: uppercase;">Report Information</h3>
-      <table style="width: 100%; border-collapse: collapse; font-size: 9pt;">
-        <tr>
-          <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Report Type:</td>
-          <td style="padding: 5px 10px;">Municipal Transaction Report</td>
-        </tr>
-        <tr style="background: #fff;">
-          <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Municipality:</td>
-          <td style="padding: 5px 10px;">${CURRENT_MUNICIPALITY || 'Unspecified'}</td>
-        </tr>
-        <tr>
-          <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Total Records:</td>
-          <td style="padding: 5px 10px;">${allTransactions.length}</td>
-        </tr>
-        <tr style="background: #fff;">
-          <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Generated:</td>
-          <td style="padding: 5px 10px;">${new Date().toLocaleString('en-PH')}</td>
-        </tr>
-        <tr>
-          <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Classification:</td>
-          <td style="padding: 5px 10px;">Official Government Document</td>
-        </tr>
-      </table>
-    `;
-    pdfContainer.appendChild(metadata);
-
-    // Closing Section
-    const closing = document.createElement('div');
-    closing.style.marginTop = '30px';
-    closing.innerHTML = `
-      <p style="font-size: 10pt; text-align: justify; text-indent: 40px;">
-        This Municipal Transaction Report contains a comprehensive summary of all payments and approved applications 
-        processed for ${CURRENT_MUNICIPALITY}. All data is accurate as of the date of generation and reflects the 
-        official records of the Department of Environment and Natural Resources.
-      </p>
-    `;
-    pdfContainer.appendChild(closing);
-
-    // Signature Section
-    const signature = document.createElement('div');
-    signature.style.marginTop = '40px';
-    signature.style.textAlign = 'right';
-    signature.style.marginRight = '50px';
-    signature.innerHTML = `
-      <div style="border-bottom: 2px solid #000; width: 250px; margin-left: auto; padding-top: 50px;"></div>
-      <p style="margin: 5px 0 0; font-size: 11pt; font-weight: bold; text-transform: uppercase;">Municipal Administrator</p>
-      <p style="margin: 0; font-size: 10pt;">DENR TLPH Division</p>
-      <p style="margin: 5px 0 0; font-size: 9pt; color: #666;">Date: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-    `;
-    pdfContainer.appendChild(signature);
-
-    // Security Notice
-    const security = document.createElement('div');
-    security.style.marginTop = '30px';
-    security.style.padding = '15px';
-    security.style.border = '2px solid #ffc107';
-    security.style.background = '#fff3cd';
-    security.innerHTML = `
-      <p style="margin: 0; font-size: 9pt; color: #856404; text-align: center;">
-        <strong>NOTICE:</strong> This is an electronically generated official document of the Department of Environment and Natural Resources. 
-        Any alteration or unauthorized use is punishable by law under relevant Philippine statutes.
-      </p>
-    `;
-    pdfContainer.appendChild(security);
-
-    // Footer
-    const footer = document.createElement('div');
-    footer.style.marginTop = '20px';
-    footer.style.paddingTop = '15px';
-    footer.style.borderTop = '3px solid #1b5e20';
-    footer.style.fontSize = '8pt';
-    footer.style.textAlign = 'center';
-    footer.style.color = '#666';
-    footer.innerHTML = `
-      <p style="margin: 0; line-height: 1.4;">
-        Department of Environment and Natural Resources<br>
-        DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
-        Telephone: (632) 8929-6626 | Fax: (632) 8920-4352<br>
-        Email: osec@denr.gov.ph | Website: www.denr.gov.ph
-      </p>
-      <p style="margin: 10px 0 0; font-style: italic; color: #999;">
-        Document Reference: MTR-${new Date().getTime().toString().slice(-8)} | ${new Date().toLocaleString('en-PH')}
-      </p>
-    `;
+    tableHTML += `<tr style="background: #f1f8e9; font-weight: bold;"><td colspan="3" style="padding: 8px 5px; border: 1px solid #333; text-align: right;">TOTAL</td><td style="padding: 8px 5px; border: 1px solid #333; text-align: right;">${peso.format(stats.amountPaid)}</td><td colspan="2" style="padding: 8px 5px; border: 1px solid #333;"></td></tr></tbody></table>`;
+    details.innerHTML += tableHTML; pdfContainer.appendChild(details);
+    const footer = document.createElement('div'); footer.style.marginTop = '40px'; footer.style.paddingTop = '15px'; footer.style.borderTop = '3px solid #1b5e20'; footer.style.fontSize = '8pt'; footer.style.textAlign = 'center'; footer.style.color = '#666';
+    footer.innerHTML = `<p style="margin: 0;">Department of Environment and Natural Resources • Official Document</p>`;
     pdfContainer.appendChild(footer);
-
-    // Generate PDF
-    const opt = {
-      margin: 10,
-      filename: `DENR-Municipal-Transaction-Report-${CURRENT_MUNICIPALITY}-${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
-    };
-
+    const opt = { margin: 10, filename: `DENR-Transactions-${CURRENT_MUNICIPALITY}-${new Date().toISOString().split('T')[0]}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' } };
     html2pdf().set(opt).from(pdfContainer).save();
   }
 
-  // Authentication check and data loading
   onAuthStateChanged(auth, (user) => {
-    if (!user) {
-      console.log('No user authenticated, redirecting to login...');
-      window.location.href = '/login';
-    } else {
-      console.log('User authenticated:', user.email);
-      loadTransactions();
-    }
+    if (!user) { window.location.href = '/login'; } else { loadTransactions(); }
   });
-</script>
+  </script>
+</body>
+</html>
