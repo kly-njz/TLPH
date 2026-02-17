@@ -214,84 +214,48 @@
 
   <script>
         // Dynamically set municipality from localStorage or fallback
+
         let SUBADMIN_MUNICIPALITY = localStorage.getItem('denr_user_municipality') || "San Juan";
 
-        // Helper to update repo and UI when municipality changes
+        // Helper to update UI when municipality changes
         function setMunicipality(muni) {
           SUBADMIN_MUNICIPALITY = muni;
           localStorage.setItem('denr_user_municipality', muni);
-          // Re-instantiate repo with new municipality
-          window.repo = new UsersRepository({ municipality: muni });
           loadUsers();
         }
 
         // Global users array
         let allUsers = [];
 
-        // Load users from repository and render
+
+        // Load users from Firestore for the current municipality
         async function loadUsers() {
-          allUsers = await repo.getScoped();
-          renderAll();
+          if (typeof db !== 'undefined' && typeof collection === 'function' && typeof query === 'function' && typeof where === 'function' && typeof getDocs === 'function') {
+            // Firestore query for users in the current municipality
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('municipality', '==', SUBADMIN_MUNICIPALITY));
+            const snapshot = await getDocs(q);
+            allUsers = [];
+            snapshot.forEach(doc => {
+              const data = doc.data();
+              allUsers.push({
+                id: doc.id,
+                name: (data.firstName || '') + ' ' + (data.lastName || ''),
+                email: data.email || '',
+                municipality: data.municipality || '',
+                status: data.status || '',
+              });
+            });
+            renderAll();
+          } else {
+            // Firestore not available, show empty
+            allUsers = [];
+            renderAll();
+          }
         }
 
+
         // Do not auto-load users on DOMContentLoaded; handled after login/municipality set
-
-        class UsersRepository {
-      constructor({ municipality }) {
-        this.municipality = municipality;
-
-        this._users = [
-          { id:"U-0001", name:"Juan Dela Cruz", email:"juan.delacruz@email.com", municipality:"San Juan", status:"Active" },
-          { id:"U-0002", name:"Maria Santos",   email:"maria.santos@email.com", municipality:"San Juan", status:"Disabled" },
-          { id:"U-0003", name:"Andrea Reyes",   email:"andrea.reyes@email.com", municipality:"San Juan", status:"Active" },
-
-          { id:"U-0101", name:"Leo Cruz",       email:"leo.cruz@email.com", municipality:"Bacoor", status:"Active" },
-          { id:"U-0102", name:"Ana Lim",        email:"ana.lim@email.com",  municipality:"Bacoor", status:"Active" },
-
-          { id:"U-0201", name:"Carlo Tan",      email:"carlo.tan@email.com", municipality:"Makati", status:"Disabled" },
-        ];
-
-        this._actionCount = 0;
-      }
-
-      async getAll() {
-        return [...this._users];
-      }
-
-      async getScoped() {
-        const all = await this.getAll();
-        return all.filter(u => u.municipality === this.municipality);
-      }
-
-      async getById(id) {
-        const all = await this.getAll();
-        return all.find(u => u.id === id) || null;
-      }
-
-      async setStatus(id, nextStatus) {
-        const idx = this._users.findIndex(u => u.id === id);
-        if (idx === -1) return false;
-
-        this._users[idx] = { ...this._users[idx], status: nextStatus };
-        this._actionCount += 1;
-        return true;
-      }
-
-      async remove(id) {
-        const before = this._users.length;
-        this._users = this._users.filter(u => u.id !== id);
-        const changed = this._users.length !== before;
-        if (changed) this._actionCount += 1;
-        return changed;
-      }
-
-      get actionCount() {
-        return this._actionCount;
-      }
-    }
-
-    // repo is now created dynamically in setMunicipality and at startup
-    window.repo = new UsersRepository({ municipality: SUBADMIN_MUNICIPALITY });
 
     const $ = (id) => document.getElementById(id);
     const normalize = (s) => (s || "").toString().toLowerCase().trim();
@@ -444,6 +408,8 @@
       usersTbody.innerHTML = list.map(rowHtml).join("");
     }
 
+    // Track session action count for disables/removes/enables
+    let actionCount = 0;
     function renderKpis(scopedList){
       const total = scopedList.length;
       const active = scopedList.filter(u => u.status === "Active").length;
@@ -452,7 +418,7 @@
       kpiTotal.textContent = total;
       kpiActive.textContent = active;
       kpiDisabled.textContent = disabled;
-      kpiActions.textContent = repo.actionCount;
+      kpiActions.textContent = actionCount;
     }
 
     async function renderAll(){
