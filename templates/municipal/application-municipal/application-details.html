@@ -11,8 +11,11 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 
     <style>
-        /* OFFICIAL ARIAL FORCE BOI */
-        * { font-family: Arial, Helvetica, sans-serif !important; }
+        /* OFFICIAL ARIAL FORCE BOI - (Except for Icons) */
+        *:not(.material-icons-round):not(i) { 
+            font-family: Arial, Helvetica, sans-serif !important; 
+        }
+        
         body { background-color: #f1f5f9; color: #1e293b; margin: 0; padding-bottom: 50px; }
 
         .gov-card {
@@ -84,7 +87,6 @@
     <div class="container-fluid py-5">
         <div class="max-w-6xl mx-auto">
             
-            <!-- Back Button -->
             <div class="mb-4">
                 <button onclick="window.history.back()" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 text-white text-xs font-bold uppercase tracking-wider hover:bg-slate-700 transition-all">
                     <span class="material-icons-round text-sm">arrow_back</span>
@@ -265,39 +267,27 @@
             
             try {
                 // Generate reference number
-                // Handle both Firebase Timestamp and ISO string dates
                 let date = null;
                 const dateField = applicationData.createdAt || applicationData.submittedAt;
-                console.log('Raw date field value:', dateField);
-                console.log('Date field type:', typeof dateField);
                 
                 if (dateField) {
                     if (typeof dateField.toDate === 'function') {
                         date = dateField.toDate();
-                        console.log('✅ Parsed as Firebase Timestamp:', date);
                     } else if (typeof dateField === 'string') {
                         date = new Date(dateField);
-                        console.log('✅ Parsed as ISO string:', date);
                     } else if (dateField.seconds) {
-                        // Handle Firestore Timestamp object
                         date = new Date(dateField.seconds * 1000);
-                        console.log('✅ Parsed as Firestore Timestamp object:', date);
                     }
-                } else {
-                    console.warn('⚠️ No createdAt or submittedAt field found in application data');
                 }
                 
-                // Only generate reference if we have a valid date
                 const refNumber = date 
                     ? `APP-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}-${currentApplicationId.substring(0, 6).toUpperCase()}`
                     : `APP-${new Date().getFullYear()}-${currentApplicationId.substring(0, 6).toUpperCase()}`;
-                console.log('Reference number:', refNumber);
                 document.getElementById('refNumber').textContent = refNumber;
 
                 // Status badge
                 const statusBadge = document.getElementById('statusBadge');
                 const status = applicationData.status || 'pending';
-                console.log('Application status:', status);
                 
                 if (status === 'accepted' || status === 'approved') {
                     statusBadge.className = 'bg-green-100 text-green-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-green-200';
@@ -311,55 +301,33 @@
                 }
 
                 // Application details
-                console.log('Setting application details...');
-                console.log('Product/Project name:', applicationData.productName || applicationData.projectName);
-                console.log('Category:', applicationData.category);
-                console.log('Municipality:', applicationData.municipality);
-                console.log('Investment:', applicationData.investmentQty || applicationData.initialInvestment);
-                console.log('Harvest qty:', applicationData.harvestQty || applicationData.maxHarvestQty || applicationData.harvestQuantity);
-                
                 document.getElementById('productName').textContent = applicationData.productName || applicationData.projectName || 'N/A';
                 document.getElementById('category').textContent = applicationData.category || 'N/A';
                 document.getElementById('municipality').textContent = applicationData.municipality || 'N/A';
                 
-                // Handle investment - check multiple possible field names
                 const investment = applicationData.investmentQty || applicationData.initialInvestment;
                 document.getElementById('investment').textContent = investment ? `₱ ${Number(investment).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : 'N/A';
                 
-                // Handle harvest quantity - check multiple possible field names
                 const harvest = applicationData.harvestQty || applicationData.maxHarvestQty || applicationData.harvestQuantity;
                 document.getElementById('harvestQty').textContent = harvest || 'N/A';
                 
-                // Handle filed date - show N/A if no valid date
                 if (date) {
                     document.getElementById('dateFiled').textContent = date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
-                    console.log('Filed date set:', date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }));
                 } else {
                     document.getElementById('dateFiled').textContent = 'N/A';
-                    console.warn('⚠️ Filed date not available - showing N/A');
                 }
-                
-                console.log('Application details set successfully');
 
                 // Applicant details
-                console.log('Setting applicant details...');
                 if (userData) {
-                    console.log('User data available:', userData.firstName, userData.lastName, userData.email);
                     const fullName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.email || 'N/A';
-                    console.log('Full name:', fullName);
                     document.getElementById('applicantName').textContent = fullName.toUpperCase();
                     document.getElementById('applicantEmail').textContent = userData.email || 'N/A';
                     document.getElementById('applicantProvince').textContent = userData.province || 'N/A';
-                    console.log('Applicant details set successfully');
-                } else {
-                    console.warn('No user data available');
                 }
 
                 // Documents section
-                console.log('Setting documents section...');
                 const documentsContainer = document.getElementById('documentsContainer');
                 if (applicationData.documents && applicationData.documents.length > 0) {
-                    console.log('Documents found:', applicationData.documents.length);
                     documentsContainer.innerHTML = applicationData.documents.map(doc => `
                         <div class="doc-box">
                             <i class="fa-solid fa-file text-blue-600 text-xl"></i>
@@ -370,17 +338,13 @@
                             <button onclick="window.open('${doc.url}', '_blank')" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
                         </div>
                     `).join('');
-                    console.log('Documents section populated');
                 } else {
-                    console.log('No documents found, showing empty message');
                     documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No documents uploaded.</p>';
                 }
 
-                console.log('All data populated, showing content');
                 // Show content, hide loading
                 document.getElementById('loadingContainer').style.display = 'none';
                 document.getElementById('contentContainer').style.display = 'block';
-                console.log('Display complete');
             
             } catch (error) {
                 console.error('Error in displayApplicationDetails:', error);
@@ -406,8 +370,6 @@
                 
                 // If approved, create inventory entry for the user
                 if (newStatus === 'approved') {
-                    console.log('Creating inventory entry for approved application...');
-                    
                     const inventoryData = {
                         userId: applicationData.userId,
                         userEmail: applicationData.userEmail,
@@ -425,9 +387,7 @@
                         createdAt: serverTimestamp()
                     };
                     
-                    const inventoryRef = await addDoc(collection(db, 'inventory'), inventoryData);
-                    console.log('✅ Inventory entry created:', inventoryRef.id);
-                    
+                    await addDoc(collection(db, 'inventory'), inventoryData);
                     alert(`Application approved successfully!\n\nInventory entry created for ${applicationData.productName}.`);
                 } else {
                     alert(`Application ${statusText} successfully!`);
@@ -440,16 +400,10 @@
             }
         };
 
-        // Authentication check and load data
-        console.log('Setting up auth state observer...');
         onAuthStateChanged(auth, (user) => {
-            console.log('Auth state changed, user:', user);
             if (!user) {
-                console.log('No user authenticated, redirecting to login...');
                 window.location.href = '/login';
             } else {
-                console.log('User authenticated:', user.email);
-                console.log('Calling loadApplicationDetails...');
                 loadApplicationDetails();
             }
         });
