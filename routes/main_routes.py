@@ -218,26 +218,32 @@ def user_profile():
     return render_template('user/profile.html')
 
 @bp.route('/user/transaction')
+@role_required('user')
 def user_transaction():
     return render_template('user/transaction.html')
 
 @bp.route('/user/my-documents')
+@role_required('user')
 def user_my_documents():
     return render_template('user/my-documents.html')
 
 @bp.route('/user/transaction-history')
+@role_required('user')
 def user_transaction_history():
     return render_template('user/transaction-history.html')
 
 @bp.route('/user/history')
+@role_required('user')
 def user_history():
     return render_template('user/history.html')
 
 @bp.route('/user/application')
+@role_required('user')
 def user_application():
     return render_template('user/application.html')
 
 @bp.route('/user/application/apply')
+@role_required('user')
 def user_application_apply():
     return render_template('user/app-form.html')
 
@@ -255,17 +261,21 @@ def payment_failed():
 
 # Inventory routes
 @bp.route('/user/inventory')
+@role_required('user')
 def user_inventory():
     return render_template('user/inventory/stock-list.html')
 
 @bp.route('/user/inventory/add')
+@role_required('user')
 def user_inventory_add():
     return render_template('user/inventory/stock-form.html')
 
 @bp.route('/user/inventory/info/<stock_id>')
+@role_required('user')
 def user_inventory_info(stock_id):
     return render_template('user/inventory/stock-info.html')
 
 @bp.route('/user/inventory/history')
+@role_required('user')
 def user_inventory_history():
     return render_template('user/inventory/stock-history.html')
