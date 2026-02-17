@@ -6,6 +6,16 @@ bp = Blueprint('main', __name__)
 @bp.route('/')
 def index():
     print("HOME.HTML IS BEING RENDERED")  # Debug line
+    # Server-side check for disabled user
+    user_id = session.get('user_id')
+    if user_id:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+        user_doc = db.collection('users').document(user_id).get()
+        if user_doc.exists:
+            data = user_doc.to_dict()
+            if data.get('status', '').lower() == 'disabled':
+                return redirect(url_for('account_disabled'))
     return render_template('home.html')
 
 @bp.route('/login')
