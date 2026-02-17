@@ -20,6 +20,7 @@ mail = Mail(app)
 # Initialize Firebase
 initialize_firebase_admin()
 
+
 # Import routes
 from routes import main_routes, api_routes, municipal_routes, seminar_routes, service_routes, fisheries_routes, environment_routes, forest_routes, livestock_routes, permits_routes, wildlife_routes, farm_routes, payments_routes,regional_routes,superadmin_routes, national_routes
 
@@ -43,6 +44,11 @@ app.register_blueprint(payments_routes.bp)
 app.register_blueprint(regional_routes.bp)
 app.register_blueprint(superadmin_routes.bp)
 app.register_blueprint(national_routes.bp)
+
+# Route for disabled account page
+@app.route('/account-disabled')
+def account_disabled():
+    return render_template('account-disabled.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
