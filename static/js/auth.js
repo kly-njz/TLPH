@@ -588,6 +588,7 @@ if (loginForm) {
                     headers: {
                         'Content-Type': 'application/json',
                     },
+                    credentials: 'include',
                     body: JSON.stringify({
                         user_email: user.email,
                         user_role: userRole,
