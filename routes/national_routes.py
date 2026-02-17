@@ -1,10 +1,12 @@
 from flask import Blueprint, render_template
 from firebase_config import get_firestore_db
 from datetime import datetime
+from firebase_auth_middleware import role_required
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
 @bp.route('/application-national')
+@role_required('national','national_admin')
 def application_national_view():
     try:
         db = get_firestore_db()
@@ -189,6 +191,7 @@ def application_national_view():
                              status_data=[0, 0, 0])
 
 @bp.route('/permit-national')
+@role_required('national','national_admin')
 def permit_national_view():
     try:
         db = get_firestore_db()
@@ -372,6 +375,7 @@ def permit_national_view():
                              status_data=[0, 0, 0])
 
 @bp.route('/service-national')
+@role_required('national','national_admin')
 def service_national_view():
     try:
         db = get_firestore_db()
@@ -542,6 +546,7 @@ def service_national_view():
                              status_data=[0, 0, 0])
 
 @bp.route('/inventory-national')
+@role_required('national','national_admin')
 def inventory_national_view():
     try:
         db = get_firestore_db()
@@ -664,17 +669,21 @@ def inventory_national_view():
                              region_data=[0])
 
 @bp.route('/user-inventory-national')
+@role_required('national','national_admin')
 def user_inventory_national_view():
     return render_template('national/user-inventory-national.html')
 
 @bp.route('/transaction-national')
+@role_required('national','national_admin')
 def transaction_national_view():
     return render_template('national/transaction-national.html')
 
 @bp.route('/user-management-national')
+@role_required('national','national_admin')
 def user_management_national_view():
     return render_template('national/user-national.html')
 
 @bp.route('/profile-national')
+@role_required('national','national_admin')
 def profile_national_view():
     return render_template('national/profile-national.html')
