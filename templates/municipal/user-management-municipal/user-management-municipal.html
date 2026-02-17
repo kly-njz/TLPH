@@ -212,75 +212,61 @@
     </div>
   </div>
 
-  <script>
-    
-    const SUBADMIN_MUNICIPALITY = "San Juan"; 
+  <script type="module">
+    import { db, auth } from '/static/js/firebase-config.js';
+    import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        // Dynamically set municipality from localStorage or fallback
 
-    class UsersRepository {
-      constructor({ municipality }) {
-        this.municipality = municipality;
+        let SUBADMIN_MUNICIPALITY = localStorage.getItem('denr_user_municipality') || "San Juan";
 
-        this._users = [
-          { id:"U-0001", name:"Juan Dela Cruz", email:"juan.delacruz@email.com", municipality:"San Juan", status:"Active" },
-          { id:"U-0002", name:"Maria Santos",   email:"maria.santos@email.com", municipality:"San Juan", status:"Disabled" },
-          { id:"U-0003", name:"Andrea Reyes",   email:"andrea.reyes@email.com", municipality:"San Juan", status:"Active" },
+        // Helper to update UI when municipality changes
+        function setMunicipality(muni) {
+          SUBADMIN_MUNICIPALITY = muni;
+          localStorage.setItem('denr_user_municipality', muni);
+          loadUsers();
+        }
 
-          { id:"U-0101", name:"Leo Cruz",       email:"leo.cruz@email.com", municipality:"Bacoor", status:"Active" },
-          { id:"U-0102", name:"Ana Lim",        email:"ana.lim@email.com",  municipality:"Bacoor", status:"Active" },
+        // Global users array
+        let allUsers = [];
 
-          { id:"U-0201", name:"Carlo Tan",      email:"carlo.tan@email.com", municipality:"Makati", status:"Disabled" },
-        ];
 
-        this._actionCount = 0;
-      }
+        // Load users from Firestore for the current municipality
+        async function loadUsers() {
+          if (typeof db !== 'undefined' && typeof collection === 'function' && typeof query === 'function' && typeof where === 'function' && typeof getDocs === 'function') {
+            // Firestore query for users in the current municipality and status 'approved'
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('municipality', '==', SUBADMIN_MUNICIPALITY));
+            const snapshot = await getDocs(q);
+            allUsers = [];
+            snapshot.forEach(doc => {
+              const data = doc.data();
+              allUsers.push({
+                id: doc.id,
+                name: (data.firstName || '') + ' ' + (data.lastName || ''),
+                email: data.email || '',
+                municipality: data.municipality || '',
+                status: data.status || '',
+                role: data.role || '',
+                userType: data.userType || '',
+              });
+            });
+            renderAll();
+          } else {
+            // Firestore not available, show empty
+            allUsers = [];
+            renderAll();
+          }
+        }
 
-      async getAll() {
-        return [...this._users];
-      }
 
-      async getScoped() {
-        const all = await this.getAll();
-        return all.filter(u => u.municipality === this.municipality);
-      }
-
-      async getById(id) {
-        const all = await this.getAll();
-        return all.find(u => u.id === id) || null;
-      }
-
-      async setStatus(id, nextStatus) {
-        const idx = this._users.findIndex(u => u.id === id);
-        if (idx === -1) return false;
-
-        this._users[idx] = { ...this._users[idx], status: nextStatus };
-        this._actionCount += 1;
-        return true;
-      }
-
-      async remove(id) {
-        const before = this._users.length;
-        this._users = this._users.filter(u => u.id !== id);
-        const changed = this._users.length !== before;
-        if (changed) this._actionCount += 1;
-        return changed;
-      }
-
-      get actionCount() {
-        return this._actionCount;
-      }
-    }
-
-    const repo = new UsersRepository({ municipality: SUBADMIN_MUNICIPALITY });
+        // Do not auto-load users on DOMContentLoaded; handled after login/municipality set
 
     const $ = (id) => document.getElementById(id);
     const normalize = (s) => (s || "").toString().toLowerCase().trim();
 
     function inScope(user) {
       return !!user && user.municipality === SUBADMIN_MUNICIPALITY;
-    }
-
-    function getUserById(id) {
-      return allUsers.find(u => u.id === id) || null;
     }
 
     function getUserById(id) {
@@ -423,6 +409,8 @@
       usersTbody.innerHTML = list.map(rowHtml).join("");
     }
 
+    // Track session action count for disables/removes/enables
+    let actionCount = 0;
     function renderKpis(scopedList){
       const total = scopedList.length;
       const active = scopedList.filter(u => u.status === "Active").length;
@@ -561,13 +549,33 @@
     });
 
     // Authentication check and data loading
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        console.log('No user authenticated, redirecting to login...');
-        window.location.href = '/login';
-      } else {
-        console.log('User authenticated:', user.email);
-        loadUsers();
-      }
-    });
+    // If using Firebase, fetch the user's municipality after login
+    if (typeof onAuthStateChanged === 'function' && typeof db !== 'undefined') {
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          console.log('No user authenticated, redirecting to login...');
+          window.location.href = '/login';
+        } else {
+          console.log('User authenticated:', user.email);
+          // Try to get municipality from Firestore user profile
+          try {
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              if (data.municipality) {
+                setMunicipality(data.municipality);
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn('Could not fetch user municipality:', e);
+          }
+          // fallback
+          loadUsers();
+        }
+      });
+    } else {
+      // fallback for non-Firebase or static demo
+      loadUsers();
+    }
 </script>

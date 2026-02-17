@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Accounting Dashboard — Super Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+
+    {% include 'super-admin/header-superadmin.html' %}
+    {% include 'super-admin/sidenav-superadmin.html' %}
+
+    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+
+        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
+            <div class="flex items-center gap-4">
+                <div class="bg-blue-700 p-2.5 rounded-sm hidden sm:block">
+                    <span class="material-icons-round text-white text-xl">account_balance</span>
+                </div>
+                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">Accounting Dashboard</h1>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">System-wide accounting control & oversight</p>
+                </div>
+            </div>
+            <div class="flex gap-2 no-print">
+                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm" onclick="window.print()">
+                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export Report</span>
+                </button>
+            </div>
+        </header>
+
+        <section class="bg-white border border-slate-200 shadow-sm rounded-sm mb-3 p-3">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">System Overview</h2>
+            </div>
+            <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                <div class="bg-white border border-slate-200 border-l-4 border-l-blue-700 p-3 shadow-sm rounded-sm">
+                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Active Entities</p>
+                    <h3 id="statEntities" class="text-xl font-black text-slate-900 leading-none mt-1">47</h3>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">Regions + Municipalities</p>
+                </div>
+                <div class="bg-white border border-slate-200 border-l-4 border-l-green-700 p-3 shadow-sm rounded-sm">
+                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Posted Entries</p>
+                    <h3 id="statPosted" class="text-xl font-black text-green-700 leading-none mt-1">1,284</h3>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">All time</p>
+                </div>
+                <div class="bg-white border border-slate-200 border-l-4 border-l-amber-600 p-3 shadow-sm rounded-sm">
+                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Pending Approvals</p>
+                    <h3 id="statPending" class="text-xl font-black text-amber-600 leading-none mt-1">23</h3>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">Requires action</p>
+                </div>
+                <div class="bg-white border border-slate-200 border-l-4 border-l-red-600 p-3 shadow-sm rounded-sm">
+                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">System Alerts</p>
+                    <h3 id="statAlerts" class="text-xl font-black text-red-600 leading-none mt-1">8</h3>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">Unmapped/broken</p>
+                </div>
+                <div class="bg-white border border-slate-200 border-l-4 border-l-slate-700 p-3 shadow-sm rounded-sm">
+                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Avg Approval Time</p>
+                    <h3 id="statAvgTime" class="text-xl font-black text-slate-900 leading-none mt-1">2.3</h3>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">Days latency</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+            <div class="bg-white border border-slate-200 shadow-sm rounded-sm p-3 flex flex-col h-[220px]">
+                <div class="flex items-center justify-between mb-3 shrink-0">
+                    <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">Usage Per Entity</h2>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase">Transaction count</span>
+                </div>
+                <div class="flex-1 relative">
+                    <canvas id="usageChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white border border-slate-200 shadow-sm rounded-sm p-3 flex flex-col h-[220px]">
+                <div class="flex items-center justify-between mb-3 shrink-0">
+                    <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">Approval Latency</h2>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase">Average days</span>
+                </div>
+                <div class="flex-1 relative">
+                    <canvas id="latencyChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <section class="flex-1 min-h-0 bg-white rounded-sm border border-slate-200 shadow-sm relative flex flex-col">
+            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex justify-between items-center gap-3 shrink-0">
+                <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">System Alerts & Issues</h2>
+                <button class="text-[9px] font-black uppercase text-slate-400 hover:text-slate-900 transition flex items-center gap-1">
+                    <span class="material-icons-round text-sm">refresh</span> Refresh
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-auto custom-scrollbar">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Alert Type</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Entity</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Description</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Severity</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Date</th>
+                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alertsTable" class="text-xs">
+                        <tr class="border-b border-slate-200 hover:bg-slate-50">
+                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-sm font-black text-[9px] uppercase">Unmapped COA</span></td>
+                            <td class="py-2.5 px-4 font-bold text-slate-700">Region IV-B</td>
+                            <td class="py-2.5 px-4 text-slate-600">Category "Office Supplies" has no account mapping</td>
+                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-sm font-black text-[9px] uppercase">High</span></td>
+                            <td class="py-2.5 px-4 text-slate-500 font-bold uppercase text-[10px]">2026-02-15</td>
+                            <td class="py-2.5 px-4 text-center"><button class="text-blue-700 font-bold hover:underline">Fix Now</button></td>
+                        </tr>
+                        <tr class="border-b border-slate-200 hover:bg-slate-50">
+                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-sm font-black text-[9px] uppercase">Broken COA Link</span></td>
+                            <td class="py-2.5 px-4 font-bold text-slate-700">NCR - Manila</td>
+                            <td class="py-2.5 px-4 text-slate-600">Account code 1001-001 does not exist in COA</td>
+                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-sm font-black text-[9px] uppercase">Medium</span></td>
+                            <td class="py-2.5 px-4 text-slate-500 font-bold uppercase text-[10px]">2026-02-14</td>
+                            <td class="py-2.5 px-4 text-center"><button class="text-blue-700 font-bold hover:underline">Fix Now</button></td>
+                        </tr>
+                        <tr class="border-b border-slate-200 hover:bg-slate-50">
+                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-sm font-black text-[9px] uppercase">Missing Tax Config</span></td>
+                            <td class="py-2.5 px-4 font-bold text-slate-700">Region VII</td>
+                            <td class="py-2.5 px-4 text-slate-600">Deposit category has no tax settings configured</td>
+                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-sm font-black text-[9px] uppercase">Low</span></td>
+                            <td class="py-2.5 px-4 text-slate-500 font-bold uppercase text-[10px]">2026-02-13</td>
+                            <td class="py-2.5 px-4 text-center"><button class="text-blue-700 font-bold hover:underline">Fix Now</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Usage per entity chart
+        const usageCtx = document.getElementById('usageChart').getContext('2d');
+        new Chart(usageCtx, {
+            type: 'bar',
+            data: {
+                labels: ['NCR', 'CAR', 'Region I', 'Region II', 'Region III', 'Region IV-A', 'Region IV-B', 'Region V'],
+                datasets: [{
+                    label: 'Transactions',
+                    data: [245, 89, 156, 112, 198, 234, 167, 145],
+                    backgroundColor: '#1e40af',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        grid: { color: '#f1f5f9' },
+                        ticks: { font: { size: 10 } }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 9 } }
+                    }
+                }
+            }
+        });
+
+        // Approval latency chart
+        const latencyCtx = document.getElementById('latencyChart').getContext('2d');
+        new Chart(latencyCtx, {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'],
+                datasets: [{
+                    label: 'Avg Days',
+                    data: [3.2, 2.8, 2.5, 2.3, 2.7, 2.1, 2.4, 2.3],
+                    borderColor: '#d97706',
+                    backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        grid: { color: '#f1f5f9' },
+                        ticks: { font: { size: 10 } }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 9 } }
+                    }
+                }
+            }
+        });
+    </script>
+
+</body>
+</html>

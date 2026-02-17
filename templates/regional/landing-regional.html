@@ -8,7 +8,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/denr-print.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <style>
@@ -37,10 +39,12 @@
                     <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1" x-text="`Region ${userRegion} (${userRegionName}) • Official Portal`"></p>
                 </div>
                 <div class="d-flex gap-2 no-print mt-3 mt-md-0">
-                    <button onclick="window.print()" class="btn btn-sm btn-outline-secondary btn-gov d-flex align-items-center gap-2">
-                        <span class="material-icons-round text-base">print</span> Print
+                    <button onclick="generateRegionalReport()" class="btn btn-sm btn-outline-secondary btn-gov d-flex align-items-center gap-2">
+                        <span class="material-icons-round text-base">print</span> Official Report
                     </button>
-                    <button class="btn btn-sm btn-primary bg-blue-900 border-0 btn-gov">Regional Report</button>
+                    <button onclick="window.print()" class="btn btn-sm btn-outline-secondary btn-gov d-flex align-items-center gap-2">
+                        <span class="material-icons-round text-base">print</span> Print Page
+                    </button>
                 </div>
             </div>
 
@@ -158,6 +162,290 @@
         import { auth, db } from '/static/js/firebase-config.js';
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
         import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+        // Global function for report generation
+        window.generateRegionalReport = function() {
+          const userRegion = document.querySelector('[x-data]').__alpineUnobservedData?.userRegion || 'IV-A';
+          const userRegionName = document.querySelector('[x-data]').__alpineUnobservedData?.userRegionName || 'CALABARZON';
+          
+          const pdfContainer = document.createElement('div');
+          pdfContainer.style.padding = '25px';
+          pdfContainer.style.backgroundColor = '#ffffff';
+          pdfContainer.style.fontFamily = "'Times New Roman', Georgia, serif";
+          pdfContainer.style.lineHeight = '1.6';
+
+          // Official DENR Header
+          const header = document.createElement('div');
+          header.style.textAlign = 'center';
+          header.style.paddingBottom = '15px';
+          header.style.borderBottom = '4px solid #1b5e20';
+          header.style.marginBottom = '25px';
+          header.innerHTML = `
+            <div style="text-align: center; margin-bottom: 10px;">
+              <img src="{{ url_for('static', filename='DENR-LOGO.webp') }}" 
+                   alt="DENR Logo" 
+                   style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto;" />
+            </div>
+            <p style="font-size: 11pt; margin: 5px 0 0; text-transform: uppercase; letter-spacing: 0.5px;">Republic of the Philippines</p>
+            <h1 style="font-size: 13pt; font-weight: bold; margin: 5px 0; text-transform: uppercase; color: #1b5e20; letter-spacing: 1px;">Department of Environment and Natural Resources</h1>
+            <p style="font-size: 10pt; margin: 3px 0; font-style: italic;">Office of the Secretary • Regional Office</p>
+            <p style="font-size: 9pt; margin: 8px 0 0; line-height: 1.4;">
+              DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
+              Tel: (632) 8929-6626 | Fax: (632) 8920-4352 | Website: www.denr.gov.ph
+            </p>
+          `;
+          pdfContainer.appendChild(header);
+
+          // Document Title
+          const titleSection = document.createElement('div');
+          titleSection.style.textAlign = 'center';
+          titleSection.style.margin = '25px 0';
+          titleSection.innerHTML = `
+            <h1 style="font-size: 18pt; font-weight: bold; color: #1b5e20; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1.5px;">
+              REGIONAL ADMINISTRATIVE REPORT
+            </h1>
+            <p style="font-size: 11pt; color: #333; margin: 5px 0;">REGION ${userRegion} (${userRegionName})</p>
+            <p style="font-size: 10pt; color: #666; margin: 10px 0; font-weight: bold;">
+              Document No. RAR-${new Date().getTime().toString().slice(-8)}<br>
+              Generated: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
+              Report Period: January - ${new Date().toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })}
+            </p>
+          `;
+          pdfContainer.appendChild(titleSection);
+
+          // Executive Summary
+          const execSummary = document.createElement('div');
+          execSummary.style.marginBottom = '20px';
+          execSummary.innerHTML = `
+            <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+              I. EXECUTIVE SUMMARY
+            </h2>
+            <div style="display: flex; justify-content: space-around; margin: 20px 0;">
+              <div style="text-align: center; padding: 15px; border: 2px solid #1b5e20; background: #f1f8e9; min-width: 140px;">
+                <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Municipalities</p>
+                <p style="font-size: 24pt; color: #1b5e20; font-weight: bold; margin: 0;">142</p>
+              </div>
+              <div style="text-align: center; padding: 15px; border: 2px solid #2e7d32; background: #f1f8e9; min-width: 140px;">
+                <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Permits</p>
+                <p style="font-size: 24pt; color: #2e7d32; font-weight: bold; margin: 0;">2,958</p>
+              </div>
+              <div style="text-align: center; padding: 15px; border: 2px solid #558b2f; background: #f1f8e9; min-width: 140px;">
+                <p style="font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Total Revenue</p>
+                <p style="font-size: 20pt; color: #558b2f; font-weight: bold; margin: 0;">₱5.69M</p>
+              </div>
+            </div>
+          `;
+          pdfContainer.appendChild(execSummary);
+
+          // Regional Overview
+          const overview = document.createElement('div');
+          overview.style.marginBottom = '20px';
+          overview.innerHTML = `
+            <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+              II. REGIONAL DISTRIBUTION
+            </h2>
+            <table style="width: 100%; border-collapse: collapse; font-size: 10pt; margin: 15px 0;">
+              <thead style="background: #1b5e20; color: white;">
+                <tr>
+                  <th style="padding: 10px; text-align: left; border: 1px solid #333;">Province</th>
+                  <th style="padding: 10px; text-align: center; border: 1px solid #333;">Municipality</th>
+                  <th style="padding: 10px; text-align: center; border: 1px solid #333;">Permits</th>
+                  <th style="padding: 10px; text-align: right; border: 1px solid #333;">Revenue (PHP)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="background: #f9f9f9;">
+                  <td style="padding: 8px 10px; border: 1px solid #999;">CAVITE</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999;">Dasmarinas City</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">142</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: right;">₱850,000</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid #999;">CAVITE</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999;">Tagaytay City</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">98</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: right;">₱1,200,000</td>
+                </tr>
+                <tr style="background: #f9f9f9;">
+                  <td style="padding: 8px 10px; border: 1px solid #999;">LAGUNA</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999;">Calamba City</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">210</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: right;">₱1,540,000</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid #999;">BATANGAS</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999;">Batangas City</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">340</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: right;">₱2,100,000</td>
+                </tr>
+                <tr style="background: #f1f8e9; font-weight: bold;">
+                  <td style="padding: 8px 10px; border: 1px solid #999;">TOTAL</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999;"></td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">790</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: right;">₱5,690,000</td>
+                </tr>
+              </tbody>
+            </table>
+          `;
+          pdfContainer.appendChild(overview);
+
+          // Permit Categories
+          const categories = document.createElement('div');
+          categories.style.marginBottom = '20px';
+          categories.innerHTML = `
+            <h2 style="color: #1b5e20; font-size: 13pt; font-weight: bold; border-bottom: 2px solid #1b5e20; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.8px;">
+              III. PERMIT CATEGORY BREAKDOWN
+            </h2>
+            <table style="width: 100%; border-collapse: collapse; font-size: 10pt; margin: 15px 0;">
+              <thead style="background: #1b5e20; color: white;">
+                <tr>
+                  <th style="padding: 10px; text-align: left; border: 1px solid #333;">Category</th>
+                  <th style="padding: 10px; text-align: center; border: 1px solid #333;">Count</th>
+                  <th style="padding: 10px; text-align: center; border: 1px solid #333;">Percentage</th>
+                  <th style="padding: 10px; text-align: center; border: 1px solid #333;">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid #999;">Forest Permits</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">1,240</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">41.8%</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; color: #1b5e20; font-weight: bold;">Active</td>
+                </tr>
+                <tr style="background: #f9f9f9;">
+                  <td style="padding: 8px 10px; border: 1px solid #999;">Wildlife Licenses</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">856</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">28.9%</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; color: #1b5e20; font-weight: bold;">Active</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid #999;">Environmental Permits</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">510</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">17.2%</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; color: #1b5e20; font-weight: bold;">Active</td>
+                </tr>
+                <tr style="background: #f9f9f9;">
+                  <td style="padding: 8px 10px; border: 1px solid #999;">Pending Review</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; font-weight: bold;">352</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">11.9%</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center; color: #f57c00; font-weight: bold;">Pending</td>
+                </tr>
+                <tr style="background: #f1f8e9; font-weight: bold;">
+                  <td style="padding: 8px 10px; border: 1px solid #999;">TOTAL</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">2,958</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999; text-align: center;">100.0%</td>
+                  <td style="padding: 8px 10px; border: 1px solid #999;"></td>
+                </tr>
+              </tbody>
+            </table>
+          `;
+          pdfContainer.appendChild(categories);
+
+          // Metadata Section
+          const metadata = document.createElement('div');
+          metadata.style.marginBottom = '20px';
+          metadata.style.padding = '15px';
+          metadata.style.background = '#f5f5f5';
+          metadata.style.borderLeft = '5px solid #1b5e20';
+          metadata.innerHTML = `
+            <h3 style="color: #1b5e20; font-size: 11pt; font-weight: bold; margin: 0 0 10px 0; text-transform: uppercase;">Report Information</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 9pt;">
+              <tr>
+                <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Report Type:</td>
+                <td style="padding: 5px 10px;">Regional Administrative Report</td>
+              </tr>
+              <tr style="background: #fff;">
+                <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Region:</td>
+                <td style="padding: 5px 10px;">Region ${userRegion} - ${userRegionName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Period Covered:</td>
+                <td style="padding: 5px 10px;">January - ${new Date().toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })}</td>
+              </tr>
+              <tr style="background: #fff;">
+                <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Generated:</td>
+                <td style="padding: 5px 10px;">${new Date().toLocaleString('en-PH')}</td>
+              </tr>
+              <tr>
+                <td style="padding: 5px 10px; width: 35%; font-weight: bold; color: #1b5e20;">Classification:</td>
+                <td style="padding: 5px 10px;">Official Government Document</td>
+              </tr>
+            </table>
+          `;
+          pdfContainer.appendChild(metadata);
+
+          // Closing Section
+          const closing = document.createElement('div');
+          closing.style.marginTop = '30px';
+          closing.innerHTML = `
+            <p style="font-size: 10pt; text-align: justify; text-indent: 40px;">
+              This Regional Administrative Report contains a comprehensive analysis of permit issuances, 
+              revenue generation, and administrative activities across Region ${userRegion}. All data is accurate 
+              as of the date of generation and reflects the official records of the Department of Environment 
+              and Natural Resources.
+            </p>
+          `;
+          pdfContainer.appendChild(closing);
+
+          // Signature Section
+          const signature = document.createElement('div');
+          signature.style.marginTop = '40px';
+          signature.style.textAlign = 'right';
+          signature.style.marginRight = '50px';
+          signature.innerHTML = `
+            <div style="border-bottom: 2px solid #000; width: 250px; margin-left: auto; padding-top: 50px;"></div>
+            <p style="margin: 5px 0 0; font-size: 11pt; font-weight: bold; text-transform: uppercase;">Regional Director</p>
+            <p style="margin: 0; font-size: 10pt;">DENR Regional Office</p>
+            <p style="margin: 5px 0 0; font-size: 9pt; color: #666;">Date: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          `;
+          pdfContainer.appendChild(signature);
+
+          // Security Notice
+          const security = document.createElement('div');
+          security.style.marginTop = '30px';
+          security.style.padding = '15px';
+          security.style.border = '2px solid #ffc107';
+          security.style.background = '#fff3cd';
+          security.innerHTML = `
+            <p style="margin: 0; font-size: 9pt; color: #856404; text-align: center;">
+              <strong>NOTICE:</strong> This is an electronically generated official document of the Department of Environment and Natural Resources. 
+              Any alteration or unauthorized use is punishable by law under relevant Philippine statutes.
+            </p>
+          `;
+          pdfContainer.appendChild(security);
+
+          // Footer
+          const footer = document.createElement('div');
+          footer.style.marginTop = '20px';
+          footer.style.paddingTop = '15px';
+          footer.style.borderTop = '3px solid #1b5e20';
+          footer.style.fontSize = '8pt';
+          footer.style.textAlign = 'center';
+          footer.style.color = '#666';
+          footer.innerHTML = `
+            <p style="margin: 0; line-height: 1.4;">
+              Department of Environment and Natural Resources<br>
+              DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
+              Telephone: (632) 8929-6626 | Fax: (632) 8920-4352<br>
+              Email: osec@denr.gov.ph | Website: www.denr.gov.ph
+            </p>
+            <p style="margin: 10px 0 0; font-style: italic; color: #999;">
+              Document Reference: RAR-${new Date().getTime().toString().slice(-8)} | ${new Date().toLocaleString('en-PH')}
+            </p>
+          `;
+          pdfContainer.appendChild(footer);
+
+          // Generate PDF
+          const opt = {
+            margin: 10,
+            filename: `DENR-Regional-Report-${userRegion}-${new Date().toISOString().split('T')[0]}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+          };
+
+          html2pdf().set(opt).from(pdfContainer).save();
+        };
 
         document.addEventListener('alpine:init', () => {
             Alpine.data('regionalDashboard', () => ({

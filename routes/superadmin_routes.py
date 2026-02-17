@@ -124,3 +124,32 @@ def tasks_view():
 @role_required('super-admin','superadmin')
 def applicants_view():
     return render_template('super-admin/applicants/applicants.html')
+
+# --- Accounting Module Routes ---
+@bp.route('/accounting/dashboard')
+def accounting_dashboard():
+    return render_template('super-admin/accounting/accounting-dashboard.html')
+
+@bp.route('/accounting/entities')
+def accounting_entities():
+    return render_template('super-admin/accounting/entities.html')
+
+@bp.route('/accounting/coa-templates')
+def accounting_coa_templates():
+    return render_template('super-admin/accounting/coa-templates.html')
+
+@bp.route('/accounting/expense-categories')
+def accounting_expense_categories():
+    return render_template('super-admin/accounting/expense-categories.html')
+
+@bp.route('/accounting/deposit-categories')
+def accounting_deposit_categories():
+    return render_template('super-admin/accounting/deposit-categories.html')
+
+@bp.route('/accounting/permissions')
+def accounting_permissions():
+    return render_template('super-admin/accounting/permissions.html')
+
+@bp.route('/accounting/audit')
+def accounting_audit():
+    return render_template('super-admin/accounting/audit.html')
