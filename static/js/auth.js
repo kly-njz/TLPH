@@ -582,6 +582,18 @@ if (loginForm) {
                 
                 console.log('User role:', userRole);
                 
+                // Set Flask session
+                await fetch('/api/set-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_email: user.email,
+                        user_role: userRole
+                    })
+                });
+                
                 // Redirect based on role
                 if (userRole === 'municipal') {
                     window.location.href = '/municipal/dashboard';
