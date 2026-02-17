@@ -245,6 +245,16 @@ def set_session():
         print(f'Error setting session: {str(e)}')
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@bp.route('/logout', methods=['POST'])
+def logout():
+    """Clear Flask session on logout"""
+    try:
+        session.clear()
+        return jsonify({'success': True, 'message': 'Logged out successfully'})
+    except Exception as e:
+        print(f'Error logging out: {str(e)}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @bp.route('/submit-application', methods=['POST'])
 def submit_application():
     """Handle application submission with file uploads"""
