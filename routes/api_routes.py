@@ -230,17 +230,19 @@ def set_session():
         data = request.get_json()
         user_email = data.get('user_email')
         user_role = data.get('user_role')
-        
-        if not user_email or not user_role:
-            return jsonify({'success': False, 'message': 'Missing user_email or user_role'}), 400
-        
+        user_id = data.get('user_id')
+
+        if not user_email or not user_role or not user_id:
+            return jsonify({'success': False, 'message': 'Missing user_email, user_role, or user_id'}), 400
+
         # Set session
         session.permanent = True
         session['user_email'] = user_email
         session['user_role'] = user_role
-        
-        print(f'Session set for {user_email} with role {user_role}')
-        
+        session['user_id'] = user_id
+
+        print(f'Session set for {user_email} with role {user_role} and user_id {user_id}')
+
         return jsonify({'success': True, 'message': 'Session set successfully'})
     
     except Exception as e:

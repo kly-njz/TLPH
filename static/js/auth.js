@@ -590,7 +590,8 @@ if (loginForm) {
                     },
                     body: JSON.stringify({
                         user_email: user.email,
-                        user_role: userRole
+                        user_role: userRole,
+                        user_id: user.uid
                     })
                 });
                 
