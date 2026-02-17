@@ -583,7 +583,7 @@ if (loginForm) {
                 console.log('User role:', userRole);
                 
                 // Set Flask session
-                await fetch('/api/set-session', {
+                const sessionResponse = await fetch('/api/set-session', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -594,14 +594,22 @@ if (loginForm) {
                     })
                 });
                 
+                const sessionData = await sessionResponse.json();
+                
+                if (!sessionData.success) {
+                    throw new Error('Failed to set session');
+                }
+                
+                console.log('Flask session set successfully');
+                
                 // Redirect based on role
-                if (userRole === 'municipal') {
+                if (userRole === 'municipal' || userRole === 'municipal_admin') {
                     window.location.href = '/municipal/dashboard';
-                } else if (userRole === 'national') {
+                } else if (userRole === 'national' || userRole === 'national_admin') {
                     window.location.href = '/national/dashboard';
-                } else if (userRole === 'regional') {
+                } else if (userRole === 'regional' || userRole === 'regional_admin') {
                     window.location.href = '/regional/dashboard';
-                } else if (userRole === 'super-admin') {
+                } else if (userRole === 'super-admin' || userRole === 'superadmin') {
                     window.location.href = '/super-admin/dashboard';
                 } else {
                     window.location.href = '/user/dashboard';
