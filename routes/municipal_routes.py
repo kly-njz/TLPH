@@ -77,3 +77,48 @@ def profile():
 @role_required('municipal','municipal_admin')
 def notification():
     return render_template('municipal/notification.html')
+
+@bp.route('/company')
+@role_required('municipal','municipal_admin')
+def hrm_company():
+    return render_template('municipal/hrm/company-municipal.html')
+
+@bp.route('/department')
+@role_required('municipal','municipal_admin')
+def hrm_department():
+    return render_template('municipal/hrm/department-municipal.html')
+
+@bp.route('/designation')
+@role_required('municipal','municipal_admin')
+def hrm_designation():
+    return render_template('municipal/hrm/designation-municipal.html')
+
+@bp.route('/office-shift')
+@role_required('municipal','municipal_admin')
+def hrm_office_shift():
+    return render_template('municipal/hrm/office-shift-municipal.html')
+
+@bp.route('/employees')
+@role_required('municipal','municipal_admin')
+def hrm_employees():
+    return render_template('municipal/hrm/employees-municipal.html')
+
+@bp.route('/attendance')
+@role_required('municipal','municipal_admin')
+def hrm_attendance():
+    return render_template('municipal/hrm/attendance-municipal.html')
+
+@bp.route('/holiday')
+@role_required('municipal','municipal_admin')
+def hrm_holiday():
+    return render_template('municipal/hrm/holiday-municipal.html')
+
+@bp.route('/leave-request')
+@role_required('municipal','municipal_admin')
+def hrm_leave():
+    return render_template('municipal/hrm/leave-municipal.html')
+
+@bp.route('/payroll')
+@role_required('municipal','municipal_admin')
+def hrm_payroll():
+    return render_template('municipal/hrm/payroll-municipal.html')
