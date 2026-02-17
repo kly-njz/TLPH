@@ -235,6 +235,7 @@ def set_session():
             return jsonify({'success': False, 'message': 'Missing user_email or user_role'}), 400
         
         # Set session
+        session.permanent = True
         session['user_email'] = user_email
         session['user_role'] = user_role
         

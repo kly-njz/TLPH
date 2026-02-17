@@ -2,9 +2,17 @@ from flask import Flask, render_template
 from flask_mail import Mail
 from config import Config
 from firebase_config import initialize_firebase_admin
+from datetime import timedelta
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Session configuration
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+app.config['SESSION_COOKIE_SECURE'] = False  # Set True if using HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Initialize Flask-Mail
 mail = Mail(app)
