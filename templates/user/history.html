@@ -1796,52 +1796,84 @@
           return dateB - dateA;
         });
 
-        const pdfContainer = document.createElement('div');
-        pdfContainer.style.padding = '25px';
-        pdfContainer.style.backgroundColor = '#ffffff';
-        pdfContainer.style.fontFamily = "'Times New Roman', Georgia, serif";
-        pdfContainer.style.lineHeight = '1.6';
-        
-        // Official DENR Header
-        const header = document.createElement('div');
-        header.className = 'denr-official-header';
-        header.style.textAlign = 'center';
-        header.style.paddingBottom = '15px';
-        header.style.borderBottom = '4px solid #1b5e20';
-        header.style.marginBottom = '25px';
-        header.innerHTML = `
-          <div style="text-align: center; margin-bottom: 10px;">
-            <img src="{{ url_for('static', filename='daily-tribune_import_wp-content_uploads_2022_12_DENR.avif') }}" 
-                 alt="DENR Logo" 
-                 style="width: 80px; height: 80px; object-fit: contain; margin: 0 auto;" />
-          </div>
-          <p style="font-size: 11pt; margin: 5px 0 0; text-transform: uppercase; letter-spacing: 0.5px;">Republic of the Philippines</p>
-          <h1 style="font-size: 13pt; font-weight: bold; margin: 5px 0; text-transform: uppercase; color: #1b5e20; letter-spacing: 1px;">Department of Environment and Natural Resources</h1>
-          <p style="font-size: 10pt; margin: 3px 0; font-style: italic;">Office of the Secretary</p>
-          <p style="font-size: 9pt; margin: 8px 0 0; line-height: 1.4;">
-            DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
-            Tel: (632) 8929-6626 | Fax: (632) 8920-4352 | Website: www.denr.gov.ph
-          </p>
-        `;
-        pdfContainer.appendChild(header);
 
-        // Document Title
-        const titleSection = document.createElement('div');
-        titleSection.className = 'denr-doc-title';
-        titleSection.style.textAlign = 'center';
-        titleSection.style.margin = '25px 0';
-        titleSection.innerHTML = `
-          <h1 style="font-size: 18pt; font-weight: bold; color: #1b5e20; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1.5px;">
-            APPLICATIONS REPORT
-          </h1>
-          <p style="font-size: 11pt; color: #333; margin: 5px 0;">Approved Applications Summary</p>
-          <p style="font-size: 10pt; color: #666; margin: 10px 0; font-weight: bold;">
-            Document No. APR-${new Date().getTime().toString().slice(-8)}<br>
-            Generated: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
-            Total Records: ${approvedApps.length}
-          </p>
+        // --- DENR Official Layout ---
+        const pdfContainer = document.createElement('div');
+        pdfContainer.className = 'denr-print-preview';
+        pdfContainer.style.width = '210mm';
+        pdfContainer.style.minHeight = '297mm';
+        pdfContainer.style.padding = '20mm 15mm';
+        pdfContainer.style.backgroundColor = '#fff';
+        pdfContainer.style.fontFamily = 'Times New Roman, Georgia, serif';
+        pdfContainer.style.color = '#000';
+        pdfContainer.style.position = 'relative';
+
+        // Header
+        pdfContainer.innerHTML = `
+          <div class="denr-official-header">
+            <div class="logo-section">
+              <img src="{{ url_for('static', filename='DENR-LOGO.webp') }}" alt="DENR Logo" />
+            </div>
+            <div class="republic-text">Republic of the Philippines</div>
+            <div class="department-name">Department of Environment and Natural Resources</div>
+            <div class="office-name">Office of the Secretary</div>
+            <div class="address">DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>Tel: (632) 8929-6626 | Fax: (632) 8920-4352 | Website: www.denr.gov.ph</div>
+          </div>
+
+          <div class="denr-doc-title">
+            <h1>APPLICATIONS REPORT</h1>
+            <div class="subtitle">Approved Applications Summary</div>
+            <div class="doc-number">Document No. APR-${new Date().getTime().toString().slice(-8)}<br>Generated: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}<br>Total Records: ${approvedApps.length}</div>
+          </div>
         `;
-        pdfContainer.appendChild(titleSection);
+
+        // Details Section
+        const detailsSection = document.createElement('div');
+        detailsSection.className = 'denr-section';
+        detailsSection.innerHTML = `<h2>Applications Details</h2>`;
+
+        approvedApps.forEach((app, idx) => {
+          const date = app.date instanceof Date ? app.date.toLocaleDateString('en-PH', {
+            year: 'numeric', month: 'short', day: 'numeric'
+          }) : new Date(app.date).toLocaleDateString('en-PH', {
+            year: 'numeric', month: 'short', day: 'numeric'
+          });
+          detailsSection.innerHTML += `
+            <div style="margin-bottom: 15px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb; page-break-inside: avoid; font-size: 11px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #3b82f6;">
+                <div>
+                  <span style="display: inline-block; padding: 4px 8px; background: #dbeafe; color: #1e40af; border-radius: 4px; font-weight: 700; font-size: 10px; text-transform: uppercase; margin-bottom: 4px;">${app.type}</span>
+                  <h3 style="color: #1b330d; font-size: 13px; font-weight: 700; margin: 4px 0 0 0;">${app.description}</h3>
+                </div>
+                <span style="color: #6b7280; font-weight: 600; font-size: 11px;">App #${idx + 1}</span>
+              </div>
+              <div style="background: white; padding: 10px; border-radius: 4px; font-size: 11px;">
+                <p style="color: #6b7280; margin: 0;"><strong>Status:</strong> <span style="color: #059669; font-weight: 700;">${app.status}</span></p>
+                <p style="color: #6b7280; margin: 3px 0 0 0;"><strong>Date:</strong> ${date}</p>
+                <p style="color: #6b7280; margin: 3px 0 0 0;"><strong>Amount:</strong> ₱${Number(app.amount || 0).toLocaleString()}</p>
+                ${app.harvestQty ? `<p style=\"color: #6b7280; margin: 3px 0 0 0;\"><strong>Harvest Qty:</strong> ${Number(app.harvestQty).toLocaleString()} units</p>` : ''}
+                ${app.reference ? `<p style=\"color: #6b7280; margin: 3px 0 0 0;\"><strong>Reference:</strong> ${app.reference}</p>` : ''}
+                <p style="color: #6b7280; margin: 3px 0 0 0;"><strong>Email:</strong> ${user.email || 'N/A'}</p>
+              </div>
+            </div>
+          `;
+        });
+        pdfContainer.appendChild(detailsSection);
+
+        // Footer
+        pdfContainer.innerHTML += `
+          <div class=\"denr-footer\">
+            <div class=\"contact-info\">
+              Department of Environment and Natural Resources<br>
+              DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
+              Telephone: (632) 8929-6626 | Fax: (632) 8920-4352<br>
+              Email: osec@denr.gov.ph | Website: www.denr.gov.ph
+            </div>
+            <div class=\"disclaimer\">
+              Document Reference: APR-${new Date().getTime().toString().slice(-8)} | ${new Date().toLocaleString('en-PH')}
+            </div>
+          </div>
+        `;
 
         const detailsSection = document.createElement('div');
         detailsSection.style.marginTop = '15px';
