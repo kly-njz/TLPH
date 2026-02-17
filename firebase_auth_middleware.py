@@ -28,10 +28,21 @@ def role_required(*allowed_roles):
             user_role = session.get('user_role', '')
             
             if user_role not in allowed_roles:
-                print(f'❌ Role mismatch: {user_role} not in {allowed_roles}, redirecting to login')
-                # Unauthorized access - redirect back to login
-                # Don't try to redirect to their dashboard as it might not exist
-                return redirect(url_for('main.login'))
+                print(f'❌ Role mismatch: {user_role} not in {allowed_roles}, staying on current page')
+                # Instead of redirecting to login, redirect back to their appropriate dashboard
+                role_dashboards = {
+                    'user': '/user/dashboard',
+                    'municipal': '/municipal/dashboard',
+                    'municipal_admin': '/municipal/dashboard',
+                    'regional': '/regional/profile',
+                    'regional_admin': '/regional/profile',
+                    'national': '/national/dashboard',
+                    'national_admin': '/national/dashboard',
+                    'super-admin': '/superadmin/inventory',
+                    'superadmin': '/superadmin/inventory'
+                }
+                dashboard_url = role_dashboards.get(user_role, '/login')
+                return redirect(dashboard_url)
             
             print(f'✅ Access granted: {user_role} accessing {f.__name__}')
             return f(*args, **kwargs)
