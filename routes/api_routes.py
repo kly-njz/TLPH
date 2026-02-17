@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, session
 from flask_mail import Message, Mail
 from datetime import datetime
 import random
+from firebase_auth_middleware import firebase_auth_required
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -221,7 +222,43 @@ def login_user():
     except Exception as e:
         print(f'Error logging in: {str(e)}')
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@bp.route('/set-session', methods=['POST'])
+def set_session():
+    """Set Flask session after Firebase authentication"""
+    try:
+        data = request.get_json()
+        user_email = data.get('user_email')
+        user_role = data.get('user_role')
+        
+        if not user_email or not user_role:
+            return jsonify({'success': False, 'message': 'Missing user_email or user_role'}), 400
+        
+        # Set session
+        session.permanent = True
+        session['user_email'] = user_email
+        session['user_role'] = user_role
+        
+        print(f'Session set for {user_email} with role {user_role}')
+        
+        return jsonify({'success': True, 'message': 'Session set successfully'})
+    
+    except Exception as e:
+        print(f'Error setting session: {str(e)}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@bp.route('/logout', methods=['POST'])
+def logout():
+    """Clear Flask session on logout"""
+    try:
+        session.clear()
+        return jsonify({'success': True, 'message': 'Logged out successfully'})
+    except Exception as e:
+        print(f'Error logging out: {str(e)}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @bp.route('/submit-application', methods=['POST'])
+@firebase_auth_required
 def submit_application():
     """Handle application submission with file uploads"""
     try:
@@ -281,6 +318,7 @@ def submit_application():
         }), 500
 
 @bp.route('/get-applications/<user_id>', methods=['GET'])
+@firebase_auth_required
 def get_user_applications(user_id):
     """Get all applications for a specific user"""
     try:

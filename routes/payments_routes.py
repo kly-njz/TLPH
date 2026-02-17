@@ -8,6 +8,7 @@ from io import BytesIO
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from firebase_auth_middleware import firebase_auth_required
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 
@@ -246,6 +247,7 @@ def xendit_webhook():
 
 
 @bp.route('/payment-form/<service_type>', methods=['GET'])
+@firebase_auth_required
 def payment_form(service_type):
     """Display payment form for different service types"""
     return render_template('payment-form.html', 
