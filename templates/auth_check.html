@@ -1,37 +1,35 @@
-<!-- Auth Check: Prevents flash of protected content -->
-<style>
-    body {
-        visibility: hidden;
-        opacity: 0;
-    }
-    body.auth-checked {
-        visibility: visible;
-        opacity: 1;
-        transition: opacity 0.1s ease-in;
-    }
-</style>
-
-<script type="module">
-    // Immediate auth check to prevent content flash
-    import { auth } from '/static/js/firebase-config.js';
-    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-    // Check auth immediately
-    onAuthStateChanged(auth, (user) => {
-        if (user) {
-            // User is authenticated, show page
-            document.body.classList.add('auth-checked');
-        } else {
-            // No auth, redirect to login immediately
-            window.location.replace('/login');
-        }
-    });
-
-    // Fallback timeout: if Firebase takes too long, check session
-    setTimeout(() => {
-        if (!document.body.classList.contains('auth-checked')) {
-            // Server-side will handle redirect, but hide content
-            window.location.replace('/login');
-        }
-    }, 500);
+<!-- Instant Auth Check: Prevents flash of protected content -->
+<!-- Usage: Add {% set required_role = 'user' %} before including this template -->
+<style>html{visibility:hidden;opacity:0}html.show{visibility:visible;opacity:1;transition:opacity 0.1s}</style>
+<script>
+(function() {
+    var requiredRole = '{{ required_role if required_role else "user" }}';
+    var allowedRoles = requiredRole.split(',').map(function(r) { return r.trim(); });
+    
+    fetch('/api/check-session', {method: 'GET', credentials: 'same-origin'})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.authenticated) {
+                // Check if user's role matches any allowed role
+                var hasAccess = allowedRoles.some(function(role) {
+                    return data.role === role || 
+                           (role === 'municipal' && data.role === 'municipal_admin') ||
+                           (role === 'regional' && data.role === 'regional_admin') ||
+                           (role === 'national' && data.role === 'national_admin') ||
+                           (role === 'superadmin' && data.role === 'super-admin');
+                });
+                
+                if (hasAccess) {
+                    document.documentElement.classList.add('show');
+                } else {
+                    window.location.replace('/login');
+                }
+            } else {
+                window.location.replace('/login');
+            }
+        })
+        .catch(function() { 
+            window.location.replace('/login'); 
+        });
+})();
 </script>
