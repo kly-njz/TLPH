@@ -214,11 +214,12 @@
 
   <script type="module">
     import { db, auth } from '/static/js/firebase-config.js';
-    import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         // Dynamically set municipality from localStorage or fallback
 
         let SUBADMIN_MUNICIPALITY = localStorage.getItem('denr_user_municipality') || "San Juan";
+        let unsubscribeListener = null; // Store listener unsubscribe function
 
         // Helper to update UI when municipality changes
         function setMunicipality(muni) {
@@ -231,27 +232,40 @@
         let allUsers = [];
 
 
-        // Load users from Firestore for the current municipality
+        // Load users from Firestore for the current municipality with real-time listener
         async function loadUsers() {
-          if (typeof db !== 'undefined' && typeof collection === 'function' && typeof query === 'function' && typeof where === 'function' && typeof getDocs === 'function') {
-            // Firestore query for users in the current municipality and status 'approved'
+          // Unsubscribe from previous listener if exists
+          if (unsubscribeListener) {
+            unsubscribeListener();
+            unsubscribeListener = null;
+          }
+
+          if (typeof db !== 'undefined' && typeof collection === 'function' && typeof query === 'function' && typeof where === 'function' && typeof onSnapshot === 'function') {
+            // Firestore query for users in the current municipality
             const usersRef = collection(db, 'users');
             const q = query(usersRef, where('municipality', '==', SUBADMIN_MUNICIPALITY));
-            const snapshot = await getDocs(q);
-            allUsers = [];
-            snapshot.forEach(doc => {
-              const data = doc.data();
-              allUsers.push({
-                id: doc.id,
-                name: (data.firstName || '') + ' ' + (data.lastName || ''),
-                email: data.email || '',
-                municipality: data.municipality || '',
-                status: data.status || '',
-                role: data.role || '',
-                userType: data.userType || '',
+            
+            // Real-time listener - automatically updates when data changes
+            unsubscribeListener = onSnapshot(q, (snapshot) => {
+              allUsers = [];
+              snapshot.forEach(doc => {
+                const data = doc.data();
+                allUsers.push({
+                  id: doc.id,
+                  name: (data.firstName || '') + ' ' + (data.lastName || ''),
+                  email: data.email || '',
+                  municipality: data.municipality || '',
+                  status: data.status || '',
+                  role: data.role || '',
+                  userType: data.userType || '',
+                });
               });
+              renderAll();
+            }, (error) => {
+              console.error('Error listening to users:', error);
+              allUsers = [];
+              renderAll();
             });
-            renderAll();
           } else {
             // Firestore not available, show empty
             allUsers = [];
@@ -475,12 +489,8 @@
         await updateDoc(doc(db, 'users', id), { status: 'Disabled' });
         console.log('User disabled successfully');
         
-        // Wait a bit for Firestore to propagate
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
         actionCount++;
-        await loadUsers();
-        alert('User has been disabled successfully.');
+        alert('User has been disabled successfully. UI will update automatically.');
       } catch (error) {
         console.error('Error disabling user:', error);
         alert('Failed to disable user: ' + error.message);
@@ -512,12 +522,8 @@
         await updateDoc(doc(db, 'users', id), { status: 'Active' });
         console.log('User enabled successfully');
         
-        // Wait a bit for Firestore to propagate
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
         actionCount++;
-        await loadUsers();
-        alert('User has been enabled successfully.');
+        alert('User has been enabled successfully. UI will update automatically.');
       } catch (error) {
         console.error('Error enabling user:', error);
         alert('Failed to enable user: ' + error.message);
@@ -545,12 +551,8 @@
         await deleteDoc(doc(db, 'users', id));
         console.log('User removed successfully');
         
-        // Wait a bit for Firestore to propagate
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
         actionCount++;
-        await loadUsers();
-        alert('User has been removed successfully.');
+        alert('User has been removed successfully. UI will update automatically.');
       } catch (error) {
         console.error('Error removing user:', error);
         alert('Failed to remove user: ' + error.message);
