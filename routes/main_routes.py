@@ -31,7 +31,7 @@ def register():
 def create_municipal_admin():
     return render_template('create-municipal-admin.html')
 
-@bp.route('/create-regional-account')
+@bp.route('/create-regional-account')   
 @role_required('super-admin','superadmin','national','national_admin')
 def create_regional_account():
     return render_template('create_regional_account.html')
@@ -285,10 +285,13 @@ def user_inventory():
 def user_inventory_add():
     return render_template('user/inventory/stock-form.html')
 
-@bp.route('/user/inventory/info/<stock_id>')
+
+# Updated route to accept app_id as path parameter
+@bp.route('/user/inventory/stock-info/<app_id>')
 @role_required('user')
-def user_inventory_info(stock_id):
-    return render_template('user/inventory/stock-info.html')
+def inventory_stock_info(app_id):
+     """Shows inventory stock info page for a specific item"""
+     return render_template('user/inventory/stock-info.html')
 
 @bp.route('/user/inventory/history')
 @role_required('user')
