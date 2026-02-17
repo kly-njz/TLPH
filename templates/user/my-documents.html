@@ -761,6 +761,7 @@
     };
 
     window.downloadDocument = function(docId, title, category, docType) {
+
       // Find the document
       const doc = allDocuments.find(d => d.id === docId);
       if (!doc) {
@@ -774,148 +775,84 @@
       const approvedDate = doc.approvedDate instanceof Date ? doc.approvedDate : new Date(doc.approvedDate);
       const reference = doc.reference;
       const amount = typeof doc.amount === 'number' ? peso.format(doc.amount) : 'N/A';
+      const docTypeLabel = docType ? docType.toUpperCase() : 'DOCUMENT';
 
-      // Create PDF content
+      // Create PDF content using official DENR layout
       const pdfContent = document.createElement('div');
+      pdfContent.className = 'denr-print-preview';
       pdfContent.style.width = '210mm';
       pdfContent.style.minHeight = '297mm';
-      pdfContent.style.padding = '20mm';
-      pdfContent.style.backgroundColor = '#ffffff';
-      pdfContent.style.fontFamily = 'Arial, sans-serif';
+      pdfContent.style.padding = '20mm 15mm';
+      pdfContent.style.backgroundColor = '#fff';
+      pdfContent.style.fontFamily = 'Times New Roman, Georgia, serif';
       pdfContent.style.color = '#000';
       pdfContent.style.position = 'relative';
 
       pdfContent.innerHTML = `
-        <div style="text-align: center; margin-bottom: 20px; border-bottom: 4px solid #1b5e20; padding-bottom: 15px;">
-          <div style="margin-bottom: 10px;">
-            <img src="{{ url_for('static', filename='daily-tribune_import_wp-content_uploads_2022_12_DENR.avif') }}" 
-                 alt="DENR Logo" 
-                 style="width: 80px; height: 80px; object-fit: contain;" />
+        <div class="denr-official-header">
+          <div class="logo-section">
+            <img src="{{ url_for('static', filename='DENR-LOGO.webp') }}" alt="DENR Logo" />
           </div>
-          <p style="font-size: 11pt; margin: 5px 0 0; text-transform: uppercase; letter-spacing: 0.5px;">Republic of the Philippines</p>
-          <h1 style="font-size: 13pt; font-weight: bold; margin: 5px 0; text-transform: uppercase; color: #1b5e20; letter-spacing: 1px;">Department of Environment and Natural Resources</h1>
-          <p style="font-size: 10pt; margin: 3px 0; font-style: italic;">Office of the Secretary</p>
-          <p style="font-size: 9pt; margin: 8px 0 0; line-height: 1.4; color: #555;">
+          <div class="republic-text">Republic of the Philippines</div>
+          <div class="department-name">Department of Environment and Natural Resources</div>
+          <div class="office-name">Office of the Secretary</div>
+          <div class="address">DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>Tel: (632) 8929-6626 | Fax: (632) 8920-4352 | Website: www.denr.gov.ph</div>
+        </div>
+
+        <div class="denr-doc-title">
+          <h1>${docTypeLabel} CERTIFICATE</h1>
+          <div class="subtitle">Reference No. <strong>${reference}</strong></div>
+          <div class="doc-number">Generated: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+        </div>
+
+        <div class="denr-metadata">
+          <table>
+            <tr><td>Applicant</td><td>${userName}</td></tr>
+            <tr><td>Email</td><td>${userEmail}</td></tr>
+            <tr><td>Category</td><td>${category.toUpperCase()}</td></tr>
+            <tr><td>Certificate Type</td><td>${docTypeLabel}</td></tr>
+            <tr><td>Date Applied</td><td>${date.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
+            <tr><td>Date Approved</td><td>${approvedDate.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
+            <tr><td>Processing Fee</td><td>${amount}</td></tr>
+            <tr><td>Status</td><td><span class="status-approved">APPROVED</span></td></tr>
+          </table>
+        </div>
+
+        <div class="denr-section">
+          <h2>Certificate Details</h2>
+          <p class="no-indent"><strong>SUBJECT:</strong> <span style="text-transform: uppercase;">${title}</span></p>
+          <p>This certifies that the application for <strong>${title}</strong> has been duly processed, evaluated, and <span class="status-approved">APPROVED</span> by the Department of Environment and Natural Resources, in accordance with Philippine Environmental Laws and DENR Administrative Orders.</p>
+          <p>This certificate is issued in accordance with existing DENR rules and regulations and is valid subject to compliance with all applicable environmental laws and conditions as may be prescribed by the Department.</p>
+          <p>The holder of this certificate shall strictly observe all environmental protection measures and shall be subject to monitoring and evaluation by authorized DENR personnel.</p>
+        </div>
+
+        <div class="denr-signature-section">
+          <div class="denr-signature-block">
+            <div class="signature-line"></div>
+            <div class="signatory-name">REGINA PAZ L. LOPEZ</div>
+            <div class="signatory-title">Secretary</div>
+          </div>
+        </div>
+
+        <div class="denr-doc-reference">
+          <div class="ref-number">DENR-${reference.substring(0, 8).toUpperCase()}</div>
+          <div class="generated-date">${new Date().toLocaleString('en-PH')}</div>
+        </div>
+
+        <div class="denr-security-notice">
+          <strong>NOTICE:</strong> This is an electronically generated official document of the Department of Environment and Natural Resources. Any alteration or unauthorized use is punishable by law under relevant Philippine statutes.
+        </div>
+
+        <div class="denr-footer">
+          <div class="contact-info">
+            Department of Environment and Natural Resources<br>
             DENR Building, Visayas Avenue, Diliman, Quezon City 1100, Philippines<br>
-            Tel: (632) 8929-6626 • Fax: (632) 8920-4352 • Email: osec@denr.gov.ph<br>
-            Website: www.denr.gov.ph
-          </p>
-        </div>
-
-        <div style="margin: 25px 0; text-align: center;">
-          <h2 style="margin: 0; font-size: 16pt; font-weight: bold; text-transform: uppercase; color: #1b5e20; letter-spacing: 1.5px;">
-            CERTIFICATE OF ${docType.toUpperCase()}
-          </h2>
-          <p style="margin: 8px 0; font-size: 11pt; color: #555;">
-            Reference No. <strong>${reference}</strong>
-          </p>
-        </div>
-
-        <div style="position: absolute; top: 20mm; right: 20mm; text-align: right;">
-          <div style="border: 3px solid #1b5e20; padding: 10px 15px; display: inline-block; transform: rotate(-12deg); background: #f1f8e9;">
-            <p style="margin: 0; font-size: 12pt; font-weight: bold; color: #1b5e20; text-transform: uppercase;">
-              ${approvedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()}
-            </p>
+            Telephone: (632) 8929-6626 | Fax: (632) 8920-4352<br>
+            Email: osec@denr.gov.ph | Website: www.denr.gov.ph
           </div>
-        </div>
-
-        <div style="margin: 40px 0 30px; line-height: 1.8;">
-          <p style="margin-bottom: 20px; font-size: 13px; text-align: justify;">
-            <strong>SUBJECT:</strong> &nbsp; <span style="text-transform: uppercase;">${title}</span>
-          </p>
-
-          <p style="margin-bottom: 15px; font-size: 12px; text-align: justify; text-indent: 50px;">
-            Pursuant to the Philippine Environmental Laws and in accordance with DENR Administrative Orders and regulations, 
-            this is to certify that the application for <strong>${title}</strong> has been duly processed, evaluated, 
-            and <strong style="color: #1b5e20;">APPROVED</strong> by the Department of Environment and Natural Resources.
-          </p>
-
-          <div style="margin: 30px 0; padding: 15px; background: #f5f5f5; border-left: 4px solid #1b5e20;">
-            <h3 style="margin: 0 0 10px; font-size: 12px; font-weight: bold; text-transform: uppercase; color: #1b5e20;">
-              Certificate Details
-            </h3>
-            <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
-              <tr>
-                <td style="padding: 5px 10px; width: 40%; font-weight: bold;">Certificate Type:</td>
-                <td style="padding: 5px 10px;">${docType.toUpperCase()}</td>
-              </tr>
-              <tr>
-                <td style="padding: 5px 10px; font-weight: bold;">Category:</td>
-                <td style="padding: 5px 10px;">${category.toUpperCase()}</td>
-              </tr>
-              <tr>
-                <td style="padding: 5px 10px; font-weight: bold;">Reference Number:</td>
-                <td style="padding: 5px 10px;">${reference}</td>
-              </tr>
-              <tr>
-                <td style="padding: 5px 10px; font-weight: bold;">Applicant:</td>
-                <td style="padding: 5px 10px;">${userName}</td>
-              </tr>
-              <tr>
-                <td style="padding: 5px 10px; font-weight: bold;">Email:</td>
-                <td style="padding: 5px 10px;">${userEmail}</td>
-              </tr>
-              <tr>
-                <td style="padding: 5px 10px; font-weight: bold;">Date Applied:</td>
-                <td style="padding: 5px 10px;">${date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</td>
-              </tr>
-              <tr>
-                <td style="padding: 5px 10px; font-weight: bold;">Date Approved:</td>
-                <td style="padding: 5px 10px;">${approvedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</td>
-              </tr>
-              <tr>
-                <td style="padding: 5px 10px; font-weight: bold;">Processing Fee:</td>
-                <td style="padding: 5px 10px;">${amount}</td>
-              </tr>
-              <tr>
-                <td style="padding: 5px 10px; font-weight: bold;">Status:</td>
-                <td style="padding: 5px 10px; color: #1b5e20; font-weight: bold;">APPROVED</td>
-              </tr>
-            </table>
+          <div class="disclaimer">
+            Document Reference: DENR-${reference.substring(0, 8).toUpperCase()} | ${new Date().toLocaleString('en-PH')}
           </div>
-
-          <p style="margin: 25px 0 15px; font-size: 12px; text-align: justify; text-indent: 50px;">
-            This certificate is issued in accordance with existing DENR rules and regulations and is valid 
-            subject to compliance with all applicable environmental laws and conditions as may be prescribed 
-            by the Department.
-          </p>
-
-          <p style="margin: 15px 0; font-size: 12px; text-align: justify; text-indent: 50px;">
-            The holder of this certificate shall strictly observe all environmental protection measures and 
-            shall be subject to monitoring and evaluation by authorized DENR personnel.
-          </p>
-        </div>
-
-        <div style="margin-top: 50px;">
-          <div style="text-align: right; margin-right: 50px;">
-            <div style="border-bottom: 2px solid #000; width: 250px; margin-left: auto; margin-bottom: 5px; padding-top: 40px;"></div>
-            <p style="margin: 0; font-size: 12px; font-weight: bold; text-transform: uppercase;">REGINA PAZ L. LOPEZ</p>
-            <p style="margin: 0; font-size: 11px;">Secretary</p>
-          </div>
-        </div>
-
-        <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ddd;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="text-align: center; padding: 10px; background: #000; color: white; border-radius: 5px;">
-              <div style="font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 2px;">
-                ||||||||||||||||||||||||||||
-              </div>
-              <p style="margin: 5px 0 0; font-size: 8px;">DENR-${reference.substring(0, 8).toUpperCase()}</p>
-            </div>
-            <div style="text-align: right; font-size: 9px; color: #666;">
-              <p style="margin: 0;"><strong>PUBLICATION:</strong> DENR Official Gazette</p>
-              <p style="margin: 0;"><strong>DATE:</strong> ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-              <p style="margin: 5px 0 0;"><strong>ACKNOWLEDGMENT:</strong> U.P. Law Center</p>
-              <p style="margin: 0;">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-            </div>
-          </div>
-        </div>
-
-        <div style="margin-top: 30px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px;">
-          <p style="margin: 0; font-size: 10px; color: #856404; text-align: center;">
-            <strong>NOTICE:</strong> This is an electronically generated document. 
-            Any alteration or tampering of this certificate is punishable by law.
-          </p>
         </div>
       `;
 
@@ -923,7 +860,7 @@
 
       const options = {
         margin: 0,
-        filename: `DENR_${docType.toUpperCase()}_${reference}_${new Date().getTime()}.pdf`,
+        filename: `DENR_${docTypeLabel}_${reference}_${new Date().getTime()}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, letterRendering: true },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
