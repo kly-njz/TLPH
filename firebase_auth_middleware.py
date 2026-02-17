@@ -25,20 +25,9 @@ def role_required(*allowed_roles):
             user_role = session.get('user_role', '')
             
             if user_role not in allowed_roles:
-                # Redirect to appropriate dashboard based on their actual role
-                role_redirects = {
-                    'user': '/user/dashboard',
-                    'municipal': '/municipal/dashboard',
-                    'municipal_admin': '/municipal/dashboard',
-                    'regional': '/regional/profile',
-                    'regional_admin': '/regional/profile',
-                    'national': '/national/dashboard',
-                    'national_admin': '/national/dashboard',
-                    'super-admin': '/superadmin/inventory',
-                    'superadmin': '/superadmin/inventory'
-                }
-                redirect_url = role_redirects.get(user_role, '/login')
-                return redirect(redirect_url)
+                # Unauthorized access - redirect back to login
+                # Don't try to redirect to their dashboard as it might not exist
+                return redirect(url_for('main.login'))
             
             return f(*args, **kwargs)
         return decorated_function
