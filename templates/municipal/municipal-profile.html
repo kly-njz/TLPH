@@ -1,17 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personnel Profile | DENR</title>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <!-- Firebase scripts -->
-    <script type="module" src="/static/js/firebase-config.js"></script>
-    <script type="module" src="/static/js/auth.js"></script>
-    
+                                <!-- Role, Status, and Division/Section Assignment fields removed as they are assigned and not editable -->
     <style>
         [x-cloak] { display: none !important; }
 
@@ -255,7 +244,7 @@
                                             const discardBtn = document.getElementById('discardBtn');
                                             let editMode = false;
                                             const fieldIds = [
-                                                'lastNameField','firstNameField','middleNameField','employeeIdField','municipalityField','provinceField','roleField','statusField','phoneField','emailField','divisionField'
+                                                'lastNameField','firstNameField','middleNameField','employeeIdField','municipalityField','provinceField','phoneField','emailField'
                                             ];
                                             function setFieldsReadOnly(readonly) {
                                                 fieldIds.forEach(id => {
@@ -285,9 +274,20 @@
                                                             const userId = auth.currentUser.uid;
                                                             const userDocRef = doc(db, 'users', userId);
                                                             const updateData = {};
-                                                            fieldIds.forEach(id => {
-                                                                const elem = document.getElementById(id);
-                                                                if (elem) updateData[id.replace('Field','')] = elem.value;
+                                                            // Map input fields to Firestore keys for update
+                                                            const mapping = {
+                                                                lastNameField: 'lastName',
+                                                                firstNameField: 'firstName',
+                                                                middleNameField: 'middleName',
+                                                                employeeIdField: 'employeeId',
+                                                                municipalityField: 'municipality',
+                                                                provinceField: 'province',
+                                                                phoneField: 'phone',
+                                                                emailField: 'email'
+                                                            };
+                                                            Object.entries(mapping).forEach(([inputId, firestoreKey]) => {
+                                                                const elem = document.getElementById(inputId);
+                                                                if (elem) updateData[firestoreKey] = elem.value;
                                                             });
                                                             await updateDoc(userDocRef, updateData);
                                                             alert('Profile updated successfully!');
@@ -399,6 +399,20 @@
                                     }
                                 } else {
                                     elem.value = data.employeeId || '';
+                                }
+                            } else if (inputId === 'roleField') {
+                                elem.value = 'municipal';
+                                // Save to Firestore if missing or incorrect
+                                if (!data.role || data.role !== 'municipal') {
+                                    const db = window.db;
+                                    const auth = window.auth;
+                                    if (db && auth && auth.currentUser) {
+                                        import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js').then(({ doc, updateDoc }) => {
+                                            const userId = auth.currentUser.uid;
+                                            const userDocRef = doc(db, 'users', userId);
+                                            updateDoc(userDocRef, { role: 'municipal' });
+                                        });
+                                    }
                                 }
                             } else {
                                 elem.value = data[firestoreKey] || '';
