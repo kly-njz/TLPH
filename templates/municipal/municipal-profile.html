@@ -164,15 +164,15 @@
                             <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
                                 <div>
                                     <label class="label-sm block mb-0.5">Surname</label>
-                                    <input id="lastNameField" type="text" class="input-gov uppercase">
+                                    <input id="lastNameField" type="text" class="input-gov uppercase" readonly>
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">First Name</label>
-                                    <input id="firstNameField" type="text" class="input-gov uppercase">
+                                    <input id="firstNameField" type="text" class="input-gov uppercase" readonly>
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">Middle Name</label>
-                                    <input id="middleNameField" type="text" class="input-gov uppercase">
+                                    <input id="middleNameField" type="text" class="input-gov uppercase" readonly>
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">Employee ID No.</label>
@@ -180,31 +180,31 @@
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">Municipality</label>
-                                    <input id="municipalityField" type="text" class="input-gov uppercase">
+                                    <input id="municipalityField" type="text" class="input-gov uppercase" readonly>
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">Province</label>
-                                    <input id="provinceField" type="text" class="input-gov uppercase">
+                                    <input id="provinceField" type="text" class="input-gov uppercase" readonly>
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">Role</label>
-                                    <input id="roleField" type="text" class="input-gov uppercase">
+                                    <input id="roleField" type="text" class="input-gov uppercase" readonly>
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">Status</label>
-                                    <input id="statusField" type="text" class="input-gov uppercase">
+                                    <input id="statusField" type="text" class="input-gov uppercase" readonly>
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">Phone</label>
-                                    <input id="phoneField" type="text" class="input-gov">
+                                    <input id="phoneField" type="text" class="input-gov" readonly>
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">Email</label>
-                                    <input id="emailField" type="text" class="input-gov">
+                                    <input id="emailField" type="text" class="input-gov" readonly>
                                 </div>
                                 <div class="md:col-span-2">
                                     <label class="label-sm block mb-0.5">Division / Section Assignment</label>
-                                    <input id="divisionField" type="text" class="input-gov uppercase">
+                                    <input id="divisionField" type="text" class="input-gov uppercase" readonly>
                                 </div>
 
                                 <div class="md:col-span-3">
@@ -218,8 +218,8 @@
                             </div>
 
                             <div class="bg-slate-50 px-4 py-2 border-t border-slate-200 text-right no-print flex justify-end gap-2">
-                                <button type="button" class="bg-white border border-slate-300 text-slate-600 px-3 py-1 text-[9px] font-black uppercase hover:bg-slate-100 rounded-[2px]">Discard</button>
-                                <button type="submit" class="bg-emerald-800 text-white px-5 py-1 text-[9px] font-black uppercase hover:bg-emerald-900 rounded-[2px] shadow-sm">Update Record</button>
+                                <button id="discardBtn" type="button" class="bg-white border border-slate-300 text-slate-600 px-3 py-1 text-[9px] font-black uppercase hover:bg-slate-100 rounded-[2px]" style="display:none;">Discard</button>
+                                <button id="editSaveBtn" type="button" class="bg-emerald-800 text-white px-5 py-1 text-[9px] font-black uppercase hover:bg-emerald-900 rounded-[2px] shadow-sm">Update Record</button>
                             </div>
                         </div>
 
@@ -249,6 +249,71 @@
     </div>
 
     <script>
+                                        document.addEventListener('DOMContentLoaded', function() {
+                                            loadMunicipalProfile();
+                                            const editSaveBtn = document.getElementById('editSaveBtn');
+                                            const discardBtn = document.getElementById('discardBtn');
+                                            let editMode = false;
+                                            const fieldIds = [
+                                                'lastNameField','firstNameField','middleNameField','employeeIdField','municipalityField','provinceField','roleField','statusField','phoneField','emailField','divisionField'
+                                            ];
+                                            function setFieldsReadOnly(readonly) {
+                                                fieldIds.forEach(id => {
+                                                    const elem = document.getElementById(id);
+                                                    if (elem) elem.readOnly = readonly;
+                                                });
+                                            }
+                                            if (editSaveBtn) {
+                                                editSaveBtn.addEventListener('click', async function(e) {
+                                                    e.preventDefault();
+                                                    if (!editMode) {
+                                                        // Enter edit mode
+                                                        editMode = true;
+                                                        setFieldsReadOnly(false);
+                                                        editSaveBtn.textContent = 'Save Changes';
+                                                        discardBtn.style.display = '';
+                                                    } else {
+                                                        // Save changes
+                                                        try {
+                                                            const db = window.db;
+                                                            const auth = window.auth;
+                                                            if (!db || !auth || !auth.currentUser) {
+                                                                alert('Firebase not initialized or user not authenticated');
+                                                                return;
+                                                            }
+                                                            const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+                                                            const userId = auth.currentUser.uid;
+                                                            const userDocRef = doc(db, 'users', userId);
+                                                            const updateData = {};
+                                                            fieldIds.forEach(id => {
+                                                                const elem = document.getElementById(id);
+                                                                if (elem) updateData[id.replace('Field','')] = elem.value;
+                                                            });
+                                                            await updateDoc(userDocRef, updateData);
+                                                            alert('Profile updated successfully!');
+                                                            editMode = false;
+                                                            setFieldsReadOnly(true);
+                                                            editSaveBtn.textContent = 'Update Record';
+                                                            discardBtn.style.display = 'none';
+                                                            await loadMunicipalProfile();
+                                                        } catch (err) {
+                                                            alert('Failed to update profile: ' + err.message);
+                                                            console.error('Update error:', err);
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                            if (discardBtn) {
+                                                discardBtn.addEventListener('click', function() {
+                                                    editMode = false;
+                                                    setFieldsReadOnly(true);
+                                                    editSaveBtn.textContent = 'Update Record';
+                                                    discardBtn.style.display = 'none';
+                                                    loadMunicipalProfile();
+                                                });
+                                            }
+                                            setFieldsReadOnly(true);
+                                        });
                         // Enable direct editing and update Firestore
                         document.addEventListener('DOMContentLoaded', function() {
                             const updateBtn = document.querySelector('.gov-panel.shadow-sm button[type="submit"]');
@@ -345,21 +410,7 @@
                         const officeBlock = document.getElementById('profileOfficeBlock');
                         if (officeBlock) officeBlock.textContent = (data.province || '').toUpperCase();
 
-                        // Name block
-                        document.querySelector('h2.text-[11px]').textContent = `${data.firstName || ''} ${data.middleName || ''} ${data.lastName || ''}`;
-                        // Role
-                        document.querySelector('p.text-emerald-700').textContent = data.role ? data.role.toUpperCase() : '';
-                        // Status
-                        document.querySelector('span.bg-emerald-50').textContent = data.status ? data.status.toUpperCase() : '';
-                        // Office Station
-                        document.querySelector('p.font-bold.text-[10px]').textContent = data.officeStation || data.province || '';
-                        // Division/Section
-                        const divisionElem = document.getElementById('divisionField');
-                        if (divisionElem) divisionElem.textContent = data.division || '';
-                        // Municipality
-                        const municipalityElem = document.querySelector('input.input-gov.uppercase[name="municipality"]');
-                        if (municipalityElem) municipalityElem.value = data.municipality || '';
-                        // Add more fields as needed
+                        // (Removed all invalid querySelector calls. All display blocks above use getElementById only.)
                     } catch (err) {
                         console.error('Failed to load profile:', err);
                     }
