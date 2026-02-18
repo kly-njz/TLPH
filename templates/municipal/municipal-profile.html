@@ -313,12 +313,14 @@
                         ];
                         fields.forEach(([inputId, firestoreKey]) => {
                             const elem = document.getElementById(inputId);
-                            if (elem) {
-                                if (inputId === 'employeeIdField') {
-                                    elem.value = data.employeeId || generateEmployeeId(data.createdAt);
-                                } else {
-                                    elem.value = data[firestoreKey] !== undefined ? data[firestoreKey] : '';
-                                }
+                            if (!elem) {
+                                console.warn('Missing input field:', inputId);
+                                return;
+                            }
+                            if (inputId === 'employeeIdField') {
+                                elem.value = data.employeeId || generateEmployeeId(data.createdAt);
+                            } else {
+                                elem.value = data[firestoreKey] !== undefined ? data[firestoreKey] : '';
                             }
                         });
 
@@ -333,14 +335,18 @@
                             return `DENR${year}-${month}-${day}-${sec}`;
                         }
                         // Update display blocks with Firestore values
-                        const nameBlock = document.getElementById('profileNameBlock');
-                        if (nameBlock) nameBlock.textContent = `${data.firstName || ''} ${data.middleName || ''} ${data.lastName || ''}`;
-                        const roleBlock = document.getElementById('profileRoleBlock');
-                        if (roleBlock) roleBlock.textContent = (data.role || '').toUpperCase();
-                        const statusBlock = document.getElementById('profileStatusBlock');
-                        if (statusBlock) statusBlock.textContent = (data.status || '').toUpperCase();
-                        const officeBlock = document.getElementById('profileOfficeBlock');
-                        if (officeBlock) officeBlock.textContent = (data.province || '').toUpperCase();
+                        try {
+                            const nameBlock = document.getElementById('profileNameBlock');
+                            if (nameBlock) nameBlock.textContent = `${data.firstName || ''} ${data.middleName || ''} ${data.lastName || ''}`;
+                            const roleBlock = document.getElementById('profileRoleBlock');
+                            if (roleBlock) roleBlock.textContent = (data.role || '').toUpperCase();
+                            const statusBlock = document.getElementById('profileStatusBlock');
+                            if (statusBlock) statusBlock.textContent = (data.status || '').toUpperCase();
+                            const officeBlock = document.getElementById('profileOfficeBlock');
+                            if (officeBlock) officeBlock.textContent = (data.province || '').toUpperCase();
+                        } catch (err) {
+                            console.error('Failed to update display blocks:', err);
+                        }
 
                         // Name block
                         document.querySelector('h2.text-[11px]').textContent = `${data.firstName || ''} ${data.middleName || ''} ${data.lastName || ''}`;
@@ -380,7 +386,7 @@
                                 const userDocRef = doc(db, 'users', userId);
                                 // Collect values from input fields
                                 // Gather all input values for update
-                                // Save all fields, even if empty
+                                // Save all fields, even if empty, with error handling
                                 const updateData = {
                                     lastName: document.getElementById('lastNameField')?.value || '',
                                     firstName: document.getElementById('firstNameField')?.value || '',
@@ -394,7 +400,18 @@
                                     email: document.getElementById('emailField')?.value || '',
                                     division: document.getElementById('divisionField')?.value || ''
                                 };
-                                await updateDoc(userDocRef, updateData);
+                                try {
+                                    if (!db || !auth || !auth.currentUser) {
+                                        alert('Firebase not initialized or user not authenticated');
+                                        return;
+                                    }
+                                    await updateDoc(userDocRef, updateData);
+                                    alert('Profile updated successfully!');
+                                    await loadMunicipalProfile();
+                                } catch (err) {
+                                    alert('Failed to update profile: ' + err.message);
+                                    console.error('Update error:', err);
+                                }
                                 alert('Profile updated successfully!');
                                 await loadMunicipalProfile();
                                 alert('Profile updated successfully!');
