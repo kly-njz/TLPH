@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>User Registry | National Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* Government Standard Typography & Layout */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+    
+    /* Compact Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-btn { padding: 4px 10px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+    
+    /* Chart Fix */
+    .chart-container { position: relative; height: 100%; width: 100%; overflow: hidden; }
+    
+    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+<div class="flex-1 flex overflow-hidden">
+    <aside class="sidebar-container hidden lg:block">
+        {% include 'national/sidenav-national.html' %}
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar">
+
+        <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-slate-800 flex items-center justify-center text-white">
+              <span class="material-icons-round text-[18px]">manage_accounts</span>
+            </div>
+            <div class="leading-tight">
+              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">User Management</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">National Registry Dashboard</p>
+            </div>
+          </div>
+          <button class="gov-btn bg-slate-800 hover:bg-slate-900 text-white flex items-center gap-1 shadow-sm">
+            <span class="material-icons-round text-[14px]">download</span> Export Users
+          </button>
+        </header>
+
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-2 shrink-0">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-slate-800">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Accounts</span>
+            <div id="kpiTotalUsers" class="text-lg font-black text-slate-800 mt-0.5 leading-none">—</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">National HQ</span>
+            <div id="kpiNational" class="text-lg font-black text-blue-700 mt-0.5 leading-none">—</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Regional</span>
+            <div id="kpiRegional" class="text-lg font-black text-emerald-700 mt-0.5 leading-none">—</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Municipal</span>
+            <div id="kpiMunicipal" class="text-lg font-black text-amber-600 mt-0.5 leading-none">—</div>
+          </div>
+        </section>
+
+        <div class="flex-1 grid grid-cols-12 gap-2 min-h-0">
+          
+          <div class="col-span-12 xl:col-span-3 flex flex-col gap-2 shrink-0">
+            <div class="gov-card p-2 flex-1 flex flex-col">
+              <h2 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-1">Users by Type</h2>
+              <div class="chart-container flex-1"><canvas id="chartUserType"></canvas></div>
+            </div>
+            <div class="gov-card p-2 flex-1 flex flex-col">
+              <h2 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-1">Reg. Distribution</h2>
+              <div class="chart-container flex-1"><canvas id="chartUserRegion"></canvas></div>
+            </div>
+          </div>
+
+          <section class="col-span-12 xl:col-span-9 gov-card flex flex-col overflow-hidden">
+            <div class="bg-slate-50 px-3 py-1.5 border-b border-slate-300 flex justify-between items-center shrink-0">
+              <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Official Access Registry</h2>
+              <div class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter italic">Verified System Logs</div>
+            </div>
+
+            <div class="flex-1 overflow-auto custom-scrollbar">
+              <table class="w-full text-left border-collapse">
+                <thead class="sticky top-0 z-10">
+                  <tr>
+                    <th class="px-3 py-1.5 border-r border-slate-200">Legal Name</th>
+                    <th class="px-3 py-1.5 border-r border-slate-200">Email Address</th>
+                    <th class="px-3 py-1.5 border-r border-slate-200 text-center">User Type</th>
+                    <th class="px-3 py-1.5 border-r border-slate-200">Assigned Region</th>
+                    <th class="px-3 py-1.5 border-r border-slate-200 text-center">Status</th>
+                    <th class="px-3 py-1.5 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTbody" class="text-[10px] divide-y divide-slate-100">
+                  <tr class="hover:bg-blue-50 transition-colors">
+                    <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 uppercase">National Admin</td>
+                    <td class="px-3 py-1.5 text-slate-500 font-mono border-r border-slate-100">national.admin@tlph.gov</td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100 font-bold">National</td>
+                    <td class="px-3 py-1.5 border-r border-slate-100 text-slate-400 text-center">—</td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                      <span class="px-1.5 py-0.5 rounded-[1px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase text-[8px]">Active</span>
+                    </td>
+                    <td class="px-3 py-1.5 text-center space-x-1">
+                      <button onclick="viewUser(this)" class="text-blue-700 font-bold uppercase hover:underline">View</button>
+                      <button onclick="removeUser(this)" class="text-rose-700 font-bold uppercase hover:underline">Revoke</button>
+                    </td>
+                    <td class="hidden">—</td> 
+                  </tr>
+                  <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 uppercase">Municipal Admin - Calamba</td>
+                    <td class="px-3 py-1.5 text-slate-500 font-mono border-r border-slate-100">calamba.admin@tlph.gov</td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100 font-bold">Municipal</td>
+                    <td class="px-3 py-1.5 border-r border-slate-100 font-bold text-blue-700">Region IV-A</td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                      <span class="px-1.5 py-0.5 rounded-[1px] font-black bg-slate-100 text-slate-500 border border-slate-300 uppercase text-[8px]">Disabled</span>
+                    </td>
+                    <td class="px-3 py-1.5 text-center space-x-1">
+                      <button onclick="viewUser(this)" class="text-blue-700 font-bold uppercase hover:underline">View</button>
+                      <button onclick="removeUser(this)" class="text-rose-700 font-bold uppercase hover:underline">Revoke</button>
+                    </td>
+                    <td class="hidden">Calamba</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <footer class="flex justify-between items-center py-1 border-t border-slate-300 text-[9px] text-slate-500 shrink-0 uppercase font-bold tracking-tight">
+          <div>© 2026 TLPH • National User Management Console</div>
+          <div class="flex gap-2">
+            <span>Verified System v2.1 Stable</span>
+            <span class="text-slate-300">|</span>
+            <span>Auth: Multi-Factor Active</span>
+          </div>
+        </footer>
+    </main>
+  </div>
+
+  <div id="viewModal" class="fixed inset-0 hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm z-[3000]">
+    <div class="bg-white rounded-[2px] w-full max-w-sm border border-slate-400 shadow-2xl overflow-hidden">
+      <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0">User Profile Audit</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
+      </div>
+      <div id="viewContent" class="p-4 bg-slate-50"></div>
+      <div class="px-4 py-2 border-t bg-white flex justify-end">
+        <button onclick="closeModal()" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50">Close Preview</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let charts = {};
+
+    function updateAnalytics() {
+      const rows = [...document.querySelectorAll('#usersTbody tr')];
+      let national = 0, regional = 0, municipal = 0;
+      let byRegion = {};
+
+      rows.forEach(r => {
+        const type = r.cells[2].innerText.trim();
+        const region = r.cells[3].innerText.trim();
+        if (type === "National") national++;
+        if (type === "Regional") regional++;
+        if (type === "Municipal") municipal++;
+        if (region !== "—") { byRegion[region] = (byRegion[region] || 0) + 1; }
+      });
+
+      document.getElementById('kpiTotalUsers').innerText = rows.length;
+      document.getElementById('kpiNational').innerText = national;
+      document.getElementById('kpiRegional').innerText = regional;
+      document.getElementById('kpiMunicipal').innerText = municipal;
+
+      if (charts.type) charts.type.destroy();
+      charts.type = new Chart(document.getElementById('chartUserType'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Nat', 'Reg', 'Mun'],
+          datasets: [{ data: [national, regional, municipal], backgroundColor: ['#0f172a', '#2563eb', '#10b981'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 8, font: { size: 9, weight: 'bold' } } } } }
+      });
+
+      if (charts.region) charts.region.destroy();
+      charts.region = new Chart(document.getElementById('chartUserRegion'), {
+        type: 'bar',
+        data: {
+          labels: Object.keys(byRegion),
+          datasets: [{ data: Object.values(byRegion), backgroundColor: '#475569', borderRadius: 1 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { ticks: { font: { size: 8 } } } } }
+      });
+    }
+
+    function viewUser(btn) {
+      const tr = btn.closest('tr');
+      const cells = tr.cells;
+      document.getElementById('viewContent').innerHTML = `
+        <div class="space-y-3">
+          <div class="p-2 border rounded-[2px] bg-white">
+            <span class="block text-[8px] font-bold text-slate-400 uppercase">Legal Full Name</span>
+            <span class="font-black text-slate-800 uppercase">${cells[0].innerText}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="p-2 border rounded-[2px] bg-white">
+                <span class="block text-[8px] font-bold text-slate-400 uppercase">Access Level</span>
+                <span class="font-bold text-blue-700">${cells[2].innerText}</span>
+            </div>
+            <div class="p-2 border rounded-[2px] bg-white">
+                <span class="block text-[8px] font-bold text-slate-400 uppercase">Status</span>
+                <span class="font-bold">${cells[4].innerText}</span>
+            </div>
+          </div>
+          <div class="p-2 border rounded-[2px] bg-blue-50 border-blue-100">
+            <span class="block text-[8px] font-bold text-blue-400 uppercase">Registered Email</span>
+            <span class="font-mono text-blue-900">${cells[1].innerText}</span>
+          </div>
+        </div>`;
+      document.getElementById('viewModal').classList.remove('hidden');
+      document.getElementById('viewModal').classList.add('flex');
+    }
+
+    function closeModal() { document.getElementById('viewModal').classList.add('hidden'); }
+    function removeUser(btn) { if (confirm("Revoke access for this user?")) { btn.closest('tr').remove(); updateAnalytics(); } }
+
+    updateAnalytics();
+  </script>
+</body>
+</html>

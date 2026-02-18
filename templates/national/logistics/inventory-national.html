@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Inventory Registry | National Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Government Standard Typography & Layout */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+    
+    /* Compact Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #1e40af; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+    
+    /* CRITICAL CHART FIX: Pipigil sa overflow/overlap */
+    .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; }
+    .chart-container { position: absolute; inset: 0; }
+
+    /* Dense Table Formatting */
+    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 6px 8px !important; }
+    td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+<div class="flex-1 flex overflow-hidden">
+    <aside class="sidebar-container hidden lg:block">
+        {% include 'national/sidenav-national.html' %}
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar">
+
+        <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white">
+              <span class="material-icons-round text-[18px]">inventory_2</span>
+            </div>
+            <div class="leading-tight">
+              <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">National Inventory Registry</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Centralized Asset Management System</p>
+            </div>
+          </div>
+          <button onclick="openModal()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
+            <span class="material-icons-round text-[14px]">add_box</span> Add Record
+          </button>
+        </header>
+
+        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-slate-800">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Records</span>
+            <div class="text-lg font-black text-slate-900 mt-0.5 leading-none">{{ total_count|default('142') }}</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600 bg-blue-50/30">
+            <span class="text-[9px] font-black uppercase text-blue-800 tracking-widest">Chemical Inventory</span>
+            <div class="text-lg font-black text-blue-700 mt-0.5 leading-none">{{ chemical_count|default('45') }}</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 bg-emerald-50/30">
+            <span class="text-[9px] font-black uppercase text-emerald-800 tracking-widest">Natural Resources</span>
+            <div class="text-lg font-black text-emerald-700 mt-0.5 leading-none">{{ natural_resources_count|default('82') }}</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 bg-amber-50/30">
+            <span class="text-[9px] font-black uppercase text-amber-800 tracking-widest">Protected Areas</span>
+            <div class="text-lg font-black text-amber-700 mt-0.5 leading-none">{{ protected_area_count|default('15') }}</div>
+          </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 h-[150px]">
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase text-slate-600 border-l-2 border-slate-600 pl-1 mb-1 shrink-0">Inventory by Category</h2>
+            <div class="chart-safe-zone"><div class="chart-container"><canvas id="categoryChart"></canvas></div></div>
+          </div>
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase text-slate-600 border-l-2 border-slate-600 pl-1 mb-1 shrink-0">Regional Volume Distribution</h2>
+            <div class="chart-safe-zone"><div class="chart-container"><canvas id="regionChart"></canvas></div></div>
+          </div>
+        </section>
+
+        <section class="gov-card flex-1 min-h-[250px] flex flex-col overflow-hidden bg-white">
+          <div class="p-2 border-b border-slate-200 shrink-0 flex justify-between items-center bg-slate-50">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+                <span class="material-icons-round text-[14px]">view_list</span> Master List Records
+            </h2>
+            <span class="text-[9px] text-slate-500 font-bold uppercase">Showing {{ inventory_records|length|default('3') }} entries</span>
+          </div>
+
+          <div class="flex-1 overflow-auto custom-scrollbar">
+            <table class="w-full text-left border-collapse" id="inventoryTable">
+              <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
+                <tr>
+                  <th class="border-r border-slate-200">Category</th>
+                  <th class="border-r border-slate-200">Description</th>
+                  <th class="border-r border-slate-200 text-center">Qty</th>
+                  <th class="border-r border-slate-200">Region</th>
+                  <th class="border-r border-slate-200">Municipality</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryBody" class="text-[10px] divide-y divide-slate-100">
+                
+                {% if inventory_records and inventory_records|length > 0 %}
+                  {% for record in inventory_records %}
+                  <tr class="hover:bg-blue-50 transition">
+                    <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">{{ record.category }}</td>
+                    <td class="text-slate-600 border-r border-slate-100">{{ record.description }}</td>
+                    <td class="font-mono font-black text-slate-900 border-r border-slate-100 text-center">{{ record.quantity }}</td>
+                    <td class="text-slate-700 border-r border-slate-100 uppercase font-bold">{{ record.region }}</td>
+                    <td class="text-slate-600 border-r border-slate-100 uppercase">{{ record.municipality }}</td>
+                    <td class="text-center">
+                      <div class="flex justify-center gap-2">
+                        <button onclick="editRow(this)" class="text-blue-700 font-bold hover:underline uppercase text-[9px]">Edit</button>
+                        <button onclick="deleteRow(this)" class="text-rose-700 font-bold hover:underline uppercase text-[9px]">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr class="hover:bg-blue-50 transition">
+                    <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">Chemical Inventory</td>
+                    <td class="text-slate-600 border-r border-slate-100">Ammonium Nitrate (Lab Grade)</td>
+                    <td class="font-mono font-black text-slate-900 border-r border-slate-100 text-center">50</td>
+                    <td class="text-slate-700 border-r border-slate-100 uppercase font-bold">NCR</td>
+                    <td class="text-slate-600 border-r border-slate-100 uppercase">Quezon City</td>
+                    <td class="text-center">
+                      <div class="flex justify-center gap-2">
+                        <button onclick="editRow(this)" class="text-blue-700 font-bold hover:underline uppercase text-[9px]">Edit</button>
+                        <button onclick="deleteRow(this)" class="text-rose-700 font-bold hover:underline uppercase text-[9px]">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr class="hover:bg-blue-50 transition">
+                    <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">Protected Area</td>
+                    <td class="text-slate-600 border-r border-slate-100">Mangrove Propagules</td>
+                    <td class="font-mono font-black text-slate-900 border-r border-slate-100 text-center">1500</td>
+                    <td class="text-slate-700 border-r border-slate-100 uppercase font-bold">Region IV-A</td>
+                    <td class="text-slate-600 border-r border-slate-100 uppercase">Calamba</td>
+                    <td class="text-center">
+                      <div class="flex justify-center gap-2">
+                        <button onclick="editRow(this)" class="text-blue-700 font-bold hover:underline uppercase text-[9px]">Edit</button>
+                        <button onclick="deleteRow(this)" class="text-rose-700 font-bold hover:underline uppercase text-[9px]">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                {% endif %}
+
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+    </main>
+  </div>
+
+  <div id="inventoryModal" class="fixed inset-0 hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm z-[3000] p-4">
+    <div class="bg-white rounded-[2px] w-full max-w-md shadow-2xl border border-slate-400 overflow-hidden">
+      
+      <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-1" id="modalTitle">
+          <span class="material-icons-round text-[14px]">add_box</span> Record Entry
+        </h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
+      </div>
+
+      <form id="inventoryForm" class="p-4 space-y-3 bg-slate-50">
+        <div>
+          <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Category</label>
+          <select id="category" class="gov-input w-full cursor-pointer">
+            <option>Chemical Inventory</option>
+            <option>Natural Resources</option>
+            <option>Protected Area</option>
+            <option>Biodiversity Inventory</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Item Description</label>
+          <input id="description" type="text" placeholder="Specific name or details" class="gov-input w-full">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Quantity</label>
+            <input id="quantity" type="number" placeholder="0" class="gov-input w-full font-mono">
+          </div>
+          <div>
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Region</label>
+            <input id="region" type="text" placeholder="e.g. NCR" class="gov-input w-full uppercase">
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Municipality</label>
+          <input id="municipality" type="text" placeholder="Location name" class="gov-input w-full uppercase">
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-200 mt-2">
+          <button type="button" onclick="closeModal()" class="gov-btn bg-white border border-slate-300 text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Save Data</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // --- UI LOGIC (RESTORED EXACTLY) ---
+    let editingRow = null;
+    const inventoryBody = document.getElementById('inventoryBody');
+    const inventoryForm = document.getElementById('inventoryForm');
+    
+    const categoryInput = document.getElementById('category');
+    const descriptionInput = document.getElementById('description');
+    const quantityInput = document.getElementById('quantity');
+    const regionInput = document.getElementById('region');
+    const municipalityInput = document.getElementById('municipality');
+
+    function openModal(){
+      document.getElementById('inventoryModal').classList.remove('hidden');
+      document.getElementById('inventoryModal').classList.add('flex');
+    }
+
+    function closeModal(){
+      document.getElementById('inventoryModal').classList.add('hidden');
+      document.getElementById('inventoryModal').classList.remove('flex');
+      inventoryForm.reset();
+      editingRow = null;
+    }
+
+    inventoryForm.addEventListener('submit', function(e){
+      e.preventDefault();
+
+      const category = categoryInput.value;
+      const description = descriptionInput.value;
+      const quantity = quantityInput.value;
+      const region = regionInput.value;
+      const municipality = municipalityInput.value;
+
+      if(editingRow){
+        editingRow.cells[0].innerText = category;
+        editingRow.cells[1].innerText = description;
+        editingRow.cells[2].innerText = quantity;
+        editingRow.cells[3].innerText = region;
+        editingRow.cells[4].innerText = municipality;
+      } else {
+        const row = inventoryBody.insertRow();
+        row.className = "hover:bg-blue-50 transition";
+        row.innerHTML = `
+          <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">${category}</td>
+          <td class="text-slate-600 border-r border-slate-100">${description}</td>
+          <td class="font-mono font-black text-slate-900 border-r border-slate-100 text-center">${quantity}</td>
+          <td class="text-slate-700 border-r border-slate-100 uppercase font-bold">${region}</td>
+          <td class="text-slate-600 border-r border-slate-100 uppercase">${municipality}</td>
+          <td class="text-center">
+            <div class="flex justify-center gap-2">
+              <button onclick="editRow(this)" class="text-blue-700 font-bold hover:underline uppercase text-[9px]">Edit</button>
+              <button onclick="deleteRow(this)" class="text-rose-700 font-bold hover:underline uppercase text-[9px]">Delete</button>
+            </div>
+          </td>
+        `;
+      }
+      closeModal();
+    });
+
+    function editRow(btn){
+      editingRow = btn.closest("tr");
+      categoryInput.value = editingRow.cells[0].innerText;
+      descriptionInput.value = editingRow.cells[1].innerText;
+      quantityInput.value = editingRow.cells[2].innerText;
+      regionInput.value = editingRow.cells[3].innerText;
+      municipalityInput.value = editingRow.cells[4].innerText;
+      openModal();
+    }
+
+    function deleteRow(btn){
+      if(confirm("Confirm removal of this inventory record?")){
+        btn.closest("tr").remove();
+      }
+    }
+
+    // --- CHARTS CONFIG ---
+    Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+    Chart.defaults.font.size = 8;
+    Chart.defaults.color = "#64748b";
+
+    const sharedOpts = { 
+        responsive: true, 
+        maintainAspectRatio: false, 
+        layout: { padding: 5 },
+        plugins: { legend: { position: 'right', labels: { boxWidth: 6, font: { weight: 'bold' } } } }
+    };
+
+    // Category Doughnut
+    new Chart(document.getElementById('categoryChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Chemical', 'Nat. Res.', 'Protected', 'Bio'],
+        datasets: [{ data: [45, 82, 15, 20], backgroundColor: ['#1e40af', '#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }]
+      },
+      options: { ...sharedOpts, cutout: '70%' }
+    });
+
+    // Region Volume Bar
+    new Chart(document.getElementById('regionChart'), {
+      type: 'bar',
+      data: {
+        labels: ['NCR', 'IV-A', 'III', 'VII', 'XI'],
+        datasets: [{ label: 'Stock Volume', data: [5000, 3200, 2100, 1800, 1500], backgroundColor: '#475569', borderRadius: 2 }]
+      },
+      options: { ...sharedOpts, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
+    });
+  </script>
+</body>
+</html>

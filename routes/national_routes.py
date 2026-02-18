@@ -128,7 +128,7 @@ def application_national_view():
         ]
 
         return render_template(
-            'national/applications-national.html',
+            'national/operations/applications-national.html',
             applications=applications,
             total_count=total_count,
             approved_count=approved_count,
@@ -297,7 +297,7 @@ def permit_national_view():
         ]
 
         return render_template(
-            'national/licensing-permit-national.html',
+            'national/operations/licensing-permit-national.html',
             permits=permits,
             total_count=total_count,
             approved_count=approved_count,
@@ -572,7 +572,7 @@ def inventory_national_view():
         region_data = [item[1] for item in top_regions] if top_regions else [0]
 
         return render_template(
-            'national/inventory-national.html',
+            'national/logistics/inventory-national.html',
             inventory_records=inventory_records,
             total_count=total_count,
             chemical_count=chemical_count,
@@ -613,83 +613,76 @@ def inventory_national_view():
 def user_inventory_national_view():
     return render_template('national/user-inventory-national.html')
 
-
-@bp.route('/transaction-national')
-@role_required('national', 'national_admin')
-def transaction_national_view():
-    return render_template('national/transaction-national.html')
-
-
 @bp.route('/user-management-national')
 @role_required('national', 'national_admin')
 def user_management_national_view():
-    return render_template('national/user-national.html')
+    return render_template('national/system/user-national.html')
 
 
 @bp.route('/products-national')
 @role_required('national', 'national_admin')
 def products_national():
-    return render_template('national/products-national.html')
+    return render_template('national/logistics/products-national.html')
 
 
 @bp.route('/purchases')
 @role_required('national', 'national_admin')
 def purchases():
-    return render_template('national/purchases.html')
+    return render_template('national/logistics/purchases.html')
 
 
 @bp.route('/sales')
 @role_required('national', 'national_admin')
 def sales():
-    return render_template('national/sales.html')
+    return render_template('national/logistics/sales.html')
 
 
 @bp.route('/sales-return')
 @role_required('national', 'national_admin')
 def sales_return():
-    return render_template('national/sales-return.html')
+    return render_template('national/logistics/sales-return.html')
 
 
 @bp.route('/distributed-products')
 @role_required('national', 'national_admin')
 def distributed_products():
-    return render_template('national/distributed-products.html')
+    return render_template('national/logistics/distributed-products.html')
 
 
 @bp.route('/damage-products')
 @role_required('national', 'national_admin')
 def damage_products():
-    return render_template('national/damage-products.html')
+    return render_template('national/logistics/damage-products.html')
 
 
 @bp.route('/transfer-products')
 @role_required('national', 'national_admin')
 def transfer_products():
-    return render_template('national/transfer-products.html')
+    return render_template('national/logistics/transfer-products.html')
 
 
 @bp.route('/quotation')
 @role_required('national', 'national_admin')
 def quotation():
-    return render_template('national/quotation.html')
+    return render_template('national/operations/quotation.html')
 
 
 @bp.route('/projects')
 @role_required('national', 'national_admin')
 def projects():
-    return render_template('national/projects.html')
+    return render_template('national/operations/projects.html')
 
 
 @bp.route('/tasks')
 @role_required('national', 'national_admin')
 def tasks():
-    return render_template('national/tasks.html')
+    return render_template('national/operations/tasks.html')
 
 
 @bp.route('/applicants')
 @role_required('national', 'national_admin')
 def applicants():
-    return render_template('national/applicants.html')
+    return render_template('national/HRM/applicants.html')
 
 
 # -----------------------------
@@ -698,43 +691,36 @@ def applicants():
 @bp.route('/accounting/dashboard')
 @role_required('national', 'national_admin')
 def accounting_dashboard():
-    return render_template('national/accounting-dashboard.html')
+    return render_template('national/accounting/accounting-dashboard.html')
 
 
 @bp.route('/accounting/entities')
 @role_required('national', 'national_admin')
 def accounting_entities():
-    return render_template('national/accounting-entities.html')
+    return render_template('national/accounting/accounting-entities.html')
 
 
 @bp.route('/accounting/coa-templates')
 @role_required('national', 'national_admin')
 def accounting_coa_templates():
-    return render_template('national/accounting-coa-templates.html')
+    return render_template('national/accounting/accounting-coa-templates.html')
 
 
 @bp.route('/accounting/expense-categories')
 @role_required('national', 'national_admin')
 def accounting_expense_categories():
-    return render_template('national/accounting-expense-categories.html')
+    return render_template('national/accounting/accounting-expense-categories.html')
 
 
 @bp.route('/accounting/deposit-categories')
 @role_required('national', 'national_admin')
 def accounting_deposit_categories():
-    return render_template('national/accounting-deposit-categories.html')
+    return render_template('national/accounting/accounting-deposit-categories.html')
 
-
-@bp.route('/accounting/permissions')
+@bp.route('/transaction-national')
 @role_required('national', 'national_admin')
-def accounting_permissions():
-    return render_template('national/accounting-permissions.html')
-
-
-@bp.route('/accounting/audit')
-@role_required('national', 'national_admin')
-def accounting_audit():
-    return render_template('national/accounting-audit.html')
+def transaction_national_view():
+    return render_template('national/accounting/transaction-national.html')
 
 
 # -----------------------------
@@ -743,4 +729,69 @@ def accounting_audit():
 @bp.route('/profile-national')
 @role_required('national', 'national_admin')
 def profile_national_view():
-    return render_template('national/profile-national.html')
+    return render_template('national/system/profile-national.html')
+
+@bp.route('/company')
+@role_required('national', 'national_admin')
+def company_national_view():
+    return render_template('national/HRM/company-national.html')
+
+@bp.route('/departments')
+@role_required('national', 'national_admin')
+def departments_national_view():
+    return render_template('national/HRM/department-national.html')
+
+@bp.route('/designations')
+@role_required('national', 'national_admin')
+def designations_national_view():
+    return render_template('national/HRM/designation-national.html')
+
+@bp.route('/office-shifts')
+@role_required('national', 'national_admin')
+def office_shifts_national_view():
+    return render_template('national/HRM/office-shift-national.html')
+
+@bp.route('/employees')
+@role_required('national', 'national_admin')
+def employees_national_view():
+    return render_template('national/HRM/employees-national.html')
+
+@bp.route('/attendance')
+@role_required('national', 'national_admin')
+def attendance_national_view():
+    return render_template('national/HRM/attendance-national.html')
+
+@bp.route('/holidays')
+@role_required('national', 'national_admin')
+def holidays_national_view():
+    return render_template('national/HRM/holiday-national.html')
+
+@bp.route('/leave-requests')
+@role_required('national', 'national_admin')
+def leave_requests_national_view():
+    return render_template('national/HRM/leave-request-national.html')
+
+@bp.route('/payroll')
+@role_required('national', 'national_admin')
+def payroll_national_view():
+    return render_template('national/HRM/payroll.html')
+
+@bp.route('/audit-logs')
+@role_required('national', 'national_admin')
+def audit_logs():
+    return render_template('national/system/audit.html')
+
+@bp.route('/permissions')
+@role_required('national', 'national_admin')
+def permissions_national_view():
+    return render_template('national/system/permissions.html')
+
+@bp.route('/service-requests')
+@role_required('national', 'national_admin')
+def service_requests_national_view():
+    return render_template('national/operations/service-national.html')
+
+@bp.route('/user-inventory')
+@role_required('national', 'national_admin')
+def user_inventory_national():
+    return render_template('national/logistics/user-inventory-national.html')
