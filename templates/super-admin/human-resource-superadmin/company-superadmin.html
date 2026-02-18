@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DENR | HRM - Company (Super Admin)</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{ --gov-font: Verdana, Arial, Tahoma, sans-serif; }
+    html, body{ font-family: var(--gov-font); }
+    body::before{
+      content:"";
+      position: fixed;
+      inset: 0;
+      background-image: url('/static/images/denr.jpg');
+      background-repeat: no-repeat;
+      background-position: center 22%;
+      background-size: 520px;
+      opacity: 0.035;
+      pointer-events: none;
+      z-index: -1;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-slate-100 text-slate-900">
+  <!-- Sidebar include (use your fixed sidenav) -->
+{% include 'super-admin/header-superadmin.html' %}
+{% include 'super-admin/sidenav-superadmin.html' %}
+
+  <!-- Main -->
+  <main class="p-5 pt-[92px] lg:ml-[260px]">
+    <!-- Page header -->
+    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600">
+          <span class="material-icons-round text-[16px] text-green-700">business</span>
+          Human Resources • Company (Super Admin)
+        </div>
+        <h1 class="mt-2 text-2xl font-black tracking-tight text-slate-900">Company Registry</h1>
+        <p class="mt-1 text-sm font-semibold text-slate-600">
+          Manage organization entries across all regions and municipalities.
+        </p>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <button id="btnExport"
+          class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">
+          <span class="material-icons-round text-[18px]">download</span>
+          Export CSV
+        </button>
+        <button id="btnAdd"
+          class="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-green-800">
+          <span class="material-icons-round text-[18px]">add</span>
+          Add Company
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <section class="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-12 md:items-end">
+        <div class="md:col-span-4">
+          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Search</label>
+          <div class="mt-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-green-200">
+            <span class="material-icons-round text-[20px] text-slate-400">search</span>
+            <input id="qSearch" type="text" placeholder="Company name, code, email..."
+              class="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400" />
+          </div>
+        </div>
+
+        <div class="md:col-span-3">
+          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Region</label>
+          <select id="qRegion"
+            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+          </select>
+        </div>
+
+        <div class="md:col-span-3">
+          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Municipality</label>
+          <select id="qMunicipality"
+            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+          </select>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Status</label>
+          <select id="qStatus"
+            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="text-xs font-bold text-slate-500">
+          Tip: Use filters to view companies by Region and Municipality (national scope).
+        </div>
+        <div class="flex gap-2">
+          <button id="btnReset"
+            class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+            <span class="material-icons-round text-[18px]">restart_alt</span>
+            Reset
+          </button>
+          <button id="btnApply"
+            class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800">
+            <span class="material-icons-round text-[18px]">tune</span>
+            Apply
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI Cards -->
+    <section class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Total Companies</p>
+          <span class="material-icons-round text-[20px] text-slate-500">domain</span>
+        </div>
+        <div id="kpiTotal" class="mt-2 text-3xl font-black tracking-tight text-slate-900">0</div>
+        <p class="mt-1 text-xs font-bold text-slate-500">All registered entries</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Active</p>
+          <span class="material-icons-round text-[20px] text-green-700">check_circle</span>
+        </div>
+        <div id="kpiActive" class="mt-2 text-3xl font-black tracking-tight text-green-800">0</div>
+        <p class="mt-1 text-xs font-bold text-slate-500">Currently operational</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Inactive</p>
+          <span class="material-icons-round text-[20px] text-red-600">cancel</span>
+        </div>
+        <div id="kpiInactive" class="mt-2 text-3xl font-black tracking-tight text-red-700">0</div>
+        <p class="mt-1 text-xs font-bold text-slate-500">Disabled / archived</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Coverage</p>
+          <span class="material-icons-round text-[20px] text-blue-700">public</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <div id="kpiRegions" class="text-3xl font-black tracking-tight text-slate-900">0</div>
+          <div class="text-xs font-black text-slate-500">regions</div>
+          <div class="mx-1 text-slate-300">•</div>
+          <div id="kpiMunicipalities" class="text-3xl font-black tracking-tight text-slate-900">0</div>
+          <div class="text-xs font-black text-slate-500">municipalities</div>
+        </div>
+        <p class="mt-1 text-xs font-bold text-slate-500">Active distribution scope</p>
+      </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="mb-3 flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-black text-slate-900">Companies by Region</h2>
+            <p class="text-xs font-bold text-slate-500">Counts grouped by region</p>
+          </div>
+          <span class="material-icons-round text-[20px] text-slate-500">bar_chart</span>
+        </div>
+        <div class="h-[280px]">
+          <canvas id="chartRegion"></canvas>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="mb-3 flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-black text-slate-900">Status Distribution</h2>
+            <p class="text-xs font-bold text-slate-500">Active vs inactive</p>
+          </div>
+          <span class="material-icons-round text-[20px] text-slate-500">donut_small</span>
+        </div>
+        <div class="h-[280px]">
+          <canvas id="chartStatus"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table -->
+    <section class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex flex-col gap-2 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-sm font-black text-slate-900">Company List</h2>
+          <p class="text-xs font-bold text-slate-500">Super Admin (National Scope) • Includes region & municipality</p>
+        </div>
+        <div class="text-xs font-black text-slate-500">
+          Showing: <span id="rowsCount" class="text-slate-900">0</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-left">
+          <thead class="bg-slate-50">
+            <tr class="text-[11px] font-black uppercase tracking-widest text-slate-500">
+              <th class="px-4 py-3">Company</th>
+              <th class="px-4 py-3">Region</th>
+              <th class="px-4 py-3">Municipality</th>
+              <th class="px-4 py-3">Category</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="px-4 py-3">Contacts</th>
+              <th class="px-4 py-3">Updated</th>
+              <th class="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="companyTbody" class="divide-y divide-slate-100">
+            <!-- rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-col gap-2 border-t border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="text-xs font-bold text-slate-500">
+          Note: This page uses mock data. Connect to Firestore/DB by replacing the <code class="font-black">companies</code> array.
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="prevPage"
+            class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+            Prev
+          </button>
+          <div class="text-xs font-black text-slate-500">
+            Page <span id="pageNow" class="text-slate-900">1</span> / <span id="pageTotal" class="text-slate-900">1</span>
+          </div>
+          <button id="nextPage"
+            class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+            Next
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modal (Add/Edit) -->
+    <div id="modalBackdrop" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/30 p-4">
+      <div class="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-100 p-4">
+          <div>
+            <h3 id="modalTitle" class="text-sm font-black text-slate-900">Add Company</h3>
+            <p class="text-xs font-bold text-slate-500">National scope • requires region & municipality</p>
+          </div>
+          <button id="btnCloseModal"
+            class="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50">
+            <span class="material-icons-round text-[20px]">close</span>
+          </button>
+        </div>
+
+        <form id="companyForm" class="p-4">
+          <input type="hidden" id="formId" />
+
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Company Name</label>
+              <input id="formName" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
+                placeholder="e.g., DENR Central Office" />
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Company Code</label>
+              <input id="formCode" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
+                placeholder="e.g., DENR-CO" />
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Region</label>
+              <select id="formRegion" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+              </select>
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Municipality</label>
+              <select id="formMunicipality" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+              </select>
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Category</label>
+              <select id="formCategory" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+                <option value="National Office">National Office</option>
+                <option value="Regional Office">Regional Office</option>
+                <option value="Provincial Office">Provincial Office</option>
+                <option value="Field Office">Field Office</option>
+                <option value="Partner / Contractor">Partner / Contractor</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Status</label>
+              <select id="formStatus" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Email</label>
+              <input id="formEmail" type="email"
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
+                placeholder="e.g., hrm@denr.gov.ph" />
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Phone</label>
+              <input id="formPhone"
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
+                placeholder="e.g., +63 2 1234 5678" />
+            </div>
+          </div>
+
+          <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <button type="button" id="btnCancel"
+              class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="submit"
+              class="rounded-xl bg-green-700 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-green-800">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ---------------------------
+    // Mock master data (Region -> municipalities)
+    // Replace with DB-driven lists if needed.
+    // ---------------------------
+    const regionMap = {
+      "All Regions": ["All Municipalities"],
+      "NCR": ["All Municipalities", "Manila", "Quezon City", "Makati", "Pasig", "Taguig"],
+      "Region I": ["All Municipalities", "San Fernando", "Laoag", "Vigan"],
+      "Region II": ["All Municipalities", "Tuguegarao", "Ilagan", "Cauayan"],
+      "Region III": ["All Municipalities", "San Fernando (Pampanga)", "Balanga", "Malolos"],
+      "Region IV-A": ["All Municipalities", "Calamba", "Santa Rosa", "Lipa", "Lucena"],
+      "Region V": ["All Municipalities", "Legazpi", "Naga", "Sorsogon City"],
+      "Region VI": ["All Municipalities", "Iloilo City", "Bacolod", "Roxas City"],
+      "Region VII": ["All Municipalities", "Cebu City", "Mandaue", "Lapu-Lapu"],
+      "Region VIII": ["All Municipalities", "Tacloban", "Ormoc", "Catbalogan"],
+      "Region IX": ["All Municipalities", "Zamboanga City", "Pagadian", "Dipolog"],
+      "Region X": ["All Municipalities", "Cagayan de Oro", "Iligan", "Malaybalay"],
+      "Region XI": ["All Municipalities", "Davao City", "Tagum", "Digos"],
+      "Region XII": ["All Municipalities", "Koronadal", "General Santos", "Kidapawan"],
+      "Region XIII": ["All Municipalities", "Butuan", "Surigao City", "Tandag"],
+      "BARMM": ["All Municipalities", "Cotabato City", "Marawi", "Lamitan"]
+    };
+
+    // Mock companies (replace with DB fetch)
+    let companies = [
+      { id: crypto.randomUUID(), name: "DENR Central Office", code: "DENR-CO", region: "NCR", municipality: "Manila", category: "National Office", status: "active", email: "central@denr.gov.ph", phone: "+63 2 8123 4567", updatedAt: "2026-02-10" },
+      { id: crypto.randomUUID(), name: "DENR Region IV-A", code: "DENR-R4A", region: "Region IV-A", municipality: "Calamba", category: "Regional Office", status: "active", email: "r4a@denr.gov.ph", phone: "+63 49 500 1234", updatedAt: "2026-02-09" },
+      { id: crypto.randomUUID(), name: "DENR Region VI", code: "DENR-R6", region: "Region VI", municipality: "Iloilo City", category: "Regional Office", status: "active", email: "r6@denr.gov.ph", phone: "+63 33 700 2222", updatedAt: "2026-02-07" },
+      { id: crypto.randomUUID(), name: "DENR Field Office - Taguig", code: "DENR-FO-TAG", region: "NCR", municipality: "Taguig", category: "Field Office", status: "inactive", email: "taguig@denr.gov.ph", phone: "+63 2 8899 1111", updatedAt: "2026-01-29" },
+      { id: crypto.randomUUID(), name: "Partner Contractor - EnviroTech", code: "EXT-ENV", region: "Region III", municipality: "Malolos", category: "Partner / Contractor", status: "active", email: "contact@envirotech.ph", phone: "+63 44 900 8888", updatedAt: "2026-02-11" },
+      { id: crypto.randomUUID(), name: "DENR Region XI", code: "DENR-R11", region: "Region XI", municipality: "Davao City", category: "Regional Office", status: "active", email: "r11@denr.gov.ph", phone: "+63 82 600 7654", updatedAt: "2026-02-12" },
+      { id: crypto.randomUUID(), name: "DENR Region V", code: "DENR-R5", region: "Region V", municipality: "Legazpi", category: "Regional Office", status: "active", email: "r5@denr.gov.ph", phone: "+63 52 400 1212", updatedAt: "2026-02-08" },
+      { id: crypto.randomUUID(), name: "DENR Provincial Office - Cebu", code: "DENR-PO-CEB", region: "Region VII", municipality: "Cebu City", category: "Provincial Office", status: "active", email: "cebu@denr.gov.ph", phone: "+63 32 300 2222", updatedAt: "2026-02-06" }
+    ];
+
+    // ---------------------------
+    // DOM helpers
+    // ---------------------------
+    const $ = (id) => document.getElementById(id);
+
+    function setOptions(selectEl, options, selectedValue) {
+      selectEl.innerHTML = "";
+      options.forEach(opt => {
+        const o = document.createElement("option");
+        o.value = opt;
+        o.textContent = opt;
+        if (selectedValue && selectedValue === opt) o.selected = true;
+        selectEl.appendChild(o);
+      });
+    }
+
+    // ---------------------------
+    // Filters & paging state
+    // ---------------------------
+    let page = 1;
+    const perPage = 6;
+
+    function applyFilters(list) {
+      const q = $("qSearch").value.trim().toLowerCase();
+      const r = $("qRegion").value;
+      const m = $("qMunicipality").value;
+      const s = $("qStatus").value;
+
+      return list.filter(x => {
+        const matchesQ =
+          !q ||
+          x.name.toLowerCase().includes(q) ||
+          x.code.toLowerCase().includes(q) ||
+          (x.email || "").toLowerCase().includes(q);
+
+        const matchesRegion = (r === "All Regions") || x.region === r;
+        const matchesMuni = (m === "All Municipalities") || x.municipality === m;
+        const matchesStatus = (s === "all") || x.status === s;
+
+        return matchesQ && matchesRegion && matchesMuni && matchesStatus;
+      });
+    }
+
+    // ---------------------------
+    // Rendering: KPIs
+    // ---------------------------
+    function renderKPIs(filtered) {
+      const total = filtered.length;
+      const active = filtered.filter(x => x.status === "active").length;
+      const inactive = filtered.filter(x => x.status === "inactive").length;
+
+      const regionSet = new Set(filtered.map(x => x.region));
+      const muniSet = new Set(filtered.map(x => x.municipality));
+
+      $("kpiTotal").textContent = total;
+      $("kpiActive").textContent = active;
+      $("kpiInactive").textContent = inactive;
+      $("kpiRegions").textContent = regionSet.size;
+      $("kpiMunicipalities").textContent = muniSet.size;
+    }
+
+    // ---------------------------
+    // Charts
+    // ---------------------------
+    let chartRegion, chartStatus;
+
+    function buildRegionCounts(filtered) {
+      const map = {};
+      filtered.forEach(x => { map[x.region] = (map[x.region] || 0) + 1; });
+      const labels = Object.keys(map);
+      const values = labels.map(k => map[k]);
+      return { labels, values };
+    }
+
+    function renderCharts(filtered) {
+      const regionCounts = buildRegionCounts(filtered);
+      const active = filtered.filter(x => x.status === "active").length;
+      const inactive = filtered.filter(x => x.status === "inactive").length;
+
+      if (chartRegion) chartRegion.destroy();
+      if (chartStatus) chartStatus.destroy();
+
+      chartRegion = new Chart($("chartRegion"), {
+        type: "bar",
+        data: {
+          labels: regionCounts.labels,
+          datasets: [{ label: "Companies", data: regionCounts.values }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: true }
+          },
+          scales: {
+            x: { ticks: { font: { family: "Verdana" } } },
+            y: { beginAtZero: true, ticks: { precision: 0, font: { family: "Verdana" } } }
+          }
+        }
+      });
+
+      chartStatus = new Chart($("chartStatus"), {
+        type: "doughnut",
+        data: {
+          labels: ["Active", "Inactive"],
+          datasets: [{ data: [active, inactive] }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "bottom", labels: { font: { family: "Verdana" } } }
+          }
+        }
+      });
+    }
+
+    // ---------------------------
+    // Table rendering
+    // ---------------------------
+    function badge(status) {
+      if (status === "active") {
+        return `<span class="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-[11px] font-black text-green-800">
+          <span class="material-icons-round text-[16px]">check_circle</span> Active
+        </span>`;
+      }
+      return `<span class="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-[11px] font-black text-red-700">
+        <span class="material-icons-round text-[16px]">cancel</span> Inactive
+      </span>`;
+    }
+
+    function rowHTML(x) {
+      return `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3">
+            <div class="font-black text-slate-900">${escapeHtml(x.name)}</div>
+            <div class="text-xs font-bold text-slate-500">${escapeHtml(x.code)}</div>
+          </td>
+          <td class="px-4 py-3 text-sm font-semibold text-slate-800">${escapeHtml(x.region)}</td>
+          <td class="px-4 py-3 text-sm font-semibold text-slate-800">${escapeHtml(x.municipality)}</td>
+          <td class="px-4 py-3">
+            <span class="inline-flex rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-700">
+              ${escapeHtml(x.category)}
+            </span>
+          </td>
+          <td class="px-4 py-3">${badge(x.status)}</td>
+          <td class="px-4 py-3">
+            <div class="text-sm font-semibold text-slate-800">${escapeHtml(x.email || "—")}</div>
+            <div class="text-xs font-bold text-slate-500">${escapeHtml(x.phone || "—")}</div>
+          </td>
+          <td class="px-4 py-3 text-sm font-semibold text-slate-700">${escapeHtml(x.updatedAt)}</td>
+          <td class="px-4 py-3 text-right">
+            <div class="inline-flex gap-2">
+              <button data-action="edit" data-id="${x.id}"
+                class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+                <span class="material-icons-round text-[18px] align-middle">edit</span>
+              </button>
+              <button data-action="toggle" data-id="${x.id}"
+                class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+                <span class="material-icons-round text-[18px] align-middle">sync</span>
+              </button>
+              <button data-action="delete" data-id="${x.id}"
+                class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-red-700 hover:bg-red-50">
+                <span class="material-icons-round text-[18px] align-middle">delete</span>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function renderTable(filtered) {
+      const totalRows = filtered.length;
+      const totalPages = Math.max(1, Math.ceil(totalRows / perPage));
+      page = Math.min(page, totalPages);
+
+      const start = (page - 1) * perPage;
+      const slice = filtered.slice(start, start + perPage);
+
+      $("companyTbody").innerHTML = slice.map(rowHTML).join("");
+      $("rowsCount").textContent = totalRows;
+      $("pageNow").textContent = page;
+      $("pageTotal").textContent = totalPages;
+
+      $("prevPage").disabled = page <= 1;
+      $("nextPage").disabled = page >= totalPages;
+
+      $("prevPage").classList.toggle("opacity-50", page <= 1);
+      $("nextPage").classList.toggle("opacity-50", page >= totalPages);
+    }
+
+    // ---------------------------
+    // Modal
+    // ---------------------------
+    function openModal(mode, company) {
+      $("modalBackdrop").classList.remove("hidden");
+      $("modalBackdrop").classList.add("flex");
+
+      $("modalTitle").textContent = mode === "edit" ? "Edit Company" : "Add Company";
+
+      $("formId").value = company?.id || "";
+      $("formName").value = company?.name || "";
+      $("formCode").value = company?.code || "";
+      $("formEmail").value = company?.email || "";
+      $("formPhone").value = company?.phone || "";
+      $("formCategory").value = company?.category || "National Office";
+      $("formStatus").value = company?.status || "active";
+
+      // Region/municipality selects in modal
+      const regions = Object.keys(regionMap).filter(r => r !== "All Regions");
+      setOptions($("formRegion"), regions, company?.region || regions[0]);
+      const muniList = regionMap[$("formRegion").value] || ["All Municipalities"];
+      setOptions($("formMunicipality"), muniList.filter(x => x !== "All Municipalities"), company?.municipality || (muniList[1] || muniList[0]));
+    }
+
+    function closeModal() {
+      $("modalBackdrop").classList.add("hidden");
+      $("modalBackdrop").classList.remove("flex");
+    }
+
+    // ---------------------------
+    // Export CSV
+    // ---------------------------
+    function exportCSV(filtered) {
+      const headers = ["Name","Code","Region","Municipality","Category","Status","Email","Phone","UpdatedAt"];
+      const rows = filtered.map(x => [
+        x.name, x.code, x.region, x.municipality, x.category, x.status, x.email || "", x.phone || "", x.updatedAt
+      ]);
+
+      const csv = [headers, ...rows]
+        .map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "hrm_companies.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    // ---------------------------
+    // Main render
+    // ---------------------------
+    function renderAll() {
+      const filtered = applyFilters(companies);
+      renderKPIs(filtered);
+      renderCharts(filtered);
+      renderTable(filtered);
+      return filtered;
+    }
+
+    // ---------------------------
+    // Init region/municipality dropdowns (filters)
+    // ---------------------------
+    function initFilters() {
+      const regions = Object.keys(regionMap);
+      setOptions($("qRegion"), regions, "All Regions");
+      setOptions($("qMunicipality"), regionMap["All Regions"], "All Municipalities");
+
+      $("qRegion").addEventListener("change", () => {
+        const r = $("qRegion").value;
+        setOptions($("qMunicipality"), regionMap[r] || ["All Municipalities"], "All Municipalities");
+      });
+    }
+
+    // Modal region -> municipality linkage
+    function initModalRegionLink() {
+      $("formRegion").addEventListener("change", () => {
+        const r = $("formRegion").value;
+        const muniList = (regionMap[r] || []).filter(x => x !== "All Municipalities");
+        setOptions($("formMunicipality"), muniList.length ? muniList : ["—"], muniList[0]);
+      });
+    }
+
+    // ---------------------------
+    // Events
+    // ---------------------------
+    document.addEventListener("DOMContentLoaded", () => {
+      initFilters();
+
+      // Apply / Reset
+      $("btnApply").addEventListener("click", () => { page = 1; renderAll(); });
+      $("btnReset").addEventListener("click", () => {
+        $("qSearch").value = "";
+        $("qRegion").value = "All Regions";
+        setOptions($("qMunicipality"), regionMap["All Regions"], "All Municipalities");
+        $("qStatus").value = "all";
+        page = 1;
+        renderAll();
+      });
+
+      // Live search (nice UX)
+      $("qSearch").addEventListener("input", () => { page = 1; renderAll(); });
+      $("qStatus").addEventListener("change", () => { page = 1; renderAll(); });
+      $("qMunicipality").addEventListener("change", () => { page = 1; renderAll(); });
+      $("qRegion").addEventListener("change", () => { page = 1; renderAll(); });
+
+      // Paging
+      $("prevPage").addEventListener("click", () => { page = Math.max(1, page - 1); renderAll(); });
+      $("nextPage").addEventListener("click", () => { page = page + 1; renderAll(); });
+
+      // Add / Export
+      $("btnAdd").addEventListener("click", () => openModal("add"));
+      $("btnExport").addEventListener("click", () => exportCSV(applyFilters(companies)));
+
+      // Modal close
+      $("btnCloseModal").addEventListener("click", closeModal);
+      $("btnCancel").addEventListener("click", closeModal);
+      $("modalBackdrop").addEventListener("click", (e) => { if (e.target === $("modalBackdrop")) closeModal(); });
+
+      // Form submit (Add/Edit)
+      $("companyForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+
+        const id = $("formId").value;
+        const payload = {
+          id: id || crypto.randomUUID(),
+          name: $("formName").value.trim(),
+          code: $("formCode").value.trim(),
+          region: $("formRegion").value,
+          municipality: $("formMunicipality").value,
+          category: $("formCategory").value,
+          status: $("formStatus").value,
+          email: $("formEmail").value.trim(),
+          phone: $("formPhone").value.trim(),
+          updatedAt: new Date().toISOString().slice(0, 10)
+        };
+
+        if (id) {
+          companies = companies.map(x => x.id === id ? payload : x);
+        } else {
+          companies = [payload, ...companies];
+        }
+
+        closeModal();
+        page = 1;
+        renderAll();
+      });
+
+      // Table actions (delegate)
+      $("companyTbody").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+
+        const action = btn.getAttribute("data-action");
+        const id = btn.getAttribute("data-id");
+        const company = companies.find(x => x.id === id);
+        if (!company) return;
+
+        if (action === "edit") {
+          openModal("edit", company);
+          initModalRegionLink();
+          // ensure selects match the company
+          $("formRegion").value = company.region;
+          $("formRegion").dispatchEvent(new Event("change"));
+          $("formMunicipality").value = company.municipality;
+          return;
+        }
+
+        if (action === "toggle") {
+          companies = companies.map(x => x.id === id ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) } : x);
+          renderAll();
+          return;
+        }
+
+        if (action === "delete") {
+          const ok = confirm(`Delete "${company.name}"? This cannot be undone.`);
+          if (!ok) return;
+          companies = companies.filter(x => x.id !== id);
+          page = 1;
+          renderAll();
+          return;
+        }
+      });
+
+      // Initial render
+      renderAll();
+    });
+  </script>
+</body>
+</html>

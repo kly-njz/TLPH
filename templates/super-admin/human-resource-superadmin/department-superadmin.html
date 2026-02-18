@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DENR | HRM - Department (Super Admin)</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{ --gov-font: Verdana, Arial, Tahoma, sans-serif; }
+    html, body{ font-family: var(--gov-font); }
+    body::before{
+      content:"";
+      position: fixed;
+      inset: 0;
+      background-image: url('/static/images/denr.jpg');
+      background-repeat: no-repeat;
+      background-position: center 22%;
+      background-size: 520px;
+      opacity: 0.035;
+      pointer-events: none;
+      z-index: -1;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-slate-100 text-slate-900">
+{% include 'super-admin/header-superadmin.html' %}
+{% include 'super-admin/sidenav-superadmin.html' %}
+
+
+  <main class="p-5 pt-[92px] lg:ml-[260px]">
+    <!-- Header -->
+    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600">
+          <span class="material-icons-round text-[16px] text-green-700">domain</span>
+          Human Resources • Department (Super Admin)
+        </div>
+        <h1 class="mt-2 text-2xl font-black tracking-tight text-slate-900">Department Registry</h1>
+        <p class="mt-1 text-sm font-semibold text-slate-600">
+          Manage departments across all companies, regions, and municipalities.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <button id="btnExport"
+          class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">
+          <span class="material-icons-round text-[18px]">download</span>
+          Export CSV
+        </button>
+        <button id="btnAdd"
+          class="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-green-800">
+          <span class="material-icons-round text-[18px]">add</span>
+          Add Department
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <section class="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-12 md:items-end">
+        <div class="md:col-span-4">
+          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Search</label>
+          <div class="mt-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-green-200">
+            <span class="material-icons-round text-[20px] text-slate-400">search</span>
+            <input id="qSearch" type="text" placeholder="Department name, code, head..."
+              class="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400" />
+          </div>
+        </div>
+
+        <div class="md:col-span-3">
+          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Company</label>
+          <select id="qCompany"
+            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+          </select>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Region</label>
+          <select id="qRegion"
+            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+          </select>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Municipality</label>
+          <select id="qMunicipality"
+            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+          </select>
+        </div>
+
+        <div class="md:col-span-1">
+          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Status</label>
+          <select id="qStatus"
+            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="text-xs font-bold text-slate-500">
+          Tip: Filter by Company + Region + Municipality for national oversight.
+        </div>
+        <div class="flex gap-2">
+          <button id="btnReset"
+            class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+            <span class="material-icons-round text-[18px]">restart_alt</span>
+            Reset
+          </button>
+          <button id="btnApply"
+            class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800">
+            <span class="material-icons-round text-[18px]">tune</span>
+            Apply
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI Cards -->
+    <section class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Total Departments</p>
+          <span class="material-icons-round text-[20px] text-slate-500">account_tree</span>
+        </div>
+        <div id="kpiTotal" class="mt-2 text-3xl font-black tracking-tight text-slate-900">0</div>
+        <p class="mt-1 text-xs font-bold text-slate-500">All registered units</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Active</p>
+          <span class="material-icons-round text-[20px] text-green-700">check_circle</span>
+        </div>
+        <div id="kpiActive" class="mt-2 text-3xl font-black tracking-tight text-green-800">0</div>
+        <p class="mt-1 text-xs font-bold text-slate-500">Operational</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Inactive</p>
+          <span class="material-icons-round text-[20px] text-red-600">cancel</span>
+        </div>
+        <div id="kpiInactive" class="mt-2 text-3xl font-black tracking-tight text-red-700">0</div>
+        <p class="mt-1 text-xs font-bold text-slate-500">Disabled / archived</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Coverage</p>
+          <span class="material-icons-round text-[20px] text-blue-700">public</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <div id="kpiRegions" class="text-3xl font-black tracking-tight text-slate-900">0</div>
+          <div class="text-xs font-black text-slate-500">regions</div>
+          <div class="mx-1 text-slate-300">•</div>
+          <div id="kpiMunicipalities" class="text-3xl font-black tracking-tight text-slate-900">0</div>
+          <div class="text-xs font-black text-slate-500">municipalities</div>
+        </div>
+        <p class="mt-1 text-xs font-bold text-slate-500">Distribution scope</p>
+      </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="mb-3 flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-black text-slate-900">Departments by Company</h2>
+            <p class="text-xs font-bold text-slate-500">Counts grouped by company</p>
+          </div>
+          <span class="material-icons-round text-[20px] text-slate-500">bar_chart</span>
+        </div>
+        <div class="h-[280px]">
+          <canvas id="chartCompany"></canvas>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="mb-3 flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-black text-slate-900">Status Distribution</h2>
+            <p class="text-xs font-bold text-slate-500">Active vs inactive</p>
+          </div>
+          <span class="material-icons-round text-[20px] text-slate-500">donut_small</span>
+        </div>
+        <div class="h-[280px]">
+          <canvas id="chartStatus"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table -->
+    <section class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex flex-col gap-2 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-sm font-black text-slate-900">Department List</h2>
+          <p class="text-xs font-bold text-slate-500">Super Admin (National Scope) • Includes company + region + municipality</p>
+        </div>
+        <div class="text-xs font-black text-slate-500">
+          Showing: <span id="rowsCount" class="text-slate-900">0</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-left">
+          <thead class="bg-slate-50">
+            <tr class="text-[11px] font-black uppercase tracking-widest text-slate-500">
+              <th class="px-4 py-3">Department</th>
+              <th class="px-4 py-3">Company</th>
+              <th class="px-4 py-3">Region</th>
+              <th class="px-4 py-3">Municipality</th>
+              <th class="px-4 py-3">Head</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="px-4 py-3">Updated</th>
+              <th class="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="deptTbody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-col gap-2 border-t border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="text-xs font-bold text-slate-500">
+          Note: This page uses mock data. Replace the <code class="font-black">departments</code> array to connect your DB.
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="prevPage"
+            class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+            Prev
+          </button>
+          <div class="text-xs font-black text-slate-500">
+            Page <span id="pageNow" class="text-slate-900">1</span> / <span id="pageTotal" class="text-slate-900">1</span>
+          </div>
+          <button id="nextPage"
+            class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+            Next
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modal -->
+    <div id="modalBackdrop" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/30 p-4">
+      <div class="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-100 p-4">
+          <div>
+            <h3 id="modalTitle" class="text-sm font-black text-slate-900">Add Department</h3>
+            <p class="text-xs font-bold text-slate-500">National scope • company + region + municipality required</p>
+          </div>
+          <button id="btnCloseModal"
+            class="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50">
+            <span class="material-icons-round text-[20px]">close</span>
+          </button>
+        </div>
+
+        <form id="deptForm" class="p-4">
+          <input type="hidden" id="formId" />
+
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Department Name</label>
+              <input id="formName" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
+                placeholder="e.g., Environmental Management Bureau" />
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Department Code</label>
+              <input id="formCode" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
+                placeholder="e.g., EMB" />
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Company</label>
+              <select id="formCompany" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+              </select>
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Head of Department</label>
+              <input id="formHead"
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
+                placeholder="e.g., Juan Dela Cruz" />
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Region</label>
+              <select id="formRegion" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+              </select>
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Municipality</label>
+              <select id="formMunicipality" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+              </select>
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Status</label>
+              <select id="formStatus" required
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Description</label>
+              <input id="formDesc"
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
+                placeholder="Short description (optional)" />
+            </div>
+          </div>
+
+          <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <button type="button" id="btnCancel"
+              class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="submit"
+              class="rounded-xl bg-green-700 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-green-800">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ---- Regions -> municipalities (mock master list)
+    const regionMap = {
+      "All Regions": ["All Municipalities"],
+      "NCR": ["All Municipalities", "Manila", "Quezon City", "Makati", "Pasig", "Taguig"],
+      "Region I": ["All Municipalities", "San Fernando", "Laoag", "Vigan"],
+      "Region II": ["All Municipalities", "Tuguegarao", "Ilagan", "Cauayan"],
+      "Region III": ["All Municipalities", "San Fernando (Pampanga)", "Balanga", "Malolos"],
+      "Region IV-A": ["All Municipalities", "Calamba", "Santa Rosa", "Lipa", "Lucena"],
+      "Region V": ["All Municipalities", "Legazpi", "Naga", "Sorsogon City"],
+      "Region VI": ["All Municipalities", "Iloilo City", "Bacolod", "Roxas City"],
+      "Region VII": ["All Municipalities", "Cebu City", "Mandaue", "Lapu-Lapu"],
+      "Region VIII": ["All Municipalities", "Tacloban", "Ormoc", "Catbalogan"],
+      "Region IX": ["All Municipalities", "Zamboanga City", "Pagadian", "Dipolog"],
+      "Region X": ["All Municipalities", "Cagayan de Oro", "Iligan", "Malaybalay"],
+      "Region XI": ["All Municipalities", "Davao City", "Tagum", "Digos"],
+      "Region XII": ["All Municipalities", "Koronadal", "General Santos", "Kidapawan"],
+      "Region XIII": ["All Municipalities", "Butuan", "Surigao City", "Tandag"],
+      "BARMM": ["All Municipalities", "Cotabato City", "Marawi", "Lamitan"]
+    };
+
+    // ---- Companies (mock; typically from your Company table)
+    const companiesMaster = [
+      "All Companies",
+      "DENR Central Office",
+      "DENR Region IV-A",
+      "DENR Region VI",
+      "DENR Region XI",
+      "Partner Contractor - EnviroTech"
+    ];
+
+    // ---- Departments (mock data)
+    let departments = [
+      { id: crypto.randomUUID(), name: "Environmental Management Bureau", code: "EMB", company: "DENR Central Office", region: "NCR", municipality: "Manila", head: "Juan Dela Cruz", status: "active", updatedAt: "2026-02-10", desc: "Regulatory and compliance oversight" },
+      { id: crypto.randomUUID(), name: "Forest Management Bureau", code: "FMB", company: "DENR Central Office", region: "NCR", municipality: "Quezon City", head: "Maria Santos", status: "active", updatedAt: "2026-02-09", desc: "Forestry programs and protection" },
+      { id: crypto.randomUUID(), name: "Biodiversity Management Bureau", code: "BMB", company: "DENR Central Office", region: "NCR", municipality: "Manila", head: "Arnel Reyes", status: "active", updatedAt: "2026-02-07", desc: "Protected areas and biodiversity" },
+      { id: crypto.randomUUID(), name: "Regional HR Unit", code: "HR-R4A", company: "DENR Region IV-A", region: "Region IV-A", municipality: "Calamba", head: "Liza Cruz", status: "active", updatedAt: "2026-02-11", desc: "Regional HR management" },
+      { id: crypto.randomUUID(), name: "Regional Finance Unit", code: "FIN-R6", company: "DENR Region VI", region: "Region VI", municipality: "Iloilo City", head: "Ramon Lim", status: "inactive", updatedAt: "2026-01-29", desc: "Budget and disbursement" },
+      { id: crypto.randomUUID(), name: "Field Compliance Unit", code: "COMP-R11", company: "DENR Region XI", region: "Region XI", municipality: "Davao City", head: "Nina Garcia", status: "active", updatedAt: "2026-02-12", desc: "Field inspections and reports" },
+      { id: crypto.randomUUID(), name: "Contractor Operations", code: "OPS-ENV", company: "Partner Contractor - EnviroTech", region: "Region III", municipality: "Malolos", head: "P. Velasco", status: "active", updatedAt: "2026-02-08", desc: "Project implementation support" }
+    ];
+
+    const $ = (id) => document.getElementById(id);
+
+    function setOptions(selectEl, options, selectedValue) {
+      selectEl.innerHTML = "";
+      options.forEach(opt => {
+        const o = document.createElement("option");
+        o.value = opt;
+        o.textContent = opt;
+        if (selectedValue && selectedValue === opt) o.selected = true;
+        selectEl.appendChild(o);
+      });
+    }
+
+    // ---- Paging
+    let page = 1;
+    const perPage = 7;
+
+    function applyFilters(list) {
+      const q = $("qSearch").value.trim().toLowerCase();
+      const c = $("qCompany").value;
+      const r = $("qRegion").value;
+      const m = $("qMunicipality").value;
+      const s = $("qStatus").value;
+
+      return list.filter(x => {
+        const matchesQ =
+          !q ||
+          x.name.toLowerCase().includes(q) ||
+          x.code.toLowerCase().includes(q) ||
+          (x.head || "").toLowerCase().includes(q);
+
+        const matchesCompany = (c === "All Companies") || x.company === c;
+        const matchesRegion = (r === "All Regions") || x.region === r;
+        const matchesMuni = (m === "All Municipalities") || x.municipality === m;
+        const matchesStatus = (s === "all") || x.status === s;
+
+        return matchesQ && matchesCompany && matchesRegion && matchesMuni && matchesStatus;
+      });
+    }
+
+    function renderKPIs(filtered) {
+      const total = filtered.length;
+      const active = filtered.filter(x => x.status === "active").length;
+      const inactive = filtered.filter(x => x.status === "inactive").length;
+
+      const regionSet = new Set(filtered.map(x => x.region));
+      const muniSet = new Set(filtered.map(x => x.municipality));
+
+      $("kpiTotal").textContent = total;
+      $("kpiActive").textContent = active;
+      $("kpiInactive").textContent = inactive;
+      $("kpiRegions").textContent = regionSet.size;
+      $("kpiMunicipalities").textContent = muniSet.size;
+    }
+
+    // ---- Charts
+    let chartCompany, chartStatus;
+
+    function buildCountsByCompany(filtered) {
+      const map = {};
+      filtered.forEach(x => { map[x.company] = (map[x.company] || 0) + 1; });
+      const labels = Object.keys(map);
+      const values = labels.map(k => map[k]);
+      return { labels, values };
+    }
+
+    function renderCharts(filtered) {
+      const companyCounts = buildCountsByCompany(filtered);
+      const active = filtered.filter(x => x.status === "active").length;
+      const inactive = filtered.filter(x => x.status === "inactive").length;
+
+      if (chartCompany) chartCompany.destroy();
+      if (chartStatus) chartStatus.destroy();
+
+      chartCompany = new Chart($("chartCompany"), {
+        type: "bar",
+        data: { labels: companyCounts.labels, datasets: [{ label: "Departments", data: companyCounts.values }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        }
+      });
+
+      chartStatus = new Chart($("chartStatus"), {
+        type: "doughnut",
+        data: { labels: ["Active", "Inactive"], datasets: [{ data: [active, inactive] }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: "bottom" } }
+        }
+      });
+    }
+
+    // ---- Table
+    function badge(status) {
+      if (status === "active") {
+        return `<span class="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-[11px] font-black text-green-800">
+          <span class="material-icons-round text-[16px]">check_circle</span> Active
+        </span>`;
+      }
+      return `<span class="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-[11px] font-black text-red-700">
+        <span class="material-icons-round text-[16px]">cancel</span> Inactive
+      </span>`;
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function rowHTML(x) {
+      return `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3">
+            <div class="font-black text-slate-900">${escapeHtml(x.name)}</div>
+            <div class="text-xs font-bold text-slate-500">${escapeHtml(x.code)} • ${escapeHtml(x.desc || "—")}</div>
+          </td>
+          <td class="px-4 py-3 text-sm font-semibold text-slate-800">${escapeHtml(x.company)}</td>
+          <td class="px-4 py-3 text-sm font-semibold text-slate-800">${escapeHtml(x.region)}</td>
+          <td class="px-4 py-3 text-sm font-semibold text-slate-800">${escapeHtml(x.municipality)}</td>
+          <td class="px-4 py-3">
+            <div class="text-sm font-semibold text-slate-800">${escapeHtml(x.head || "—")}</div>
+          </td>
+          <td class="px-4 py-3">${badge(x.status)}</td>
+          <td class="px-4 py-3 text-sm font-semibold text-slate-700">${escapeHtml(x.updatedAt)}</td>
+          <td class="px-4 py-3 text-right">
+            <div class="inline-flex gap-2">
+              <button data-action="edit" data-id="${x.id}"
+                class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+                <span class="material-icons-round text-[18px] align-middle">edit</span>
+              </button>
+              <button data-action="toggle" data-id="${x.id}"
+                class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+                <span class="material-icons-round text-[18px] align-middle">sync</span>
+              </button>
+              <button data-action="delete" data-id="${x.id}"
+                class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-red-700 hover:bg-red-50">
+                <span class="material-icons-round text-[18px] align-middle">delete</span>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
+    function renderTable(filtered) {
+      const totalRows = filtered.length;
+      const totalPages = Math.max(1, Math.ceil(totalRows / perPage));
+      page = Math.min(page, totalPages);
+
+      const start = (page - 1) * perPage;
+      const slice = filtered.slice(start, start + perPage);
+
+      $("deptTbody").innerHTML = slice.map(rowHTML).join("");
+      $("rowsCount").textContent = totalRows;
+      $("pageNow").textContent = page;
+      $("pageTotal").textContent = totalPages;
+
+      $("prevPage").disabled = page <= 1;
+      $("nextPage").disabled = page >= totalPages;
+      $("prevPage").classList.toggle("opacity-50", page <= 1);
+      $("nextPage").classList.toggle("opacity-50", page >= totalPages);
+    }
+
+    // ---- Modal
+    function openModal(mode, dept) {
+      $("modalBackdrop").classList.remove("hidden");
+      $("modalBackdrop").classList.add("flex");
+      $("modalTitle").textContent = mode === "edit" ? "Edit Department" : "Add Department";
+
+      $("formId").value = dept?.id || "";
+      $("formName").value = dept?.name || "";
+      $("formCode").value = dept?.code || "";
+      $("formHead").value = dept?.head || "";
+      $("formStatus").value = dept?.status || "active";
+      $("formDesc").value = dept?.desc || "";
+
+      // company options
+      setOptions($("formCompany"), companiesMaster.filter(x => x !== "All Companies"), dept?.company || companiesMaster[1]);
+
+      // region/muni options
+      const regions = Object.keys(regionMap).filter(r => r !== "All Regions");
+      setOptions($("formRegion"), regions, dept?.region || regions[0]);
+
+      const muniList = (regionMap[$("formRegion").value] || []).filter(x => x !== "All Municipalities");
+      setOptions($("formMunicipality"), muniList.length ? muniList : ["—"], dept?.municipality || muniList[0]);
+    }
+
+    function closeModal() {
+      $("modalBackdrop").classList.add("hidden");
+      $("modalBackdrop").classList.remove("flex");
+    }
+
+    function exportCSV(filtered) {
+      const headers = ["Name","Code","Company","Region","Municipality","Head","Status","UpdatedAt","Description"];
+      const rows = filtered.map(x => [
+        x.name, x.code, x.company, x.region, x.municipality, x.head || "", x.status, x.updatedAt, x.desc || ""
+      ]);
+
+      const csv = [headers, ...rows]
+        .map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "hrm_departments.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function renderAll() {
+      const filtered = applyFilters(departments);
+      renderKPIs(filtered);
+      renderCharts(filtered);
+      renderTable(filtered);
+      return filtered;
+    }
+
+    function initFilters() {
+      setOptions($("qCompany"), companiesMaster, "All Companies");
+
+      const regions = Object.keys(regionMap);
+      setOptions($("qRegion"), regions, "All Regions");
+      setOptions($("qMunicipality"), regionMap["All Regions"], "All Municipalities");
+
+      $("qRegion").addEventListener("change", () => {
+        const r = $("qRegion").value;
+        setOptions($("qMunicipality"), regionMap[r] || ["All Municipalities"], "All Municipalities");
+      });
+    }
+
+    function initModalRegionLink() {
+      $("formRegion").addEventListener("change", () => {
+        const r = $("formRegion").value;
+        const muniList = (regionMap[r] || []).filter(x => x !== "All Municipalities");
+        setOptions($("formMunicipality"), muniList.length ? muniList : ["—"], muniList[0]);
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      initFilters();
+
+      $("btnApply").addEventListener("click", () => { page = 1; renderAll(); });
+      $("btnReset").addEventListener("click", () => {
+        $("qSearch").value = "";
+        $("qCompany").value = "All Companies";
+        $("qRegion").value = "All Regions";
+        setOptions($("qMunicipality"), regionMap["All Regions"], "All Municipalities");
+        $("qStatus").value = "all";
+        page = 1;
+        renderAll();
+      });
+
+      $("qSearch").addEventListener("input", () => { page = 1; renderAll(); });
+      $("qStatus").addEventListener("change", () => { page = 1; renderAll(); });
+      $("qCompany").addEventListener("change", () => { page = 1; renderAll(); });
+      $("qMunicipality").addEventListener("change", () => { page = 1; renderAll(); });
+      $("qRegion").addEventListener("change", () => { page = 1; renderAll(); });
+
+      $("prevPage").addEventListener("click", () => { page = Math.max(1, page - 1); renderAll(); });
+      $("nextPage").addEventListener("click", () => { page = page + 1; renderAll(); });
+
+      $("btnAdd").addEventListener("click", () => {
+        openModal("add");
+        initModalRegionLink();
+      });
+
+      $("btnExport").addEventListener("click", () => exportCSV(applyFilters(departments)));
+
+      $("btnCloseModal").addEventListener("click", closeModal);
+      $("btnCancel").addEventListener("click", closeModal);
+      $("modalBackdrop").addEventListener("click", (e) => { if (e.target === $("modalBackdrop")) closeModal(); });
+
+      $("deptForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const id = $("formId").value;
+
+        const payload = {
+          id: id || crypto.randomUUID(),
+          name: $("formName").value.trim(),
+          code: $("formCode").value.trim(),
+          company: $("formCompany").value,
+          head: $("formHead").value.trim(),
+          region: $("formRegion").value,
+          municipality: $("formMunicipality").value,
+          status: $("formStatus").value,
+          desc: $("formDesc").value.trim(),
+          updatedAt: new Date().toISOString().slice(0, 10)
+        };
+
+        if (id) departments = departments.map(x => x.id === id ? payload : x);
+        else departments = [payload, ...departments];
+
+        closeModal();
+        page = 1;
+        renderAll();
+      });
+
+      $("deptTbody").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+
+        const action = btn.getAttribute("data-action");
+        const id = btn.getAttribute("data-id");
+        const dept = departments.find(x => x.id === id);
+        if (!dept) return;
+
+        if (action === "edit") {
+          openModal("edit", dept);
+          initModalRegionLink();
+          $("formRegion").value = dept.region;
+          $("formRegion").dispatchEvent(new Event("change"));
+          $("formMunicipality").value = dept.municipality;
+          return;
+        }
+
+        if (action === "toggle") {
+          departments = departments.map(x => x.id === id
+            ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) }
+            : x
+          );
+          renderAll();
+          return;
+        }
+
+        if (action === "delete") {
+          const ok = confirm(`Delete "${dept.name}"? This cannot be undone.`);
+          if (!ok) return;
+          departments = departments.filter(x => x.id !== id);
+          page = 1;
+          renderAll();
+          return;
+        }
+      });
+
+      renderAll();
+    });
+  </script>
+</body>
+</html>
