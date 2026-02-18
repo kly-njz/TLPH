@@ -1,7 +1,11 @@
-@bp.route('/municipal-profile-update')
-@role_required('municipal','municipal_admin')
-def municipal_profile_update():
-    return render_template('municipal/municipal-profile-update.html')
+# ...existing code...
+
+# Add this route at the end of the file:
+#
+# @bp.route('/municipal-profile-update')
+# @role_required('municipal','municipal_admin')
+# def municipal_profile_update():
+#     return render_template('municipal/municipal-profile-update.html')
 from flask import Blueprint, render_template
 from firebase_auth_middleware import role_required
 
@@ -126,3 +130,8 @@ def hrm_leave():
 @role_required('municipal','municipal_admin')
 def hrm_payroll():
     return render_template('municipal/hrm/payroll-municipal.html')
+
+@bp.route('/municipal-profile-update')
+@role_required('municipal','municipal_admin')
+def municipal_profile_update():
+    return render_template('municipal/municipal-profile-update.html')

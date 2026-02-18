@@ -198,18 +198,6 @@
                                 <button type="button" class="bg-white border border-slate-300 text-slate-600 px-3 py-1 text-[9px] font-black uppercase hover:bg-slate-100 rounded-[2px]">Discard</button>
                                 <button type="submit" class="bg-emerald-800 text-white px-5 py-1 text-[9px] font-black uppercase hover:bg-emerald-900 rounded-[2px] shadow-sm">Update Record</button>
                             </div>
-                            <script>
-                            // Redirect to update page on Update Record click
-                            document.addEventListener('DOMContentLoaded', function() {
-                                const updateBtn = document.querySelector('.gov-panel.shadow-sm button[type="submit"]');
-                                if (updateBtn) {
-                                    updateBtn.addEventListener('click', function(e) {
-                                        e.preventDefault();
-                                        window.location.href = '/municipal/municipal-profile-update';
-                                    });
-                                }
-                            });
-                            </script>
                         </div>
 
                         <div class="gov-panel p-3">
@@ -241,20 +229,25 @@
                 // Load real municipal user data and populate profile fields
                 document.addEventListener('DOMContentLoaded', async function() {
                     try {
-                        // Assume Firebase is globally available
-                        const db = window.db || null;
-                        const auth = window.auth || null;
+                        const db = window.db;
+                        const auth = window.auth;
                         if (!db || !auth || !auth.currentUser) return;
                         const userId = auth.currentUser.uid;
-                        const userDocRef = window.firebase.firestore().collection('users').doc(userId);
-                        const doc = await userDocRef.get();
-                        if (!doc.exists) return;
-                        const data = doc.data();
-                        // Populate fields
-                        document.querySelector('input.input-gov.uppercase[value="ADMINISTRATOR"]').value = data.lastName || '';
-                        document.querySelector('input.input-gov.uppercase[value="DAVE"]').value = data.firstName || '';
-                        document.querySelector('input.input-gov.uppercase[value="ALCANTARA"]').value = data.middleName || '';
-                        document.querySelector('input.input-gov.font-mono[value="DENR-2026-089"]').value = data.employeeId || '';
+                        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+                        const userDocRef = doc(db, 'users', userId);
+                        const docSnap = await getDoc(userDocRef);
+                        if (!docSnap.exists()) return;
+                        const data = docSnap.data();
+                        // Update displayed info
+                        document.querySelector('input.input-gov.uppercase').value = data.lastName || '';
+                        document.querySelectorAll('input.input-gov.uppercase')[1].value = data.firstName || '';
+                        document.querySelectorAll('input.input-gov.uppercase')[2].value = data.middleName || '';
+                        document.querySelector('input.input-gov.font-mono').value = data.employeeId || '';
+                        // Update text fields
+                        document.querySelector('h2.text-[11px]').textContent = `${data.firstName || ''} ${data.middleName || ''} ${data.lastName || ''}`;
+                        document.querySelector('p.text-emerald-700').textContent = data.role ? data.role.toUpperCase() : '';
+                        document.querySelector('span.bg-emerald-50').textContent = data.status ? data.status.toUpperCase() : '';
+                        document.querySelector('p.font-bold.text-[10px]').textContent = data.province ? data.province.toUpperCase() : '';
                         // Add more fields as needed
                     } catch (err) {
                         console.error('Failed to load profile:', err);
