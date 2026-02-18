@@ -5,14 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DENR | HR - Leave Requests (Super Admin)</title>
 
+  <!-- Tailwind + Material Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+
+  <!-- Chart.js (analytics) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- SheetJS (Excel/CSV import) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
     :root{ --gov-font: Verdana, Arial, Tahoma, sans-serif; }
     html, body{ font-family: var(--gov-font); }
     body::before{
-      content:""; position:fixed; inset:0; pointer-events:none; z-index:-1;
+      content:"";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: -1;
       background-image:
         radial-gradient(circle at 15% 15%, rgba(15,23,42,.06), transparent 38%),
         radial-gradient(circle at 85% 30%, rgba(2,132,199,.06), transparent 42%),
@@ -22,77 +33,80 @@
 </head>
 
 <body class="min-h-screen bg-gray-100 text-slate-900">
-    {% include 'super-admin/sidenav-superadmin.html' %}
-    {% include 'super-admin/header-superadmin.html' %}
 
-  <!-- Top Bar -->
-  <header class="sticky top-0 z-30 border-b border-gray-200 bg-white/85 backdrop-blur">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      <div class="h-16 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="h-9 w-9 rounded-xl border border-gray-200 bg-white grid place-items-center">
-            <span class="material-icons-round text-[20px]">assignment</span>
+  {% include 'super-admin/header-superadmin.html' %}
+  {% include 'super-admin/sidenav-superadmin.html' %}
+
+  <main class="p-5 pt-[92px] lg:ml-[260px]">
+
+    <!-- Header -->
+    <section class="mb-3">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-[12px] font-bold text-slate-700">
+            <span class="material-icons-round text-[18px]">event_busy</span>
+            Human Resource • Leave Requests (Super Admin)
           </div>
-          <div class="leading-tight">
-            <div class="text-[12px] font-semibold text-slate-700">Human Resource</div>
-            <h1 class="text-[14px] sm:text-[15px] font-black tracking-tight">Leave Request Management</h1>
-          </div>
+          <h1 class="mt-2 text-[26px] font-black tracking-tight">Leave Request Management</h1>
+          <p class="text-[13px] text-slate-600 mt-1">
+            Review, approve, and track leave requests with analytics, calendar view, and payroll impact preview.
+          </p>
         </div>
 
-        <div class="flex items-center gap-2">
-          <button id="btnExport" class="hidden sm:inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50">
-            <span class="material-icons-round text-[18px]">download</span> Export
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="btnToggleView"
+            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
+            <span class="material-icons-round text-[18px]">calendar_month</span>
+            Calendar View
           </button>
-          <button id="btnOpenCreate" class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[12px] font-bold text-white hover:bg-slate-800">
-            <span class="material-icons-round text-[18px]">add</span> New Request
+
+          <button id="btnImport"
+            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
+            <span class="material-icons-round text-[18px]">upload</span>
+            Import Excel/CSV
+          </button>
+
+          <button id="btnExport"
+            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
+            <span class="material-icons-round text-[18px]">download</span>
+            Export CSV
+          </button>
+
+          <button id="btnOpenCreate"
+            class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-[12px] font-bold text-white hover:bg-slate-800">
+            <span class="material-icons-round text-[18px]">add</span>
+            New Leave
           </button>
         </div>
       </div>
-    </div>
-  </header>
+    </section>
 
-  <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-    <!-- Filters + Stats -->
-    <section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+    <!-- Controls -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
       <div class="lg:col-span-8 bg-white border border-gray-200 rounded-2xl p-4">
         <div class="flex items-start justify-between gap-3">
           <div>
-            <h2 class="text-[13px] font-black">Scope & Filters</h2>
-            <p class="text-[12px] text-slate-600 mt-1">Leave requests by <b>Regional</b> / <b>Municipality</b> scope.</p>
+            <h2 class="text-[13px] font-black">Filters</h2>
+            <p class="text-[12px] text-slate-600 mt-1">Filter list + analytics; process approvals in bulk.</p>
           </div>
-          <button id="btnClear" class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50">
-            <span class="material-icons-round text-[18px]">filter_alt_off</span> Clear
+          <button id="btnClear"
+            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50">
+            <span class="material-icons-round text-[18px]">filter_alt_off</span>
+            Clear
           </button>
         </div>
 
         <div class="mt-4 grid grid-cols-1 md:grid-cols-12 gap-3">
           <div class="md:col-span-3">
-            <label class="block text-[11px] font-bold text-slate-700">Category</label>
-            <select id="fc" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
-              <option value="ALL">All</option><option value="REGIONAL">Regional</option><option value="MUNICIPALITY">Municipality</option>
-            </select>
-          </div>
-
-          <div class="md:col-span-3">
-            <label class="block text-[11px] font-bold text-slate-700">Region</label>
-            <select id="fr" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
-              <option value="ALL">All</option>
-              <option>NCR</option><option>CAR</option><option>Region I</option><option>Region II</option><option>Region III</option>
-              <option>Region IV-A</option><option>Region IV-B</option><option>Region V</option><option>Region VI</option><option>Region VII</option>
-              <option>Region VIII</option><option>Region IX</option><option>Region X</option><option>Region XI</option><option>Region XII</option>
-              <option>Region XIII</option><option>BARMM</option>
-            </select>
-          </div>
-
-          <div class="md:col-span-3">
-            <label class="block text-[11px] font-bold text-slate-700">Municipality</label>
-            <input id="fm" placeholder="e.g., San Pedro"
-              class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
+            <label class="block text-[11px] font-bold text-slate-700">Year</label>
+            <select id="fy"
+              class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100"></select>
           </div>
 
           <div class="md:col-span-3">
             <label class="block text-[11px] font-bold text-slate-700">Status</label>
-            <select id="fs" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
+            <select id="fstatus"
+              class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
               <option value="ALL">All</option>
               <option value="PENDING">Pending</option>
               <option value="APPROVED">Approved</option>
@@ -101,92 +115,215 @@
             </select>
           </div>
 
-          <div class="md:col-span-4">
-            <label class="block text-[11px] font-bold text-slate-700">From</label>
-            <input id="fFrom" type="date"
-              class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
-          </div>
-
-          <div class="md:col-span-4">
-            <label class="block text-[11px] font-bold text-slate-700">To</label>
-            <input id="fTo" type="date"
-              class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
-          </div>
-
-          <div class="md:col-span-4">
+          <div class="md:col-span-3">
             <label class="block text-[11px] font-bold text-slate-700">Leave Type</label>
-            <select id="fType" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
+            <select id="ftype"
+              class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
               <option value="ALL">All</option>
-              <option value="VACATION">Vacation</option>
-              <option value="SICK">Sick</option>
-              <option value="EMERGENCY">Emergency</option>
-              <option value="MATERNITY">Maternity</option>
-              <option value="PATERNITY">Paternity</option>
-              <option value="SPECIAL_PRIVILEGE">Special Privilege</option>
-              <option value="OFFICIAL_BUSINESS">Official Business</option>
-              <option value="OTHERS">Others</option>
+              <option value="VACATION">Vacation Leave</option>
+              <option value="SICK">Sick Leave</option>
+              <option value="EMERGENCY">Emergency Leave</option>
+              <option value="MATERNITY">Maternity Leave</option>
+              <option value="PATERNITY">Paternity Leave</option>
+              <option value="SPECIAL">Special Leave</option>
+              <option value="UNPAID">Unpaid Leave</option>
             </select>
           </div>
 
-          <div class="md:col-span-12">
+          <div class="md:col-span-3">
+            <label class="block text-[11px] font-bold text-slate-700">Region</label>
+            <select id="fr"
+              class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
+              <option value="ALL">All</option>
+              <option>NCR</option><option>CAR</option><option>Region I</option><option>Region II</option><option>Region III</option>
+              <option>Region IV-A</option><option>Region IV-B</option><option>Region V</option><option>Region VI</option><option>Region VII</option>
+              <option>Region VIII</option><option>Region IX</option><option>Region X</option><option>Region XI</option><option>Region XII</option>
+              <option>Region XIII</option><option>BARMM</option>
+            </select>
+          </div>
+
+          <div class="md:col-span-8">
             <label class="block text-[11px] font-bold text-slate-700">Search</label>
             <div class="mt-1 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 focus-within:ring-4 focus-within:ring-emerald-100">
               <span class="material-icons-round text-[18px] text-slate-500">search</span>
-              <input id="fSearch" placeholder="Search ref no., employee no., name, reason..."
+              <input id="fs" placeholder="Search employee, department, reason, reference..."
                 class="w-full bg-transparent text-[13px] font-semibold outline-none" />
             </div>
           </div>
+
+          <div class="md:col-span-4">
+            <label class="block text-[11px] font-bold text-slate-700">Department</label>
+            <input id="fdept" placeholder="e.g., HR, Finance, Admin"
+              class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100" />
+          </div>
         </div>
 
-        <div class="mt-4 flex flex-wrap gap-2 text-[11px] text-slate-600">
+        <div class="mt-4 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
           <span class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1">
-            <span class="material-icons-round text-[16px]">info</span> Municipality required when category is Municipality
-          </span>
-          <span class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1">
-            <span class="material-icons-round text-[16px]">rule</span> Date range filter applies to leave start/end
+            <span class="material-icons-round text-[16px]">info</span>
+            Bulk approve/reject applies to selected rows.
           </span>
         </div>
       </div>
 
-      <div class="lg:col-span-4 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
+      <!-- Stats -->
+      <div class="lg:col-span-4 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
         <div class="bg-white border border-gray-200 rounded-2xl p-4">
           <div class="flex items-center justify-between">
-            <div><div class="text-[11px] font-bold text-slate-600 uppercase">Requests</div><div id="stAll" class="text-2xl font-black mt-1">0</div></div>
-            <div class="h-10 w-10 rounded-2xl border border-gray-200 bg-white grid place-items-center"><span class="material-icons-round">inventory_2</span></div>
+            <div>
+              <div class="text-[11px] font-bold text-slate-600 uppercase">Requests</div>
+              <div id="stAll" class="text-2xl font-black mt-1">0</div>
+            </div>
+            <div class="h-10 w-10 rounded-2xl border border-gray-200 bg-white grid place-items-center">
+              <span class="material-icons-round">list_alt</span>
+            </div>
           </div>
         </div>
         <div class="bg-white border border-gray-200 rounded-2xl p-4">
           <div class="flex items-center justify-between">
-            <div><div class="text-[11px] font-bold text-slate-600 uppercase">Pending</div><div id="stPending" class="text-2xl font-black mt-1">0</div></div>
-            <div class="h-10 w-10 rounded-2xl border border-gray-200 bg-white grid place-items-center"><span class="material-icons-round text-amber-700">hourglass_top</span></div>
+            <div>
+              <div class="text-[11px] font-bold text-slate-600 uppercase">Pending</div>
+              <div id="stPending" class="text-2xl font-black mt-1">0</div>
+            </div>
+            <div class="h-10 w-10 rounded-2xl border border-gray-200 bg-white grid place-items-center">
+              <span class="material-icons-round text-amber-700">hourglass_top</span>
+            </div>
           </div>
         </div>
         <div class="bg-white border border-gray-200 rounded-2xl p-4">
           <div class="flex items-center justify-between">
-            <div><div class="text-[11px] font-bold text-slate-600 uppercase">Approved</div><div id="stApproved" class="text-2xl font-black mt-1">0</div></div>
-            <div class="h-10 w-10 rounded-2xl border border-gray-200 bg-white grid place-items-center"><span class="material-icons-round text-emerald-700">check_circle</span></div>
+            <div>
+              <div class="text-[11px] font-bold text-slate-600 uppercase">Approved</div>
+              <div id="stApproved" class="text-2xl font-black mt-1">0</div>
+            </div>
+            <div class="h-10 w-10 rounded-2xl border border-gray-200 bg-white grid place-items-center">
+              <span class="material-icons-round text-emerald-700">check_circle</span>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Table -->
-    <section class="mt-4 bg-white border border-gray-200 rounded-2xl overflow-hidden">
+    <!-- Analytics + Impact -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
+      <div class="lg:col-span-7 bg-white border border-gray-200 rounded-2xl p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h2 class="text-[13px] font-black">Analytics</h2>
+            <p class="text-[12px] text-slate-600 mt-1">Charts update based on current filters.</p>
+          </div>
+          <span class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-black text-slate-700">
+            <span class="material-icons-round text-[16px]">insights</span>
+            Live
+          </span>
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="rounded-2xl border border-gray-200 bg-white p-3">
+            <div class="text-[11px] font-black text-slate-700 mb-2">By Status</div>
+            <canvas id="chStatus" height="160"></canvas>
+          </div>
+          <div class="rounded-2xl border border-gray-200 bg-white p-3">
+            <div class="text-[11px] font-black text-slate-700 mb-2">By Leave Type</div>
+            <canvas id="chType" height="160"></canvas>
+          </div>
+          <div class="md:col-span-2 rounded-2xl border border-gray-200 bg-white p-3">
+            <div class="text-[11px] font-black text-slate-700 mb-2">By Region (Top)</div>
+            <canvas id="chRegion" height="140"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-5 grid grid-cols-1 gap-3">
+        <!-- Leave days impact -->
+        <div class="bg-white border border-gray-200 rounded-2xl p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h2 class="text-[13px] font-black">Leave Days Impact</h2>
+              <p class="text-[12px] text-slate-600 mt-1">
+                Calculates total leave days (inclusive) and estimates payroll impact for selected request.
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-3 grid grid-cols-1 md:grid-cols-12 gap-3">
+            <div class="md:col-span-6">
+              <label class="block text-[11px] font-bold text-slate-700">Daily Rate</label>
+              <input id="payDaily" type="number" min="0" step="0.01" placeholder="e.g., 750"
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
+            </div>
+            <div class="md:col-span-6">
+              <label class="block text-[11px] font-bold text-slate-700">Mode</label>
+              <select id="payMode"
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
+                <option value="PAID">Paid Leave (deduct 0)</option>
+                <option value="UNPAID">Unpaid Leave (deduct)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-3 flex items-center gap-2">
+            <button id="btnCalcImpact"
+              class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-[12px] font-bold text-white hover:bg-slate-800">
+              <span class="material-icons-round text-[18px]">calculate</span>
+              Compute Selected
+            </button>
+
+            <div class="ml-auto rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+              <div class="text-[11px] font-bold text-slate-600 uppercase">Impact</div>
+              <div id="impactOut" class="text-[18px] font-black">—</div>
+            </div>
+          </div>
+
+          <div id="impactExplain" class="mt-2 text-[12px] text-slate-600"></div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="bg-white border border-gray-200 rounded-2xl p-4">
+          <div>
+            <h2 class="text-[13px] font-black">Bulk Actions</h2>
+            <p class="text-[12px] text-slate-600 mt-1">Approve/reject selected requests. Adds a remark.</p>
+          </div>
+
+          <div class="mt-3 grid grid-cols-1 md:grid-cols-12 gap-3">
+            <div class="md:col-span-8">
+              <label class="block text-[11px] font-bold text-slate-700">Remark</label>
+              <input id="bulkRemark" placeholder="e.g., Approved by HR Director"
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
+            </div>
+            <div class="md:col-span-4 flex items-end gap-2">
+              <button id="btnBulkApprove"
+                class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-[12px] font-black text-white hover:bg-emerald-700">
+                <span class="material-icons-round text-[18px]">check</span>
+                Approve
+              </button>
+              <button id="btnBulkReject"
+                class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-3 py-2 text-[12px] font-black text-white hover:bg-red-700">
+                <span class="material-icons-round text-[18px]">close</span>
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Table View -->
+    <section id="tableView" class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
       <div class="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 class="text-[13px] font-black">Leave Requests</h2>
-          <p class="text-[12px] text-slate-600 mt-1">Review, approve, reject, or cancel leave requests.</p>
+          <p class="text-[12px] text-slate-600 mt-1">
+            Track start/end dates, approvals, leave type, and department/region.
+          </p>
         </div>
 
         <div class="flex items-center gap-2">
-          <button id="btnBulkApprove" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-[12px] font-bold text-white hover:bg-emerald-700">
-            <span class="material-icons-round text-[18px]">check</span> Approve Selected
-          </button>
-          <button id="btnBulkReject" class="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-bold text-amber-800 hover:bg-amber-100">
-            <span class="material-icons-round text-[18px]">block</span> Reject Selected
-          </button>
-          <button id="btnBulkDelete" class="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700 hover:bg-red-100">
-            <span class="material-icons-round text-[18px]">delete</span> Remove Selected
+          <button id="btnBulkDelete"
+            class="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700 hover:bg-red-100">
+            <span class="material-icons-round text-[18px]">delete</span>
+            Remove Selected
           </button>
         </div>
       </div>
@@ -195,14 +332,15 @@
         <table class="min-w-full text-left">
           <thead class="bg-gray-50 border-y border-gray-200">
             <tr class="text-[11px] uppercase tracking-wide text-slate-600">
-              <th class="px-4 py-3 w-10"><input id="sa" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-200" /></th>
-              <th class="px-4 py-3 font-bold">Reference</th>
-              <th class="px-4 py-3 font-bold">Employee</th>
-              <th class="px-4 py-3 font-bold">Category</th>
+              <th class="px-4 py-3 w-10">
+                <input id="sa" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-200" />
+              </th>
+              <th class="px-4 py-3 font-bold">Date Filed</th>
+              <th class="px-4 py-3 font-bold">Reference & Employee</th>
+              <th class="px-4 py-3 font-bold">Leave Type</th>
+              <th class="px-4 py-3 font-bold">Duration</th>
+              <th class="px-4 py-3 font-bold">Department</th>
               <th class="px-4 py-3 font-bold">Region</th>
-              <th class="px-4 py-3 font-bold">Municipality</th>
-              <th class="px-4 py-3 font-bold">Leave</th>
-              <th class="px-4 py-3 font-bold">Dates</th>
               <th class="px-4 py-3 font-bold">Status</th>
               <th class="px-4 py-3 font-bold text-right">Actions</th>
             </tr>
@@ -213,9 +351,49 @@
 
       <div class="p-4 text-[12px] text-slate-600" id="cnt">Showing 0 requests</div>
     </section>
+
+    <!-- Calendar View -->
+    <section id="calendarView" class="hidden mt-3 bg-white border border-gray-200 rounded-2xl overflow-hidden">
+      <div class="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-200">
+        <div>
+          <h2 class="text-[13px] font-black">Calendar View</h2>
+          <p class="text-[12px] text-slate-600 mt-1">
+            Leave blocks appear across date ranges; filters apply.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="calPrev"
+            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50">
+            <span class="material-icons-round text-[18px]">chevron_left</span>
+            Prev
+          </button>
+
+          <div class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] font-black">
+            <span id="calLabel">—</span>
+          </div>
+
+          <button id="calNext"
+            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50">
+            Next
+            <span class="material-icons-round text-[18px]">chevron_right</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="p-4">
+        <div class="grid grid-cols-7 gap-2 text-[11px] font-black text-slate-600 mb-2">
+          <div class="text-center">Sun</div><div class="text-center">Mon</div><div class="text-center">Tue</div>
+          <div class="text-center">Wed</div><div class="text-center">Thu</div><div class="text-center">Fri</div>
+          <div class="text-center">Sat</div>
+        </div>
+        <div id="calGrid" class="grid grid-cols-7 gap-2"></div>
+      </div>
+    </section>
+
   </main>
 
-  <!-- Modal -->
+  <!-- Create/Edit Modal -->
   <div id="mb" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-slate-900/40"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -232,53 +410,31 @@
 
         <form id="f" class="p-4">
           <input id="eid" type="hidden" />
+
           <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
             <div class="md:col-span-4">
-              <label class="block text-[11px] font-bold text-slate-700">Reference No.</label>
-              <input id="ref" required placeholder="LR-2026-00012"
-                class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
-            </div>
-
-            <div class="md:col-span-4">
-              <label class="block text-[11px] font-bold text-slate-700">Request Date</label>
-              <input id="reqDate" type="date" required
-                class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
-            </div>
-
-            <div class="md:col-span-4">
-              <label class="block text-[11px] font-bold text-slate-700">Status</label>
-              <select id="status" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
-                <option value="PENDING">Pending</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </div>
-
-            <div class="md:col-span-4">
-              <label class="block text-[11px] font-bold text-slate-700">Employee No.</label>
-              <input id="no" required placeholder="DENR-2026-0007"
-                class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
-            </div>
-
-            <div class="md:col-span-8">
               <label class="block text-[11px] font-bold text-slate-700">Employee Name</label>
-              <input id="name" required placeholder="Dela Cruz, Juan"
-                class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
+              <input id="emp" required placeholder="e.g., Juan Dela Cruz"
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
             </div>
 
             <div class="md:col-span-3">
-              <label class="block text-[11px] font-bold text-slate-700">Category</label>
-              <select id="cat" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
-                <option value="REGIONAL">Regional</option>
-                <option value="MUNICIPALITY">Municipality</option>
-              </select>
+              <label class="block text-[11px] font-bold text-slate-700">Employee ID</label>
+              <input id="empid" placeholder="e.g., DENR-1234"
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
             </div>
 
-            <div class="md:col-span-3">
+            <div class="md:col-span-5">
+              <label class="block text-[11px] font-bold text-slate-700">Department</label>
+              <input id="dept" required placeholder="e.g., HR, Finance"
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
+            </div>
+
+            <div class="md:col-span-4">
               <label class="block text-[11px] font-bold text-slate-700">Region</label>
-              <select id="reg" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
-                <option value="">(Optional)</option>
+              <select id="reg" required
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
+                <option value="">Select</option>
                 <option>NCR</option><option>CAR</option><option>Region I</option><option>Region II</option><option>Region III</option>
                 <option>Region IV-A</option><option>Region IV-B</option><option>Region V</option><option>Region VI</option><option>Region VII</option>
                 <option>Region VIII</option><option>Region IX</option><option>Region X</option><option>Region XI</option><option>Region XII</option>
@@ -286,67 +442,174 @@
               </select>
             </div>
 
-            <div class="md:col-span-3">
-              <label class="block text-[11px] font-bold text-slate-700">Municipality</label>
-              <input id="mun" placeholder="e.g., San Pedro"
-                class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
-              <p class="mt-1 text-[11px] text-slate-500">Required if Municipality category.</p>
-            </div>
-
-            <div class="md:col-span-3">
+            <div class="md:col-span-4">
               <label class="block text-[11px] font-bold text-slate-700">Leave Type</label>
-              <select id="type" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
-                <option value="VACATION">Vacation</option>
-                <option value="SICK">Sick</option>
-                <option value="EMERGENCY">Emergency</option>
-                <option value="MATERNITY">Maternity</option>
-                <option value="PATERNITY">Paternity</option>
-                <option value="SPECIAL_PRIVILEGE">Special Privilege</option>
-                <option value="OFFICIAL_BUSINESS">Official Business</option>
-                <option value="OTHERS">Others</option>
+              <select id="type" required
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
+                <option value="VACATION">Vacation Leave</option>
+                <option value="SICK">Sick Leave</option>
+                <option value="EMERGENCY">Emergency Leave</option>
+                <option value="MATERNITY">Maternity Leave</option>
+                <option value="PATERNITY">Paternity Leave</option>
+                <option value="SPECIAL">Special Leave</option>
+                <option value="UNPAID">Unpaid Leave</option>
               </select>
             </div>
 
-            <div class="md:col-span-3">
+            <div class="md:col-span-4">
+              <label class="block text-[11px] font-bold text-slate-700">Filed Date</label>
+              <input id="filed" type="date" required
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
+            </div>
+
+            <div class="md:col-span-4">
               <label class="block text-[11px] font-bold text-slate-700">Start Date</label>
-              <input id="start" type="date" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
+              <input id="start" type="date" required
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
             </div>
 
-            <div class="md:col-span-3">
+            <div class="md:col-span-4">
               <label class="block text-[11px] font-bold text-slate-700">End Date</label>
-              <input id="end" type="date" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
+              <input id="end" type="date" required
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
             </div>
 
-            <div class="md:col-span-3">
-              <label class="block text-[11px] font-bold text-slate-700">Days (Computed)</label>
-              <input id="days" readonly
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] font-bold text-slate-900" />
-              <p class="mt-1 text-[11px] text-slate-500">Calendar days (simple).</p>
+            <div class="md:col-span-4">
+              <label class="block text-[11px] font-bold text-slate-700">Status</label>
+              <select id="status" required
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
             </div>
 
             <div class="md:col-span-12">
-              <label class="block text-[11px] font-bold text-slate-700">Reason / Details</label>
-              <textarea id="reason" rows="2" required placeholder="State reason and relevant details..."
-                class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100"></textarea>
-            </div>
-
-            <div class="md:col-span-12">
-              <label class="block text-[11px] font-bold text-slate-700">Approver Notes (Optional)</label>
-              <textarea id="notes" rows="2" placeholder="Approval remarks, rejection reason, etc."
-                class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100"></textarea>
+              <label class="block text-[11px] font-bold text-slate-700">Reason / Notes</label>
+              <textarea id="reason" rows="3" placeholder="e.g., Medical check-up / family emergency / travel..."
+                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100"></textarea>
             </div>
           </div>
 
           <div class="mt-4 flex items-center justify-between gap-3">
-            <div class="text-[12px] text-slate-600"><b>Actions:</b> You can approve/reject from table or edit status here.</div>
+            <div class="text-[12px] text-slate-600">
+              <b>Validation:</b> Start date must be ≤ end date.
+            </div>
             <div class="flex items-center gap-2">
-              <button type="button" id="mc" class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">Cancel</button>
-              <button class="rounded-xl bg-slate-900 px-4 py-2 text-[12px] font-bold text-white hover:bg-slate-800 inline-flex items-center gap-2">
-                <span class="material-icons-round text-[18px]">save</span> Save
+              <button type="button" id="mc"
+                class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                class="rounded-xl bg-slate-900 px-4 py-2 text-[12px] font-bold text-white hover:bg-slate-800 inline-flex items-center gap-2">
+                <span class="material-icons-round text-[18px]">save</span>
+                Save
               </button>
             </div>
           </div>
         </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Modal -->
+  <div id="imb" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-slate-900/40"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="w-full max-w-5xl rounded-2xl bg-white border border-gray-200 shadow-xl overflow-hidden">
+        <div class="p-4 border-b border-gray-200 flex items-start justify-between gap-3">
+          <div>
+            <div class="text-[11px] font-bold text-slate-600 uppercase">Import</div>
+            <h3 class="text-[14px] font-black mt-1">Excel/CSV Import</h3>
+            <p class="text-[12px] text-slate-600 mt-1">
+              Expected columns: <b>Date Filed</b>, <b>Reference</b>, <b>Employee</b>, <b>Employee ID</b>, <b>Department</b>, <b>Region</b>, <b>Leave Type</b>,
+              <b>Start Date</b>, <b>End Date</b>, <b>Status</b>, <b>Reason</b>
+            </p>
+          </div>
+          <button id="imx" class="h-10 w-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 grid place-items-center">
+            <span class="material-icons-round">close</span>
+          </button>
+        </div>
+
+        <div class="p-4">
+          <div class="flex flex-col md:flex-row md:items-center gap-3">
+            <input id="importFile" type="file" accept=".xlsx,.xls,.csv" class="w-full md:w-auto text-[12px]" />
+            <button id="btnParse"
+              class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-[12px] font-bold text-white hover:bg-slate-800">
+              <span class="material-icons-round text-[18px]">upload_file</span>
+              Parse
+            </button>
+
+            <div class="ml-auto flex items-center gap-2">
+              <label class="inline-flex items-center gap-2 text-[12px] font-bold text-slate-700">
+                <input id="skipConflicts" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-200" checked>
+                Skip duplicate references
+              </label>
+            </div>
+          </div>
+
+          <div class="mt-4 rounded-2xl border border-gray-200 overflow-hidden">
+            <div class="bg-gray-50 border-b border-gray-200 px-4 py-2 text-[12px] font-black text-slate-700">
+              Preview
+              <span id="impCount" class="ml-2 text-slate-500 font-bold">(0 rows)</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-left">
+                <thead class="bg-white border-b border-gray-200">
+                  <tr class="text-[11px] uppercase tracking-wide text-slate-600">
+                    <th class="px-4 py-2 font-bold">Reference</th>
+                    <th class="px-4 py-2 font-bold">Employee</th>
+                    <th class="px-4 py-2 font-bold">Type</th>
+                    <th class="px-4 py-2 font-bold">Start</th>
+                    <th class="px-4 py-2 font-bold">End</th>
+                    <th class="px-4 py-2 font-bold">Region</th>
+                    <th class="px-4 py-2 font-bold">Status</th>
+                    <th class="px-4 py-2 font-bold">Status Note</th>
+                  </tr>
+                </thead>
+                <tbody id="impTb" class="divide-y divide-gray-200"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mt-4 flex items-center justify-between gap-3">
+            <div id="impSummary" class="text-[12px] text-slate-600"></div>
+            <div class="flex items-center gap-2">
+              <button id="btnImportApply"
+                class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-[12px] font-bold text-white hover:bg-emerald-700">
+                <span class="material-icons-round text-[18px]">done_all</span>
+                Import
+              </button>
+              <button id="btnImportCancel"
+                class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- View Modal -->
+  <div id="vmb" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-slate-900/40"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="w-full max-w-3xl rounded-2xl bg-white border border-gray-200 shadow-xl overflow-hidden">
+        <div class="p-4 border-b border-gray-200 flex items-start justify-between">
+          <div>
+            <div class="text-[11px] font-bold text-slate-600 uppercase">Leave Request</div>
+            <h3 id="vt" class="text-[14px] font-black mt-1">Details</h3>
+          </div>
+          <button id="vx" class="h-10 w-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 grid place-items-center">
+            <span class="material-icons-round">close</span>
+          </button>
+        </div>
+        <div id="vd" class="p-4 text-[13px]"></div>
       </div>
     </div>
   </div>
@@ -359,231 +622,807 @@
           <span class="material-icons-round text-emerald-700">check</span>
         </div>
         <div>
-          <div id="tt" class="text-[12px] font-black">Saved</div>
-          <div id="tm" class="text-[12px] text-slate-600 mt-0.5">Done.</div>
+          <div id="tt" class="text-[12px] font-black">Done</div>
+          <div id="tm" class="text-[12px] text-slate-600 mt-0.5">—</div>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    // ---- Tiny utils ----
-    const $=id=>document.getElementById(id), q=s=>document.querySelectorAll(s);
-    const esc=s=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
-    const toast=(a,b)=>{tt.textContent=a;tm.textContent=b;toastEl.classList.remove("hidden");clearTimeout(window.__t);window.__t=setTimeout(()=>toastEl.classList.add("hidden"),2200)};
-    const chip=(txt,cls,dot)=>`<span class="inline-flex items-center gap-2 rounded-full border ${cls} px-3 py-1 text-[11px] font-black"><span class="h-2 w-2 rounded-full ${dot}"></span>${txt}</span>`;
-    const chipCat=c=>c==="REGIONAL"
-      ? `<span class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 text-sky-800 px-3 py-1 text-[11px] font-black"><span class="material-icons-round text-[16px]">apartment</span>Regional</span>`
-      : `<span class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-800 px-3 py-1 text-[11px] font-black"><span class="material-icons-round text-[16px]">location_city</span>Municipality</span>`;
-    const chipStatus=s=>{
-      const m={
+    // ---------- Tiny utils ----------
+    const $ = id => document.getElementById(id);
+    const q = s => document.querySelectorAll(s);
+    const esc = s => String(s ?? "")
+      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+    const toast = (a,b) => {
+      $("tt").textContent = a; $("tm").textContent = b;
+      $("toast").classList.remove("hidden");
+      clearTimeout(window.__t);
+      window.__t = setTimeout(()=> $("toast").classList.add("hidden"), 2200);
+    };
+    const norm = s => String(s ?? "").trim();
+    const low = s => norm(s).toLowerCase();
+
+    const money = (n) => {
+      const x = Number(n);
+      if(!Number.isFinite(x)) return "—";
+      return x.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+    };
+
+    const chip = (txt, cls, dot) =>
+      `<span class="inline-flex items-center gap-2 rounded-full border ${cls} px-3 py-1 text-[11px] font-black">
+        <span class="h-2 w-2 rounded-full ${dot}"></span>${txt}
+      </span>`;
+
+    const chipStatus = s => {
+      const m = ({
         PENDING:["Pending","border-amber-200 bg-amber-50 text-amber-800","bg-amber-500"],
         APPROVED:["Approved","border-emerald-200 bg-emerald-50 text-emerald-800","bg-emerald-500"],
-        REJECTED:["Rejected","border-red-200 bg-red-50 text-red-700","bg-red-500"],
-        CANCELLED:["Cancelled","border-gray-200 bg-gray-50 text-slate-700","bg-gray-400"]
-      }[s]||["—","border-gray-200 bg-gray-50 text-slate-700","bg-gray-400"];
-      return chip(m[0],m[1],m[2]);
+        REJECTED:["Rejected","border-red-200 bg-red-50 text-red-800","bg-red-500"],
+        CANCELLED:["Cancelled","border-slate-200 bg-slate-50 text-slate-700","bg-slate-500"]
+      })[s] || ["—","border-gray-200 bg-gray-50 text-slate-700","bg-gray-400"];
+      return chip(m[0], m[1], m[2]);
     };
-    const fmtType=t=>({
-      VACATION:"Vacation",SICK:"Sick",EMERGENCY:"Emergency",MATERNITY:"Maternity",PATERNITY:"Paternity",
-      SPECIAL_PRIVILEGE:"Special Privilege",OFFICIAL_BUSINESS:"Official Business",OTHERS:"Others"
-    }[t]||t);
 
-    // ---- Mock data (replace w/ DB) ----
-    let reqs=[
-      {id:crypto.randomUUID(),ref:"LR-2026-00012",reqDate:"2026-02-16",no:"DENR-2026-0007",name:"Dela Cruz, Juan",cat:"REGIONAL",reg:"NCR",mun:"",type:"VACATION",start:"2026-02-20",end:"2026-02-21",status:"PENDING",reason:"Family matters",notes:""},
-      {id:crypto.randomUUID(),ref:"LR-2026-00018",reqDate:"2026-02-10",no:"DENR-2026-0011",name:"Santos, Maria",cat:"MUNICIPALITY",reg:"Region IV-A",mun:"San Pedro",type:"SICK",start:"2026-02-11",end:"2026-02-12",status:"APPROVED",reason:"Medical",notes:"Approved by HR"}
+    const chipType = t => {
+      const m = ({
+        VACATION:["Vacation","border-sky-200 bg-sky-50 text-sky-800","bg-sky-500"],
+        SICK:["Sick","border-indigo-200 bg-indigo-50 text-indigo-800","bg-indigo-500"],
+        EMERGENCY:["Emergency","border-amber-200 bg-amber-50 text-amber-800","bg-amber-500"],
+        MATERNITY:["Maternity","border-pink-200 bg-pink-50 text-pink-800","bg-pink-500"],
+        PATERNITY:["Paternity","border-teal-200 bg-teal-50 text-teal-800","bg-teal-500"],
+        SPECIAL:["Special","border-violet-200 bg-violet-50 text-violet-800","bg-violet-500"],
+        UNPAID:["Unpaid","border-red-200 bg-red-50 text-red-800","bg-red-500"]
+      })[t] || ["—","border-gray-200 bg-gray-50 text-slate-700","bg-gray-400"];
+      return chip(m[0], m[1], m[2]);
+    };
+
+    const fmtRange = (a,b) => `${a} → ${b}`;
+
+    const daysInclusive = (start, end) => {
+      const s = new Date(start + "T00:00:00");
+      const e = new Date(end + "T00:00:00");
+      if(isNaN(s) || isNaN(e) || s > e) return 0;
+      const ms = (e - s);
+      return Math.floor(ms / (1000*60*60*24)) + 1;
+    };
+
+    const overlaps = (aStart, aEnd, bStart, bEnd) => !(aEnd < bStart || aStart > bEnd);
+
+    // ---------- Dynamic year ----------
+    const fy = $("fy");
+    const nowY = new Date().getFullYear();
+    for(let y = nowY - 2; y <= nowY + 10; y++){
+      const opt = document.createElement("option");
+      opt.value = String(y);
+      opt.textContent = String(y);
+      if(y === 2026) opt.selected = true;
+      fy.appendChild(opt);
+    }
+
+    // ---------- Data model ----------
+    // {id,ref,filed,employee,empId,dept,reg,type,start,end,status,reason,remark}
+    const makeRef = () => `LR-${new Date().getFullYear()}-${Math.floor(Math.random()*90000+10000)}`;
+    let leaves = [
+      {id:crypto.randomUUID(),ref:makeRef(),filed:"2026-02-01",employee:"Juan Dela Cruz",empId:"DENR-1234",dept:"HR",reg:"NCR",type:"VACATION",start:"2026-02-10",end:"2026-02-12",status:"PENDING",reason:"Family event",remark:""},
+      {id:crypto.randomUUID(),ref:makeRef(),filed:"2026-01-22",employee:"Maria Santos",empId:"DENR-8441",dept:"Finance",reg:"Region IV-A",type:"SICK",start:"2026-01-23",end:"2026-01-24",status:"APPROVED",reason:"Flu",remark:"Approved by HR"},
+      {id:crypto.randomUUID(),ref:makeRef(),filed:"2026-02-03",employee:"Pedro Reyes",empId:"DENR-5502",dept:"Admin",reg:"Region IV-A",type:"UNPAID",start:"2026-02-15",end:"2026-02-18",status:"REJECTED",reason:"Personal trip",remark:"Insufficient leave credits"},
+      {id:crypto.randomUUID(),ref:makeRef(),filed:"2026-02-05",employee:"Ana Lim",empId:"DENR-9011",dept:"Operations",reg:"Region VII",type:"EMERGENCY",start:"2026-02-06",end:"2026-02-06",status:"APPROVED",reason:"Emergency family matter",remark:"Approved"}
     ];
 
-    // ---- Elements ----
-    const tb=$("tb"), cnt=$("cnt");
-    const toastEl=$("toast"), tt=$("tt"), tm=$("tm");
-
-    // ---- Date helpers ----
-    const daysBetween=(a,b)=>{
-      if(!a||!b) return "";
-      const A=new Date(a+"T00:00:00"), B=new Date(b+"T00:00:00");
-      const diff=Math.round((B-A)/(1000*60*60*24));
-      return isNaN(diff) ? "" : String(diff+1); // inclusive
+    // Conflicts: same employee overlapping APPROVED leave ranges
+    const hasApprovedOverlap = (payload, ignoreId=null) => {
+      return leaves.some(x =>
+        x.id !== ignoreId &&
+        x.status === "APPROVED" &&
+        low(x.employee) === low(payload.employee) &&
+        overlaps(x.start, x.end, payload.start, payload.end)
+      );
     };
 
-    // ---- Filters ----
-    const getF=()=>({c:fc.value,r:fr.value,m:fm.value.trim().toLowerCase(),s:fs.value,t:fType.value,from:fFrom.value,to:fTo.value,ss:fSearch.value.trim().toLowerCase()});
-    const inRange=(x,from,to)=>{ if(from && x<from) return false; if(to && x>to) return false; return true; };
-    const filt=arr=>{
-      const f=getF();
-      return arr.filter(x=>{
-        const hay=[x.ref,x.no,x.name,x.reason,x.notes,x.type,x.status,x.cat,x.reg,x.mun,x.start,x.end].join(" ").toLowerCase();
-        return (f.c==="ALL"||x.cat===f.c)
-          && (f.r==="ALL"||(x.reg||"")===f.r)
-          && (!f.m||(x.mun||"").toLowerCase().includes(f.m))
-          && (f.s==="ALL"||x.status===f.s)
-          && (f.t==="ALL"||x.type===f.t)
-          && inRange(x.start,f.from,f.to) && inRange(x.end,f.from,f.to)
-          && (!f.ss||hay.includes(f.ss));
+    const validate = (p) => {
+      if(!p.employee) return "Employee is required.";
+      if(!p.dept) return "Department is required.";
+      if(!p.reg) return "Region is required.";
+      if(!p.filed) return "Filed date is required.";
+      if(!p.start || !p.end) return "Start/end dates are required.";
+      if(new Date(p.start) > new Date(p.end)) return "Start date must be ≤ end date.";
+      if(!p.type) return "Leave type is required.";
+      if(!p.status) return "Status is required.";
+      return null;
+    };
+
+    // ---------- Filters ----------
+    const getF = () => ({
+      y: fy.value,
+      status: $("fstatus").value,
+      type: $("ftype").value,
+      reg: $("fr").value,
+      dept: low($("fdept").value),
+      s: low($("fs").value),
+    });
+
+    const filt = (arr) => {
+      const f = getF();
+      return arr.filter(x => {
+        const year = (x.filed || "").slice(0,4);
+        const hay = [x.ref,x.filed,x.employee,x.empId,x.dept,x.reg,x.type,x.start,x.end,x.status,x.reason,x.remark].join(" ").toLowerCase();
+        return (f.y === "ALL" || year === f.y)
+          && (f.status === "ALL" || x.status === f.status)
+          && (f.type === "ALL" || x.type === f.type)
+          && (f.reg === "ALL" || x.reg === f.reg)
+          && (!f.dept || low(x.dept).includes(f.dept))
+          && (!f.s || hay.includes(f.s));
+      }).sort((a,b)=> (a.filed||"").localeCompare(b.filed||""));
+    };
+
+    // ---------- Table render ----------
+    const tb = $("tb");
+    const cnt = $("cnt");
+
+    const selectedIds = () => Array.from(document.querySelectorAll(".rc:checked")).map(x=>x.dataset.id);
+
+    const renderTable = () => {
+      const rows = filt(leaves);
+      $("stAll").textContent = rows.length;
+      $("stPending").textContent = rows.filter(x=>x.status==="PENDING").length;
+      $("stApproved").textContent = rows.filter(x=>x.status==="APPROVED").length;
+      cnt.textContent = `Showing ${rows.length} requests`;
+      $("sa").checked = false;
+
+      tb.innerHTML = rows.map(x=>{
+        const dur = daysInclusive(x.start, x.end);
+        const refLine = `<div class="text-[12px] font-bold text-slate-700">${esc(x.ref)}</div>`;
+        const empLine = `<div class="text-[13px] font-black">${esc(x.employee)}</div>
+                         <div class="text-[11px] text-slate-600">${esc(x.empId || "")}</div>`;
+        return `
+          <tr class="hover:bg-gray-50 ${x.status==="PENDING" ? "bg-amber-50/20" : ""}">
+            <td class="px-4 py-3 align-top">
+              <input type="checkbox" class="rc h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-200" data-id="${x.id}">
+            </td>
+            <td class="px-4 py-3 align-top">
+              <div class="text-[12px] font-bold">${esc(x.filed)}</div>
+            </td>
+            <td class="px-4 py-3 align-top">
+              ${refLine}
+              <div class="mt-1">${empLine}</div>
+            </td>
+            <td class="px-4 py-3 align-top">${chipType(x.type)}</td>
+            <td class="px-4 py-3 align-top">
+              <div class="text-[12px] font-bold">${esc(fmtRange(x.start, x.end))}</div>
+              <div class="text-[11px] text-slate-600 mt-1">${dur} day(s)</div>
+            </td>
+            <td class="px-4 py-3 align-top"><div class="text-[12px] font-bold">${esc(x.dept)}</div></td>
+            <td class="px-4 py-3 align-top"><div class="text-[12px] font-bold">${esc(x.reg)}</div></td>
+            <td class="px-4 py-3 align-top">${chipStatus(x.status)}</td>
+            <td class="px-4 py-3 align-top text-right">
+              <div class="inline-flex flex-wrap justify-end gap-2">
+                <button class="vw inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50" data-id="${x.id}">
+                  <span class="material-icons-round text-[18px]">visibility</span> View
+                </button>
+                <button class="ap inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-800 hover:bg-emerald-100" data-id="${x.id}">
+                  <span class="material-icons-round text-[18px]">check</span> Approve
+                </button>
+                <button class="rj inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-800 hover:bg-red-100" data-id="${x.id}">
+                  <span class="material-icons-round text-[18px]">close</span> Reject
+                </button>
+                <button class="ed inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50" data-id="${x.id}">
+                  <span class="material-icons-round text-[18px]">edit</span> Edit
+                </button>
+                <button class="rm inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700 hover:bg-red-100" data-id="${x.id}">
+                  <span class="material-icons-round text-[18px]">delete</span> Remove
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    };
+
+    // ---------- Calendar ----------
+    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    let calMonth = (new Date()).getMonth();
+    const calLabel = $("calLabel");
+    const calGrid = $("calGrid");
+
+    const isInMonth = (dateStr, year, monthIdx) => {
+      return String(dateStr || "").startsWith(`${year}-${String(monthIdx+1).padStart(2,"0")}`);
+    };
+
+    const leavesOn = (dateStr) => {
+      const rows = filt(leaves); // respect filters
+      return rows.filter(l => l.start <= dateStr && l.end >= dateStr);
+    };
+
+    const renderCalendar = () => {
+      const year = parseInt(fy.value, 10);
+      const month = calMonth;
+
+      calLabel.textContent = `${monthNames[month]} ${year}`;
+      calGrid.innerHTML = "";
+
+      const first = new Date(year, month, 1);
+      const startDay = first.getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      for(let i=0; i<startDay; i++){
+        const cell = document.createElement("div");
+        cell.className = "h-28 rounded-2xl border border-gray-200 bg-gray-50";
+        calGrid.appendChild(cell);
+      }
+
+      for(let day=1; day<=daysInMonth; day++){
+        const d = new Date(year, month, day);
+        const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+        const list = leavesOn(dateStr);
+
+        const cell = document.createElement("div");
+        cell.className = "h-28 rounded-2xl border border-gray-200 bg-white p-2 overflow-hidden";
+
+        const dow = d.getDay();
+        const weekend = (dow === 0 || dow === 6);
+
+        cell.innerHTML = `
+          <div class="flex items-start justify-between gap-2">
+            <div class="text-[12px] font-black ${weekend ? "text-slate-400" : "text-slate-900"}">${day}</div>
+            ${list.length ? `<span class="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-black text-sky-800">
+              <span class="material-icons-round text-[14px]">event_busy</span>${list.length}
+            </span>` : ``}
+          </div>
+          <div class="mt-1 space-y-1">
+            ${list.slice(0,3).map(l=>`
+              <button class="calItem w-full text-left truncate rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-bold text-slate-700" data-id="${l.id}">
+                ${esc(l.employee)} • ${esc(l.type)}
+              </button>
+            `).join("")}
+            ${list.length > 3 ? `<div class="text-[10px] font-bold text-slate-500">+${list.length-3} more</div>` : ``}
+          </div>
+        `;
+        calGrid.appendChild(cell);
+      }
+    };
+
+    // ---------- Charts ----------
+    let chStatus, chType, chRegion;
+
+    const countBy = (rows, fnKey) => {
+      const m = new Map();
+      rows.forEach(r=>{
+        const k = fnKey(r);
+        m.set(k, (m.get(k)||0) + 1);
+      });
+      return Array.from(m.entries()).sort((a,b)=>b[1]-a[1]);
+    };
+
+    const renderCharts = () => {
+      const rows = filt(leaves);
+
+      const byStatus = countBy(rows, r=>r.status || "—");
+      const byType = countBy(rows, r=>r.type || "—");
+      const byRegion = countBy(rows, r=>r.reg || "—").slice(0,8);
+
+      [chStatus,chType,chRegion].forEach(c=>{ if(c) c.destroy(); });
+
+      chStatus = new Chart($("chStatus"), {
+        type: "doughnut",
+        data: { labels: byStatus.map(x=>x[0]), datasets: [{ data: byStatus.map(x=>x[1]) }] },
+        options: { responsive:true, plugins:{ legend:{ position:"bottom" } } }
+      });
+
+      chType = new Chart($("chType"), {
+        type: "bar",
+        data: { labels: byType.map(x=>x[0]), datasets: [{ label:"Count", data: byType.map(x=>x[1]) }] },
+        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
+      });
+
+      chRegion = new Chart($("chRegion"), {
+        type: "bar",
+        data: { labels: byRegion.map(x=>x[0]), datasets: [{ label:"Count", data: byRegion.map(x=>x[1]) }] },
+        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
       });
     };
 
-    // ---- Render ----
-    const render=()=>{
-      const rows=filt(reqs);
-      stAll.textContent=rows.length;
-      stPending.textContent=rows.filter(x=>x.status==="PENDING").length;
-      stApproved.textContent=rows.filter(x=>x.status==="APPROVED").length;
-      cnt.textContent=`Showing ${rows.length} requests`;
-      sa.checked=false;
-
-      tb.innerHTML=rows.map(x=>`
-        <tr class="hover:bg-gray-50">
-          <td class="px-4 py-3 align-top"><input type="checkbox" class="rc h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-200" data-id="${x.id}"></td>
-
-          <td class="px-4 py-3 align-top">
-            <div class="text-[13px] font-black">${esc(x.ref)}</div>
-            <div class="text-[11px] text-slate-600 mt-1">Requested: ${esc(x.reqDate)}</div>
-          </td>
-
-          <td class="px-4 py-3 align-top">
-            <div class="text-[13px] font-black">${esc(x.name)}</div>
-            <div class="text-[11px] text-slate-600 mt-1"><span class="font-bold text-slate-700">${esc(x.no)}</span></div>
-          </td>
-
-          <td class="px-4 py-3 align-top">${chipCat(x.cat)}</td>
-          <td class="px-4 py-3 align-top"><div class="text-[12px] font-bold">${esc(x.reg||"—")}</div></td>
-          <td class="px-4 py-3 align-top"><div class="text-[12px] font-bold">${esc(x.mun||"—")}</div></td>
-
-          <td class="px-4 py-3 align-top">
-            <div class="text-[12px] font-black">${esc(fmtType(x.type))}</div>
-            <div class="text-[11px] text-slate-600 mt-1 line-clamp-2">${esc(x.reason)}</div>
-          </td>
-
-          <td class="px-4 py-3 align-top">
-            <div class="text-[12px] font-bold">${esc(x.start)} → ${esc(x.end)}</div>
-            <div class="text-[11px] text-slate-600 mt-1">${daysBetween(x.start,x.end)} day(s)</div>
-          </td>
-
-          <td class="px-4 py-3 align-top">${chipStatus(x.status)}</td>
-
-          <td class="px-4 py-3 align-top text-right">
-            <div class="inline-flex gap-2">
-              <button class="ap inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-[12px] font-bold text-white hover:bg-emerald-700" data-id="${x.id}">
-                <span class="material-icons-round text-[18px]">check</span> Approve
-              </button>
-              <button class="rj inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-bold text-amber-800 hover:bg-amber-100" data-id="${x.id}">
-                <span class="material-icons-round text-[18px]">block</span> Reject
-              </button>
-              <button class="ed inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50" data-id="${x.id}">
-                <span class="material-icons-round text-[18px]">edit</span> Edit
-              </button>
-            </div>
-          </td>
-        </tr>
-      `).join("");
-    };
-
-    // ---- Modal helpers ----
-    const openM=(mode,id)=>{
-      mb.classList.remove("hidden");
-      eid.value=""; f.reset();
-      mt.textContent=mode==="edit"?"Edit Leave Request":"New Leave Request";
-      reqDate.value ||= new Date().toISOString().slice(0,10);
-
-      if(mode==="edit"){
-        const x=reqs.find(z=>z.id===id); if(!x) return;
-        eid.value=x.id; ref.value=x.ref; reqDate.value=x.reqDate; status.value=x.status;
-        no.value=x.no; name.value=x.name; cat.value=x.cat; reg.value=x.reg||""; mun.value=x.mun||"";
-        type.value=x.type; start.value=x.start; end.value=x.end; days.value=daysBetween(x.start,x.end);
-        reason.value=x.reason; notes.value=x.notes||"";
+    // ---------- CRUD ----------
+    const upsert = (payload, id) => {
+      if(!id){
+        leaves.unshift({ id: crypto.randomUUID(), ref: makeRef(), remark:"", ...payload });
+      }else{
+        leaves = leaves.map(x => x.id === id ? { ...x, ...payload } : x);
       }
     };
-    const closeM=()=>mb.classList.add("hidden");
+    const del = (id) => leaves = leaves.filter(x => x.id !== id);
 
-    // ---- CRUD ----
-    const upsert=(payload,id)=>!id ? reqs.unshift({id:crypto.randomUUID(),...payload}) : reqs=reqs.map(x=>x.id===id?{...x,...payload}:x);
-    const del=(id)=>reqs=reqs.filter(x=>x.id!==id);
-    const selected=()=>Array.from(document.querySelectorAll(".rc:checked")).map(x=>x.dataset.id);
+    // ---------- Modal helpers ----------
+    const openM = (mode, id) => {
+      $("mb").classList.remove("hidden");
+      $("eid").value = "";
+      $("f").reset();
+      $("mt").textContent = mode === "edit" ? "Edit Leave Request" : "New Leave Request";
 
-    // ---- Export ----
-    const exportCSV=()=>{
-      const rows=filt(reqs);
-      const headers=["Reference","Request Date","Employee No.","Employee Name","Category","Region","Municipality","Leave Type","Start","End","Days","Status","Reason","Notes"];
-      const body=rows.map(x=>[x.ref,x.reqDate,x.no,x.name,x.cat,x.reg||"",x.mun||"",fmtType(x.type),x.start,x.end,daysBetween(x.start,x.end),x.status,x.reason,x.notes||""]);
-      const csv=[headers,...body].map(r=>r.map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(",")).join("\n");
-      const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}), url=URL.createObjectURL(blob);
-      const a=document.createElement("a"); a.href=url; a.download="denr_hr_leave_requests.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      toast("Exported","CSV file downloaded.");
+      // defaults
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth()+1).padStart(2,"0");
+      const dd = String(today.getDate()).padStart(2,"0");
+      $("filed").value = `${yyyy}-${mm}-${dd}`;
+      $("status").value = "PENDING";
+
+      if(mode === "edit"){
+        const x = leaves.find(z=>z.id===id);
+        if(!x) return;
+        $("eid").value = x.id;
+        $("emp").value = x.employee;
+        $("empid").value = x.empId || "";
+        $("dept").value = x.dept;
+        $("reg").value = x.reg;
+        $("type").value = x.type;
+        $("filed").value = x.filed;
+        $("start").value = x.start;
+        $("end").value = x.end;
+        $("status").value = x.status;
+        $("reason").value = x.reason || "";
+      }
+    };
+    const closeM = () => $("mb").classList.add("hidden");
+
+    // View modal
+    const openView = (id) => {
+      const x = leaves.find(z=>z.id===id);
+      if(!x) return;
+      $("vmb").classList.remove("hidden");
+      $("vt").textContent = `${x.ref} • ${x.employee}`;
+      const dur = daysInclusive(x.start, x.end);
+      $("vd").innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+          <div class="md:col-span-6 rounded-2xl border border-gray-200 bg-white p-3">
+            <div class="text-[11px] font-black text-slate-700">Employee</div>
+            <div class="text-[14px] font-black mt-1">${esc(x.employee)}</div>
+            <div class="text-[12px] text-slate-600">${esc(x.empId || "")}</div>
+          </div>
+          <div class="md:col-span-6 rounded-2xl border border-gray-200 bg-white p-3">
+            <div class="text-[11px] font-black text-slate-700">Status</div>
+            <div class="mt-2">${chipStatus(x.status)}</div>
+            <div class="text-[12px] text-slate-600 mt-2">${esc(x.remark || "")}</div>
+          </div>
+
+          <div class="md:col-span-4 rounded-2xl border border-gray-200 bg-white p-3">
+            <div class="text-[11px] font-black text-slate-700">Leave Type</div>
+            <div class="mt-2">${chipType(x.type)}</div>
+          </div>
+          <div class="md:col-span-4 rounded-2xl border border-gray-200 bg-white p-3">
+            <div class="text-[11px] font-black text-slate-700">Duration</div>
+            <div class="text-[13px] font-black mt-1">${esc(fmtRange(x.start, x.end))}</div>
+            <div class="text-[12px] text-slate-600 mt-1">${dur} day(s) inclusive</div>
+          </div>
+          <div class="md:col-span-4 rounded-2xl border border-gray-200 bg-white p-3">
+            <div class="text-[11px] font-black text-slate-700">Department / Region</div>
+            <div class="text-[13px] font-black mt-1">${esc(x.dept)}</div>
+            <div class="text-[12px] text-slate-600">${esc(x.reg)}</div>
+          </div>
+
+          <div class="md:col-span-12 rounded-2xl border border-gray-200 bg-white p-3">
+            <div class="text-[11px] font-black text-slate-700">Reason</div>
+            <div class="text-[13px] font-semibold mt-1 text-slate-800">${esc(x.reason || "—")}</div>
+          </div>
+        </div>
+      `;
+    };
+    const closeView = () => $("vmb").classList.add("hidden");
+
+    // ---------- Export ----------
+    const exportCSV = () => {
+      const rows = filt(leaves);
+      const headers = ["Date Filed","Reference","Employee","Employee ID","Department","Region","Leave Type","Start Date","End Date","Status","Reason","Remark"];
+      const body = rows.map(x => [x.filed,x.ref,x.employee,x.empId||"",x.dept,x.reg,x.type,x.start,x.end,x.status,x.reason||"",x.remark||""]);
+      const csv = [headers, ...body]
+        .map(r => r.map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `denr_hr_leave_requests_${fy.value}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast("Exported", "CSV file downloaded.");
     };
 
-    // ---- Status update ----
-    const setStatus=(id,newStatus)=>{
-      reqs=reqs.map(x=>x.id===id?{...x,status:newStatus}:x);
+    // ---------- Import ----------
+    let importRows = [];
+    const openImport = () => {
+      $("imb").classList.remove("hidden");
+      $("importFile").value = "";
+      $("impTb").innerHTML = "";
+      $("impCount").textContent = "(0 rows)";
+      $("impSummary").textContent = "";
+      importRows = [];
     };
+    const closeImport = () => $("imb").classList.add("hidden");
 
-    // ---- Events ----
-    btnOpenCreate.onclick=()=>openM("create");
-    mx.onclick=mc.onclick=()=>closeM();
-    mb.onclick=e=>{ if(e.target===mb) closeM(); };
+    const refExists = (ref) => leaves.some(x => norm(x.ref) === norm(ref));
 
-    // compute days
-    const recalc=()=>days.value=daysBetween(start.value,end.value);
-    start.oninput=end.oninput=recalc;
+    const parseFile = async () => {
+      const file = $("importFile").files?.[0];
+      if(!file) return toast("No file", "Choose an .xlsx or .csv file.");
 
-    // Filters
-    ["fc","fr","fs","fType"].forEach(id=>$(id).addEventListener("change",render));
-    ["fm","fFrom","fTo","fSearch"].forEach(id=>$(id).addEventListener("input",render));
-    btnClear.onclick=()=>{ fc.value="ALL"; fr.value="ALL"; fm.value=""; fs.value="ALL"; fType.value="ALL"; fFrom.value=""; fTo.value=""; fSearch.value=""; render(); toast("Cleared","Filters reset."); };
-    btnExport.onclick=exportCSV;
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, {type:"array"});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, {defval:""});
 
-    // Select all
-    sa.onchange=(e)=>q(".rc").forEach(x=>x.checked=e.target.checked);
-
-    // Bulk actions
-    btnBulkApprove.onclick=()=>{
-      const ids=selected(); if(!ids.length) return toast("No selection","Select at least one request.");
-      ids.forEach(id=>setStatus(id,"APPROVED")); render(); toast("Updated","Selected requests approved.");
-    };
-    btnBulkReject.onclick=()=>{
-      const ids=selected(); if(!ids.length) return toast("No selection","Select at least one request.");
-      ids.forEach(id=>setStatus(id,"REJECTED")); render(); toast("Updated","Selected requests rejected.");
-    };
-    btnBulkDelete.onclick=()=>{
-      const ids=selected(); if(!ids.length) return toast("No selection","Select at least one request.");
-      if(!confirm(`Remove ${ids.length} selected request(s)?`)) return;
-      ids.forEach(del); render(); toast("Removed","Selected requests deleted.");
-    };
-
-    // Row actions
-    document.addEventListener("click",(e)=>{
-      const ed=e.target.closest(".ed"), ap=e.target.closest(".ap"), rj=e.target.closest(".rj");
-      if(ed) return openM("edit",ed.dataset.id);
-      if(ap){ setStatus(ap.dataset.id,"APPROVED"); render(); return toast("Approved","Request approved."); }
-      if(rj){ setStatus(rj.dataset.id,"REJECTED"); render(); return toast("Rejected","Request rejected."); }
-    });
-
-    // Save
-    f.onsubmit=(e)=>{
-      e.preventDefault();
-      const payload={
-        ref:ref.value.trim(), reqDate:reqDate.value, status:status.value,
-        no:no.value.trim(), name:name.value.trim(),
-        cat:cat.value, reg:reg.value.trim(), mun:mun.value.trim(),
-        type:type.value, start:start.value, end:end.value,
-        reason:reason.value.trim(), notes:notes.value.trim()
+      const col = (row, name) => {
+        const key = Object.keys(row).find(k => low(k) === low(name));
+        return key ? row[key] : "";
       };
 
-      // validations
-      if(payload.cat==="MUNICIPALITY" && !payload.mun) return toast("Missing field","Municipality is required.");
-      if(payload.start && payload.end && payload.end < payload.start) return toast("Invalid dates","End date must be on/after start date.");
-      // unique ref
-      const id=eid.value.trim()||null;
-      const dup=reqs.some(x=>x.ref.toLowerCase()===payload.ref.toLowerCase() && x.id!==id);
-      if(dup) return toast("Duplicate","Reference No. must be unique.");
+      const asDate = (v) => {
+        if(typeof v === "number"){
+          const d = XLSX.SSF.parse_date_code(v);
+          if(d) return `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`;
+        }
+        return norm(v);
+      };
 
-      upsert(payload,id);
-      closeM(); render(); toast("Saved","Leave request saved.");
+      const mapped = json.map((row, idx) => {
+        const payload = {
+          filed: asDate(col(row, "Date Filed")) || asDate(col(row, "Filed Date")),
+          ref: norm(col(row, "Reference")) || makeRef(),
+          employee: norm(col(row, "Employee")),
+          empId: norm(col(row, "Employee ID")),
+          dept: norm(col(row, "Department")),
+          reg: norm(col(row, "Region")),
+          type: norm(col(row, "Leave Type")).toUpperCase().replaceAll(" ", "_"),
+          start: asDate(col(row, "Start Date")),
+          end: asDate(col(row, "End Date")),
+          status: norm(col(row, "Status")).toUpperCase(),
+          reason: norm(col(row, "Reason")),
+          remark: norm(col(row, "Remark"))
+        };
+
+        // normalize
+        const typeMap = {
+          "VACATION LEAVE":"VACATION",
+          "SICK LEAVE":"SICK",
+          "EMERGENCY LEAVE":"EMERGENCY",
+          "MATERNITY LEAVE":"MATERNITY",
+          "PATERNITY LEAVE":"PATERNITY",
+          "SPECIAL LEAVE":"SPECIAL",
+          "UNPAID LEAVE":"UNPAID",
+        };
+        payload.type = typeMap[payload.type] || payload.type || "VACATION";
+
+        const statusMap = { "PENDING":"PENDING","APPROVED":"APPROVED","REJECTED":"REJECTED","CANCELLED":"CANCELLED" };
+        payload.status = statusMap[payload.status] || "PENDING";
+
+        return { idx: idx+1, payload };
+      });
+
+      const skip = $("skipConflicts").checked;
+      let ok=0, bad=0, dupe=0;
+
+      importRows = mapped.map(({idx, payload})=>{
+        const err = validate(payload);
+        if(err){ bad++; return {idx, payload, status:"INVALID", note: err}; }
+
+        if(refExists(payload.ref)){
+          dupe++;
+          return {idx, payload, status:"DUPLICATE", note: skip ? "Will be skipped (ref exists)." : "Duplicate reference."};
+        }
+        ok++;
+        return {idx, payload, status:"OK", note:"Ready to import."};
+      });
+
+      $("impCount").textContent = `(${importRows.length} rows)`;
+      $("impSummary").textContent = `Ready: ${ok} • Duplicates: ${dupe} • Invalid: ${bad}`;
+
+      $("impTb").innerHTML = importRows.slice(0,200).map(r=>`
+        <tr>
+          <td class="px-4 py-2 text-[12px] font-bold">${esc(r.payload.ref)}</td>
+          <td class="px-4 py-2 text-[12px] font-black">${esc(r.payload.employee)}</td>
+          <td class="px-4 py-2 text-[12px]">${esc(r.payload.type)}</td>
+          <td class="px-4 py-2 text-[12px]">${esc(r.payload.start)}</td>
+          <td class="px-4 py-2 text-[12px]">${esc(r.payload.end)}</td>
+          <td class="px-4 py-2 text-[12px]">${esc(r.payload.reg)}</td>
+          <td class="px-4 py-2 text-[12px]">${esc(r.payload.status)}</td>
+          <td class="px-4 py-2 text-[11px] font-black ${
+            r.status==="OK" ? "text-emerald-700" :
+            r.status==="DUPLICATE" ? "text-amber-700" : "text-red-700"
+          }">${esc(r.status)} • ${esc(r.note)}</td>
+        </tr>
+      `).join("");
+
+      if(importRows.length > 200){
+        $("impTb").innerHTML += `<tr><td colspan="8" class="px-4 py-3 text-[12px] text-slate-600">Showing first 200 rows only.</td></tr>`;
+      }
+
+      toast("Parsed", `Loaded ${importRows.length} rows from file.`);
     };
 
-    // Init
-    render();
+    const applyImport = () => {
+      if(!importRows.length) return toast("Nothing to import", "Parse a file first.");
+      const skip = $("skipConflicts").checked;
+
+      let added=0, skipped=0, invalid=0;
+      importRows.forEach(r=>{
+        if(r.status==="INVALID"){ invalid++; return; }
+        if(r.status==="DUPLICATE" && skip){ skipped++; return; }
+        if(refExists(r.payload.ref)){ skipped++; return; }
+
+        leaves.unshift({
+          id: crypto.randomUUID(),
+          ref: r.payload.ref || makeRef(),
+          filed: r.payload.filed,
+          employee: r.payload.employee,
+          empId: r.payload.empId,
+          dept: r.payload.dept,
+          reg: r.payload.reg,
+          type: r.payload.type,
+          start: r.payload.start,
+          end: r.payload.end,
+          status: r.payload.status,
+          reason: r.payload.reason,
+          remark: r.payload.remark || ""
+        });
+        added++;
+      });
+
+      closeImport();
+      rerenderAll();
+      toast("Import complete", `Added ${added}, skipped ${skipped}, invalid ${invalid}.`);
+    };
+
+    // ---------- Impact calc ----------
+    const computeImpactFor = (id) => {
+      const x = leaves.find(z=>z.id===id);
+      if(!x) return {ok:false, msg:"Select a request first."};
+      const dur = daysInclusive(x.start, x.end);
+      if(dur <= 0) return {ok:false, msg:"Invalid date range."};
+
+      const daily = Number($("payDaily").value);
+      if(!Number.isFinite(daily) || daily <= 0) return {ok:false, msg:"Enter a valid daily rate."};
+
+      const mode = $("payMode").value;
+      const deduction = (mode === "UNPAID") ? dur * daily : 0;
+      return {
+        ok:true,
+        msg:`Selected: ${x.ref} • ${x.employee}`,
+        dur,
+        daily,
+        mode,
+        deduction,
+        employee: x.employee,
+        ref: x.ref
+      };
+    };
+
+    // ---------- Bulk status update ----------
+    const setStatusForIds = (ids, status, remark) => {
+      let updated=0, blocked=0;
+
+      leaves = leaves.map(x=>{
+        if(!ids.includes(x.id)) return x;
+
+        // approving: block if overlaps with another approved request for same employee
+        if(status === "APPROVED"){
+          const payload = {...x, status:"APPROVED"};
+          if(hasApprovedOverlap(payload, x.id)){
+            blocked++;
+            return x;
+          }
+        }
+
+        updated++;
+        return { ...x, status, remark: remark || x.remark || "" };
+      });
+
+      return {updated, blocked};
+    };
+
+    // ---------- Re-render ----------
+    const rerenderAll = () => {
+      renderTable();
+      renderCalendar();
+      renderCharts();
+    };
+
+    // ---------- Events ----------
+    $("btnOpenCreate").onclick = ()=> openM("create");
+    $("mx").onclick = $("mc").onclick = closeM;
+    $("mb").onclick = (e)=>{ if(e.target === $("mb")) closeM(); };
+
+    $("vx").onclick = closeView;
+    $("vmb").onclick = (e)=>{ if(e.target === $("vmb")) closeView(); };
+
+    // Save form
+    $("f").onsubmit = (e) => {
+      e.preventDefault();
+
+      const payload = {
+        filed: $("filed").value,
+        employee: norm($("emp").value),
+        empId: norm($("empid").value),
+        dept: norm($("dept").value),
+        reg: norm($("reg").value),
+        type: $("type").value,
+        start: $("start").value,
+        end: $("end").value,
+        status: $("status").value,
+        reason: norm($("reason").value)
+      };
+
+      const err = validate(payload);
+      if(err) return toast("Validation", err);
+
+      const id = norm($("eid").value) || null;
+
+      // block overlap if setting to APPROVED
+      if(payload.status === "APPROVED" && hasApprovedOverlap(payload, id)){
+        return toast("Conflict", "Employee already has an approved leave overlapping this date range.");
+      }
+
+      upsert(payload, id);
+      closeM();
+      rerenderAll();
+      toast("Saved", "Leave request saved.");
+    };
+
+    // row actions
+    document.addEventListener("click", (e)=>{
+      const vw = e.target.closest(".vw");
+      const ap = e.target.closest(".ap");
+      const rj = e.target.closest(".rj");
+      const ed = e.target.closest(".ed");
+      const rm = e.target.closest(".rm");
+      const calItem = e.target.closest(".calItem");
+
+      if(calItem) openView(calItem.dataset.id);
+
+      if(vw) openView(vw.dataset.id);
+
+      if(ap){
+        const id = ap.dataset.id;
+        const remark = norm($("bulkRemark").value) || "Approved";
+        const res = setStatusForIds([id], "APPROVED", remark);
+        rerenderAll();
+        if(res.blocked) toast("Blocked", "Approval blocked due to overlap with existing approved leave.");
+        else toast("Approved", "Request approved.");
+      }
+
+      if(rj){
+        const id = rj.dataset.id;
+        const remark = norm($("bulkRemark").value) || "Rejected";
+        setStatusForIds([id], "REJECTED", remark);
+        rerenderAll();
+        toast("Rejected", "Request rejected.");
+      }
+
+      if(ed) openM("edit", ed.dataset.id);
+
+      if(rm){
+        const id = rm.dataset.id;
+        const x = leaves.find(z=>z.id===id);
+        if(!x) return;
+        if(confirm(`Remove ${x.ref} (${x.employee})?`)){
+          del(id);
+          rerenderAll();
+          toast("Removed", "Request deleted.");
+        }
+      }
+    });
+
+    // select all
+    $("sa").onchange = (e)=> q(".rc").forEach(x=>x.checked = e.target.checked);
+
+    // bulk delete
+    $("btnBulkDelete").onclick = ()=>{
+      const ids = selectedIds();
+      if(!ids.length) return toast("No selection", "Select at least one request.");
+      if(!confirm(`Remove ${ids.length} selected request(s)?`)) return;
+      ids.forEach(del);
+      rerenderAll();
+      toast("Removed", "Selected requests deleted.");
+    };
+
+    // bulk approve/reject
+    $("btnBulkApprove").onclick = ()=>{
+      const ids = selectedIds();
+      if(!ids.length) return toast("No selection", "Select at least one request.");
+      const remark = norm($("bulkRemark").value) || "Approved";
+      const res = setStatusForIds(ids, "APPROVED", remark);
+      rerenderAll();
+      if(res.blocked) toast("Approved (partial)", `Approved ${res.updated}. Blocked ${res.blocked} due to overlap.`);
+      else toast("Approved", `Approved ${res.updated} request(s).`);
+    };
+
+    $("btnBulkReject").onclick = ()=>{
+      const ids = selectedIds();
+      if(!ids.length) return toast("No selection", "Select at least one request.");
+      const remark = norm($("bulkRemark").value) || "Rejected";
+      const res = setStatusForIds(ids, "REJECTED", remark);
+      rerenderAll();
+      toast("Rejected", `Rejected ${res.updated} request(s).`);
+    };
+
+    // impact calc (selected = first checked row)
+    $("btnCalcImpact").onclick = ()=>{
+      const id = selectedIds()[0];
+      if(!id) return toast("No selection", "Select one request (checkbox) to compute impact.");
+      const out = computeImpactFor(id);
+      if(!out.ok) return toast("Cannot compute", out.msg);
+
+      const dur = out.dur;
+      const mode = out.mode;
+      const deduction = out.deduction;
+
+      $("impactOut").textContent = mode === "UNPAID" ? `-${money(deduction)}` : `0.00`;
+      $("impactExplain").textContent =
+        `${out.msg}. Duration: ${dur} day(s). Mode: ${mode}. ` +
+        (mode === "UNPAID"
+          ? `Estimated deduction = ${dur} × ${money(out.daily)} = ${money(deduction)}.`
+          : `Paid leave: no deduction in this preview.`);
+
+      toast("Computed", "Impact computed for selected request.");
+    };
+
+    // filters rerender
+    ["fy","fstatus","ftype","fr"].forEach(id => $(id).addEventListener("change", rerenderAll));
+    ["fs","fdept"].forEach(id => $(id).addEventListener("input", rerenderAll));
+
+    $("btnClear").onclick = ()=>{
+      $("fstatus").value="ALL";
+      $("ftype").value="ALL";
+      $("fr").value="ALL";
+      $("fdept").value="";
+      $("fs").value="";
+      rerenderAll();
+      toast("Cleared", "Filters reset.");
+    };
+
+    // view toggle
+    $("btnToggleView").onclick = ()=>{
+      $("tableView").classList.toggle("hidden");
+      $("calendarView").classList.toggle("hidden");
+      const showingCal = !$("calendarView").classList.contains("hidden");
+      $("btnToggleView").innerHTML = showingCal
+        ? `<span class="material-icons-round text-[18px]">table_rows</span> Table View`
+        : `<span class="material-icons-round text-[18px]">calendar_month</span> Calendar View`;
+      renderCalendar();
+    };
+
+    // calendar nav
+    $("calPrev").onclick = ()=>{
+      calMonth = (calMonth + 11) % 12;
+      renderCalendar();
+    };
+    $("calNext").onclick = ()=>{
+      calMonth = (calMonth + 1) % 12;
+      renderCalendar();
+    };
+
+    // export
+    $("btnExport").onclick = exportCSV;
+
+    // import
+    $("btnImport").onclick = openImport;
+    $("imx").onclick = $("btnImportCancel").onclick = closeImport;
+    $("imb").onclick = (e)=>{ if(e.target === $("imb")) closeImport(); };
+    $("btnParse").onclick = parseFile;
+    $("btnImportApply").onclick = applyImport;
+
+    // ---------- Init ----------
+    // add ALL option to year if you want cross-year
+    const allOpt = document.createElement("option");
+    allOpt.value = "ALL";
+    allOpt.textContent = "All";
+    fy.insertBefore(allOpt, fy.firstChild);
+
+    rerenderAll();
+    renderCalendar();
   </script>
 </body>
 </html>
