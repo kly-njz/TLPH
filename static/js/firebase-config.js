@@ -21,5 +21,12 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const googleProvider = new GoogleAuthProvider();
 
+// Expose to global scope
+window.app = app;
+window.auth = auth;
+window.db = db;
+window.storage = storage;
+window.googleProvider = googleProvider;
+
 export { app, auth, db, storage, signInWithEmailAndPassword, createUserWithEmailAndPassword, googleProvider, signInWithPopup, onAuthStateChanged };
 

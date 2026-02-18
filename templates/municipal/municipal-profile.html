@@ -8,6 +8,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Firebase scripts -->
+    <script type="module" src="/static/js/firebase-config.js"></script>
+    <script type="module" src="/static/js/auth.js"></script>
     
     <style>
         [x-cloak] { display: none !important; }
@@ -128,17 +131,17 @@
                                 <input type="file" id="profile-upload" accept="image/*" onchange="previewImage(event)">
                             </div>
 
-                            <h2 class="text-[11px] font-black text-slate-900 uppercase m-0 leading-tight">Dave A. Administrator</h2>
-                            <p class="text-emerald-700 text-[8px] font-bold mt-1 uppercase tracking-tighter leading-none">IT Officer I</p>
+                            <h2 id="profileNameBlock" class="text-[11px] font-black text-slate-900 uppercase m-0 leading-tight">Dave A. Administrator</h2>
+                            <p id="profileRoleBlock" class="text-emerald-700 text-[8px] font-bold mt-1 uppercase tracking-tighter leading-none">IT Officer I</p>
                             
                             <div class="text-left mt-4 pt-3 border-t border-slate-100 space-y-3">
                                 <div>
                                     <label class="label-sm block leading-none mb-1">Status</label>
-                                    <span class="bg-emerald-50 text-emerald-700 text-[8px] font-black px-1.5 py-0.5 rounded-[1px] border border-emerald-200 uppercase">Active Duty</span>
+                                    <span id="profileStatusBlock" class="bg-emerald-50 text-emerald-700 text-[8px] font-black px-1.5 py-0.5 rounded-[1px] border border-emerald-200 uppercase">Active Duty</span>
                                 </div>
                                 <div>
                                     <label class="label-sm block leading-none mb-1">Office Station</label>
-                                    <p class="font-bold text-[10px] text-slate-700 uppercase leading-none m-0">Region IV-A</p>
+                                    <p id="profileOfficeBlock" class="font-bold text-[10px] text-slate-700 uppercase leading-none m-0">Region IV-A</p>
                                 </div>
                             </div>
                         </div>
@@ -161,24 +164,47 @@
                             <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
                                 <div>
                                     <label class="label-sm block mb-0.5">Surname</label>
-                                    <input type="text" value="ADMINISTRATOR" class="input-gov uppercase">
+                                    <input id="lastNameField" type="text" class="input-gov uppercase">
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">First Name</label>
-                                    <input type="text" value="DAVE" class="input-gov uppercase">
+                                    <input id="firstNameField" type="text" class="input-gov uppercase">
                                 </div>
                                 <div>
                                     <label class="label-sm block mb-0.5">Middle Name</label>
-                                    <input type="text" value="ALCANTARA" class="input-gov uppercase">
+                                    <input id="middleNameField" type="text" class="input-gov uppercase">
                                 </div>
-                                
                                 <div>
                                     <label class="label-sm block mb-0.5">Employee ID No.</label>
-                                    <input type="text" value="DENR-2026-089" class="input-gov font-mono">
+                                    <input id="employeeIdField" type="text" class="input-gov font-mono" readonly>
+                                </div>
+                                <div>
+                                    <label class="label-sm block mb-0.5">Municipality</label>
+                                    <input id="municipalityField" type="text" class="input-gov uppercase">
+                                </div>
+                                <div>
+                                    <label class="label-sm block mb-0.5">Province</label>
+                                    <input id="provinceField" type="text" class="input-gov uppercase">
+                                </div>
+                                <div>
+                                    <label class="label-sm block mb-0.5">Role</label>
+                                    <input id="roleField" type="text" class="input-gov uppercase">
+                                </div>
+                                <div>
+                                    <label class="label-sm block mb-0.5">Status</label>
+                                    <input id="statusField" type="text" class="input-gov uppercase">
+                                </div>
+                                <div>
+                                    <label class="label-sm block mb-0.5">Phone</label>
+                                    <input id="phoneField" type="text" class="input-gov">
+                                </div>
+                                <div>
+                                    <label class="label-sm block mb-0.5">Email</label>
+                                    <input id="emailField" type="text" class="input-gov">
                                 </div>
                                 <div class="md:col-span-2">
                                     <label class="label-sm block mb-0.5">Division / Section Assignment</label>
-                                    <p class="text-[11px] font-bold text-slate-800 mt-0.5 m-0">Knowledge and Information Systems Service (KISS)</p>
+                                    <input id="divisionField" type="text" class="input-gov uppercase">
                                 </div>
 
                                 <div class="md:col-span-3">
@@ -223,6 +249,176 @@
     </div>
 
     <script>
+                        // Enable direct editing and update Firestore
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const updateBtn = document.querySelector('.gov-panel.shadow-sm button[type="submit"]');
+                            if (updateBtn) {
+                                updateBtn.addEventListener('click', async function(e) {
+                                    e.preventDefault();
+                                    try {
+                                        const db = window.db;
+                                        const auth = window.auth;
+                                        if (!db || !auth || !auth.currentUser) {
+                                            alert('Firebase not initialized or user not authenticated');
+                                            return;
+                                        }
+                                        const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+                                        const userId = auth.currentUser.uid;
+                                        const userDocRef = doc(db, 'users', userId);
+                                        // Collect values from input fields
+                                        const lastName = document.querySelector('input.input-gov.uppercase').value;
+                                        const firstName = document.querySelectorAll('input.input-gov.uppercase')[1].value;
+                                        const middleName = document.querySelectorAll('input.input-gov.uppercase')[2].value;
+                                        const employeeId = document.querySelector('input.input-gov.font-mono').value;
+                                        // Add more fields as needed
+                                        await updateDoc(userDocRef, {
+                                            lastName,
+                                            firstName,
+                                            middleName,
+                                            employeeId,
+                                        });
+                                        alert('Profile updated successfully!');
+                                    } catch (err) {
+                                        alert('Failed to update profile: ' + err.message);
+                                    }
+                                });
+                            }
+                        });
+                // Load real municipal user data and populate profile fields
+                async function loadMunicipalProfile() {
+                    try {
+                        const db = window.db;
+                        const auth = window.auth;
+                        if (!db || !auth || !auth.currentUser) return;
+                        const userId = auth.currentUser.uid;
+                        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+                        const userDocRef = doc(db, 'users', userId);
+                        const docSnap = await getDoc(userDocRef);
+                        if (!docSnap.exists()) return;
+                        const data = docSnap.data();
+                        // Update input fields
+                        // Populate all fields from Firestore
+                        const fields = [
+                            ['lastNameField', 'lastName'],
+                            ['firstNameField', 'firstName'],
+                            ['middleNameField', 'middleName'],
+                            ['employeeIdField', 'employeeId'],
+                            ['municipalityField', 'municipality'],
+                            ['provinceField', 'province'],
+                            ['roleField', 'role'],
+                            ['statusField', 'status'],
+                            ['phoneField', 'phone'],
+                            ['emailField', 'email'],
+                            ['divisionField', 'division'],
+                        ];
+                        fields.forEach(([inputId, firestoreKey]) => {
+                            const elem = document.getElementById(inputId);
+                            if (!elem) {
+                                console.warn('Missing input field:', inputId);
+                                return;
+                            }
+                            if (inputId === 'employeeIdField') {
+                                elem.value = data.employeeId || generateEmployeeId(data.createdAt);
+                            } else {
+                                elem.value = data[firestoreKey] !== undefined ? data[firestoreKey] : '';
+                            }
+                        });
+
+                        function generateEmployeeId(createdAt) {
+                            // createdAt format: YYYY-MM-DDTHH:mm:ss.sssZ
+                            if (!createdAt) return '';
+                            const d = new Date(createdAt);
+                            const year = d.getFullYear();
+                            const month = String(d.getMonth()+1).padStart(2,'0');
+                            const day = String(d.getDate()).padStart(2,'0');
+                            const sec = String(d.getSeconds()).padStart(2,'0');
+                            return `DENR${year}-${month}-${day}-${sec}`;
+                        }
+                        // Update display blocks with Firestore values
+                        // Update display blocks with Firestore values using only getElementById
+                        const nameBlock = document.getElementById('profileNameBlock');
+                        if (nameBlock) nameBlock.textContent = `${data.firstName || ''} ${data.middleName || ''} ${data.lastName || ''}`;
+                        const roleBlock = document.getElementById('profileRoleBlock');
+                        if (roleBlock) roleBlock.textContent = (data.role || '').toUpperCase();
+                        const statusBlock = document.getElementById('profileStatusBlock');
+                        if (statusBlock) statusBlock.textContent = (data.status || '').toUpperCase();
+                        const officeBlock = document.getElementById('profileOfficeBlock');
+                        if (officeBlock) officeBlock.textContent = (data.province || '').toUpperCase();
+
+                        // Name block
+                        document.querySelector('h2.text-[11px]').textContent = `${data.firstName || ''} ${data.middleName || ''} ${data.lastName || ''}`;
+                        // Role
+                        document.querySelector('p.text-emerald-700').textContent = data.role ? data.role.toUpperCase() : '';
+                        // Status
+                        document.querySelector('span.bg-emerald-50').textContent = data.status ? data.status.toUpperCase() : '';
+                        // Office Station
+                        document.querySelector('p.font-bold.text-[10px]').textContent = data.officeStation || data.province || '';
+                        // Division/Section
+                        const divisionElem = document.getElementById('divisionField');
+                        if (divisionElem) divisionElem.textContent = data.division || '';
+                        // Municipality
+                        const municipalityElem = document.querySelector('input.input-gov.uppercase[name="municipality"]');
+                        if (municipalityElem) municipalityElem.value = data.municipality || '';
+                        // Add more fields as needed
+                    } catch (err) {
+                        console.error('Failed to load profile:', err);
+                    }
+                }
+
+                document.addEventListener('DOMContentLoaded', function() {
+                    loadMunicipalProfile();
+                    const updateBtn = document.querySelector('.gov-panel.shadow-sm button[type="submit"]');
+                    if (updateBtn) {
+                        updateBtn.addEventListener('click', async function(e) {
+                            e.preventDefault();
+                            try {
+                                const db = window.db;
+                                const auth = window.auth;
+                                if (!db || !auth || !auth.currentUser) {
+                                    alert('Firebase not initialized or user not authenticated');
+                                    return;
+                                }
+                                const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+                                const userId = auth.currentUser.uid;
+                                const userDocRef = doc(db, 'users', userId);
+                                // Collect values from input fields
+                                // Gather all input values for update
+                                // Save all fields, even if empty, with error handling
+                                const updateData = {
+                                    lastName: document.getElementById('lastNameField')?.value || '',
+                                    firstName: document.getElementById('firstNameField')?.value || '',
+                                    middleName: document.getElementById('middleNameField')?.value || '',
+                                    employeeId: document.getElementById('employeeIdField')?.value || '',
+                                    municipality: document.getElementById('municipalityField')?.value || '',
+                                    province: document.getElementById('provinceField')?.value || '',
+                                    role: document.getElementById('roleField')?.value || '',
+                                    status: document.getElementById('statusField')?.value || '',
+                                    phone: document.getElementById('phoneField')?.value || '',
+                                    email: document.getElementById('emailField')?.value || '',
+                                    division: document.getElementById('divisionField')?.value || ''
+                                };
+                                try {
+                                    if (!db || !auth || !auth.currentUser) {
+                                        alert('Firebase not initialized or user not authenticated');
+                                        return;
+                                    }
+                                    await updateDoc(userDocRef, updateData);
+                                    alert('Profile updated successfully!');
+                                    await loadMunicipalProfile();
+                                } catch (err) {
+                                    alert('Failed to update profile: ' + err.message);
+                                    console.error('Update error:', err);
+                                }
+                                alert('Profile updated successfully!');
+                                await loadMunicipalProfile();
+                                alert('Profile updated successfully!');
+                                await loadMunicipalProfile(); // Reload info after update
+                            } catch (err) {
+                                alert('Failed to update profile: ' + err.message);
+                            }
+                        });
+                    }
+                });
         function previewImage(event) {
             const reader = new FileReader();
             reader.onload = function() {
@@ -235,6 +431,50 @@
                 reader.readAsDataURL(event.target.files[0]);
             }
         }
+
+        // Municipal Profile Update Handler
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add submit handler for update record
+            const formPanel = document.querySelector('.gov-panel.shadow-sm form') || document.querySelector('.gov-panel.shadow-sm');
+            const updateBtn = document.querySelector('.gov-panel.shadow-sm button[type="submit"]');
+            if (updateBtn) {
+                updateBtn.addEventListener('click', async function(e) {
+                    e.preventDefault();
+                    // Collect values
+                    const surname = document.querySelector('input.input-gov.uppercase[value="ADMINISTRATOR"]')?.value || '';
+                    const firstName = document.querySelector('input.input-gov.uppercase[value="DAVE"]')?.value || '';
+                    const middleName = document.querySelector('input.input-gov.uppercase[value="ALCANTARA"]')?.value || '';
+                    const employeeId = document.querySelector('input.input-gov.font-mono[value="DENR-2026-089"]')?.value || '';
+                    // Add more fields as needed
+
+                    // Firebase update logic (Firestore v10 modular API)
+                    try {
+                        const db = window.db || null;
+                        const auth = window.auth || null;
+                        if (!db || !auth || !auth.currentUser) {
+                            alert('Firebase not initialized or user not authenticated');
+                            return;
+                        }
+                        // Import Firestore functions
+                        const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+                        const userId = auth.currentUser.uid;
+                        const userDocRef = doc(db, 'users', userId);
+                        await updateDoc(userDocRef, {
+                            firstName,
+                            lastName: surname,
+                            middleName,
+                            employeeId,
+                            // Add other fields here
+                            // Save the id field
+                            id: employeeId
+                        });
+                        alert('Profile updated successfully!');
+                    } catch (err) {
+                        alert('Failed to update profile: ' + err.message);
+                    }
+                });
+            }
+        });
     </script>
 </body>
 </html>
