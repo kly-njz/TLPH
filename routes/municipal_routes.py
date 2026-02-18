@@ -1,3 +1,7 @@
+@bp.route('/municipal-profile-update')
+@role_required('municipal','municipal_admin')
+def municipal_profile_update():
+    return render_template('municipal/municipal-profile-update.html')
 from flask import Blueprint, render_template
 from firebase_auth_middleware import role_required
 
