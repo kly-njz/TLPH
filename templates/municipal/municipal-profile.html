@@ -382,10 +382,26 @@
                                 console.warn('Missing input field:', inputId);
                                 return;
                             }
+                            // Always set .value for each field
                             if (inputId === 'employeeIdField') {
-                                elem.value = data.employeeId || generateEmployeeId(data.createdAt);
+                                if (!data.employeeId && data.createdAt) {
+                                    const newId = generateEmployeeId(data.createdAt);
+                                    elem.value = newId;
+                                    // Save to Firestore
+                                    const db = window.db;
+                                    const auth = window.auth;
+                                    if (db && auth && auth.currentUser) {
+                                        import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js').then(({ doc, updateDoc }) => {
+                                            const userId = auth.currentUser.uid;
+                                            const userDocRef = doc(db, 'users', userId);
+                                            updateDoc(userDocRef, { employeeId: newId });
+                                        });
+                                    }
+                                } else {
+                                    elem.value = data.employeeId || '';
+                                }
                             } else {
-                                elem.value = data[firestoreKey] !== undefined ? data[firestoreKey] : '';
+                                elem.value = data[firestoreKey] || '';
                             }
                         });
 
