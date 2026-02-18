@@ -262,7 +262,7 @@
                             }
                         });
                 // Load real municipal user data and populate profile fields
-                document.addEventListener('DOMContentLoaded', async function() {
+                async function loadMunicipalProfile() {
                     try {
                         const db = window.db;
                         const auth = window.auth;
@@ -273,19 +273,74 @@
                         const docSnap = await getDoc(userDocRef);
                         if (!docSnap.exists()) return;
                         const data = docSnap.data();
-                        // Update displayed info
+                        // Update input fields
                         document.querySelector('input.input-gov.uppercase').value = data.lastName || '';
                         document.querySelectorAll('input.input-gov.uppercase')[1].value = data.firstName || '';
                         document.querySelectorAll('input.input-gov.uppercase')[2].value = data.middleName || '';
                         document.querySelector('input.input-gov.font-mono').value = data.employeeId || '';
-                        // Update text fields
+
+                        // Update display fields
+                        // Name block
                         document.querySelector('h2.text-[11px]').textContent = `${data.firstName || ''} ${data.middleName || ''} ${data.lastName || ''}`;
+                        // Role
                         document.querySelector('p.text-emerald-700').textContent = data.role ? data.role.toUpperCase() : '';
+                        // Status
                         document.querySelector('span.bg-emerald-50').textContent = data.status ? data.status.toUpperCase() : '';
+                        // Office Station
                         document.querySelector('p.font-bold.text-[10px]').textContent = data.province ? data.province.toUpperCase() : '';
+                        // Division/Section
+                        const divisionElem = document.querySelector('p.text-[11px].font-bold.text-slate-800');
+                        if (divisionElem) divisionElem.textContent = data.division || '';
+                        // Employee ID block
+                        const empIdElem = document.querySelector('input.input-gov.font-mono');
+                        if (empIdElem) empIdElem.value = data.employeeId || '';
+                        // Surname, First Name, Middle Name (labels)
+                        const surnameElem = document.querySelector('input.input-gov.uppercase');
+                        if (surnameElem) surnameElem.value = data.lastName || '';
+                        const firstNameElem = document.querySelectorAll('input.input-gov.uppercase')[1];
+                        if (firstNameElem) firstNameElem.value = data.firstName || '';
+                        const middleNameElem = document.querySelectorAll('input.input-gov.uppercase')[2];
+                        if (middleNameElem) middleNameElem.value = data.middleName || '';
                         // Add more fields as needed
                     } catch (err) {
                         console.error('Failed to load profile:', err);
+                    }
+                }
+
+                document.addEventListener('DOMContentLoaded', function() {
+                    loadMunicipalProfile();
+                    const updateBtn = document.querySelector('.gov-panel.shadow-sm button[type="submit"]');
+                    if (updateBtn) {
+                        updateBtn.addEventListener('click', async function(e) {
+                            e.preventDefault();
+                            try {
+                                const db = window.db;
+                                const auth = window.auth;
+                                if (!db || !auth || !auth.currentUser) {
+                                    alert('Firebase not initialized or user not authenticated');
+                                    return;
+                                }
+                                const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+                                const userId = auth.currentUser.uid;
+                                const userDocRef = doc(db, 'users', userId);
+                                // Collect values from input fields
+                                const lastName = document.querySelector('input.input-gov.uppercase').value;
+                                const firstName = document.querySelectorAll('input.input-gov.uppercase')[1].value;
+                                const middleName = document.querySelectorAll('input.input-gov.uppercase')[2].value;
+                                const employeeId = document.querySelector('input.input-gov.font-mono').value;
+                                // Add more fields as needed
+                                await updateDoc(userDocRef, {
+                                    lastName,
+                                    firstName,
+                                    middleName,
+                                    employeeId,
+                                });
+                                alert('Profile updated successfully!');
+                                await loadMunicipalProfile(); // Reload info after update
+                            } catch (err) {
+                                alert('Failed to update profile: ' + err.message);
+                            }
+                        });
                     }
                 });
         function previewImage(event) {
