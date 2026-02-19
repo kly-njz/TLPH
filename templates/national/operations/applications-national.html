@@ -205,7 +205,7 @@
     </main>
   </div>
 
-  <!-- Load Firebase and Alpine -->
+  <!-- Load Firebase modules first -->
   <script type="module">
     import { auth, db } from '/static/js/firebase-config.js';
     import { collection, query, where, getDocs, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -221,9 +221,10 @@
     window.firebaseDoc = doc;
     window.firebaseUpdateDoc = updateDoc;
     window.firebaseOnAuthStateChanged = onAuthStateChanged;
-    console.log('Firebase modules loaded');
+    console.log('Firebase modules loaded and exposed to window');
   </script>
 
+  <!-- Alpine component registration -->
   <script>
     document.addEventListener('alpine:init', () => {
       console.log('Alpine:init - registering nationalAppRegistry...');
@@ -265,6 +266,22 @@
 
         async init() {
           console.log('Initializing national app registry...');
+          
+          // Wait for Firebase modules to be available
+          let retries = 0;
+          while (!window.firebaseCollection && retries < 50) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+          }
+          
+          if (!window.firebaseCollection) {
+            console.error('Firebase modules not loaded after waiting');
+            alert('Error: Firebase modules failed to load. Please refresh the page.');
+            this.loading = false;
+            return;
+          }
+          
+          console.log('Firebase modules ready, loading applications...');
           await this.loadApplications();
         },
 
