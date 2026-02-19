@@ -157,13 +157,29 @@
     </div>
   </main>
 
+  <!-- Load Firebase config first -->
   <script type="module">
     import { auth, db } from '/static/js/firebase-config.js';
-    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
     import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-    function applicantProfile() {
-      return {
+    // Expose to window for Alpine
+    window.firebaseAuth = auth;
+    window.firebaseDB = db;
+    window.firebaseDoc = doc;
+    window.firebaseGetDoc = getDoc;
+    window.firebaseOnAuthStateChanged = onAuthStateChanged;
+    console.log('Firebase modules loaded and exposed to window');
+  </script>
+
+  <!-- Load Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Register Alpine component -->
+  <script>
+    document.addEventListener('alpine:init', () => {
+      console.log('Alpine:init event fired, registering applicantProfile...');
+      Alpine.data('applicantProfile', () => ({
         loading: true,
         applicant: {
           name: "Loading...",
@@ -196,7 +212,7 @@
             }
 
             // Fetch application data
-            const appDoc = await getDoc(doc(db, 'applications', applicationId));
+            const appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId));
             
             if (!appDoc.exists()) {
               alert('Application not found');
@@ -210,7 +226,7 @@
             // Fetch user data
             let userData = {};
             if (appData.userId) {
-              const userDoc = await getDoc(doc(db, 'users', appData.userId));
+              const userDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'users', appData.userId));
               if (userDoc.exists()) {
                 userData = userDoc.data();
               }
@@ -253,12 +269,8 @@
             this.loading = false;
           }
         }
-      }
-    }
-
-    // Make function globally available
-    window.applicantProfile = applicantProfile;
+      }));
+    });
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
 </html>
