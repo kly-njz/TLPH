@@ -144,41 +144,47 @@
 
 <script src="/static/js/payroll-municipal.js" type="module"></script>
 <script type="module">
-import { db } from '/static/js/firebase-config.js';
-import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-function peso(n) {
-    if (typeof n !== 'number') n = parseFloat(n);
-    if (isNaN(n)) return '₱ 0.00';
-    return '₱ ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-window.showPayslip = async function(empId) {
-    const employeeCol = collection(db, 'employee');
-    const employeeSnapshot = await getDocs(employeeCol);
-    const emp = employeeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).find(e => e.id === empId);
-    if (!emp) return;
-    // Compose name
-    const lastname = emp.lastname || '';
-    const firstname = emp.first_name || '';
-    const middle = emp.middle_name || '';
-    const middleInitial = middle ? middle.charAt(0).toUpperCase() + '.' : '';
-    const fullName = `${lastname}, ${firstname} ${middleInitial}`.trim();
-    document.getElementById('payslip-emp-name').textContent = fullName;
-    document.getElementById('payslip-emp-id').textContent = emp.emp_id || emp.id;
-    document.getElementById('payslip-emp-title').textContent = emp.official_title || '';
-    document.getElementById('payslip-period').textContent = 'Feb 01 - Feb 15, 2026';
-    document.getElementById('payslip-basic-pay').textContent = peso(emp.basic_pay);
-    document.getElementById('payslip-allowance').textContent = peso(emp.allowance);
-    document.getElementById('payslip-deduction').textContent = peso(emp.deduction);
-    const netPay = (Number(emp.basic_pay) || 0) + (Number(emp.allowance) || 0) - (Number(emp.deduction) || 0);
-    document.getElementById('payslip-net-pay').textContent = peso(netPay);
-    document.getElementById('payslip-modal').classList.remove('hidden');
-}
+<script>
 document.addEventListener('DOMContentLoaded', function() {
-  const closeBtn = document.getElementById('close-payslip-modal');
-  if (closeBtn) closeBtn.onclick = function() {
-    document.getElementById('payslip-modal').classList.add('hidden');
-  };
+  // Attach payslip modal openers
+  document.body.addEventListener('click', async function(e) {
+    if (e.target && e.target.matches('.view-payslip-btn')) {
+      const empId = e.target.getAttribute('data-emp-id');
+      if (!empId) return;
+      // Fetch employee data
+      const db = window.db;
+      const { collection, getDocs } = window.firebase.firestore;
+      const employeeCol = collection(db, 'employee');
+      const employeeSnapshot = await getDocs(employeeCol);
+      const emp = employeeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).find(e => e.id === empId);
+      if (!emp) return;
+      const peso = n => {
+        if (typeof n !== 'number') n = parseFloat(n);
+        if (isNaN(n)) return '₱ 0.00';
+        return '₱ ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      };
+      const lastname = emp.lastname || '';
+      const firstname = emp.first_name || '';
+      const middle = emp.middle_name || '';
+      const middleInitial = middle ? middle.charAt(0).toUpperCase() + '.' : '';
+      const fullName = `${lastname}, ${firstname} ${middleInitial}`.trim();
+      document.getElementById('payslip-emp-name').textContent = fullName;
+      document.getElementById('payslip-emp-id').textContent = emp.emp_id || emp.id;
+      document.getElementById('payslip-emp-title').textContent = emp.official_title || '';
+      document.getElementById('payslip-period').textContent = 'Feb 01 - Feb 15, 2026';
+      document.getElementById('payslip-basic-pay').textContent = peso(emp.basic_pay);
+      document.getElementById('payslip-allowance').textContent = peso(emp.allowance);
+      document.getElementById('payslip-deduction').textContent = peso(emp.deduction);
+      const netPay = (Number(emp.basic_pay) || 0) + (Number(emp.allowance) || 0) - (Number(emp.deduction) || 0);
+      document.getElementById('payslip-net-pay').textContent = peso(netPay);
+      document.getElementById('payslip-modal').classList.remove('hidden');
+    }
+    if (e.target && e.target.id === 'close-payslip-modal') {
+      document.getElementById('payslip-modal').classList.add('hidden');
+    }
+  });
 });
+</script>
 </script>
 </body>
 </html>
