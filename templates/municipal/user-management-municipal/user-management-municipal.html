@@ -194,9 +194,17 @@
           if (btn && modal && closeBtn && addUserForm && empIdInput) {
             btn.addEventListener('click', function() {
               empIdInput.value = generateEmployeeId();
-              // Set municipality and province fields to logged-in user's values
-              document.getElementById('add-municipality').value = getLoggedInMunicipality();
-              document.getElementById('add-province').value = getLoggedInProvince();
+              // Auto-fill municipality and province fields with logged-in user's values
+              const munField = document.getElementById('add-municipality');
+              const provField = document.getElementById('add-province');
+              let mun = getLoggedInMunicipality();
+              let prov = getLoggedInProvince();
+              // Fallback: try window vars
+              if (!mun && window.loggedInMunicipality) mun = window.loggedInMunicipality;
+              if (!prov && window.loggedInProvince) prov = window.loggedInProvince;
+              // Fallback: try to get from a visible element or session if needed
+              munField.value = mun || '';
+              provField.value = prov || '';
               modal.classList.remove('hidden');
             });
             closeBtn.addEventListener('click', function() {
@@ -208,9 +216,21 @@
               // Import Firestore if not already imported
               const db = window.db;
               const form = addUserForm;
+
               const generatedEmployeeId = form.employeeId.value;
-              const loggedInMunicipality = window.loggedInMunicipality;
-              const loggedInProvince = window.loggedInProvince;
+              // Fallbacks in case window vars are not set
+              let loggedInMunicipality = window.loggedInMunicipality;
+              let loggedInProvince = window.loggedInProvince;
+              if (!loggedInMunicipality) {
+                loggedInMunicipality = document.getElementById('add-municipality')?.value || '';
+              }
+              if (!loggedInProvince) {
+                loggedInProvince = document.getElementById('add-province')?.value || '';
+              }
+              if (!loggedInMunicipality || !loggedInProvince) {
+                alert('Municipality and Province are required. Please contact your administrator.');
+                return;
+              }
 
               const newUser = {
                 applicationType: "municipal",
