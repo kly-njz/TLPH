@@ -87,30 +87,40 @@ def get_user_transactions(user_email=None, user_id=None):
         transactions_ref = get_transactions_collection()
         
         transactions_by_id = {}
-        queries = []
-
-        # Primary: Query by userId if provided (ONLY userId, no email fallback)
-        if user_id:
-            queries.append(transactions_ref.where(filter=firestore.FieldFilter('userId', '==', user_id)))
-        # Fallback: Query by email ONLY if no userId provided (for backwards compatibility)
-        elif user_email:
+        
+        # Strategy: Query by email first, then filter by userId logic
+        # This handles both old records (no userId) and new records (with userId)
+        if user_email:
             normalized_email = user_email.strip().lower()
-            queries.append(transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', normalized_email)))
+            queries = [
+                transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', normalized_email))
+            ]
             if user_email != normalized_email:
                 queries.append(transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', user_email)))
-
-        for query in queries:
-            for doc in query.stream():
-                transaction = doc.to_dict()
-                transaction['id'] = doc.id
-                # Convert Firestore timestamps to ISO format strings
-                if 'created_at' in transaction and transaction['created_at']:
-                    transaction['created_at'] = transaction['created_at'].isoformat() if hasattr(transaction['created_at'], 'isoformat') else str(transaction['created_at'])
-                if 'updated_at' in transaction and transaction['updated_at']:
-                    transaction['updated_at'] = transaction['updated_at'].isoformat() if hasattr(transaction['updated_at'], 'isoformat') else str(transaction['updated_at'])
-                if 'paid_at' in transaction and transaction['paid_at']:
-                    transaction['paid_at'] = transaction['paid_at'].isoformat() if hasattr(transaction['paid_at'], 'isoformat') else str(transaction['paid_at'])
-                transactions_by_id[doc.id] = transaction
+            
+            for query in queries:
+                for doc in query.stream():
+                    transaction = doc.to_dict()
+                    
+                    # Filter logic when userId is provided:
+                    # - Include if transaction has NO userId field (old records)
+                    # - Include if transaction userId matches current user_id
+                    # - Exclude if transaction userId exists but doesn't match (other user's record)
+                    if user_id:
+                        transaction_user_id = transaction.get('userId')
+                        if transaction_user_id and transaction_user_id != user_id:
+                            # This transaction belongs to a different user (old account with same email)
+                            continue
+                    
+                    transaction['id'] = doc.id
+                    # Convert Firestore timestamps to ISO format strings
+                    if 'created_at' in transaction and transaction['created_at']:
+                        transaction['created_at'] = transaction['created_at'].isoformat() if hasattr(transaction['created_at'], 'isoformat') else str(transaction['created_at'])
+                    if 'updated_at' in transaction and transaction['updated_at']:
+                        transaction['updated_at'] = transaction['updated_at'].isoformat() if hasattr(transaction['updated_at'], 'isoformat') else str(transaction['updated_at'])
+                    if 'paid_at' in transaction and transaction['paid_at']:
+                        transaction['paid_at'] = transaction['paid_at'].isoformat() if hasattr(transaction['paid_at'], 'isoformat') else str(transaction['paid_at'])
+                    transactions_by_id[doc.id] = transaction
 
         transactions = list(transactions_by_id.values())
         transactions.sort(key=lambda t: t.get('created_at') or '', reverse=True)
