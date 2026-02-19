@@ -7,6 +7,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script type="module" src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
 
   <script>
     tailwind.config = {
@@ -54,7 +55,13 @@
       </button>
     </div>
 
-    <div class="grid gap-4 lg:grid-cols-12">
+    <!-- Loading State -->
+    <div x-show="loading" class="text-center py-20">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gov-primary"></div>
+      <p class="mt-4 text-sm font-bold text-slate-600 uppercase">Loading application details...</p>
+    </div>
+
+    <div x-show="!loading" class="grid gap-4 lg:grid-cols-12">
       <aside class="lg:col-span-4 space-y-4">
         <section class="border border-gov-border bg-gov-panel p-5 shadow-sm border-t-4 border-t-gov-primary">
           <div class="flex flex-col items-center text-center sm:flex-row sm:text-left sm:items-start gap-4">
@@ -82,6 +89,14 @@
 
           <dl class="space-y-4">
             <div>
+              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Product / Crop Name</dt>
+              <dd class="text-sm font-bold text-slate-900" x-text="applicant.productName"></dd>
+            </div>
+            <div>
+              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Category Type</dt>
+              <dd class="text-sm font-bold text-slate-900" x-text="applicant.categoryLabel"></dd>
+            </div>
+            <div>
               <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Primary Contact</dt>
               <dd class="text-sm font-bold text-slate-900" x-text="applicant.email"></dd>
               <dd class="text-sm font-bold text-slate-900" x-text="applicant.phone"></dd>
@@ -91,8 +106,8 @@
               <dd class="text-sm font-bold leading-relaxed text-slate-900" x-text="applicant.address"></dd>
             </div>
             <div>
-              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Area Coverage</dt>
-              <dd class="text-xl font-black text-gov-primary"><span x-text="applicant.area"></span> Hectares</dd>
+              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Initial Investment</dt>
+              <dd class="text-xl font-black text-emerald-700">₱ <span x-text="applicant.investment"></span></dd>
             </div>
           </dl>
         </section>
@@ -141,42 +156,193 @@
           <p class="mt-1 text-xs font-bold italic text-slate-500 uppercase">Final action will be recorded in the regional audit trail.</p>
 
           <div class="mt-5 grid gap-2 md:grid-cols-3">
-            <button class="border-2 border-rose-600 py-3 text-[11px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-600 hover:text-white transition-all">Reject Request</button>
-            <button class="border-2 border-slate-400 py-3 text-[11px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-400 hover:text-white transition-all">To Review</button>
-            <button class="bg-emerald-700 py-3 text-[11px] font-black uppercase tracking-widest text-white hover:bg-emerald-800 transition-all shadow-md">Approve Permit</button>
+            <button @click="updateStatus('rejected')" class="border-2 border-rose-600 py-3 text-[11px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-600 hover:text-white transition-all">Reject Request</button>
+            <button @click="forwardToNational()" class="border-2 border-blue-600 py-3 text-[11px] font-black uppercase tracking-widest text-blue-600 hover:bg-blue-600 hover:text-white transition-all">Forward to National</button>
+            <button @click="updateStatus('approved')" class="bg-emerald-700 py-3 text-[11px] font-black uppercase tracking-widest text-white hover:bg-emerald-800 transition-all shadow-md">Approve Permit</button>
           </div>
         </section>
       </section>
     </div>
   </main>
 
+  <!-- Load Firebase config first -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    // Expose to window for Alpine
+    window.firebaseAuth = auth;
+    window.firebaseDB = db;
+    window.firebaseDoc = doc;
+    window.firebaseGetDoc = getDoc;
+    window.firebaseOnAuthStateChanged = onAuthStateChanged;
+    console.log('Firebase modules loaded and exposed to window');
+  </script>
+
+  <!-- Load Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Register Alpine component -->
   <script>
-    function applicantProfile() {
-      return {
+    document.addEventListener('alpine:init', () => {
+      console.log('Alpine:init event fired, registering applicantProfile...');
+      Alpine.data('applicantProfile', () => ({
+        loading: true,
         applicant: {
-          name: "Paolo Dave Alqzd",
-          ref: "DENR-2026-CAL-042",
-          photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=1974&auto=format&fit=crop",
-          status: "Pending Regional Review",
-          email: "paolodave.alqzd@gmail.com",
-          phone: "+63 912 345 6789",
-          address: "124 Mabuhay St., Brgy. San Jose, Carmona, Cavite, 4116",
-          area: "15.50"
+          name: "Loading...",
+          ref: "---",
+          photo: "https://via.placeholder.com/150",
+          status: "Loading",
+          email: "---",
+          phone: "---",
+          address: "---",
+          area: "0"
         },
         stats: {
-          species: "24",
-          harvest: "18.2"
+          species: "0",
+          harvest: "0"
         },
-        documents: [
-          { name: "Approved Land Survey Plan", icon: "architecture" },
-          { name: "Duly Notarized Farm Plan", icon: "assignment" },
-          { name: "Recent Land Site Photo", icon: "terrain" },
-          { name: "Crop Inventory List", icon: "grass" },
-          { name: "Barangay Business Clearance", icon: "storefront" }
-        ]
-      }
-    }
+        documents: [],
+
+        async init() {
+          try {
+            // Get application ID from URL
+            const pathParts = window.location.pathname.split('/');
+            const applicationId = pathParts[pathParts.length - 1];
+            
+            console.log('Loading application:', applicationId);
+
+            if (!applicationId || applicationId === 'application-view') {
+              alert('No application ID provided');
+              window.history.back();
+              return;
+            }
+
+            // Fetch application data
+            const appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId));
+            
+            if (!appDoc.exists()) {
+              alert('Application not found');
+              window.history.back();
+              return;
+            }
+
+            const appData = appDoc.data();
+            console.log('Application data:', appData);
+
+            // Fetch user data
+            let userData = {};
+            if (appData.userId) {
+              const userDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'users', appData.userId));
+              if (userDoc.exists()) {
+                userData = userDoc.data();
+              }
+            }
+
+            // Category labels mapping
+            const categoryLabels = {
+              'farming': 'Crop & Plant',
+              'livestock': 'Fisheries & Agriculture',
+              'agribusiness': 'Agribusiness & Agro-Processing',
+              'trade': 'Agricultural Trade',
+              'infrastructure': 'Infrastructure'
+            };
+
+            // Populate applicant data
+            this.applicant = {
+              name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || appData.userName || 'N/A',
+              ref: applicationId.substring(0, 12).toUpperCase(),
+              photo: userData.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + (userData.firstName || 'User'),
+              status: (appData.status || 'pending').toUpperCase().replace('-', ' '),
+              productName: appData.productName || 'N/A',
+              categoryLabel: categoryLabels[appData.category] || appData.category || 'N/A',
+              email: userData.email || appData.userEmail || 'N/A',
+              phone: userData.phone || 'N/A',
+              address: `${appData.municipality || 'N/A'}, ${appData.province || 'Oriental Mindoro'}`,
+              investment: Number(appData.investmentQty || 0).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+            };
+
+            // Populate stats
+            this.stats = {
+              species: "1",
+              harvest: appData.harvestQty || appData.maxHarvestQty || "0"
+            };
+
+            // Populate documents
+            this.documents = [
+              { name: "Land Title / Tax Declaration", icon: "description" },
+              { name: "Tax Receipt", icon: "receipt_long" },
+              { name: "Blueprint / Site Plan", icon: "architecture" },
+              { name: "Land / Site Photo", icon: "terrain" },
+              { name: "Crop / Product Photo", icon: "grass" },
+              { name: "Business Plan", icon: "assignment" },
+              { name: "Barangay Clearance", icon: "storefront" }
+            ];
+
+            this.loading = false;
+            
+          } catch (error) {
+            console.error('Error loading application:', error);
+            alert('Error loading application: ' + error.message);
+            this.loading = false;
+          }
+        },
+
+        async updateStatus(newStatus) {
+          if (!confirm(`Are you sure you want to ${newStatus} this application?`)) {
+            return;
+          }
+
+          try {
+            const pathParts = window.location.pathname.split('/');
+            const applicationId = pathParts[pathParts.length - 1];
+
+            const { updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+
+            await updateDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId), {
+              status: newStatus,
+              regionalStatus: newStatus,
+              regionalUpdatedAt: new Date().toISOString(),
+              regionalUpdatedBy: window.firebaseAuth.currentUser?.email || 'regional-admin'
+            });
+
+            alert(`Application ${newStatus} successfully!`);
+            window.location.href = '/regional/application-list';
+          } catch (error) {
+            console.error('Error updating status:', error);
+            alert('Error updating application status: ' + error.message);
+          }
+        },
+
+        async forwardToNational() {
+          if (!confirm('Forward this application to National Office for final review?')) {
+            return;
+          }
+
+          try {
+            const pathParts = window.location.pathname.split('/');
+            const applicationId = pathParts[pathParts.length - 1];
+
+            const { updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+
+            await updateDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId), {
+              status: 'forwarded-to-national',
+              regionalStatus: 'forwarded',
+              nationalStatus: 'pending',
+              forwardedToNationalAt: new Date().toISOString(),
+              forwardedBy: window.firebaseAuth.currentUser?.email || 'regional-admin'
+            });
+
+            alert('Application forwarded to National Office successfully!');
+            window.location.href = '/regional/application-list';
+          } catch (error) {
+            console.error('Error forwarding application:', error);
+            alert('Error forwarding application: ' + error.message);
+          }
+        }
+      }));
+    });
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
 </html>

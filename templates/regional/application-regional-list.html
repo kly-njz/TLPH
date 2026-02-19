@@ -126,7 +126,7 @@
                                               :class="getStatusClass(app.status)" x-text="app.status"></span>
                                     </td>
                                     <td class="py-3 text-center no-print">
-                                        <a href="/regional/application-view" class="btn btn-sm btn-dark rounded-0 font-black text-[9px] uppercase px-3 py-1 text-decoration-none d-inline-block">Open</a>
+                                        <a :href="'/regional/application-view/' + app.id" class="btn btn-sm btn-dark rounded-0 font-black text-[9px] uppercase px-3 py-1 text-decoration-none d-inline-block">Open</a>
                                     </td>
                                 </tr>
                             </template>
@@ -177,6 +177,7 @@
         window.firebaseQuery = query;
         window.firebaseWhere = where;
         window.firebaseOnSnapshot = onSnapshot;
+        window.firebaseGetDocs = getDocs;
         window.firebaseDoc = doc;
         window.firebaseGetDoc = getDoc;
         window.firebaseOnAuthStateChanged = onAuthStateChanged;
@@ -235,6 +236,22 @@
                         console.log('Loading regional applications for Region', this.userRegion, '(' + this.userRegionName + ')');
                         console.log('User provinces:', this.userProvinces);
                         
+                        // First, load all users to create a mapping
+                        const usersRef = window.firebaseCollection(window.firebaseDB, 'users');
+                        const usersSnapshot = await window.firebaseGetDocs(usersRef);
+                        const usersMap = {};
+                        
+                        usersSnapshot.forEach(userDoc => {
+                            const userData = userDoc.data();
+                            usersMap[userDoc.id] = {
+                                name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.email || 'Unknown User',
+                                province: userData.province || null,
+                                municipality: userData.municipality || null
+                            };
+                        });
+                        
+                        console.log('Users loaded:', Object.keys(usersMap).length);
+                        
                         // Query applications with status 'to-review' or 'pending'
                         const q = window.firebaseQuery(
                             window.firebaseCollection(window.firebaseDB, 'applications'),
@@ -250,7 +267,10 @@
                             
                             snapshot.forEach((doc) => {
                                 const data = doc.data();
-                                const appProvince = (data.province || '').toUpperCase();
+                                const userInfo = usersMap[data.userId];
+                                const appProvince = (data.province || userInfo?.province || '').toUpperCase();
+                                const appMunicipality = (data.municipality || userInfo?.municipality || 'N/A').toUpperCase();
+                                const applicantName = (userInfo?.name || data.userName || 'Unknown').toUpperCase();
                                 
                                 // Only include applications from user's provinces
                                 if (this.userProvinces.includes(appProvince)) {
@@ -260,8 +280,8 @@
                                         id: doc.id,
                                         ref: doc.id.substring(0, 12).toUpperCase(),
                                         province: appProvince,
-                                        municipality: (data.municipality || 'N/A').toUpperCase(),
-                                        applicant: `${data.firstName || ''} ${data.lastName || ''}`.toUpperCase().trim() || 'N/A',
+                                        municipality: appMunicipality,
+                                        applicant: applicantName,
                                         category: (data.category || 'N/A').toUpperCase(),
                                         status: (data.status || 'pending').toUpperCase()
                                     });

@@ -8,6 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="module" src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <style>
     /* Government Standard Typography & Layout */
@@ -40,7 +42,7 @@
   </style>
 </head>
 
-<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col" x-data="nationalAppRegistry()">
 <div class="flex-1 flex overflow-hidden">
     <aside class="sidebar-container hidden lg:block">
         {% include 'national/sidenav-national.html' %}
@@ -55,25 +57,25 @@
               <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Endorsed by Regional Offices for Final Action</p>
             </div>
           </div>
-          <span class="px-2 py-1 bg-slate-200 text-slate-700 font-black text-[9px] uppercase rounded-[2px] tracking-widest">FEB 14, 2026</span>
+          <span class="px-2 py-1 bg-slate-200 text-slate-700 font-black text-[9px] uppercase rounded-[2px] tracking-widest" x-text="new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}).toUpperCase()"></span>
         </header>
 
         <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
           <div class="gov-card p-2 px-3 border-l-4 border-l-slate-600">
             <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">From Regional</span>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">{{ total_count|default("0") }}</div>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="totalCount"></div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-500 bg-emerald-50/30">
             <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Nat'l Approved</span>
-            <div class="text-lg font-black text-emerald-700 mt-0.5 leading-none">{{ approved_count|default("0") }}</div>
+            <div class="text-lg font-black text-emerald-700 mt-0.5 leading-none" x-text="approvedCount"></div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 bg-amber-50/30">
             <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Pending Action</span>
-            <div class="text-lg font-black text-amber-700 mt-0.5 leading-none">{{ pending_count|default("0") }}</div>
+            <div class="text-lg font-black text-amber-700 mt-0.5 leading-none" x-text="pendingCount"></div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-rose-500 bg-rose-50/30">
             <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Rejected</span>
-            <div class="text-lg font-black text-rose-700 mt-0.5 leading-none">{{ rejected_count|default("0") }}</div>
+            <div class="text-lg font-black text-rose-700 mt-0.5 leading-none" x-text="rejectedCount"></div>
           </div>
         </section>
 
@@ -99,9 +101,9 @@
                 <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex flex-wrap items-center gap-1.5">
                     <div class="relative flex-1 min-w-[120px]">
                         <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-                        <input type="text" id="masterSearch" placeholder="Search..." class="gov-input pl-6 w-full">
+                        <input type="text" x-model="searchQuery" placeholder="Search..." class="gov-input pl-6 w-full">
                     </div>
-                    <select id="regionFilter" class="gov-input cursor-pointer min-w-[100px]">
+                    <select x-model="regionFilter" class="gov-input cursor-pointer min-w-[100px]">
                         <option value="ALL">All Regions</option>
                         <option>NCR</option><option>CAR</option><option>REGION I</option><option>REGION II</option>
                         <option>REGION III</option><option>REGION IV-A</option><option>MIMAROPA</option><option>REGION V</option>
@@ -109,16 +111,16 @@
                         <option>REGION X</option><option>REGION XI</option><option>REGION XII</option><option>REGION XIII</option>
                         <option>BARMM</option>
                     </select>
-                    <select id="categoryFilter" class="gov-input cursor-pointer min-w-[100px]">
+                    <select x-model="categoryFilter" class="gov-input cursor-pointer min-w-[100px]">
                         <option value="ALL">All Categories</option>
-                        <option>CROP & PLANT</option><option>LIVESTOCK & POULTRY</option><option>FISHERIES</option>
-                        <option>AGRIBUSINESS</option><option>FOOD SAFETY</option><option>COMPLIANCE</option><option>CLIMATE RISK</option>
+                        <option>CROP & PLANT</option><option>FISHERIES & AGRICULTURE</option><option>AGRIBUSINESS</option>
+                        <option>AGRICULTURAL TRADE</option><option>INFRASTRUCTURE</option>
                     </select>
-                    <select id="statusFilter" class="gov-input cursor-pointer min-w-[90px]">
+                    <select x-model="statusFilter" class="gov-input cursor-pointer min-w-[90px]">
                         <option value="ALL">All Status</option>
                         <option>APPROVED</option><option>PENDING ACTION</option><option>REJECTED</option>
                     </select>
-                    <button onclick="clearFilters()" class="px-3 py-0.5 bg-blue-900 text-white font-bold uppercase text-[9px] rounded-[2px] shadow-sm hover:bg-blue-800 transition">Reset</button>
+                    <button @click="searchQuery=''; regionFilter='ALL'; categoryFilter='ALL'; statusFilter='ALL'" class="px-3 py-0.5 bg-blue-900 text-white font-bold uppercase text-[9px] rounded-[2px] shadow-sm hover:bg-blue-800 transition">Reset</button>
                 </div>
 
                 <div class="flex-1 overflow-auto custom-scrollbar bg-white">
@@ -129,66 +131,72 @@
                                 <th class="border-r border-slate-200">Reference ID</th>
                                 <th class="border-r border-slate-200">Applicant Name</th>
                                 <th class="border-r border-slate-200">Category</th>
+                                <th class="border-r border-slate-200">Region</th>
                                 <th class="border-r border-slate-200">Location</th>
                                 <th class="text-center border-r border-slate-200">Status</th>
                                 <th class="text-center">Manage</th>
                             </tr>
                         </thead>
                         <tbody id="tbody" class="text-[10px] divide-y divide-slate-100">
-                            
-                            <tr class="hover:bg-blue-50 transition">
-                                <td class="font-mono text-slate-500 border-r border-slate-100">2026-02-10</td>
-                                <td class="font-black text-blue-700 border-r border-slate-100">APP-00192A</td>
-                                <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">San Juan Agri Corp</td>
-                                <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">Agribusiness</td>
-                                <td class="text-slate-600 border-r border-slate-100 uppercase">Region IV-A</td>
-                                <td class="text-center border-r border-slate-100">
-                                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-amber-50 text-amber-700 border border-amber-200 w-24 text-center">Pending Action</span>
-                                </td>
-                                <td class="text-center">
-                                    <div class="flex justify-center gap-1">
-                                        <button class="btn-action btn-view" title="View"><span class="material-icons-round text-[14px]">visibility</span></button>
-                                        <button class="btn-action btn-approve" title="Approve"><span class="material-icons-round text-[14px]">check_circle</span></button>
-                                        <button class="btn-action btn-reject" title="Reject"><span class="material-icons-round text-[14px]">cancel</span></button>
-                                    </div>
+                            <!-- Loading State -->
+                            <tr x-show="loading">
+                                <td colspan="8" class="text-center py-8">
+                                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900"></div>
+                                    <p class="mt-2 text-xs font-bold text-slate-600 uppercase">Loading applications...</p>
                                 </td>
                             </tr>
 
-                            {% if applications and applications|length > 0 %}
-                                {% for app in applications %}
+                            <!-- Empty State -->
+                            <tr x-show="!loading && filteredApps.length === 0">
+                                <td colspan="8" class="text-center py-8">
+                                    <span class="material-icons-round text-slate-300 text-5xl">inbox</span>
+                                    <p class="mt-2 text-xs font-bold text-slate-500 uppercase">No applications found</p>
+                                </td>
+                            </tr>
+
+                            <!-- Data Rows -->
+                            <template x-for="app in filteredApps" :key="app.id">
                                 <tr class="hover:bg-blue-50 transition">
-                                    <td class="font-mono text-slate-500 border-r border-slate-100">{{ app.date_filed }}</td>
-                                    <td class="font-black text-blue-700 border-r border-slate-100">APP-{{ app.reference_id }}</td>
-                                    <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">{{ app.applicant_name }}</td>
-                                    <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ app.category }}</td>
-                                    <td class="text-slate-600 border-r border-slate-100 uppercase">{{ app.location }}</td>
+                                    <td class="font-mono text-slate-500 border-r border-slate-100" x-text="app.dateFiled"></td>
+                                    <td class="font-black text-blue-700 border-r border-slate-100" x-text="app.refId"></td>
+                                    <td class="font-bold text-slate-900 border-r border-slate-100 uppercase" x-text="app.applicantName"></td>
+                                    <td class="font-bold text-slate-700 border-r border-slate-100 uppercase" x-text="app.category"></td>
+                                    <td class="text-slate-600 border-r border-slate-100 uppercase text-[9px]" x-text="app.region"></td>
+                                    <td class="text-slate-600 border-r border-slate-100 uppercase" x-text="app.location"></td>
                                     <td class="text-center border-r border-slate-100">
-                                        {% if app.status == 'approved' %}
-                                            <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 w-24 text-center">Approved</span>
-                                        {% elif app.status == 'rejected' %}
-                                            <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-rose-50 text-rose-700 border border-rose-200 w-24 text-center">Rejected</span>
-                                        {% else %}
-                                            <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-amber-50 text-amber-700 border border-amber-200 w-24 text-center">Pending Action</span>
-                                        {% endif %}
+                                        <span 
+                                            :class="{
+                                                'bg-emerald-50 text-emerald-700 border-emerald-200': app.nationalStatus === 'approved',
+                                                'bg-rose-50 text-rose-700 border-rose-200': app.nationalStatus === 'rejected',
+                                                'bg-amber-50 text-amber-700 border-amber-200': app.nationalStatus === 'pending'
+                                            }"
+                                            class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border w-24 text-center"
+                                            x-text="app.nationalStatus === 'approved' ? 'Approved' : app.nationalStatus === 'rejected' ? 'Rejected' : 'Pending Action'">
+                                        </span>
                                     </td>
                                     <td class="text-center">
                                         <div class="flex justify-center gap-1">
-                                            <button class="btn-action btn-view" title="View" data-id="{{ app.id }}"><span class="material-icons-round text-[14px]">visibility</span></button>
-                                            <button class="btn-action btn-approve" title="Approve" data-id="{{ app.id }}"><span class="material-icons-round text-[14px]">check_circle</span></button>
-                                            <button class="btn-action btn-reject" title="Reject" data-id="{{ app.id }}"><span class="material-icons-round text-[14px]">cancel</span></button>
+                                            <button @click="viewApplication(app.id)" class="btn-action btn-view" title="View">
+                                                <span class="material-icons-round text-[14px]">visibility</span>
+                                            </button>
+                                            <button @click="approveApplication(app.id)" class="btn-action btn-approve" title="Approve" x-show="app.nationalStatus === 'pending'">
+                                                <span class="material-icons-round text-[14px]">check_circle</span>
+                                            </button>
+                                            <button @click="rejectApplication(app.id)" class="btn-action btn-reject" title="Reject" x-show="app.nationalStatus === 'pending'">
+                                                <span class="material-icons-round text-[14px]">cancel</span>
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
-                                {% endfor %}
-                            {% else %}
-                                {% endif %}
-                            
+                            </template>
                         </tbody>
                     </table>
                 </div>
 
                 <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
-                    <span id="rowCountLabel" class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">Registry Count: <b>{{ applications|length|default("1") }} items</b></span>
+                    <span id="rowCountLabel" class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">
+                        Registry Count: <b x-text="filteredApps.length + ' items'"></b>
+                    </span>
                     <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
                         <span class="material-icons-round text-[14px]">file_download</span> Export CSV
                     </button>
@@ -199,7 +207,223 @@
     </main>
   </div>
 
+  <!-- Load Firebase modules first -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { collection, query, where, getDocs, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    // Expose to window for Alpine
+    window.firebaseAuth = auth;
+    window.firebaseDB = db;
+    window.firebaseCollection = collection;
+    window.firebaseQuery = query;
+    window.firebaseWhere = where;
+    window.firebaseGetDocs = getDocs;
+    window.firebaseDoc = doc;
+    window.firebaseUpdateDoc = updateDoc;
+    window.firebaseOnAuthStateChanged = onAuthStateChanged;
+    console.log('Firebase modules loaded and exposed to window');
+  </script>
+
+  <!-- Alpine component registration -->
   <script>
+    document.addEventListener('alpine:init', () => {
+      console.log('Alpine:init - registering nationalAppRegistry...');
+      
+      Alpine.data('nationalAppRegistry', () => ({
+        loading: true,
+        apps: [],
+        searchQuery: '',
+        regionFilter: 'ALL',
+        categoryFilter: 'ALL',
+        statusFilter: 'ALL',
+        
+        totalCount: 0,
+        approvedCount: 0,
+        pendingCount: 0,
+        rejectedCount: 0,
+
+        get filteredApps() {
+          return this.apps.filter(app => {
+            const searchMatch = !this.searchQuery || 
+              app.applicantName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+              app.refId.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+              app.category.toLowerCase().includes(this.searchQuery.toLowerCase());
+            
+            const regionMatch = this.regionFilter === 'ALL' || 
+              app.region.toUpperCase().includes(this.regionFilter.toUpperCase()) ||
+              app.location.toUpperCase().includes(this.regionFilter.toUpperCase());
+            
+            const categoryMatch = this.categoryFilter === 'ALL' || 
+              app.category.toUpperCase().includes(this.categoryFilter.toUpperCase());
+            
+            const statusMatch = this.statusFilter === 'ALL' || 
+              (this.statusFilter === 'APPROVED' && app.nationalStatus === 'approved') ||
+              (this.statusFilter === 'PENDING ACTION' && app.nationalStatus === 'pending') ||
+              (this.statusFilter === 'REJECTED' && app.nationalStatus === 'rejected');
+            
+            return searchMatch && regionMatch && categoryMatch && statusMatch;
+          });
+        },
+
+        async init() {
+          console.log('Initializing national app registry...');
+          
+          // Wait for Firebase modules to be available
+          let retries = 0;
+          while (!window.firebaseCollection && retries < 50) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+          }
+          
+          if (!window.firebaseCollection) {
+            console.error('Firebase modules not loaded after waiting');
+            alert('Error: Firebase modules failed to load. Please refresh the page.');
+            this.loading = false;
+            return;
+          }
+          
+          console.log('Firebase modules ready, loading applications...');
+          await this.loadApplications();
+        },
+
+        async loadApplications() {
+          try {
+            this.loading = true;
+
+            // Load all users first
+            const usersRef = window.firebaseCollection(window.firebaseDB, 'users');
+            const usersSnapshot = await window.firebaseGetDocs(usersRef);
+            const usersMap = {};
+            
+            usersSnapshot.forEach(userDoc => {
+              const userData = userDoc.data();
+              usersMap[userDoc.id] = {
+                name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.email || 'Unknown User',
+                province: userData.province || null,
+                municipality: userData.municipality || null
+              };
+            });
+
+            // Query applications forwarded to national (all that have forwardedToNationalAt)
+            const appsRef = window.firebaseCollection(window.firebaseDB, 'applications');
+            // Get all applications and filter those that were forwarded to national
+            const querySnapshot = await window.firebaseGetDocs(appsRef);
+
+            this.apps = [];
+            let approved = 0, pending = 0, rejected = 0;
+
+            const categoryLabels = {
+              'farming': 'Crop & Plant',
+              'livestock': 'Fisheries & Agriculture',
+              'agribusiness': 'Agribusiness & Agro-Processing',
+              'trade': 'Agricultural Trade',
+              'infrastructure': 'Infrastructure'
+            };
+
+            querySnapshot.forEach((doc) => {
+              const data = doc.data();
+              
+              // Only include applications that were forwarded to national
+              if (!data.forwardedToNationalAt && data.status !== 'forwarded-to-national') {
+                return;
+              }
+              
+              const userInfo = usersMap[data.userId];
+              const nationalStatus = (data.nationalStatus || 'pending').toLowerCase();
+
+              if (nationalStatus === 'approved') approved++;
+              else if (nationalStatus === 'rejected') rejected++;
+              else pending++;
+
+              const location = data.province && data.municipality 
+                ? `${data.municipality}, ${data.province}`
+                : userInfo?.province && userInfo?.municipality
+                  ? `${userInfo.municipality}, ${userInfo.province}`
+                  : 'Unknown Location';
+
+              const province = (data.province || userInfo?.province || '').toLowerCase();
+              let region = 'N/A';
+              
+              // Map province to region
+              if (['oriental mindoro', 'occidental mindoro', 'marinduque', 'romblon', 'palawan'].includes(province)) {
+                region = 'MIMAROPA';
+              } else if (['batangas', 'cavite', 'laguna', 'quezon', 'rizal'].includes(province)) {
+                region = 'REGION IV-A';
+              } else if (['albay', 'camarines norte', 'camarines sur', 'catanduanes', 'masbate', 'sorsogon'].includes(province)) {
+                region = 'REGION V';
+              }
+
+              this.apps.push({
+                id: doc.id,
+                dateFiled: data.submittedAt ? new Date(data.submittedAt.toDate()).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A',
+                refId: 'APP-' + doc.id.substring(0, 8).toUpperCase(),
+                applicantName: (userInfo?.name || data.userName || 'Unknown').toUpperCase(),
+                category: categoryLabels[data.category] || data.category || 'N/A',
+                region: region,
+                location: location,
+                nationalStatus: nationalStatus,
+                province: data.province || userInfo?.province || ''
+              });
+            });
+
+            this.totalCount = this.apps.length;
+            this.approvedCount = approved;
+            this.pendingCount = pending;
+            this.rejectedCount = rejected;
+
+            console.log(`Loaded ${this.apps.length} applications`);
+            this.loading = false;
+          } catch (error) {
+            console.error('Error loading applications:', error);
+            alert('Error loading applications: ' + error.message);
+            this.loading = false;
+          }
+        },
+
+        viewApplication(appId) {
+          window.location.href = `/national/application-view/${appId}`;
+        },
+
+        async approveApplication(appId) {
+          if (!confirm('Approve this application at the National level?')) return;
+
+          try {
+            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, 'applications', appId), {
+              nationalStatus: 'approved',
+              nationalApprovedAt: new Date().toISOString(),
+              nationalApprovedBy: window.firebaseAuth.currentUser?.email || 'national-admin'
+            });
+
+            alert('Application approved successfully!');
+            await this.loadApplications();
+          } catch (error) {
+            console.error('Error approving:', error);
+            alert('Error approving application: ' + error.message);
+          }
+        },
+
+        async rejectApplication(appId) {
+          if (!confirm('Reject this application at the National level?')) return;
+
+          try {
+            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, 'applications', appId), {
+              nationalStatus: 'rejected',
+              nationalRejectedAt: new Date().toISOString(),
+              nationalRejectedBy: window.firebaseAuth.currentUser?.email || 'national-admin'
+            });
+
+            alert('Application rejected.');
+            await this.loadApplications();
+          } catch (error) {
+            console.error('Error rejecting:', error);
+            alert('Error rejecting application: ' + error.message);
+          }
+        }
+      }));
+    });
+
     // --- CHARTS CONFIG ---
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
     Chart.defaults.font.size = 8;
@@ -212,18 +436,18 @@
         plugins: { legend: { position: 'bottom', labels: { boxWidth: 6, font: { weight: 'bold' } } } }
     };
 
-    // Dummy Data for charts (Replace with your variables)
+    // Dummy Data for charts (will be replaced with real data later)
     var statusLabels = ['Approved', 'Pending', 'Rejected'];
-    var statusData = [42, 15, 5];
-    var regionLabels = ['NCR', 'IV-A', 'III', 'VII', 'XI'];
-    var regionCounts = [20, 15, 10, 8, 5];
+    var statusData = [0, 0, 0];
+    var regionLabels = ['Loading...'];
+    var regionCounts = [0];
 
     // 1. Trend Chart (Line)
     new Chart(document.getElementById('appsTrendChart'), {
         type: 'line',
         data: {
             labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
-            datasets: [{ label: 'Submissions', data: [10, 15, 8, 22, 18], borderColor: '#1e3a8a', backgroundColor: 'rgba(30,58,138,0.1)', borderWidth: 1.5, fill: true, tension: 0.3, pointRadius: 1 }]
+            datasets: [{ label: 'Submissions', data: [0, 0, 0, 0, 0], borderColor: '#1e3a8a', backgroundColor: 'rgba(30,58,138,0.1)', borderWidth: 1.5, fill: true, tension: 0.3, pointRadius: 1 }]
         },
         options: { ...sharedOpts, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
     });
@@ -247,48 +471,6 @@
         },
         options: { ...sharedOpts, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { display: false } } }
     });
-
-    // --- FILTER LOGIC ---
-    function filterTable() {
-        const s = document.getElementById('masterSearch').value.toLowerCase();
-        const r = document.getElementById('regionFilter').value.toUpperCase();
-        const c = document.getElementById('categoryFilter').value.toUpperCase();
-        const st = document.getElementById('statusFilter').value.toUpperCase();
-        
-        const rows = document.querySelectorAll('#tbody tr');
-        let count = 0;
-
-        rows.forEach(row => {
-            if (row.cells.length < 6) return; // Skip "No apps found" row
-            
-            const text = row.innerText.toUpperCase();
-            const matchS = text.includes(s.toUpperCase());
-            const matchR = r === 'ALL' || text.includes(r);
-            const matchC = c === 'ALL' || text.includes(c);
-            const matchST = st === 'ALL' || text.includes(st);
-
-            if (matchS && matchR && matchC && matchST) {
-                row.style.display = ""; 
-                count++;
-            } else { 
-                row.style.display = "none"; 
-            }
-        });
-        document.getElementById('rowCountLabel').innerHTML = `Registry Count: <b>${count} items</b>`;
-    }
-
-    ['masterSearch','regionFilter','categoryFilter','statusFilter'].forEach(id => {
-        document.getElementById(id).addEventListener('input', filterTable);
-        document.getElementById(id).addEventListener('change', filterTable);
-    });
-
-    function clearFilters() {
-        document.getElementById('masterSearch').value = "";
-        document.getElementById('regionFilter').value = "ALL";
-        document.getElementById('categoryFilter').value = "ALL";
-        document.getElementById('statusFilter').value = "ALL";
-        filterTable();
-    }
   </script>
 </body>
 </html>
