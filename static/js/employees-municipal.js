@@ -14,8 +14,8 @@ function renderEmployees(employees) {
     employees.forEach(emp => {
         // Compose name: lastname, firstname middle initial
         const lastname = emp.lastname || '';
-        const firstname = emp.firstname || '';
-        const middle = emp.middlename || '';
+        const firstname = emp.first_name || '';
+        const middle = emp.middle_name || '';
         const middleInitial = middle ? middle.charAt(0).toUpperCase() + '.' : '';
         const fullName = `${lastname}, ${firstname} ${middleInitial}`.trim();
 
