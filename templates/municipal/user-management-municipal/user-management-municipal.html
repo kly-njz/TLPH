@@ -93,7 +93,7 @@
             </div>
             <div class="md:col-span-2">
               <label class="label-sm" for="add-division">Division / Section Assignment</label>
-              <input id="add-division" name="division" type="text" class="input-gov uppercase font-bold text-slate-800 bg-white border border-gray-200 rounded px-3 py-2 w-full">
+              <input id="add-division" name="division" type="text" class="input-gov uppercase font-bold text-slate-800 bg-gray-100 border border-gray-200 rounded px-3 py-2 w-full" value="" readonly tabindex="-1" aria-readonly="true">
             </div>
             
             <div>
@@ -233,7 +233,7 @@
   <script type="module">
     // Import Firebase SDKs
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
     import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
     // Firebase Config
@@ -404,28 +404,29 @@
     $('addUserForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const form = e.target;
-      
+      const auth = getAuth();
+      const email = form['email'].value;
+      const password = form['password'].value;
       const newUser = {
         firstName: form['firstName'].value.toUpperCase(),
         lastName: form['lastName'].value.toUpperCase(),
         middleName: form['middleName'].value.toUpperCase(),
-        email: form['email'].value,
+        email: email,
         phone: form['phone'].value,
         division: form['division'].value.toUpperCase(),
         employeeId: form['employeeId'].value,
-        password: form['password'].value, // Note: In production, do not store plain text passwords
-        
-        // CRITICAL: USE THE AUTO-FILLED VALUES
+        // Do NOT store password in Firestore
         municipality: form['municipality'].value, 
         province: form['province'].value,
-
         role: "municipal",
         applicationType: "municipal",
         status: "Active",
         createdAt: new Date().toISOString()
       };
-
       try {
+        // Create user in Firebase Auth first
+        await createUserWithEmailAndPassword(auth, email, password);
+        // Then add user data to Firestore
         await addDoc(collection(db, "users"), newUser);
         alert('User added successfully!');
         $('addUserModal').classList.add('hidden');
