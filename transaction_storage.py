@@ -9,7 +9,7 @@ def get_transactions_collection():
     """Get transactions collection reference"""
     return get_db().collection('transactions')
 
-def add_transaction(user_email, external_id, invoice_id, amount, item_name, description, status='Pending'):
+def add_transaction(user_email, external_id, invoice_id, amount, item_name, description, status='Pending', user_id=None):
     """Add a new transaction record to Firestore"""
     try:
         transactions_ref = get_transactions_collection()
@@ -17,6 +17,7 @@ def add_transaction(user_email, external_id, invoice_id, amount, item_name, desc
         
         transaction = {
             'user_email': normalized_email,
+            'userId': user_id,
             'external_id': external_id,
             'invoice_id': invoice_id,
             'transaction_name': item_name,
@@ -80,32 +81,46 @@ def update_transaction_status(invoice_id, status, payment_method=None, paid_at=N
         print(f"Error updating transaction: {e}")
         return None
 
-def get_user_transactions(user_email):
+def get_user_transactions(user_email=None, user_id=None):
     """Get all transactions for a specific user from Firestore"""
     try:
         transactions_ref = get_transactions_collection()
-        normalized_email = (user_email or '').strip().lower()
-
+        
         transactions_by_id = {}
-        queries = []
-
-        if normalized_email:
-            queries.append(transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', normalized_email)))
-        if user_email and user_email != normalized_email:
-            queries.append(transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', user_email)))
-
-        for query in queries:
-            for doc in query.stream():
-                transaction = doc.to_dict()
-                transaction['id'] = doc.id
-                # Convert Firestore timestamps to ISO format strings
-                if 'created_at' in transaction and transaction['created_at']:
-                    transaction['created_at'] = transaction['created_at'].isoformat() if hasattr(transaction['created_at'], 'isoformat') else str(transaction['created_at'])
-                if 'updated_at' in transaction and transaction['updated_at']:
-                    transaction['updated_at'] = transaction['updated_at'].isoformat() if hasattr(transaction['updated_at'], 'isoformat') else str(transaction['updated_at'])
-                if 'paid_at' in transaction and transaction['paid_at']:
-                    transaction['paid_at'] = transaction['paid_at'].isoformat() if hasattr(transaction['paid_at'], 'isoformat') else str(transaction['paid_at'])
-                transactions_by_id[doc.id] = transaction
+        
+        # Strategy: Query by email first, then filter by userId logic
+        # This handles both old records (no userId) and new records (with userId)
+        if user_email:
+            normalized_email = user_email.strip().lower()
+            queries = [
+                transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', normalized_email))
+            ]
+            if user_email != normalized_email:
+                queries.append(transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', user_email)))
+            
+            for query in queries:
+                for doc in query.stream():
+                    transaction = doc.to_dict()
+                    
+                    # Filter logic when userId is provided:
+                    # - Include if transaction has NO userId field (old records)
+                    # - Include if transaction userId matches current user_id
+                    # - Exclude if transaction userId exists but doesn't match (other user's record)
+                    if user_id:
+                        transaction_user_id = transaction.get('userId')
+                        if transaction_user_id and transaction_user_id != user_id:
+                            # This transaction belongs to a different user (old account with same email)
+                            continue
+                    
+                    transaction['id'] = doc.id
+                    # Convert Firestore timestamps to ISO format strings
+                    if 'created_at' in transaction and transaction['created_at']:
+                        transaction['created_at'] = transaction['created_at'].isoformat() if hasattr(transaction['created_at'], 'isoformat') else str(transaction['created_at'])
+                    if 'updated_at' in transaction and transaction['updated_at']:
+                        transaction['updated_at'] = transaction['updated_at'].isoformat() if hasattr(transaction['updated_at'], 'isoformat') else str(transaction['updated_at'])
+                    if 'paid_at' in transaction and transaction['paid_at']:
+                        transaction['paid_at'] = transaction['paid_at'].isoformat() if hasattr(transaction['paid_at'], 'isoformat') else str(transaction['paid_at'])
+                    transactions_by_id[doc.id] = transaction
 
         transactions = list(transactions_by_id.values())
         transactions.sort(key=lambda t: t.get('created_at') or '', reverse=True)
@@ -152,7 +167,7 @@ def find_transaction_by_external_id(external_id):
         print(f"Error finding transaction: {e}")
         return None
 
-def cancel_transaction_by_reference(reference, user_email):
+def cancel_transaction_by_reference(reference, user_email=None, user_id=None):
     """Cancel a transaction by reference number (only if pending)"""
     try:
         transactions_ref = get_transactions_collection()
@@ -171,8 +186,10 @@ def cancel_transaction_by_reference(reference, user_email):
         doc = docs[0]
         transaction = doc.to_dict()
         
-        # Verify it's the user's transaction
-        if transaction.get('user_email') != user_email:
+        # Verify it's the user's transaction (check userId first, then email)
+        if user_id and transaction.get('userId') != user_id:
+            return {'success': False, 'message': 'Unauthorized to cancel this transaction'}
+        elif not user_id and transaction.get('user_email') != user_email:
             return {'success': False, 'message': 'Unauthorized to cancel this transaction'}
         
         # Only allow canceling pending transactions
