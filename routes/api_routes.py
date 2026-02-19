@@ -142,7 +142,7 @@ def register_user():
         email = data.get('email')
         password = data.get('password')
         role = data.get('applicationType', 'user')  # Default to 'user'
-        
+
         # Map application types to roles
         role_mapping = {
             'tenant': 'user',
@@ -154,25 +154,38 @@ def register_user():
             'regional': 'regional',
             'super-admin': 'super-admin'
         }
-        
+
         user_role = role_mapping.get(role, 'user')
-        
+
         if not email or not password:
             return jsonify({'success': False, 'message': 'Email and password are required'}), 400
-        
+
+        # Only allow municipal users to add users with their own province/municipality
+        if session.get('user_role') == 'municipal':
+            current_user = users_db.get(session.get('user_email'))
+            if not current_user:
+                return jsonify({'success': False, 'message': 'Session user not found'}), 403
+            # Overwrite province and municipality in data
+            if 'data' not in data:
+                data['data'] = {}
+            data['province'] = current_user['data'].get('province', '')
+            data['municipality'] = current_user['data'].get('municipality', '')
+            data['data']['province'] = current_user['data'].get('province', '')
+            data['data']['municipality'] = current_user['data'].get('municipality', '')
+
         # Check if user already exists
         if email in users_db:
             return jsonify({'success': False, 'message': 'User already exists'}), 400
-        
+
         # Store user (in production, hash password and use database)
         users_db[email] = {
             'password': password,
             'role': user_role,
             'data': data
         }
-        
+
         return jsonify({'success': True, 'message': 'Registration successful', 'role': user_role})
-    
+
     except Exception as e:
         print(f'Error registering user: {str(e)}')
         return jsonify({'success': False, 'message': str(e)}), 500
