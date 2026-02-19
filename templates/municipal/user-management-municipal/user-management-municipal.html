@@ -8,7 +8,46 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 
-  <script>
+  <script type="module">
+  import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+  import { getFirestore, collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+  // Your Firebase config (should match your project)
+  const firebaseConfig = {
+    apiKey: "AIzaSyCj3EnEG1XhF7_xWgt1vQK_VkT7288yd64",
+    authDomain: "denr-d02ae.firebaseapp.com",
+    projectId: "denr-d02ae",
+    storageBucket: "denr-d02ae.appspot.com",
+    messagingSenderId: "499245517370",
+    appId: "1:499245517370:web:c66598d7c86d5567a64303"
+  };
+
+  // Initialize Firebase app if not already initialized
+  if (!getApps().length) {
+    initializeApp(firebaseConfig);
+  }
+  const db = getFirestore();
+
+  // Set this from your backend/session for the logged-in user
+  window.currentUserEmail = window.currentUserEmail || document.getElementById('header-email')?.textContent?.trim() || "";
+
+  async function fetchCurrentUserLocation(email) {
+    if (!email) return;
+    try {
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("email", "==", email));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const userData = querySnapshot.docs[0].data();
+        window.loggedInMunicipality = userData.municipality;
+        window.loggedInProvince = userData.province;
+      }
+    } catch (err) {
+      console.error("Failed to fetch user location:", err);
+    }
+  }
+
+  fetchCurrentUserLocation(window.currentUserEmail);
     tailwind.config = {
       theme: {
         extend: {
@@ -146,7 +185,7 @@
                   </div>
                   <div>
                     <label class="label-sm" for="add-password">Password</label>
-                    <input id="add-password" name="password" type="password" class="input-gov bg-white border border-gray-300 rounded px-3 py-2 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 transition w-full" required autocomplete="new-password">
+                    <input id="add-password" name="password" type="password" class="input-gov bg-white border border-gray-300 rounded px-3 py-2 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 transition w-full" required autocomplete="new-password" />
                   </div>
                   <div class="md:col-span-3 mt-2">
                     <div class="bg-[#fffbe6] border border-[#ffe58f] rounded p-3 flex gap-3 items-start">
@@ -221,15 +260,12 @@
               // Fallbacks in case window vars are not set
               let loggedInMunicipality = window.loggedInMunicipality;
               let loggedInProvince = window.loggedInProvince;
+              // Always use the auto-filled values from the modal fields as fallback
               if (!loggedInMunicipality) {
                 loggedInMunicipality = document.getElementById('add-municipality')?.value || '';
               }
               if (!loggedInProvince) {
                 loggedInProvince = document.getElementById('add-province')?.value || '';
-              }
-              if (!loggedInMunicipality || !loggedInProvince) {
-                alert('Municipality and Province are required. Please contact your administrator.');
-                return;
               }
 
               const newUser = {
