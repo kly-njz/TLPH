@@ -54,3 +54,39 @@ async function renderPayroll() {
 }
 
 window.addEventListener('DOMContentLoaded', renderPayroll);
+
+// Payslip modal event delegation
+document.body.addEventListener('click', async function(e) {
+  if (e.target && e.target.matches('.view-payslip-btn')) {
+    const empId = e.target.getAttribute('data-emp-id');
+    if (!empId) return;
+    // Fetch employee data
+    const employeeCol = collection(db, 'employee');
+    const employeeSnapshot = await getDocs(employeeCol);
+    const emp = employeeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).find(e => e.id === empId);
+    if (!emp) return;
+    const peso = n => {
+      if (typeof n !== 'number') n = parseFloat(n);
+      if (isNaN(n)) return '₱ 0.00';
+      return '₱ ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    const lastname = emp.lastname || '';
+    const firstname = emp.first_name || '';
+    const middle = emp.middle_name || '';
+    const middleInitial = middle ? middle.charAt(0).toUpperCase() + '.' : '';
+    const fullName = `${lastname}, ${firstname} ${middleInitial}`.trim();
+    document.getElementById('payslip-emp-name').textContent = fullName;
+    document.getElementById('payslip-emp-id').textContent = emp.emp_id || emp.id;
+    document.getElementById('payslip-emp-title').textContent = emp.official_title || '';
+    document.getElementById('payslip-period').textContent = 'Feb 01 - Feb 15, 2026';
+    document.getElementById('payslip-basic-pay').textContent = peso(emp.basic_pay);
+    document.getElementById('payslip-allowance').textContent = peso(emp.allowance);
+    document.getElementById('payslip-deduction').textContent = peso(emp.deduction);
+    const netPay = (Number(emp.basic_pay) || 0) + (Number(emp.allowance) || 0) - (Number(emp.deduction) || 0);
+    document.getElementById('payslip-net-pay').textContent = peso(netPay);
+    document.getElementById('payslip-modal').classList.remove('hidden');
+  }
+  if (e.target && e.target.id === 'close-payslip-modal') {
+    document.getElementById('payslip-modal').classList.add('hidden');
+  }
+});
