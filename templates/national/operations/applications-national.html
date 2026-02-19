@@ -303,13 +303,10 @@
               };
             });
 
-            // Query applications forwarded to national
+            // Query applications forwarded to national (all that have forwardedToNationalAt)
             const appsRef = window.firebaseCollection(window.firebaseDB, 'applications');
-            const q = window.firebaseQuery(
-              appsRef,
-              window.firebaseWhere('status', '==', 'forwarded-to-national')
-            );
-            const querySnapshot = await window.firebaseGetDocs(q);
+            // Get all applications and filter those that were forwarded to national
+            const querySnapshot = await window.firebaseGetDocs(appsRef);
 
             this.apps = [];
             let approved = 0, pending = 0, rejected = 0;
@@ -324,6 +321,12 @@
 
             querySnapshot.forEach((doc) => {
               const data = doc.data();
+              
+              // Only include applications that were forwarded to national
+              if (!data.forwardedToNationalAt && data.status !== 'forwarded-to-national') {
+                return;
+              }
+              
               const userInfo = usersMap[data.userId];
               const nationalStatus = (data.nationalStatus || 'pending').toLowerCase();
 
@@ -373,7 +376,6 @@
           try {
             await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, 'applications', appId), {
               nationalStatus: 'approved',
-              status: 'approved',
               nationalApprovedAt: new Date().toISOString(),
               nationalApprovedBy: window.firebaseAuth.currentUser?.email || 'national-admin'
             });
@@ -392,7 +394,6 @@
           try {
             await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, 'applications', appId), {
               nationalStatus: 'rejected',
-              status: 'rejected',
               nationalRejectedAt: new Date().toISOString(),
               nationalRejectedBy: window.firebaseAuth.currentUser?.email || 'national-admin'
             });
