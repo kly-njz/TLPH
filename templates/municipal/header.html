@@ -2,10 +2,15 @@
     
     <div class="flex items-center gap-2 overflow-hidden shrink-0">
         <img src="/static/images/denr.jpg" alt="DENR" class="w-7 h-7 object-contain border border-slate-200 p-0.5 rounded-sm">
-        <div class="flex items-center gap-2 whitespace-nowrap">
-            <h1 class="text-[11px] font-black text-slate-900 uppercase tracking-tight m-0">DENR Portal</h1>
-            <span class="text-slate-300 text-[10px]">|</span>
-            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Municipal Management</p>
+        <div class="flex flex-col justify-center overflow-hidden">
+            <div class="flex items-center gap-2 whitespace-nowrap">
+                <h1 class="text-[11px] font-black text-slate-900 uppercase tracking-tight m-0">DENR Portal</h1>
+                <span class="text-slate-300 text-[10px]">|</span>
+                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Municipal Management</p>
+            </div>
+            <p id="municipalityName" class="text-[10px] font-black text-emerald-800 uppercase tracking-wide m-0 leading-none mt-0.5">
+                Loading...
+            </p>
         </div>
     </div>
 
@@ -111,4 +116,45 @@
             window.location.href = '/login'; 
         }
     }
+
+    // Load municipality name from Firebase
+    async function loadMunicipalityName() {
+        try {
+            // Import Firebase modules
+            const { auth, db } = await import('/static/js/firebase-config.js');
+            const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
+            const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    try {
+                        const userDoc = await getDoc(doc(db, 'users', user.uid));
+                        if (userDoc.exists()) {
+                            const userData = userDoc.data();
+                            const municipality = userData.municipality || 'Unknown Municipality';
+                            document.getElementById('municipalityName').textContent = municipality + ' Municipality';
+                        } else {
+                            document.getElementById('municipalityName').textContent = 'Municipality';
+                        }
+                    } catch (error) {
+                        console.error('Error fetching user data:', error);
+                        document.getElementById('municipalityName').textContent = 'Municipality';
+                    }
+                } else {
+                    document.getElementById('municipalityName').textContent = 'Not Logged In';
+                }
+            });
+        } catch (error) {
+            console.error('Error loading municipality name:', error);
+            document.getElementById('municipalityName').textContent = 'Municipality';
+        }
+    }
+
+    // Load municipality name when page loads
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadMunicipalityName);
+    } else {
+        loadMunicipalityName();
+    }
+
 </script>
