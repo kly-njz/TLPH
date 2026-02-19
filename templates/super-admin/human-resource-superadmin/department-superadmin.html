@@ -1,352 +1,259 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DENR | HRM - Department (Super Admin)</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Department Registry | National Admin</title>
 
-  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- Material Icons -->
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    :root{ --gov-font: Verdana, Arial, Tahoma, sans-serif; }
-    html, body{ font-family: var(--gov-font); }
-    body::before{
-      content:"";
-      position: fixed;
-      inset: 0;
-      background-image: url('/static/images/denr.jpg');
-      background-repeat: no-repeat;
-      background-position: center 22%;
-      background-size: 520px;
-      opacity: 0.035;
-      pointer-events: none;
-      z-index: -1;
-    }
+    /* Government Standard Typography & Layout */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; }
+    
+    /* Compact Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #1e40af; }
+    .gov-input:disabled { background-color: #f8fafc; cursor: not-allowed; color: #94a3b8; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+    
+    /* Chart Overlap Fix */
+    .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; }
+    .chart-container { position: absolute; inset: 0; }
+
+    /* Dense Table Formatting */
+    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 6px 8px !important; }
+    td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    
+    /* Action Buttons */
+    .btn-action { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; color: #94a3b8; cursor: pointer; }
+    .btn-edit:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
+    .btn-toggle:hover { color: white; background: #f59e0b; border-color: #d97706; }
+    .btn-delete:hover { color: white; background: #ef4444; border-color: #dc2626; }
   </style>
 </head>
 
-<body class="min-h-screen bg-slate-100 text-slate-900">
-{% include 'super-admin/header-superadmin.html' %}
-{% include 'super-admin/sidenav-superadmin.html' %}
+<body class="text-slate-800 bg-slate-100 h-screen overflow-hidden">
 
+  {% include 'super-admin/header-superadmin.html' %}
+  {% include 'super-admin/sidenav-superadmin.html' %}
 
-  <main class="p-5 pt-[92px] lg:ml-[260px]">
-    <!-- Header -->
-    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-600">
-          <span class="material-icons-round text-[16px] text-green-700">domain</span>
-          Human Resources • Department (Super Admin)
-        </div>
-        <h1 class="mt-2 text-2xl font-black tracking-tight text-slate-900">Department Registry</h1>
-        <p class="mt-1 text-sm font-semibold text-slate-600">
-          Manage departments across all companies, regions, and municipalities.
-        </p>
-      </div>
+  <div class="h-screen flex flex-col lg:ml-[260px] pt-[92px]">
+    
+    <main class="flex-1 flex flex-col min-w-0 p-3 gap-2 overflow-y-auto custom-scrollbar">
 
-      <div class="flex flex-col gap-2 sm:flex-row">
-        <button id="btnExport"
-          class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">
-          <span class="material-icons-round text-[18px]">download</span>
-          Export CSV
-        </button>
-        <button id="btnAdd"
-          class="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-green-800">
-          <span class="material-icons-round text-[18px]">add</span>
-          Add Department
-        </button>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <section class="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-12 md:items-end">
-        <div class="md:col-span-4">
-          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Search</label>
-          <div class="mt-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-green-200">
-            <span class="material-icons-round text-[20px] text-slate-400">search</span>
-            <input id="qSearch" type="text" placeholder="Department name, code, head..."
-              class="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400" />
-          </div>
-        </div>
-
-        <div class="md:col-span-3">
-          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Company</label>
-          <select id="qCompany"
-            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
-          </select>
-        </div>
-
-        <div class="md:col-span-2">
-          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Region</label>
-          <select id="qRegion"
-            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
-          </select>
-        </div>
-
-        <div class="md:col-span-2">
-          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Municipality</label>
-          <select id="qMunicipality"
-            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
-          </select>
-        </div>
-
-        <div class="md:col-span-1">
-          <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Status</label>
-          <select id="qStatus"
-            class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
-            <option value="all">All</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div class="text-xs font-bold text-slate-500">
-          Tip: Filter by Company + Region + Municipality for national oversight.
-        </div>
-        <div class="flex gap-2">
-          <button id="btnReset"
-            class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
-            <span class="material-icons-round text-[18px]">restart_alt</span>
-            Reset
-          </button>
-          <button id="btnApply"
-            class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800">
-            <span class="material-icons-round text-[18px]">tune</span>
-            Apply
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- KPI Cards -->
-    <section class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex items-center justify-between">
-          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Total Departments</p>
-          <span class="material-icons-round text-[20px] text-slate-500">account_tree</span>
-        </div>
-        <div id="kpiTotal" class="mt-2 text-3xl font-black tracking-tight text-slate-900">0</div>
-        <p class="mt-1 text-xs font-bold text-slate-500">All registered units</p>
-      </div>
-
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex items-center justify-between">
-          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Active</p>
-          <span class="material-icons-round text-[20px] text-green-700">check_circle</span>
-        </div>
-        <div id="kpiActive" class="mt-2 text-3xl font-black tracking-tight text-green-800">0</div>
-        <p class="mt-1 text-xs font-bold text-slate-500">Operational</p>
-      </div>
-
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex items-center justify-between">
-          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Inactive</p>
-          <span class="material-icons-round text-[20px] text-red-600">cancel</span>
-        </div>
-        <div id="kpiInactive" class="mt-2 text-3xl font-black tracking-tight text-red-700">0</div>
-        <p class="mt-1 text-xs font-bold text-slate-500">Disabled / archived</p>
-      </div>
-
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex items-center justify-between">
-          <p class="text-[11px] font-black uppercase tracking-widest text-slate-500">Coverage</p>
-          <span class="material-icons-round text-[20px] text-blue-700">public</span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <div id="kpiRegions" class="text-3xl font-black tracking-tight text-slate-900">0</div>
-          <div class="text-xs font-black text-slate-500">regions</div>
-          <div class="mx-1 text-slate-300">•</div>
-          <div id="kpiMunicipalities" class="text-3xl font-black tracking-tight text-slate-900">0</div>
-          <div class="text-xs font-black text-slate-500">municipalities</div>
-        </div>
-        <p class="mt-1 text-xs font-bold text-slate-500">Distribution scope</p>
-      </div>
-    </section>
-
-    <!-- Charts -->
-    <section class="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="mb-3 flex items-center justify-between">
-          <div>
-            <h2 class="text-sm font-black text-slate-900">Departments by Company</h2>
-            <p class="text-xs font-bold text-slate-500">Counts grouped by company</p>
-          </div>
-          <span class="material-icons-round text-[20px] text-slate-500">bar_chart</span>
-        </div>
-        <div class="h-[280px]">
-          <canvas id="chartCompany"></canvas>
-        </div>
-      </div>
-
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="mb-3 flex items-center justify-between">
-          <div>
-            <h2 class="text-sm font-black text-slate-900">Status Distribution</h2>
-            <p class="text-xs font-bold text-slate-500">Active vs inactive</p>
-          </div>
-          <span class="material-icons-round text-[20px] text-slate-500">donut_small</span>
-        </div>
-        <div class="h-[280px]">
-          <canvas id="chartStatus"></canvas>
-        </div>
-      </div>
-    </section>
-
-    <!-- Table -->
-    <section class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div class="flex flex-col gap-2 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 class="text-sm font-black text-slate-900">Department List</h2>
-          <p class="text-xs font-bold text-slate-500">Super Admin (National Scope) • Includes company + region + municipality</p>
-        </div>
-        <div class="text-xs font-black text-slate-500">
-          Showing: <span id="rowsCount" class="text-slate-900">0</span>
-        </div>
-      </div>
-
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-left">
-          <thead class="bg-slate-50">
-            <tr class="text-[11px] font-black uppercase tracking-widest text-slate-500">
-              <th class="px-4 py-3">Department</th>
-              <th class="px-4 py-3">Company</th>
-              <th class="px-4 py-3">Region</th>
-              <th class="px-4 py-3">Municipality</th>
-              <th class="px-4 py-3">Head</th>
-              <th class="px-4 py-3">Status</th>
-              <th class="px-4 py-3">Updated</th>
-              <th class="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="deptTbody" class="divide-y divide-slate-100"></tbody>
-        </table>
-      </div>
-
-      <div class="flex flex-col gap-2 border-t border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div class="text-xs font-bold text-slate-500">
-          Note: This page uses mock data. Replace the <code class="font-black">departments</code> array to connect your DB.
-        </div>
-
-        <div class="flex items-center gap-2">
-          <button id="prevPage"
-            class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
-            Prev
-          </button>
-          <div class="text-xs font-black text-slate-500">
-            Page <span id="pageNow" class="text-slate-900">1</span> / <span id="pageTotal" class="text-slate-900">1</span>
-          </div>
-          <button id="nextPage"
-            class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
-            Next
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Modal -->
-    <div id="modalBackdrop" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/30 p-4">
-      <div class="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl">
-        <div class="flex items-center justify-between border-b border-slate-100 p-4">
-          <div>
-            <h3 id="modalTitle" class="text-sm font-black text-slate-900">Add Department</h3>
-            <p class="text-xs font-bold text-slate-500">National scope • company + region + municipality required</p>
-          </div>
-          <button id="btnCloseModal"
-            class="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50">
-            <span class="material-icons-round text-[20px]">close</span>
-          </button>
-        </div>
-
-        <form id="deptForm" class="p-4">
-          <input type="hidden" id="formId" />
-
-          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div>
-              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Department Name</label>
-              <input id="formName" required
-                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
-                placeholder="e.g., Environmental Management Bureau" />
+        <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white">
+              <span class="material-icons-round text-[18px]">account_tree</span>
             </div>
-
-            <div>
-              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Department Code</label>
-              <input id="formCode" required
-                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
-                placeholder="e.g., EMB" />
-            </div>
-
-            <div>
-              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Company</label>
-              <select id="formCompany" required
-                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
-              </select>
-            </div>
-
-            <div>
-              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Head of Department</label>
-              <input id="formHead"
-                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
-                placeholder="e.g., Juan Dela Cruz" />
-            </div>
-
-            <div>
-              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Region</label>
-              <select id="formRegion" required
-                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
-              </select>
-            </div>
-
-            <div>
-              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Municipality</label>
-              <select id="formMunicipality" required
-                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
-              </select>
-            </div>
-
-            <div>
-              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Status</label>
-              <select id="formStatus" required
-                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200">
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="text-[11px] font-black uppercase tracking-widest text-slate-500">Description</label>
-              <input id="formDesc"
-                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200"
-                placeholder="Short description (optional)" />
+            <div class="leading-tight">
+              <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">National Department Registry</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Cross-Company Organizational Units</p>
             </div>
           </div>
-
-          <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-            <button type="button" id="btnCancel"
-              class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
-              Cancel
+          <div class="flex gap-2">
+            <button id="btnExport" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+              <span class="material-icons-round text-[14px]">file_download</span> Export CSV
             </button>
-            <button type="submit"
-              class="rounded-xl bg-green-700 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-green-800">
-              Save
+            <button id="btnAdd" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
+              <span class="material-icons-round text-[14px]">add</span> Add Department
             </button>
           </div>
-        </form>
+        </header>
+
+        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-slate-800 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Departments</div>
+                <div id="kpiTotal" class="text-lg font-black text-slate-900 leading-none mt-1">0</div>
+              </div>
+              <span class="material-icons-round text-slate-300 text-[18px]">account_tree</span>
+            </div>
+            <div class="mt-1 pt-1 border-t border-slate-100 text-[9px] text-slate-500">All registered units</div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 bg-emerald-50/30 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-emerald-800 tracking-widest">Active Units</div>
+                <div id="kpiActive" class="text-lg font-black text-emerald-700 leading-none mt-1">0</div>
+              </div>
+              <span class="material-icons-round text-emerald-200 text-[18px]">check_circle</span>
+            </div>
+            <div class="mt-1 pt-1 border-t border-emerald-100/50 text-[9px] text-slate-500">Currently operational</div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600 bg-rose-50/30 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-rose-800 tracking-widest">Inactive</div>
+                <div id="kpiInactive" class="text-lg font-black text-rose-700 leading-none mt-1">0</div>
+              </div>
+              <span class="material-icons-round text-rose-200 text-[18px]">cancel</span>
+            </div>
+            <div class="mt-1 pt-1 border-t border-rose-100/50 text-[9px] text-slate-500">Disabled or archived</div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Geographic Scope</div>
+                <div class="text-lg font-black text-blue-800 leading-none mt-1 flex items-end gap-1">
+                    <span id="kpiRegions">0</span><span class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Reg</span>
+                    <span class="text-slate-300 px-1">•</span>
+                    <span id="kpiMunicipalities">0</span><span class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Muni</span>
+                </div>
+              </div>
+              <span class="material-icons-round text-slate-300 text-[18px]">public</span>
+            </div>
+            <div class="mt-1 pt-1 border-t border-slate-100 text-[9px] text-slate-500">Active distribution coverage</div>
+          </div>
+        </section>
+
+        <div class="flex-1 flex flex-col xl:flex-row gap-2 min-h-0">
+            
+            <aside class="w-full xl:w-[260px] flex flex-col gap-2 shrink-0">
+                <div class="gov-card p-2 flex-1 flex flex-col min-h-[140px] xl:min-h-0">
+                    <h2 class="text-[9px] font-black uppercase text-slate-600 border-l-2 border-slate-600 pl-1 mb-1 shrink-0">Units by Company</h2>
+                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="chartCompany"></canvas></div></div>
+                </div>
+                <div class="gov-card p-2 flex-1 flex flex-col min-h-[140px] xl:min-h-0">
+                    <h2 class="text-[9px] font-black uppercase text-slate-600 border-l-2 border-slate-600 pl-1 mb-1 shrink-0">Operational Status Mix</h2>
+                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="chartStatus"></canvas></div></div>
+                </div>
+            </aside>
+
+            <section class="gov-card flex-1 flex flex-col min-h-[400px] xl:min-h-0 overflow-hidden bg-white">
+                
+                <div class="p-2 border-b border-slate-200 shrink-0 flex flex-wrap gap-1.5 items-center bg-slate-50 justify-between">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="relative min-w-[160px]">
+                            <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                            <input id="qSearch" type="text" class="gov-input pl-6 w-full" placeholder="Department, code, head...">
+                        </div>
+                        <select id="qCompany" class="gov-input cursor-pointer min-w-[130px]"></select>
+                        <select id="qRegion" class="gov-input cursor-pointer min-w-[110px]"></select>
+                        <select id="qMunicipality" class="gov-input cursor-pointer min-w-[130px]"></select>
+                        <select id="qStatus" class="gov-input cursor-pointer">
+                            <option value="all">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-1">
+                        <button id="btnReset" class="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[9px] uppercase rounded-[2px] transition border border-slate-300">Reset</button>
+                        <button id="btnApply" class="px-3 py-1 bg-blue-900 hover:bg-blue-800 text-white font-bold text-[9px] uppercase rounded-[2px] transition shadow-sm">Apply</button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
+                            <tr>
+                                <th class="border-r border-slate-200">Department Details</th>
+                                <th class="border-r border-slate-200">Company</th>
+                                <th class="border-r border-slate-200">Location</th>
+                                <th class="border-r border-slate-200">Dept. Head</th>
+                                <th class="border-r border-slate-200 text-center">Status</th>
+                                <th class="border-r border-slate-200 text-center">Last Update</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deptTbody" class="text-[10px] divide-y divide-slate-100">
+                            </tbody>
+                    </table>
+                </div>
+
+                <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
+                    <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">Showing <span id="rowsCount">0</span> Records</span>
+                    <div class="flex items-center gap-2">
+                        <button id="prevPage" class="px-2 py-0.5 border border-slate-300 bg-white font-bold text-[9px] uppercase hover:bg-slate-100 text-slate-600 transition">Prev</button>
+                        <span class="text-[9px] font-black text-slate-600 uppercase tracking-widest">Page <span id="pageNow" class="text-slate-900">1</span> of <span id="pageTotal" class="text-slate-900">1</span></span>
+                        <button id="nextPage" class="px-2 py-0.5 border border-slate-300 bg-white font-bold text-[9px] uppercase hover:bg-slate-100 text-slate-600 transition">Next</button>
+                    </div>
+                </div>
+
+            </section>
+        </div>
+
+    </main>
+  </div>
+
+  <div id="modalBackdrop" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="w-full max-w-lg rounded-[2px] border border-slate-400 bg-white shadow-2xl overflow-hidden">
+      
+      <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white">
+        <h3 id="modalTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">account_tree</span> Add Department
+        </h3>
+        <button id="btnCloseModal" class="text-slate-400 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
       </div>
+
+      <form id="deptForm" class="p-4 bg-slate-50 space-y-3">
+        <input type="hidden" id="formId" />
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="col-span-2 sm:col-span-1">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Department Name</label>
+            <input id="formName" required class="gov-input w-full" placeholder="e.g., Environmental Management" />
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Department Code</label>
+            <input id="formCode" required class="gov-input w-full" placeholder="e.g., EMB" />
+          </div>
+
+          <div class="col-span-2">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Company Assignment</label>
+            <select id="formCompany" required class="gov-input w-full cursor-pointer"></select>
+          </div>
+          
+          <div>
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Region</label>
+            <select id="formRegion" required class="gov-input w-full cursor-pointer"></select>
+          </div>
+          <div>
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Municipality / City</label>
+            <select id="formMunicipality" required class="gov-input w-full cursor-pointer"></select>
+          </div>
+
+          <div>
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Head of Department</label>
+            <input id="formHead" class="gov-input w-full" placeholder="e.g., Juan Dela Cruz" />
+          </div>
+          <div>
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Status</label>
+            <select id="formStatus" required class="gov-input w-full cursor-pointer">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div class="col-span-2">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Description</label>
+            <input id="formDesc" class="gov-input w-full" placeholder="Short description (optional)" />
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-200 mt-2">
+          <button type="button" id="btnCancel" class="gov-btn bg-white border border-slate-300 text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Save Record</button>
+        </div>
+      </form>
     </div>
-  </main>
+  </div>
 
   <script>
-    // ---- Regions -> municipalities (mock master list)
+    // --- MOCK DATA ---
     const regionMap = {
       "All Regions": ["All Municipalities"],
       "NCR": ["All Municipalities", "Manila", "Quezon City", "Makati", "Pasig", "Taguig"],
@@ -366,7 +273,6 @@
       "BARMM": ["All Municipalities", "Cotabato City", "Marawi", "Lamitan"]
     };
 
-    // ---- Companies (mock; typically from your Company table)
     const companiesMaster = [
       "All Companies",
       "DENR Central Office",
@@ -376,7 +282,6 @@
       "Partner Contractor - EnviroTech"
     ];
 
-    // ---- Departments (mock data)
     let departments = [
       { id: crypto.randomUUID(), name: "Environmental Management Bureau", code: "EMB", company: "DENR Central Office", region: "NCR", municipality: "Manila", head: "Juan Dela Cruz", status: "active", updatedAt: "2026-02-10", desc: "Regulatory and compliance oversight" },
       { id: crypto.randomUUID(), name: "Forest Management Bureau", code: "FMB", company: "DENR Central Office", region: "NCR", municipality: "Quezon City", head: "Maria Santos", status: "active", updatedAt: "2026-02-09", desc: "Forestry programs and protection" },
@@ -392,17 +297,13 @@
     function setOptions(selectEl, options, selectedValue) {
       selectEl.innerHTML = "";
       options.forEach(opt => {
-        const o = document.createElement("option");
-        o.value = opt;
-        o.textContent = opt;
+        const o = document.createElement("option"); o.value = opt; o.textContent = opt;
         if (selectedValue && selectedValue === opt) o.selected = true;
         selectEl.appendChild(o);
       });
     }
 
-    // ---- Paging
-    let page = 1;
-    const perPage = 7;
+    let page = 1; const perPage = 10;
 
     function applyFilters(list) {
       const q = $("qSearch").value.trim().toLowerCase();
@@ -412,38 +313,27 @@
       const s = $("qStatus").value;
 
       return list.filter(x => {
-        const matchesQ =
-          !q ||
-          x.name.toLowerCase().includes(q) ||
-          x.code.toLowerCase().includes(q) ||
-          (x.head || "").toLowerCase().includes(q);
-
+        const matchesQ = !q || x.name.toLowerCase().includes(q) || x.code.toLowerCase().includes(q) || (x.head || "").toLowerCase().includes(q);
         const matchesCompany = (c === "All Companies") || x.company === c;
         const matchesRegion = (r === "All Regions") || x.region === r;
         const matchesMuni = (m === "All Municipalities") || x.municipality === m;
         const matchesStatus = (s === "all") || x.status === s;
-
         return matchesQ && matchesCompany && matchesRegion && matchesMuni && matchesStatus;
       });
     }
 
     function renderKPIs(filtered) {
-      const total = filtered.length;
-      const active = filtered.filter(x => x.status === "active").length;
-      const inactive = filtered.filter(x => x.status === "inactive").length;
-
-      const regionSet = new Set(filtered.map(x => x.region));
-      const muniSet = new Set(filtered.map(x => x.municipality));
-
-      $("kpiTotal").textContent = total;
-      $("kpiActive").textContent = active;
-      $("kpiInactive").textContent = inactive;
-      $("kpiRegions").textContent = regionSet.size;
-      $("kpiMunicipalities").textContent = muniSet.size;
+      $("kpiTotal").textContent = filtered.length;
+      $("kpiActive").textContent = filtered.filter(x => x.status === "active").length;
+      $("kpiInactive").textContent = filtered.filter(x => x.status === "inactive").length;
+      $("kpiRegions").textContent = new Set(filtered.map(x => x.region)).size;
+      $("kpiMunicipalities").textContent = new Set(filtered.map(x => x.municipality)).size;
     }
 
-    // ---- Charts
     let chartCompany, chartStatus;
+    Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+    Chart.defaults.font.size = 8;
+    Chart.defaults.color = "#64748b";
 
     function buildCountsByCompany(filtered) {
       const map = {};
@@ -461,178 +351,124 @@
       if (chartCompany) chartCompany.destroy();
       if (chartStatus) chartStatus.destroy();
 
+      // DITO INILAGAY ANG MULTI-COLOR ARRAY PARA SA BAR CHART
+      const barColors = [
+        '#1e40af', '#10b981', '#f59e0b', '#ef4444', 
+        '#8b5cf6', '#06b6d4', '#475569', '#ec4899', '#14b8a6'
+      ];
+
       chartCompany = new Chart($("chartCompany"), {
         type: "bar",
-        data: { labels: companyCounts.labels, datasets: [{ label: "Departments", data: companyCounts.values }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        data: { 
+            labels: companyCounts.labels.map(l => l.substring(0,12)+".."), // Shortened names for better fit
+            datasets: [{ 
+                label: "Departments", 
+                data: companyCounts.values, 
+                backgroundColor: barColors, // Ginamit ang array of colors
+                borderRadius: 2,
+                borderWidth: 0
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: false } }, 
+            scales: { x: { display: false }, y: { beginAtZero: true, display: false } } 
         }
       });
 
+      // DITO NAKA-CENTER NA ANG DOUGHNUT LEGEND (position: "bottom")
       chartStatus = new Chart($("chartStatus"), {
         type: "doughnut",
-        data: { labels: ["Active", "Inactive"], datasets: [{ data: [active, inactive] }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { position: "bottom" } }
+        data: { labels: ["Active", "Inactive"], datasets: [{ data: [active, inactive], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }] },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            cutout: '70%', 
+            layout: { padding: { bottom: 10 } },
+            plugins: { legend: { position: "bottom", labels: { boxWidth: 6, font: { weight: 'bold' } } } } 
         }
       });
     }
 
-    // ---- Table
     function badge(status) {
-      if (status === "active") {
-        return `<span class="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-[11px] font-black text-green-800">
-          <span class="material-icons-round text-[16px]">check_circle</span> Active
-        </span>`;
-      }
-      return `<span class="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-[11px] font-black text-red-700">
-        <span class="material-icons-round text-[16px]">cancel</span> Inactive
-      </span>`;
-    }
-
-    function escapeHtml(str) {
-      return String(str ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+      if (status === "active") return `<span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 w-16 text-center">Active</span>`;
+      return `<span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-rose-50 text-rose-700 border border-rose-200 w-16 text-center">Inactive</span>`;
     }
 
     function rowHTML(x) {
-      return `
-        <tr class="hover:bg-slate-50">
-          <td class="px-4 py-3">
-            <div class="font-black text-slate-900">${escapeHtml(x.name)}</div>
-            <div class="text-xs font-bold text-slate-500">${escapeHtml(x.code)} • ${escapeHtml(x.desc || "—")}</div>
+      return `<tr class="hover:bg-blue-50 transition border-b border-slate-100">
+          <td class="border-r border-slate-100">
+            <div class="font-black text-slate-900 uppercase">${x.name}</div>
+            <div class="text-[9px] font-bold text-slate-500 font-mono">${x.code} <span class="font-normal text-slate-400">• ${x.desc || "—"}</span></div>
           </td>
-          <td class="px-4 py-3 text-sm font-semibold text-slate-800">${escapeHtml(x.company)}</td>
-          <td class="px-4 py-3 text-sm font-semibold text-slate-800">${escapeHtml(x.region)}</td>
-          <td class="px-4 py-3 text-sm font-semibold text-slate-800">${escapeHtml(x.municipality)}</td>
-          <td class="px-4 py-3">
-            <div class="text-sm font-semibold text-slate-800">${escapeHtml(x.head || "—")}</div>
-          </td>
-          <td class="px-4 py-3">${badge(x.status)}</td>
-          <td class="px-4 py-3 text-sm font-semibold text-slate-700">${escapeHtml(x.updatedAt)}</td>
-          <td class="px-4 py-3 text-right">
-            <div class="inline-flex gap-2">
-              <button data-action="edit" data-id="${x.id}"
-                class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
-                <span class="material-icons-round text-[18px] align-middle">edit</span>
-              </button>
-              <button data-action="toggle" data-id="${x.id}"
-                class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
-                <span class="material-icons-round text-[18px] align-middle">sync</span>
-              </button>
-              <button data-action="delete" data-id="${x.id}"
-                class="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-red-700 hover:bg-red-50">
-                <span class="material-icons-round text-[18px] align-middle">delete</span>
-              </button>
+          <td class="border-r border-slate-100 uppercase font-bold text-slate-700">${x.company}</td>
+          <td class="border-r border-slate-100 uppercase font-bold text-slate-700">${x.region} <span class="text-[9px] text-slate-400 block font-normal">${x.municipality}</span></td>
+          <td class="border-r border-slate-100 font-bold text-slate-700">${x.head || "—"}</td>
+          <td class="text-center border-r border-slate-100">${badge(x.status)}</td>
+          <td class="text-center border-r border-slate-100 font-mono text-slate-500">${x.updatedAt}</td>
+          <td class="text-center">
+            <div class="flex justify-center gap-1">
+              <button data-action="edit" data-id="${x.id}" class="btn-action btn-edit" title="Edit"><span class="material-icons-round text-[14px]">edit</span></button>
+              <button data-action="toggle" data-id="${x.id}" class="btn-action btn-toggle" title="Toggle Status"><span class="material-icons-round text-[14px]">sync</span></button>
+              <button data-action="delete" data-id="${x.id}" class="btn-action btn-delete" title="Delete"><span class="material-icons-round text-[14px]">delete</span></button>
             </div>
           </td>
-        </tr>
-      `;
+        </tr>`;
     }
 
     function renderTable(filtered) {
-      const totalRows = filtered.length;
-      const totalPages = Math.max(1, Math.ceil(totalRows / perPage));
+      const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
       page = Math.min(page, totalPages);
-
       const start = (page - 1) * perPage;
-      const slice = filtered.slice(start, start + perPage);
-
-      $("deptTbody").innerHTML = slice.map(rowHTML).join("");
-      $("rowsCount").textContent = totalRows;
-      $("pageNow").textContent = page;
-      $("pageTotal").textContent = totalPages;
-
-      $("prevPage").disabled = page <= 1;
-      $("nextPage").disabled = page >= totalPages;
-      $("prevPage").classList.toggle("opacity-50", page <= 1);
-      $("nextPage").classList.toggle("opacity-50", page >= totalPages);
+      $("deptTbody").innerHTML = filtered.slice(start, start + perPage).map(rowHTML).join("");
+      $("rowsCount").textContent = filtered.length;
+      $("pageNow").textContent = page; $("pageTotal").textContent = totalPages;
     }
 
-    // ---- Modal
     function openModal(mode, dept) {
-      $("modalBackdrop").classList.remove("hidden");
-      $("modalBackdrop").classList.add("flex");
-      $("modalTitle").textContent = mode === "edit" ? "Edit Department" : "Add Department";
-
-      $("formId").value = dept?.id || "";
-      $("formName").value = dept?.name || "";
-      $("formCode").value = dept?.code || "";
-      $("formHead").value = dept?.head || "";
-      $("formStatus").value = dept?.status || "active";
-      $("formDesc").value = dept?.desc || "";
-
-      // company options
+      $("modalBackdrop").classList.replace("hidden", "flex");
+      $("modalTitle").innerHTML = mode === "edit" ? '<span class="material-icons-round text-[14px]">edit</span> Edit Department' : '<span class="material-icons-round text-[14px]">domain_add</span> Add Department';
+      $("formId").value = dept?.id || ""; $("formName").value = dept?.name || ""; $("formCode").value = dept?.code || "";
+      $("formHead").value = dept?.head || ""; $("formStatus").value = dept?.status || "active"; $("formDesc").value = dept?.desc || "";
+      
       setOptions($("formCompany"), companiesMaster.filter(x => x !== "All Companies"), dept?.company || companiesMaster[1]);
-
-      // region/muni options
       const regions = Object.keys(regionMap).filter(r => r !== "All Regions");
       setOptions($("formRegion"), regions, dept?.region || regions[0]);
-
       const muniList = (regionMap[$("formRegion").value] || []).filter(x => x !== "All Municipalities");
       setOptions($("formMunicipality"), muniList.length ? muniList : ["—"], dept?.municipality || muniList[0]);
     }
 
-    function closeModal() {
-      $("modalBackdrop").classList.add("hidden");
-      $("modalBackdrop").classList.remove("flex");
-    }
+    function closeModal() { $("modalBackdrop").classList.replace("flex", "hidden"); }
 
     function exportCSV(filtered) {
       const headers = ["Name","Code","Company","Region","Municipality","Head","Status","UpdatedAt","Description"];
-      const rows = filtered.map(x => [
-        x.name, x.code, x.company, x.region, x.municipality, x.head || "", x.status, x.updatedAt, x.desc || ""
-      ]);
-
-      const csv = [headers, ...rows]
-        .map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
-        .join("\n");
-
+      const rows = filtered.map(x => [x.name, x.code, x.company, x.region, x.municipality, x.head || "", x.status, x.updatedAt, x.desc || ""]);
+      const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "hrm_departments.csv";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url;
+      a.download = "hrm_departments.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
 
     function renderAll() {
       const filtered = applyFilters(departments);
-      renderKPIs(filtered);
-      renderCharts(filtered);
-      renderTable(filtered);
-      return filtered;
+      renderKPIs(filtered); renderCharts(filtered); renderTable(filtered);
     }
 
     function initFilters() {
       setOptions($("qCompany"), companiesMaster, "All Companies");
-
       const regions = Object.keys(regionMap);
       setOptions($("qRegion"), regions, "All Regions");
       setOptions($("qMunicipality"), regionMap["All Regions"], "All Municipalities");
 
       $("qRegion").addEventListener("change", () => {
-        const r = $("qRegion").value;
-        setOptions($("qMunicipality"), regionMap[r] || ["All Municipalities"], "All Municipalities");
+        setOptions($("qMunicipality"), regionMap[$("qRegion").value] || ["All Municipalities"], "All Municipalities");
       });
     }
 
     function initModalRegionLink() {
       $("formRegion").addEventListener("change", () => {
-        const r = $("formRegion").value;
-        const muniList = (regionMap[r] || []).filter(x => x !== "All Municipalities");
+        const muniList = (regionMap[$("formRegion").value] || []).filter(x => x !== "All Municipalities");
         setOptions($("formMunicipality"), muniList.length ? muniList : ["—"], muniList[0]);
       });
     }
@@ -642,97 +478,50 @@
 
       $("btnApply").addEventListener("click", () => { page = 1; renderAll(); });
       $("btnReset").addEventListener("click", () => {
-        $("qSearch").value = "";
-        $("qCompany").value = "All Companies";
-        $("qRegion").value = "All Regions";
-        setOptions($("qMunicipality"), regionMap["All Regions"], "All Municipalities");
-        $("qStatus").value = "all";
-        page = 1;
-        renderAll();
+        $("qSearch").value = ""; $("qCompany").value = "All Companies"; $("qRegion").value = "All Regions";
+        setOptions($("qMunicipality"), regionMap["All Regions"], "All Municipalities"); $("qStatus").value = "all";
+        page = 1; renderAll();
       });
 
-      $("qSearch").addEventListener("input", () => { page = 1; renderAll(); });
-      $("qStatus").addEventListener("change", () => { page = 1; renderAll(); });
-      $("qCompany").addEventListener("change", () => { page = 1; renderAll(); });
-      $("qMunicipality").addEventListener("change", () => { page = 1; renderAll(); });
-      $("qRegion").addEventListener("change", () => { page = 1; renderAll(); });
-
+      ["qSearch", "qStatus", "qCompany", "qMunicipality", "qRegion"].forEach(id => $(id).addEventListener("input", () => { page = 1; renderAll(); }));
       $("prevPage").addEventListener("click", () => { page = Math.max(1, page - 1); renderAll(); });
-      $("nextPage").addEventListener("click", () => { page = page + 1; renderAll(); });
-
-      $("btnAdd").addEventListener("click", () => {
-        openModal("add");
-        initModalRegionLink();
-      });
-
+      $("nextPage").addEventListener("click", () => { page++; renderAll(); });
+      
+      $("btnAdd").addEventListener("click", () => { openModal("add"); initModalRegionLink(); });
       $("btnExport").addEventListener("click", () => exportCSV(applyFilters(departments)));
-
-      $("btnCloseModal").addEventListener("click", closeModal);
-      $("btnCancel").addEventListener("click", closeModal);
-      $("modalBackdrop").addEventListener("click", (e) => { if (e.target === $("modalBackdrop")) closeModal(); });
+      $("btnCloseModal").addEventListener("click", closeModal); $("btnCancel").addEventListener("click", closeModal);
 
       $("deptForm").addEventListener("submit", (e) => {
         e.preventDefault();
         const id = $("formId").value;
-
         const payload = {
-          id: id || crypto.randomUUID(),
-          name: $("formName").value.trim(),
-          code: $("formCode").value.trim(),
-          company: $("formCompany").value,
-          head: $("formHead").value.trim(),
-          region: $("formRegion").value,
-          municipality: $("formMunicipality").value,
-          status: $("formStatus").value,
-          desc: $("formDesc").value.trim(),
+          id: id || crypto.randomUUID(), name: $("formName").value.trim(), code: $("formCode").value.trim(),
+          company: $("formCompany").value, head: $("formHead").value.trim(), region: $("formRegion").value,
+          municipality: $("formMunicipality").value, status: $("formStatus").value, desc: $("formDesc").value.trim(),
           updatedAt: new Date().toISOString().slice(0, 10)
         };
-
         if (id) departments = departments.map(x => x.id === id ? payload : x);
         else departments = [payload, ...departments];
-
-        closeModal();
-        page = 1;
-        renderAll();
+        closeModal(); page = 1; renderAll();
       });
 
       $("deptTbody").addEventListener("click", (e) => {
-        const btn = e.target.closest("button[data-action]");
-        if (!btn) return;
-
-        const action = btn.getAttribute("data-action");
-        const id = btn.getAttribute("data-id");
-        const dept = departments.find(x => x.id === id);
-        if (!dept) return;
+        const btn = e.target.closest("button[data-action]"); if (!btn) return;
+        const action = btn.getAttribute("data-action"), id = btn.getAttribute("data-id");
+        const dept = departments.find(x => x.id === id); if (!dept) return;
 
         if (action === "edit") {
           openModal("edit", dept);
           initModalRegionLink();
-          $("formRegion").value = dept.region;
-          $("formRegion").dispatchEvent(new Event("change"));
+          $("formRegion").value = dept.region; $("formRegion").dispatchEvent(new Event("change"));
           $("formMunicipality").value = dept.municipality;
-          return;
-        }
-
-        if (action === "toggle") {
-          departments = departments.map(x => x.id === id
-            ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) }
-            : x
-          );
+        } else if (action === "toggle") {
+          departments = departments.map(x => x.id === id ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) } : x);
           renderAll();
-          return;
-        }
-
-        if (action === "delete") {
-          const ok = confirm(`Delete "${dept.name}"? This cannot be undone.`);
-          if (!ok) return;
-          departments = departments.filter(x => x.id !== id);
-          page = 1;
-          renderAll();
-          return;
+        } else if (action === "delete" && confirm(`Delete "${dept.name}"?`)) {
+          departments = departments.filter(x => x.id !== id); page = 1; renderAll();
         }
       });
-
       renderAll();
     });
   </script>
