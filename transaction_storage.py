@@ -89,12 +89,11 @@ def get_user_transactions(user_email=None, user_id=None):
         transactions_by_id = {}
         queries = []
 
-        # Primary: Query by userId if provided
+        # Primary: Query by userId if provided (ONLY userId, no email fallback)
         if user_id:
             queries.append(transactions_ref.where(filter=firestore.FieldFilter('userId', '==', user_id)))
-        
-        # Fallback: Query by email for backwards compatibility (old records)
-        if user_email:
+        # Fallback: Query by email ONLY if no userId provided (for backwards compatibility)
+        elif user_email:
             normalized_email = user_email.strip().lower()
             queries.append(transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', normalized_email)))
             if user_email != normalized_email:
