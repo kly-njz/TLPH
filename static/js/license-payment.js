@@ -3,6 +3,7 @@ import { saveLicenseApplicationToFirebase, collectLicenseFormData } from "./lice
 
 const EMAIL_TIMEOUT_MS = 1500;
 let cachedEmail = "";
+let cachedUserId = "";
 let emailPromise = null;
 
 function getCurrentUserEmail() {
@@ -23,11 +24,16 @@ function getCurrentUserEmail() {
                 unsubscribe();
             }
             cachedEmail = user && user.email ? user.email : "";
+            cachedUserId = user && user.uid ? user.uid : "";
             resolve(cachedEmail);
         });
     });
 
     return emailPromise;
+}
+
+function getCurrentUserId() {
+    return cachedUserId;
 }
 
 function slugify(value) {
@@ -152,6 +158,7 @@ async function handlePaymentSubmit(event, form) {
             external_id: externalId,
             amount: amount,
             email: email,
+            user_id: getCurrentUserId(),
             description: description,
             item_name: itemName,
             success_url: getSuccessUrl(),
