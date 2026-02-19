@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Expense Categories | Municipal Admin</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+<style>
+  body { font-family: 'Verdana','Arial',sans-serif; background:#e2e8f0; }
+  .custom-scrollbar::-webkit-scrollbar { width:5px; height:5px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background:#f1f5f9; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:2px; }
+
+  /* Chart Fix */
+  .chart-container { position:relative; height:100%; width:100%; overflow:hidden; }
+
+  html, body { height:100%; }
+</style>
+</head>
+
+<body class="text-slate-800 text-xs h-screen overflow-hidden flex flex-col">
+
+<div class="flex-1 flex overflow-hidden">
+
+  <!-- Municipal sidenav -->
+  <aside class="sidebar-container hidden lg:block">
+    {% include 'municipal/sidenav.html' %}
+  </aside>
+
+  <div class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar"
+       x-data="{ modalOpen: false }">
+
+    <!-- Header -->
+    <header class="bg-white border border-slate-300 rounded-[2px] p-3 shadow-sm flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-[2px] bg-rose-50 border border-rose-200 flex items-center justify-center">
+          <span class="material-icons-round text-rose-700 text-[18px]">category</span>
+        </div>
+        <div class="leading-tight">
+          <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Expense Categories</h1>
+          <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+            Municipal COA Mapping & Tax Configuration
+          </p>
+
+          <div class="mt-1 flex flex-wrap items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+            <span>Municipality:</span>
+            <span class="px-2 py-1 rounded-[2px] border border-slate-300 bg-slate-50 text-slate-700">
+              {{ municipality_name if municipality_name else 'Selected Municipality' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5">
+        <!-- Optional municipal filters -->
+        <select id="fundScope" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-slate-50 uppercase text-slate-700">
+          <option value="ALL">All Funds</option>
+          <option value="GENERAL">General Fund</option>
+          <option value="TRUST">Trust Fund</option>
+          <option value="SPECIAL">Special Fund</option>
+        </select>
+
+        <select id="officeScope" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-slate-50 uppercase text-slate-700">
+          <option value="ALL">All Offices</option>
+          <option value="TREASURY">Treasury</option>
+          <option value="ACCOUNTING">Accounting</option>
+          <option value="BUDGET">Budget</option>
+          <option value="ENGINEERING">Engineering</option>
+        </select>
+
+        <button @click="modalOpen = true"
+          class="bg-rose-700 hover:bg-rose-800 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
+          <span class="material-icons-round text-[14px]">add</span> Add Category
+        </button>
+      </div>
+    </header>
+
+    <!-- KPI -->
+    <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
+      <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-rose-700">
+        <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Expenses (YTD)</p>
+        <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">₱ 198,000</div>
+        <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Municipal spending</p>
+      </div>
+      <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-700">
+        <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Categories</p>
+        <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">10</div>
+        <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Mapped to COA</p>
+      </div>
+      <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm bg-slate-800 text-white">
+        <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">MoM Growth</p>
+        <div class="text-lg font-black text-rose-400 mt-0.5 leading-none">+4%</div>
+        <p class="text-[9px] text-slate-400 mt-0.5 font-medium">vs previous month</p>
+      </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 h-[160px]">
+      <div class="bg-white border border-slate-300 rounded-[2px] p-2 shadow-sm flex flex-col h-full overflow-hidden">
+        <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">
+          Expense Trends (Municipal)
+        </h2>
+        <div class="chart-container"><canvas id="trendChart"></canvas></div>
+      </div>
+
+      <div class="bg-white border border-slate-300 rounded-[2px] p-2 shadow-sm flex flex-col h-full overflow-hidden">
+        <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">
+          Tax Distribution
+        </h2>
+        <div class="chart-container"><canvas id="taxChart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- Table -->
+    <section class="flex-1 min-h-[250px] bg-white rounded-[2px] border border-slate-300 shadow-sm flex flex-col overflow-hidden">
+
+      <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
+          <span class="material-icons-round text-[14px]">table_chart</span> Mapped Categories
+        </h2>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+          <div class="relative">
+            <span class="material-icons-round text-slate-400 absolute left-1.5 top-1/2 -translate-y-1/2 text-[12px]">search</span>
+            <input type="text" id="searchInput" placeholder="Search category..."
+              class="pl-6 pr-2 py-0.5 text-[10px] font-bold border border-slate-300 rounded-[2px] w-52 bg-white outline-none focus:border-rose-700">
+          </div>
+
+          <select id="taxFilter" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white uppercase text-slate-700">
+            <option value="ALL">All Tax Types</option>
+            <option value="VAT">VAT</option>
+            <option value="EWT">EWT</option>
+            <option value="NONE">None</option>
+          </select>
+
+          <button onclick="resetFilters()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] transition">
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-auto custom-scrollbar">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-slate-100 border-b border-slate-300 sticky top-0 z-10">
+            <tr>
+              <th class="px-3 py-1.5 text-[9px] font-black uppercase text-slate-600 border-r border-slate-200">Category Name</th>
+              <th class="px-3 py-1.5 text-[9px] font-bold uppercase text-slate-600 border-r border-slate-200">COA Account Code</th>
+              <th class="px-3 py-1.5 text-[9px] font-bold uppercase text-slate-600 border-r border-slate-200 text-center">Tax Type</th>
+              <th class="px-3 py-1.5 text-[9px] font-bold uppercase text-slate-600 border-r border-slate-200 text-right">Default Rate</th>
+              <th class="px-3 py-1.5 text-[9px] font-bold uppercase text-slate-600 text-center">Action</th>
+            </tr>
+          </thead>
+
+          <tbody id="categoryTable" class="text-[10px] divide-y divide-slate-100">
+
+            <!-- Demo rows (add data-office & data-fund for municipal filters) -->
+            <tr class="hover:bg-slate-50 transition" data-tax="VAT" data-fund="GENERAL" data-office="ACCOUNTING">
+              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Office Supplies</td>
+              <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">5-02-03-010</td>
+              <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                <span class="px-1 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-[2px] font-black text-[8px] uppercase">
+                  VAT Registered
+                </span>
+              </td>
+              <td class="px-3 py-1.5 text-right font-bold text-slate-700 border-r border-slate-100">12%</td>
+              <td class="px-3 py-1.5 text-center">
+                <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-2">Edit</button>
+                <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+              </td>
+            </tr>
+
+            <tr class="hover:bg-slate-50 transition" data-tax="EWT" data-fund="GENERAL" data-office="TREASURY">
+              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Professional Services</td>
+              <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">5-02-11-990</td>
+              <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                <span class="px-1 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-[2px] font-black text-[8px] uppercase">
+                  Withholding Tax
+                </span>
+              </td>
+              <td class="px-3 py-1.5 text-right font-bold text-slate-700 border-r border-slate-100">2%</td>
+              <td class="px-3 py-1.5 text-center">
+                <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-2">Edit</button>
+                <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+              </td>
+            </tr>
+
+            <!-- Server rows (optional) -->
+            {% for c in expense_categories %}
+            <tr class="hover:bg-slate-50 transition"
+                data-tax="{{ (c.tax_type or 'NONE')|upper }}"
+                data-fund="{{ (c.fund_type or 'GENERAL')|upper }}"
+                data-office="{{ (c.office or 'ALL')|upper }}">
+              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">{{ c.name }}</td>
+              <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">{{ c.coa_code }}</td>
+              <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                <span class="px-1 py-0.5 rounded-[2px] font-black text-[8px] uppercase border
+                  {% if (c.tax_type or '') == 'VAT' %} bg-blue-50 text-blue-700 border-blue-200
+                  {% elif (c.tax_type or '') in ['EWT','WITHHOLDING','Withholding Tax'] %} bg-amber-50 text-amber-700 border-amber-200
+                  {% else %} bg-slate-100 text-slate-700 border-slate-300 {% endif %}">
+                  {{ c.tax_type or 'None' }}
+                </span>
+              </td>
+              <td class="px-3 py-1.5 text-right font-bold text-slate-700 border-r border-slate-100">
+                {{ (c.tax_rate ~ '%') if c.tax_rate else '—' }}
+              </td>
+              <td class="px-3 py-1.5 text-center">
+                <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-2">Edit</button>
+                <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+              </td>
+            </tr>
+            {% endfor %}
+
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Modal (Alpine) -->
+    <div x-show="modalOpen" style="display:none;" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[3000] p-4">
+      <div @click.away="modalOpen = false" class="bg-white rounded-[2px] w-full max-w-sm p-0 shadow-2xl border border-slate-400 overflow-hidden">
+
+        <div class="bg-slate-800 px-4 py-2 flex justify-between items-center">
+          <h3 class="text-[11px] font-black uppercase tracking-widest text-white m-0">New Expense Category (Municipal)</h3>
+          <button @click="modalOpen = false" class="text-slate-400 hover:text-white">
+            <span class="material-icons-round text-[16px]">close</span>
+          </button>
+        </div>
+
+        <form class="p-4 space-y-3 bg-slate-50" onsubmit="event.preventDefault(); alert('Save mapping (demo)'); modalOpen=false;">
+          <div>
+            <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Category Name</label>
+            <input type="text" placeholder="e.g. Fuel & Lubricants"
+              class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none focus:border-rose-700 uppercase">
+          </div>
+
+          <div>
+            <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Link to COA Account</label>
+            <select class="w-full px-2 py-1.5 text-[10px] font-mono border border-slate-300 rounded-[2px] bg-white focus:border-rose-700 outline-none">
+              <option>5-02-03-090 — Fuel, Oil and Lubricants Expenses</option>
+              <option>5-02-03-010 — Office Supplies Expenses</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Tax Type</label>
+              <select id="modalTaxType" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none">
+                <option>VAT</option>
+                <option>Withholding Tax</option>
+                <option>None</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Default Rate (%)</label>
+              <input id="modalTaxRate" type="number" placeholder="0"
+                class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none text-right">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Fund Type</label>
+              <select class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none">
+                <option>General Fund</option>
+                <option>Trust Fund</option>
+                <option>Special Fund</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Office (Optional)</label>
+              <select class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none">
+                <option>Accounting</option>
+                <option>Treasury</option>
+                <option>Budget</option>
+                <option>Engineering</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button type="submit" class="w-full bg-rose-700 hover:bg-rose-800 text-white py-2 rounded-[2px] text-[10px] font-black uppercase shadow-sm">
+              Save Mapping
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  // Search + Filters (municipal: search + tax + fund + office)
+  const searchInput = document.getElementById('searchInput');
+  const taxFilter = document.getElementById('taxFilter');
+  const fundScope = document.getElementById('fundScope');
+  const officeScope = document.getElementById('officeScope');
+
+  function applyFilters(){
+    const q = (searchInput.value || '').toLowerCase().trim();
+    const tax = (taxFilter.value || 'ALL').toUpperCase();
+    const fund = (fundScope.value || 'ALL').toUpperCase();
+    const office = (officeScope.value || 'ALL').toUpperCase();
+
+    document.querySelectorAll('#categoryTable tr').forEach(row => {
+      const text = row.innerText.toLowerCase();
+
+      const rowTax = (row.getAttribute('data-tax') || 'NONE').toUpperCase();
+      const rowFund = (row.getAttribute('data-fund') || 'GENERAL').toUpperCase();
+      const rowOffice = (row.getAttribute('data-office') || 'ALL').toUpperCase();
+
+      const matchText = text.includes(q);
+      const matchTax = (tax === 'ALL' || rowTax === tax);
+      const matchFund = (fund === 'ALL' || rowFund === fund);
+      const matchOffice = (office === 'ALL' || rowOffice === office);
+
+      row.style.display = (matchText && matchTax && matchFund && matchOffice) ? '' : 'none';
+    });
+  }
+
+  function resetFilters(){
+    searchInput.value = '';
+    taxFilter.value = 'ALL';
+    fundScope.value = 'ALL';
+    officeScope.value = 'ALL';
+    applyFilters();
+  }
+
+  searchInput.addEventListener('input', applyFilters);
+  taxFilter.addEventListener('change', applyFilters);
+  fundScope.addEventListener('change', applyFilters);
+  officeScope.addEventListener('change', applyFilters);
+
+  // Charts
+  Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+  Chart.defaults.font.size = 9;
+  Chart.defaults.color = "#64748b";
+  const chartConfig = { responsive:true, maintainAspectRatio:false, layout:{ padding:0 } };
+
+  // Line Chart (municipal sample)
+  new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels: ['J','F','M','A','M','J','J','A'],
+      datasets: [{
+        label: 'Expense',
+        data: [22,24,23,26,28,30,29,31],
+        borderColor: '#be123c', // Rose-700
+        backgroundColor: 'rgba(190, 18, 60, 0.10)',
+        borderWidth: 1.5,
+        fill: true,
+        pointRadius: 0
+      }]
+    },
+    options: {
+      ...chartConfig,
+      plugins: { legend: { display:false } },
+      scales: { x: { display:false }, y: { display:false } }
+    }
+  });
+
+  // Doughnut Chart (tax distribution)
+  new Chart(document.getElementById('taxChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['VAT', 'EWT', 'None'],
+      datasets: [{
+        data: [5, 3, 2],
+        backgroundColor: ['#3b82f6', '#f59e0b', '#cbd5e1'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      ...chartConfig,
+      cutout: '65%',
+      plugins: { legend: { position:'right', labels: { boxWidth:8, font:{ size:8 } } } }
+    }
+  });
+
+  // Init
+  applyFilters();
+
+  // Modal tax type helper: if "None", force 0
+  const modalTaxType = document.getElementById('modalTaxType');
+  const modalTaxRate = document.getElementById('modalTaxRate');
+  if(modalTaxType && modalTaxRate){
+    modalTaxType.addEventListener('change', () => {
+      const v = (modalTaxType.value || '').toLowerCase();
+      if(v.includes('none')){
+        modalTaxRate.value = '';
+        modalTaxRate.disabled = true;
+        modalTaxRate.classList.add('bg-slate-200');
+      } else {
+        modalTaxRate.disabled = false;
+        modalTaxRate.classList.remove('bg-slate-200');
+      }
+    });
+  }
+</script>
+
+</body>
+</html>

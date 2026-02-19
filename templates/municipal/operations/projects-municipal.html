@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Municipal Project Registry | TLPH</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Government Standard Typography & Layout */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+
+    /* Compact Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; }
+    .gov-input:focus { border-color: #1e40af; }
+    .gov-btn { padding: 4px 10px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+
+    /* Chart box safety */
+    .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; }
+    .chart-container { position: absolute; inset: 0; }
+
+    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 6px 8px !important; }
+    td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; }
+
+    .pill { display:inline-block; padding: 2px 6px; border-radius: 2px; font-weight: 900; font-size: 8px; text-transform: uppercase; border: 1px solid; width: 88px; text-align:center; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+<div class="flex-1 flex overflow-hidden">
+
+    <!-- MUNICIPAL SIDENAV -->
+    <aside class="sidebar-container hidden lg:block">
+        {% include 'municipal/sidenav.html' %}
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 overflow-y-auto custom-scrollbar">
+
+        <!-- HEADER -->
+        <header class="gov-card p-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white">
+              <span class="material-icons-round text-[18px]">folder_special</span>
+            </div>
+            <div class="leading-tight">
+              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Project Registry</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+                Municipal Operations Monitoring Dashboard
+              </p>
+            </div>
+          </div>
+          <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">add</span> New Project
+          </button>
+        </header>
+
+        <!-- STAT CARDS -->
+        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-slate-600">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Projects</span>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">{{ total_projects|default("0") }}</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 bg-emerald-50/30">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">In Progress</span>
+            <div class="text-lg font-black text-emerald-700 mt-0.5 leading-none">{{ in_progress|default("0") }}</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600 bg-blue-50/30">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Completed</span>
+            <div class="text-lg font-black text-blue-700 mt-0.5 leading-none">{{ completed|default("0") }}</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-amber-600 bg-amber-50/30">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Pending</span>
+            <div class="text-lg font-black text-amber-700 mt-0.5 leading-none">{{ pending|default("0") }}</div>
+          </div>
+        </section>
+
+        <!-- CHARTS -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-2 shrink-0 h-[170px]">
+
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Status Distribution
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="statusMixChart"></canvas></div>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Monthly Registry Trend
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="projectTrendChart"></canvas></div>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Barangay / Area Volume
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="areaVolumeChart"></canvas></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- MASTER LEDGER -->
+        <section class="gov-card flex-1 min-h-[320px] flex flex-col overflow-hidden">
+
+          <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+              <span class="material-icons-round text-[14px]">view_list</span> Project Master Ledger
+            </h2>
+
+            <div class="flex flex-wrap gap-1.5 items-center">
+              <div class="relative">
+                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                <input id="searchProject" type="text" placeholder="Search project / barangay..." class="gov-input pl-6 w-56">
+              </div>
+
+              <select id="barangayFilter" class="gov-input cursor-pointer" onchange="filterTable()">
+                <option value="">All Barangays</option>
+                <option value="Barangay 1">Barangay 1</option>
+                <option value="Barangay 2">Barangay 2</option>
+                <option value="Barangay 3">Barangay 3</option>
+              </select>
+
+              <select id="statusFilter" class="gov-input cursor-pointer" onchange="filterTable()">
+                <option value="">All Status</option>
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+              </select>
+
+              <button onclick="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] hover:bg-slate-300">
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-auto custom-scrollbar bg-white">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th class="border-r border-slate-200">Project Name</th>
+                  <th class="border-r border-slate-200">Barangay / Area</th>
+                  <th class="border-r border-slate-200 whitespace-nowrap">Municipality</th>
+                  <th class="text-center border-r border-slate-200">Status</th>
+                  <th class="text-center border-r border-slate-200 whitespace-nowrap">Start Date</th>
+                  <th class="text-center">Action</th>
+                </tr>
+              </thead>
+
+              <tbody id="projectTable" class="text-[10px] divide-y divide-slate-100">
+
+                <!-- SAMPLE ROW -->
+                <tr class="hover:bg-blue-50 transition">
+                  <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">Municipal Solid Waste Recovery</td>
+                  <td class="font-bold text-blue-800 border-r border-slate-100 uppercase">Barangay 2</td>
+                  <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">Your Municipality</td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="pill bg-emerald-50 text-emerald-700 border-emerald-200">In Progress</span>
+                  </td>
+                  <td class="font-mono text-slate-500 border-r border-slate-100 text-center">Feb 10, 2026</td>
+                  <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                      <button class="text-blue-700 font-bold hover:underline uppercase">View</button>
+                      <button class="text-blue-700 font-bold hover:underline uppercase">Edit</button>
+                      <button class="text-rose-700 font-bold hover:underline uppercase">Archive</button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- DYNAMIC DATA -->
+                {% for project in projects %}
+                <tr class="hover:bg-blue-50 transition">
+                  <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">{{ project.name }}</td>
+                  <td class="font-bold text-blue-800 border-r border-slate-100 uppercase">{{ project.barangay }}</td>
+                  <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ project.municipality }}</td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="pill
+                      {% if project.status == 'In Progress' %} bg-emerald-50 text-emerald-700 border-emerald-200
+                      {% elif project.status == 'Completed' %} bg-blue-50 text-blue-700 border-blue-200
+                      {% elif project.status == 'Pending' %} bg-amber-50 text-amber-700 border-amber-200
+                      {% else %} bg-slate-100 text-slate-600 border-slate-200 {% endif %}">
+                      {{ project.status }}
+                    </span>
+                  </td>
+                  <td class="font-mono text-slate-500 border-r border-slate-100 text-center">{{ project.start_date }}</td>
+                  <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                      <button class="text-blue-700 font-bold uppercase hover:underline">Edit</button>
+                      <button class="text-rose-700 font-bold uppercase hover:underline">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+
+              </tbody>
+            </table>
+          </div>
+
+          <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
+            <span class="text-[9px] text-slate-500 italic uppercase font-bold tracking-wider">
+              System-generated project report • Municipal FY 2026
+            </span>
+            <button class="font-bold uppercase text-blue-700 hover:underline text-[9px]">Export to CSV Format</button>
+          </div>
+
+        </section>
+
+    </main>
+</div>
+
+<script>
+  // --- Chart Implementations ---
+  Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+  Chart.defaults.font.size = 8;
+  Chart.defaults.color = "#64748b";
+
+  const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: { padding: 5 },
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: { boxWidth: 8, font: { weight: 'bold' } }
+      }
+    }
+  };
+
+  // Use your backend variables if available
+  const completedVal = Number("{{ completed|default(12) }}");
+  const progressVal = Number("{{ in_progress|default(9) }}");
+  const pendingVal = Number("{{ pending|default(5) }}");
+
+  // 1) Status Mix Chart
+  new Chart(document.getElementById('statusMixChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Completed', 'In Progress', 'Pending'],
+      datasets: [{
+        data: [completedVal, progressVal, pendingVal],
+        backgroundColor: ['#1e3a8a', '#10b981', '#f59e0b'],
+        borderWidth: 0
+      }]
+    },
+    options: { ...commonOptions, cutout: '70%' }
+  });
+
+  // 2) Monthly Trend Chart (dummy; replace with dynamic arrays)
+  new Chart(document.getElementById('projectTrendChart'), {
+    type: 'line',
+    data: {
+      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+      datasets: [{
+        label: 'Projects',
+        data: [2, 5, 3, 8, 4, 6],
+        borderColor: '#1e3a8a',
+        backgroundColor: 'rgba(30, 64, 175, 0.1)',
+        borderWidth: 1.5,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 1
+      }]
+    },
+    options: {
+      ...commonOptions,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, ticks: { stepSize: 2 } }
+      }
+    }
+  });
+
+  // 3) Area/Barangay Volume (dummy; replace with your counts)
+  new Chart(document.getElementById('areaVolumeChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Barangay 1', 'Barangay 2', 'Barangay 3'],
+      datasets: [{
+        label: 'Projects',
+        data: [6, 10, 4],
+        backgroundColor: '#475569',
+        borderRadius: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, ticks: { stepSize: 2 } }
+      }
+    }
+  });
+
+  // --- Search & Filter Logic ---
+  function filterTable() {
+    const q = document.getElementById('searchProject').value.toLowerCase();
+    const st = document.getElementById('statusFilter').value.toLowerCase();
+    const brgy = document.getElementById('barangayFilter').value.toLowerCase();
+    const rows = document.querySelectorAll('#projectTable tr');
+
+    rows.forEach(row => {
+      const text = row.innerText.toLowerCase();
+      const matchQ = text.includes(q);
+      const matchSt = !st || text.includes(st);
+      const matchBrgy = !brgy || text.includes(brgy);
+      row.style.display = (matchQ && matchSt && matchBrgy) ? '' : 'none';
+    });
+  }
+
+  document.getElementById('searchProject').addEventListener('input', filterTable);
+
+  function resetFilters() {
+    document.getElementById('searchProject').value = '';
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('barangayFilter').value = '';
+    filterTable();
+  }
+</script>
+</body>
+</html>

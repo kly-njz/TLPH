@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quotation Registry | Municipal Operations</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Government Standard Typography & Layout */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+
+    /* Compact Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #1e40af; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+
+    /* Chart containment */
+    .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; }
+    .chart-container { position: absolute; inset: 0; }
+
+    /* Dense Table Formatting */
+    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 8px !important; }
+    td { padding: 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+
+    .pill { display:inline-block; padding:2px 6px; border-radius:2px; font-weight:900; font-size:8px; text-transform:uppercase; border:1px solid; width: 90px; text-align:center; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+<div class="flex-1 flex overflow-hidden">
+
+    <!-- MUNICIPAL SIDENAV -->
+    <aside class="sidebar-container hidden lg:block">
+        {% include 'municipal/sidenav.html' %}
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 overflow-y-auto custom-scrollbar">
+
+        <!-- HEADER -->
+        <header class="gov-card p-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white">
+              <span class="material-icons-round text-[18px]">attach_money</span>
+            </div>
+            <div class="leading-tight">
+              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Quotation Management</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+                Municipal Pricing & Billing Registry
+              </p>
+            </div>
+          </div>
+          <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
+            <span class="material-icons-round text-[14px]">add</span> Create Quotation
+          </button>
+        </header>
+
+        <!-- STAT CARDS -->
+        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-slate-600">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Quotations</span>
+              <span class="material-icons-round text-slate-400 text-[14px]">receipt_long</span>
+            </div>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">{{ total_quotes|default("0") }}</div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 bg-amber-50/30">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Pending Approval</span>
+              <span class="material-icons-round text-amber-600 text-[14px]">hourglass_top</span>
+            </div>
+            <div class="text-lg font-black text-amber-700 mt-0.5 leading-none">{{ pending_quotes|default("0") }}</div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 bg-emerald-50/30">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Approved / Ready</span>
+              <span class="material-icons-round text-emerald-700 text-[14px]">check_circle</span>
+            </div>
+            <div class="text-lg font-black text-emerald-800 mt-0.5 leading-none">{{ approved_quotes|default("0") }}</div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600 bg-blue-50/30">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Value (PHP)</span>
+              <span class="material-icons-round text-blue-700 text-[14px]">payments</span>
+            </div>
+            <div class="text-lg font-black text-blue-800 mt-0.5 leading-none">
+              ₱{{ total_value|default("0.00") }}
+            </div>
+          </div>
+        </section>
+
+        <!-- CHARTS -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 h-[160px]">
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Quotation Status Distribution
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="quoteStatusChart"></canvas></div>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Monthly Quotation Value (PHP)
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="quoteTrendChart"></canvas></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- LEDGER -->
+        <section class="gov-card flex-1 min-h-[250px] flex flex-col overflow-hidden">
+
+          <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+              <span class="material-icons-round text-[14px]">view_list</span> Official Quotation Ledger
+            </h2>
+
+            <div class="flex flex-wrap gap-1.5 items-center">
+              <div class="relative">
+                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                <input type="text" id="searchQuote" placeholder="Search quotation/client..." class="gov-input pl-6 w-56" oninput="filterTable()">
+              </div>
+
+              <!-- Municipal scoping filters -->
+              <select id="barangayFilter" class="gov-input cursor-pointer bg-white" onchange="filterTable()">
+                <option value="">All Barangays</option>
+                <option value="Barangay 1">Barangay 1</option>
+                <option value="Barangay 2">Barangay 2</option>
+                <option value="Barangay 3">Barangay 3</option>
+              </select>
+
+              <select id="statusFilter" class="gov-input cursor-pointer bg-white" onchange="filterTable()">
+                <option value="">All Status</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+
+              <button onclick="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] hover:bg-slate-300 transition shadow-sm">
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-auto custom-scrollbar bg-white">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th class="border-r border-slate-200">Quotation #</th>
+                  <th class="border-r border-slate-200">Client / Office</th>
+                  <th class="border-r border-slate-200">Barangay</th>
+                  <th class="border-r border-slate-200">Total Amount</th>
+                  <th class="border-r border-slate-200 whitespace-nowrap">Filing Date</th>
+                  <th class="text-center border-r border-slate-200">Status</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+
+              <tbody id="quoteTable" class="text-[10px] divide-y divide-slate-100">
+
+                <!-- SAMPLE ROW -->
+                <tr class="hover:bg-blue-50 transition quote-row">
+                  <td class="font-black text-slate-900 border-r border-slate-100">MQ-2026-001</td>
+                  <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">Municipal ENRO - Procurement</td>
+                  <td class="font-bold text-blue-800 border-r border-slate-100 uppercase">Barangay 2</td>
+                  <td class="font-mono font-bold text-blue-800 border-r border-slate-100 uppercase text-[11px]">₱25,000.00</td>
+                  <td class="font-mono text-slate-500 border-r border-slate-100 text-center uppercase">2026-02-17</td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="pill bg-amber-50 text-amber-700 border-amber-200">Pending</span>
+                  </td>
+                  <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                      <button class="text-blue-700 font-bold hover:underline uppercase text-[9px]">View</button>
+                      <button class="text-emerald-700 font-bold hover:underline uppercase text-[9px]">Approve</button>
+                      <button class="text-rose-700 font-bold hover:underline uppercase text-[9px]">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- DYNAMIC ROWS -->
+                {% for quotation in quotations %}
+                <tr class="hover:bg-blue-50 transition quote-row">
+                  <td class="font-black text-slate-900 border-r border-slate-100 uppercase">{{ quotation.number }}</td>
+                  <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ quotation.client }}</td>
+                  <td class="font-bold text-blue-800 border-r border-slate-100 uppercase">{{ quotation.barangay }}</td>
+                  <td class="font-mono font-bold text-blue-800 border-r border-slate-100 uppercase">₱{{ quotation.amount }}</td>
+                  <td class="font-mono text-slate-500 border-r border-slate-100 text-center uppercase">{{ quotation.date }}</td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="pill
+                      {% if quotation.status == 'Approved' %} bg-emerald-50 text-emerald-700 border-emerald-200
+                      {% elif quotation.status == 'Pending' %} bg-amber-50 text-amber-700 border-amber-200
+                      {% elif quotation.status == 'Rejected' %} bg-rose-50 text-rose-700 border-rose-200
+                      {% else %} bg-slate-100 text-slate-600 border-slate-200 {% endif %}">
+                      {{ quotation.status }}
+                    </span>
+                  </td>
+                  <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                      <button class="text-blue-700 font-bold uppercase text-[9px] hover:underline">View</button>
+                      <button class="text-emerald-700 font-bold uppercase text-[9px] hover:underline">Approve</button>
+                      <button class="text-rose-700 font-bold uppercase text-[9px] hover:underline">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+
+              </tbody>
+            </table>
+          </div>
+
+          <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
+            <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">Showing Records • Municipal FY 2026</span>
+            <button class="font-bold uppercase text-blue-800 hover:underline text-[9px] flex items-center gap-1">
+              <span class="material-icons-round text-[14px]">file_download</span> Export CSV Report
+            </button>
+          </div>
+
+        </section>
+
+    </main>
+</div>
+
+<script>
+  // --- Chart Implementations ---
+  Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+  Chart.defaults.font.size = 8;
+  Chart.defaults.color = "#64748b";
+
+  const chartOpt = { responsive: true, maintainAspectRatio: false, layout: { padding: 5 } };
+
+  // You can pass these from backend (recommended)
+  const approved = Number("{{ approved_quotes|default(42) }}");
+  const pending  = Number("{{ pending_quotes|default(6) }}");
+  const rejected = Number("{{ rejected_quotes|default(2) }}");
+
+  // 1) Status (Doughnut)
+  new Chart(document.getElementById('quoteStatusChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Approved', 'Pending', 'Rejected'],
+      datasets: [{ data: [approved, pending, rejected], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }]
+    },
+    options: {
+      ...chartOpt,
+      cutout: '65%',
+      plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { weight: 'bold' } } } }
+    }
+  });
+
+  // 2) Trend (Bar - monthly totals) - replace with dynamic arrays
+  new Chart(document.getElementById('quoteTrendChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'],
+      datasets: [{
+        label: 'Value (PHP)',
+        data: [150000, 200000, 180000, 320000, 250000, 420000],
+        backgroundColor: '#1e40af',
+        borderRadius: 2
+      }]
+    },
+    options: {
+      ...chartOpt,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false } },
+        y: {
+          beginAtZero: true,
+          ticks: { callback: function(value){ return '₱' + (value/1000) + 'k'; } }
+        }
+      }
+    }
+  });
+
+  // --- Search & Filter Logic ---
+  function filterTable() {
+    const q = document.getElementById('searchQuote').value.toLowerCase().trim();
+    const status = document.getElementById('statusFilter').value.toLowerCase();
+    const brgy = document.getElementById('barangayFilter').value.toLowerCase();
+    const rows = document.querySelectorAll('.quote-row');
+
+    rows.forEach(row => {
+      const text = row.innerText.toLowerCase();
+      const matchQ = text.includes(q);
+      const matchStatus = !status || text.includes(status);
+      const matchBrgy = !brgy || text.includes(brgy);
+      row.style.display = (matchQ && matchStatus && matchBrgy) ? '' : 'none';
+    });
+  }
+
+  function resetFilters() {
+    document.getElementById('searchQuote').value = '';
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('barangayFilter').value = '';
+    filterTable();
+  }
+</script>
+</body>
+</html>

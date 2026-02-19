@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Accounting Dashboard — Municipality</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
+
+  <style>
+    body { font-family: 'Inter', sans-serif; background:#f8fafc; }
+    .custom-scrollbar::-webkit-scrollbar { width:6px; height:6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background:#f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background:#94a3b8; }
+    html, body { height: 100%; }
+  </style>
+</head>
+
+<body class="text-slate-800 text-xs bg-slate-50 h-screen overflow-hidden">
+
+  <!-- ✅ Stable layout wrapper: prevents “pushed to bottom” -->
+  <div class="h-full lg:grid lg:grid-cols-[260px_1fr]">
+
+    <!-- Municipal sidenav -->
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'municipal/sidenav.html' %}
+    </aside>
+
+    <!-- Main Column -->
+    <div class="h-full flex flex-col overflow-hidden">
+      <main class="p-3 flex-1 min-h-0 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
+
+        <!-- Header -->
+        <header class="bg-white border border-slate-300 rounded-sm p-3 shadow-sm shrink-0">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-sm bg-blue-900 flex items-center justify-center">
+                <span class="material-icons-round text-white text-base">account_balance</span>
+              </div>
+              <div>
+                <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight leading-none">
+                  Accounting Dashboard
+                </h1>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                  Municipal accounting metrics & daily operations
+                </p>
+              </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex flex-wrap gap-1.5 items-center">
+              <!-- Scope: municipality only -->
+              <span class="px-2 py-1 text-[10px] font-black border border-blue-200 rounded-sm bg-blue-50 uppercase text-blue-900">
+                Municipality Scope
+              </span>
+
+              <select id="dateFilter" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-sm bg-slate-50 uppercase text-slate-700">
+                <option value="THIS_MONTH">This Month</option>
+                <option value="LAST_30_DAYS">Last 30 Days</option>
+                <option value="THIS_QUARTER">This Quarter</option>
+                <option value="THIS_YEAR">This Year</option>
+              </select>
+
+              <!-- Municipal-only filters (no region-wide oversight) -->
+              <select id="fundFilter" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-sm bg-slate-50 uppercase text-slate-700">
+                <option value="ALL">All Funds</option>
+                <option value="GENERAL">General Fund</option>
+                <option value="TRUST">Trust Fund</option>
+                <option value="SPECIAL">Special Fund</option>
+              </select>
+
+              <select id="officeFilter" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-sm bg-slate-50 uppercase text-slate-700">
+                <option value="ALL">All Offices</option>
+                <option value="TREASURY">Treasury</option>
+                <option value="ACCOUNTING">Accounting</option>
+                <option value="BUDGET">Budget</option>
+                <option value="ENGINEERING">Engineering</option>
+              </select>
+
+              <button onclick="exportDashboard()"
+                class="inline-flex items-center justify-center gap-1 bg-blue-900 hover:bg-blue-800 transition
+                       text-white px-3 py-1 rounded-sm text-[10px] font-black uppercase shadow-sm">
+                <span class="material-icons-round text-[14px]">download</span>
+                Export
+              </button>
+            </div>
+          </div>
+
+          <!-- Selected municipality label (server-fed) -->
+          <div class="mt-2 flex flex-wrap items-center gap-2 text-[10px]">
+            <span class="font-black uppercase tracking-widest text-slate-500">Municipality:</span>
+            <span class="px-2 py-1 rounded-sm border border-slate-300 bg-slate-50 font-bold text-slate-700">
+              {{ municipality_name if municipality_name else 'Selected Municipality' }}
+            </span>
+            <span class="text-slate-400 font-bold">•</span>
+            <span class="text-slate-500 font-medium">
+              Region/Province (optional): {{ region_name if region_name else '—' }} {{ province_name if province_name else '' }}
+            </span>
+          </div>
+        </header>
+
+        <!-- KPI Cards (municipal-level) -->
+        <section class="grid grid-cols-2 md:grid-cols-5 gap-2 shrink-0">
+          <div class="bg-white border border-slate-300 rounded-sm p-2 shadow-sm border-l-4 border-l-blue-800">
+            <div class="flex items-center justify-between">
+              <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Users</p>
+              <span class="material-icons-round text-blue-800 text-[14px]">group</span>
+            </div>
+            <div class="mt-1 text-lg font-black text-slate-900 leading-none">18</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Logged in this period</p>
+          </div>
+
+          <div class="bg-white border border-slate-300 rounded-sm p-2 shadow-sm border-l-4 border-l-emerald-700">
+            <div class="flex items-center justify-between">
+              <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Posted Entries</p>
+              <span class="material-icons-round text-emerald-700 text-[14px]">fact_check</span>
+            </div>
+            <div class="mt-1 text-lg font-black text-emerald-700 leading-none">312</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Municipal journals</p>
+          </div>
+
+          <div class="bg-white border border-slate-300 rounded-sm p-2 shadow-sm border-l-4 border-l-amber-600">
+            <div class="flex items-center justify-between">
+              <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Pending</p>
+              <span class="material-icons-round text-amber-600 text-[14px]">pending_actions</span>
+            </div>
+            <div class="mt-1 text-lg font-black text-amber-600 leading-none">9</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Needs approval</p>
+          </div>
+
+          <div class="bg-white border border-slate-300 rounded-sm p-2 shadow-sm border-l-4 border-l-rose-700">
+            <div class="flex items-center justify-between">
+              <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Exceptions</p>
+              <span class="material-icons-round text-rose-700 text-[14px]">warning</span>
+            </div>
+            <div class="mt-1 text-lg font-black text-rose-700 leading-none">3</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Check mappings/links</p>
+          </div>
+
+          <div class="bg-white border border-slate-300 rounded-sm p-2 shadow-sm border-l-4 border-l-violet-700">
+            <div class="flex items-center justify-between">
+              <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Avg Approval</p>
+              <span class="material-icons-round text-violet-700 text-[14px]">timer</span>
+            </div>
+            <div class="mt-1 text-lg font-black text-violet-700 leading-none">1.4d</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Median processing</p>
+          </div>
+        </section>
+
+        <!-- Financial Snapshot (municipal) -->
+        <section class="grid grid-cols-1 md:grid-cols-4 gap-2 shrink-0">
+          <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deposits</p>
+            <div class="mt-1 text-lg font-black text-emerald-700 leading-none">₱ 245K</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Current period</p>
+          </div>
+
+          <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Expenses</p>
+            <div class="mt-1 text-lg font-black text-rose-700 leading-none">₱ 198K</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Current period</p>
+          </div>
+
+          <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Net Movement</p>
+            <div class="mt-1 text-lg font-black text-slate-900 leading-none">₱ 47K</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Deposits - Expenses</p>
+          </div>
+
+          <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Collection Rate</p>
+            <div class="mt-1 text-lg font-black text-amber-700 leading-none">+6%</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">vs previous</p>
+          </div>
+        </section>
+
+        <!-- Charts -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-2 shrink-0">
+          <div class="lg:col-span-2 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
+            <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-1 mb-1">
+              <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Municipal Cashflow Trend</h2>
+              <div class="flex gap-1">
+                <span class="px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase border bg-emerald-50 text-emerald-700 border-emerald-200">
+                  Deposits
+                </span>
+                <span class="px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase border bg-rose-50 text-rose-700 border-rose-200">
+                  Expenses
+                </span>
+              </div>
+            </div>
+            <div class="h-[110px]">
+              <canvas id="cashflowLineChart"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1">
+              Revenue Mix (Municipal)
+            </h2>
+            <div class="h-[110px]">
+              <canvas id="categoryPieChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0">
+          <div class="bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1">
+              Entries per Office
+            </h2>
+            <div class="h-[110px]">
+              <canvas id="usageBarChart"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1">
+              Approval Latency
+            </h2>
+            <div class="h-[110px]">
+              <canvas id="latencyLineChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- Bottom: Alerts + Recent Activity -->
+        <section class="grid grid-cols-1 xl:grid-cols-3 gap-2 flex-1 min-h-0">
+          <!-- Alerts (municipal) -->
+          <div class="xl:col-span-2 bg-white border border-slate-300 rounded-sm shadow-sm flex flex-col overflow-hidden min-h-0">
+            <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex items-center justify-between">
+              <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Municipal Alerts</h2>
+              <button class="text-[9px] font-black uppercase text-blue-800 hover:text-blue-900"
+                      onclick="viewAllAlerts()">
+                View All
+              </button>
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-auto custom-scrollbar">
+              <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-100 border-b border-slate-300 sticky top-0 z-10">
+                  <tr>
+                    <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600">Type</th>
+                    <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600">Office</th>
+                    <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600">Description</th>
+                    <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600">Severity</th>
+                    <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600">Date</th>
+                  </tr>
+                </thead>
+                <tbody class="text-[10px]" id="alertsTableBody">
+                  <tr class="border-b border-slate-200 hover:bg-slate-50 transition" data-date="2026-02-17" data-office="TREASURY" data-fund="GENERAL">
+                    <td class="px-3 py-2 font-bold text-slate-900">Bank Reconcile</td>
+                    <td class="px-3 py-2 text-slate-700">Treasury</td>
+                    <td class="px-3 py-2 text-slate-600">Unreconciled items detected</td>
+                    <td class="px-3 py-2">
+                      <span class="px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase border bg-amber-50 text-amber-700 border-amber-200">
+                        Warning
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 text-slate-500">2026-02-17</td>
+                  </tr>
+
+                  <tr class="border-b border-slate-200 hover:bg-slate-50 transition" data-date="2026-02-16" data-office="ACCOUNTING" data-fund="GENERAL">
+                    <td class="px-3 py-2 font-bold text-slate-900">COA Mapping</td>
+                    <td class="px-3 py-2 text-slate-700">Accounting</td>
+                    <td class="px-3 py-2 text-slate-600">2 accounts missing mapping</td>
+                    <td class="px-3 py-2">
+                      <span class="px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase border bg-rose-50 text-rose-700 border-rose-200">
+                        Critical
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 text-slate-500">2026-02-16</td>
+                  </tr>
+
+                  <tr class="border-b border-slate-200 hover:bg-slate-50 transition" data-date="2026-02-15" data-office="BUDGET" data-fund="SPECIAL">
+                    <td class="px-3 py-2 font-bold text-slate-900">Budget Line</td>
+                    <td class="px-3 py-2 text-slate-700">Budget</td>
+                    <td class="px-3 py-2 text-slate-600">Exceeded threshold on 1 line</td>
+                    <td class="px-3 py-2">
+                      <span class="px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase border bg-amber-50 text-amber-700 border-amber-200">
+                        Warning
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 text-slate-500">2026-02-15</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Recent Activity (municipal) -->
+          <div class="bg-white border border-slate-300 rounded-sm shadow-sm flex flex-col overflow-hidden min-h-0">
+            <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0">
+              <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Recent Activity</h2>
+            </div>
+
+            <div id="activityList" class="flex-1 min-h-0 overflow-auto custom-scrollbar p-2 space-y-2">
+              <div class="border border-slate-200 rounded-sm p-2 hover:bg-slate-50 transition" data-date="2026-02-17" data-office="ACCOUNTING" data-fund="GENERAL">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <p class="text-[10px] font-black text-slate-900">Journal Entry Approved</p>
+                    <p class="text-[9px] text-slate-600 mt-0.5">JE-2026-00045 — ₱25,450.00</p>
+                    <p class="text-[9px] text-slate-500 mt-0.5">By Municipal Accountant • Accounting</p>
+                  </div>
+                  <span class="px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase border bg-emerald-50 text-emerald-700 border-emerald-200">
+                    Approve
+                  </span>
+                </div>
+                <p class="text-[9px] text-slate-400 mt-1">2026-02-17 14:23</p>
+              </div>
+
+              <div class="border border-slate-200 rounded-sm p-2 hover:bg-slate-50 transition" data-date="2026-02-17" data-office="TREASURY" data-fund="GENERAL">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <p class="text-[10px] font-black text-slate-900">Deposit Recorded</p>
+                    <p class="text-[9px] text-slate-600 mt-0.5">DEP-2026-00012 — ₱8,000.00</p>
+                    <p class="text-[9px] text-slate-500 mt-0.5">By Cashier • Treasury</p>
+                  </div>
+                  <span class="px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase border bg-blue-50 text-blue-700 border-blue-200">
+                    Create
+                  </span>
+                </div>
+                <p class="text-[9px] text-slate-400 mt-1">2026-02-17 11:05</p>
+              </div>
+
+              <div class="border border-slate-200 rounded-sm p-2 hover:bg-slate-50 transition" data-date="2026-02-16" data-office="BUDGET" data-fund="SPECIAL">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <p class="text-[10px] font-black text-slate-900">Budget Item Updated</p>
+                    <p class="text-[9px] text-slate-600 mt-0.5">Office Supplies — Reallocated</p>
+                    <p class="text-[9px] text-slate-500 mt-0.5">By Budget Officer • Budget</p>
+                  </div>
+                  <span class="px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase border bg-amber-50 text-amber-700 border-amber-200">
+                    Edit
+                  </span>
+                </div>
+                <p class="text-[9px] text-slate-400 mt-1">2026-02-16 16:41</p>
+              </div>
+            </div>
+
+            <div class="border-t border-slate-300 px-3 py-2 text-[9px] text-slate-500 shrink-0 flex items-center justify-between">
+              <span>Last synced: <b class="text-slate-700">15:30</b></span>
+              <button class="px-2 py-1 rounded-sm border border-slate-300 font-black uppercase text-[9px] hover:bg-slate-50"
+                      onclick="viewAllActivity()">
+                View
+              </button>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    function exportDashboard(){ alert('Export dashboard (demo)'); }
+    function viewAllAlerts(){ alert('Open municipal alerts page (demo)'); }
+    function viewAllActivity(){ alert('Open municipal activity page (demo)'); }
+
+    // ✅ Chart defaults: clean look
+    Chart.defaults.font.family = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    Chart.defaults.color = "#475569";
+
+    // Cashflow (Deposits vs Expenses) - municipal sample
+    new Chart(document.getElementById('cashflowLineChart'), {
+      type: 'line',
+      data: {
+        labels: ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],
+        datasets: [
+          {
+            label: 'Deposits',
+            data: [28000,31000,29500,34000,32000,36000,37500,39000],
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16,185,129,0.10)',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 2
+          },
+          {
+            label: 'Expenses',
+            data: [22000,24000,23000,25000,26000,27500,29000,30500],
+            borderColor: '#f43f5e',
+            backgroundColor: 'rgba(244,63,94,0.08)',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 2
+          }
+        ]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { font: { size: 9 } } },
+          x: { ticks: { font: { size: 9 } } }
+        },
+        maintainAspectRatio: false
+      }
+    });
+
+    // Revenue mix (municipal)
+    new Chart(document.getElementById('categoryPieChart'), {
+      type: 'pie',
+      data: {
+        labels: ['Service Fees','Business Permits','Real Property Tax','Other'],
+        datasets: [{
+          data: [4,3,2,1],
+          backgroundColor: ['#6366f1','#f59e0b','#10b981','#f43f5e']
+        }]
+      },
+      options: {
+        plugins: { legend: { position: 'right', labels: { font: { size: 9 }, boxWidth: 10 } } },
+        maintainAspectRatio: false
+      }
+    });
+
+    // Entries per office
+    new Chart(document.getElementById('usageBarChart'), {
+      type: 'bar',
+      data: {
+        labels: ['Treasury','Accounting','Budget','Engineering','Admin'],
+        datasets: [{
+          label: 'Entries',
+          data: [120,90,60,28,14],
+          backgroundColor: '#2563eb'
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { font: { size: 9 } } },
+          x: { ticks: { font: { size: 9 } } }
+        },
+        maintainAspectRatio: false
+      }
+    });
+
+    // Approval latency
+    new Chart(document.getElementById('latencyLineChart'), {
+      type: 'line',
+      data: {
+        labels: ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],
+        datasets: [{
+          label: 'Avg Days',
+          data: [1.2,1.5,1.3,1.6,1.4,1.2,1.3,1.4],
+          borderColor: '#8b5cf6',
+          backgroundColor: 'rgba(139,92,246,0.10)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { font: { size: 9 } } },
+          x: { ticks: { font: { size: 9 } } }
+        },
+        maintainAspectRatio: false
+      }
+    });
+
+    // Unified Filter Logic (municipal): fund + office + date
+    const officeFilter = document.getElementById('officeFilter');
+    const fundFilter = document.getElementById('fundFilter');
+    const dateFilter = document.getElementById('dateFilter');
+
+    function applyFilters() {
+      const officeVal = officeFilter.value.toUpperCase();
+      const fundVal = fundFilter.value.toUpperCase();
+      const dateVal = dateFilter.value;
+      const now = new Date();
+
+      function isDateMatch(dateStr) {
+        if (!dateStr) return true;
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return true;
+
+        switch (dateVal) {
+          case 'THIS_MONTH':
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+          case 'LAST_30_DAYS':
+            const thirtyDaysAgo = new Date(now);
+            thirtyDaysAgo.setDate(now.getDate() - 30);
+            return d >= thirtyDaysAgo;
+          case 'THIS_QUARTER':
+            const currentQ = Math.floor(now.getMonth() / 3);
+            const dateQ = Math.floor(d.getMonth() / 3);
+            return currentQ === dateQ && d.getFullYear() === now.getFullYear();
+          case 'THIS_YEAR':
+            return d.getFullYear() === now.getFullYear();
+          default:
+            return true;
+        }
+      }
+
+      // Filter Alerts Table
+      document.querySelectorAll('#alertsTableBody tr').forEach(row => {
+        const rowDate = row.getAttribute('data-date');
+        const rowOffice = (row.getAttribute('data-office') || '').toUpperCase();
+        const rowFund = (row.getAttribute('data-fund') || '').toUpperCase();
+
+        const officeMatch = (officeVal === 'ALL' || rowOffice === officeVal);
+        const fundMatch = (fundVal === 'ALL' || rowFund === fundVal);
+        const dateMatch = isDateMatch(rowDate);
+
+        row.style.display = (officeMatch && fundMatch && dateMatch) ? '' : 'none';
+      });
+
+      // Filter Activity List
+      document.querySelectorAll('#activityList > div').forEach(item => {
+        const itemDate = item.getAttribute('data-date');
+        const itemOffice = (item.getAttribute('data-office') || '').toUpperCase();
+        const itemFund = (item.getAttribute('data-fund') || '').toUpperCase();
+
+        const officeMatch = (officeVal === 'ALL' || itemOffice === officeVal);
+        const fundMatch = (fundVal === 'ALL' || itemFund === fundVal);
+        const dateMatch = isDateMatch(itemDate);
+
+        item.style.display = (officeMatch && fundMatch && dateMatch) ? '' : 'none';
+      });
+    }
+
+    officeFilter.addEventListener('change', applyFilters);
+    fundFilter.addEventListener('change', applyFilters);
+    dateFilter.addEventListener('change', applyFilters);
+
+    // Run once
+    applyFilters();
+  </script>
+</body>
+</html>
