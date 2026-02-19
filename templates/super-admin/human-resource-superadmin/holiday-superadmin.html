@@ -1,743 +1,532 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DENR | HR - Holidays (Super Admin)</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Holiday Management | National Admin</title>
 
-  <!-- Tailwind + Material Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-
-  <!-- Chart.js (analytics) -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
-  <!-- SheetJS (Excel/CSV import) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
-    :root{ --gov-font: Verdana, Arial, Tahoma, sans-serif; }
-    html, body{ font-family: var(--gov-font); }
-    body::before{
-      content:"";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: -1;
-      background-image:
-        radial-gradient(circle at 15% 15%, rgba(15,23,42,.06), transparent 38%),
-        radial-gradient(circle at 85% 30%, rgba(2,132,199,.06), transparent 42%),
-        radial-gradient(circle at 30% 85%, rgba(16,185,129,.05), transparent 45%);
-    }
+    /* Government Standard Typography & Layout */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; }
+    
+    /* Compact Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #1e40af; }
+    .gov-input:disabled { background-color: #f8fafc; cursor: not-allowed; color: #94a3b8; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+
+    /* Dense Table Formatting */
+    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 6px 8px !important; }
+    td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    
+    /* Action Buttons */
+    .btn-action { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; color: #94a3b8; cursor: pointer; }
+    .btn-edit:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
+    .btn-delete:hover { color: white; background: #ef4444; border-color: #dc2626; }
   </style>
 </head>
 
-<body class="min-h-screen bg-gray-100 text-slate-900">
+<body class="text-slate-800 bg-slate-100 h-screen overflow-hidden flex flex-col">
 
   {% include 'super-admin/header-superadmin.html' %}
   {% include 'super-admin/sidenav-superadmin.html' %}
 
-  <main class="p-5 pt-[92px] lg:ml-[260px]">
+  <div class="h-screen flex flex-col lg:ml-[260px] pt-[92px]">
+    
+    <main class="flex-1 flex flex-col min-w-0 p-3 gap-2 overflow-y-auto custom-scrollbar">
 
-    <!-- Header -->
-    <section class="mb-3">
-      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-[12px] font-bold text-slate-700">
-            <span class="material-icons-round text-[18px]">event</span>
-            Human Resource • Holidays (Super Admin)
-          </div>
-          <h1 class="mt-2 text-[26px] font-black tracking-tight">Holiday Management</h1>
-          <p class="text-[13px] text-slate-600 mt-1">
-            Create, validate, visualize, import, and apply holidays by <b>National</b>, <b>Regional</b>, or <b>Municipality</b> scope.
-          </p>
+        <div class="gov-card p-2 flex flex-wrap xl:flex-nowrap items-center gap-3 shrink-0 bg-white border-l-4 border-l-slate-800">
+            
+            <div class="shrink-0 leading-tight">
+                <div class="text-[10px] font-black uppercase text-slate-800 tracking-widest flex items-center gap-1"><span class="material-icons-round text-[14px]">calculate</span> Calculator Tools</div>
+            </div>
+            
+            <div class="w-px h-5 bg-slate-200 hidden xl:block"></div>
+
+            <div class="flex items-center gap-1.5 shrink-0">
+                <select id="wdMonth" class="gov-input cursor-pointer min-w-[90px]"></select>
+                <select id="wdRegion" class="gov-input cursor-pointer min-w-[120px]"><option value="">(All Regions)</option></select>
+                <select id="wdMuni" class="gov-input cursor-pointer min-w-[120px]" disabled><option value="">(All Municipalities)</option></select>
+                <button id="btnCalcWD" class="px-2 py-1 bg-slate-800 hover:bg-slate-900 text-white font-bold text-[9px] uppercase rounded-[2px] transition shadow-sm">Calc WD</button>
+                <div class="px-2 text-center bg-slate-100 border border-slate-200 rounded-[2px] min-w-[40px]" title="Working Days Result">
+                    <span id="wdOut" class="text-[12px] font-black text-slate-900 leading-none">—</span>
+                </div>
+            </div>
+
+            <div class="w-px h-5 bg-slate-200 hidden xl:block"></div>
+
+            <div class="flex items-center gap-1.5 shrink-0">
+                <input id="payDaily" type="number" min="0" step="0.01" placeholder="Daily Rate" class="gov-input w-24">
+                <input id="payHrs" type="number" min="1" step="0.5" placeholder="Hrs/Day" class="gov-input w-20">
+                <button id="btnCalcPay" class="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[9px] uppercase rounded-[2px] transition shadow-sm">Est Pay</button>
+                <div class="px-2 text-center bg-emerald-50 border border-emerald-200 rounded-[2px] min-w-[60px] text-emerald-800" title="Estimated Payroll">
+                    <span id="payOut" class="text-[12px] font-black leading-none">—</span>
+                </div>
+            </div>
+            
+            <div class="w-px h-5 bg-slate-200 hidden xl:block"></div>
+            
+            <div class="flex-1 min-w-[150px]">
+                <div id="wdExplain" class="text-[8px] text-slate-500 font-bold leading-tight truncate"></div>
+                <div id="payExplain" class="text-[8px] text-emerald-700 font-bold leading-tight truncate"></div>
+            </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          <button id="btnToggleView"
-            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
-            <span class="material-icons-round text-[18px]">calendar_month</span>
-            Calendar View
-          </button>
-
-          <button id="btnImport"
-            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
-            <span class="material-icons-round text-[18px]">upload</span>
-            Import Excel/CSV
-          </button>
-
-          <button id="btnExport"
-            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
-            <span class="material-icons-round text-[18px]">download</span>
-            Export CSV
-          </button>
-
-          <button id="btnOpenCreate"
-            class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-[12px] font-bold text-white hover:bg-slate-800">
-            <span class="material-icons-round text-[18px]">add</span>
-            New Holiday
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Controls -->
-    <section class="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
-      <div class="lg:col-span-8 bg-white border border-gray-200 rounded-2xl p-4">
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <h2 class="text-[13px] font-black">Scope & Filters</h2>
-            <p class="text-[12px] text-slate-600 mt-1">
-              Filter list + analytics; use bulk tools to propagate holidays.
-            </p>
+        <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white">
+              <span class="material-icons-round text-[18px]">event</span>
+            </div>
+            <div class="leading-tight">
+              <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">National Holiday Management</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Create, validate, & apply holidays by Scope</p>
+            </div>
           </div>
-          <button id="btnClear"
-            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50">
-            <span class="material-icons-round text-[18px]">filter_alt_off</span>
-            Clear
-          </button>
-        </div>
-
-        <div class="mt-4 grid grid-cols-1 md:grid-cols-12 gap-3">
-          <div class="md:col-span-3">
-            <label class="block text-[11px] font-bold text-slate-700">Year</label>
-            <select id="fy"
-              class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100"></select>
+          <div class="flex gap-1.5">
+            <button id="btnToggleView" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+              <span class="material-icons-round text-[14px]">calendar_month</span> Calendar
+            </button>
+            <button id="btnImport" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+              <span class="material-icons-round text-[14px]">upload</span> Import
+            </button>
+            <button id="btnExport" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+              <span class="material-icons-round text-[14px]">download</span> Export
+            </button>
+            <button id="btnOpenCreate" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
+              <span class="material-icons-round text-[14px]">add</span> New Holiday
+            </button>
           </div>
+        </header>
 
-          <div class="md:col-span-3">
-            <label class="block text-[11px] font-bold text-slate-700">Scope</label>
-            <select id="fscope"
-              class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
-              <option value="ALL">All</option>
-              <option value="NATIONAL">National</option>
-              <option value="REGIONAL">Regional</option>
-              <option value="MUNICIPALITY">Municipality</option>
-            </select>
-          </div>
-
-          <div class="md:col-span-3">
-            <label class="block text-[11px] font-bold text-slate-700">Region</label>
-            <select id="fr"
-              class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
-              <option value="ALL">All</option>
-              <option>NCR</option><option>CAR</option><option>Region I</option><option>Region II</option><option>Region III</option>
-              <option>Region IV-A</option><option>Region IV-B</option><option>Region V</option><option>Region VI</option><option>Region VII</option>
-              <option>Region VIII</option><option>Region IX</option><option>Region X</option><option>Region XI</option><option>Region XII</option>
-              <option>Region XIII</option><option>BARMM</option>
-            </select>
-          </div>
-
-          <div class="md:col-span-3">
-            <label class="block text-[11px] font-bold text-slate-700">Municipality</label>
-            <input id="fm" placeholder="e.g., San Pedro"
-              class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100" />
-          </div>
-
-          <div class="md:col-span-8">
-            <label class="block text-[11px] font-bold text-slate-700">Search</label>
-            <div class="mt-1 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 focus-within:ring-4 focus-within:ring-emerald-100">
-              <span class="material-icons-round text-[18px] text-slate-500">search</span>
-              <input id="fs" placeholder="Search holiday name, type, notes..."
-                class="w-full bg-transparent text-[13px] font-semibold outline-none" />
+        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-slate-800 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Holidays</div>
+                <div id="stAll" class="text-xl font-black text-slate-900 leading-none mt-1">0</div>
+              </div>
+              <span class="material-icons-round text-slate-300 text-[20px]">event_note</span>
             </div>
           </div>
 
-          <div class="md:col-span-4">
-            <label class="block text-[11px] font-bold text-slate-700">Type</label>
-            <select id="ft"
-              class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
-              <option value="ALL">All</option>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 bg-emerald-50/30 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-emerald-800 tracking-widest">Regular</div>
+                <div id="stReg" class="text-xl font-black text-emerald-700 leading-none mt-1">0</div>
+              </div>
+              <span class="material-icons-round text-emerald-200 text-[20px]">verified</span>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-sky-600 bg-sky-50/30 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-sky-800 tracking-widest">Special / Local</div>
+                <div id="stSpec" class="text-xl font-black text-sky-700 leading-none mt-1">0</div>
+              </div>
+              <span class="material-icons-round text-sky-200 text-[20px]">stars</span>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-indigo-600 flex flex-col justify-center gap-1.5">
+             <button id="btnCopyNationalToRegion" class="gov-btn border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center justify-center gap-1 w-full shadow-none text-[8px]">
+               <span class="material-icons-round text-[12px]">content_copy</span> Copy Nat'l → Region
+             </button>
+             <button id="btnCloneRegionToMunicipalities" class="gov-btn border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 flex items-center justify-center gap-1 w-full shadow-none text-[8px]">
+               <span class="material-icons-round text-[12px]">hub</span> Clone Reg → Muni
+             </button>
+          </div>
+        </section>
+
+        <div class="flex-1 flex flex-col xl:flex-row gap-2 min-h-0">
+            
+            <aside class="w-full xl:w-[260px] flex flex-col gap-2 shrink-0 overflow-y-auto custom-scrollbar pb-2">
+                
+                <div class="gov-card p-3 flex flex-col shrink-0">
+                    <h2 class="text-[9px] font-black uppercase text-slate-600 border-b border-slate-100 pb-1 mb-2">Holidays by Type</h2>
+                    <div class="relative w-full h-[180px]">
+                        <canvas id="chType"></canvas>
+                    </div>
+                </div>
+
+                <div class="gov-card p-3 flex flex-col shrink-0">
+                    <h2 class="text-[9px] font-black uppercase text-slate-600 border-b border-slate-100 pb-1 mb-2">Distribution by Scope</h2>
+                    <div class="relative w-full h-[200px]">
+                        <canvas id="chScope"></canvas>
+                    </div>
+                </div>
+
+                <div class="gov-card p-3 flex flex-col shrink-0">
+                    <h2 class="text-[9px] font-black uppercase text-slate-600 border-b border-slate-100 pb-1 mb-2">Top Regions</h2>
+                    <div class="relative w-full h-[180px]">
+                        <canvas id="chRegion"></canvas>
+                    </div>
+                </div>
+
+            </aside>
+
+            <section class="gov-card flex-1 flex flex-col min-h-[400px] overflow-hidden bg-white">
+                
+                <div class="p-2 border-b border-slate-200 shrink-0 flex flex-wrap gap-1.5 items-center bg-slate-50 justify-between">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <select id="fy" class="gov-input cursor-pointer min-w-[70px]"></select>
+                        <div class="relative min-w-[140px]">
+                            <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                            <input id="fs" type="text" class="gov-input pl-6 w-full" placeholder="Holiday, Type, Notes...">
+                        </div>
+                        <select id="fscope" class="gov-input cursor-pointer min-w-[100px]">
+                            <option value="ALL">All Scopes</option>
+                            <option value="NATIONAL">National</option>
+                            <option value="REGIONAL">Regional</option>
+                            <option value="MUNICIPALITY">Municipality</option>
+                        </select>
+                        <select id="fr" class="gov-input cursor-pointer min-w-[110px]">
+                            <option value="ALL" data-code="ALL">All Regions</option>
+                        </select>
+                        <select id="fm" class="gov-input cursor-pointer min-w-[120px]" disabled>
+                            <option value="ALL">All Municipalities</option>
+                        </select>
+                        <select id="ft" class="gov-input cursor-pointer min-w-[100px]">
+                            <option value="ALL">All Types</option>
+                            <option value="REGULAR">Regular</option>
+                            <option value="SPECIAL_NON_WORKING">Special (NW)</option>
+                            <option value="SPECIAL_WORKING">Special (W)</option>
+                            <option value="LOCAL">Local</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-1 border-l border-slate-300 pl-2">
+                        <button id="btnClear" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[9px] uppercase rounded-[2px] transition border border-slate-300">Reset</button>
+                        <button id="btnBulkDelete" class="gov-btn bg-white border border-slate-300 text-rose-700 hover:bg-rose-50 flex items-center gap-1" title="Delete Selected">
+                            <span class="material-icons-round text-[12px]">delete</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="tableView" class="flex-1 overflow-auto custom-scrollbar flex flex-col">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
+                            <tr>
+                                <th class="border-r border-slate-200 text-center w-8">
+                                    <input id="sa" type="checkbox" class="cursor-pointer" />
+                                </th>
+                                <th class="border-r border-slate-200">Date</th>
+                                <th class="border-r border-slate-200">Holiday Details</th>
+                                <th class="border-r border-slate-200 text-center">Type</th>
+                                <th class="border-r border-slate-200 text-center">Scope</th>
+                                <th class="border-r border-slate-200 text-center">Region</th>
+                                <th class="border-r border-slate-200 text-center">Municipality</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tb" class="text-[10px] divide-y divide-slate-100">
+                            </tbody>
+                    </table>
+                </div>
+
+                <div id="calendarView" class="hidden flex-1 flex flex-col overflow-hidden bg-slate-50">
+                    <div class="flex items-center justify-between p-2 border-b border-slate-200 bg-white shrink-0">
+                        <button id="calPrev" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[9px] uppercase rounded-[2px] transition border border-slate-300 flex items-center"><span class="material-icons-round text-[12px]">chevron_left</span> Prev</button>
+                        <span id="calLabel" class="text-[11px] font-black uppercase tracking-widest text-slate-800">—</span>
+                        <button id="calNext" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[9px] uppercase rounded-[2px] transition border border-slate-300 flex items-center">Next <span class="material-icons-round text-[12px]">chevron_right</span></button>
+                    </div>
+                    <div class="p-2 flex-1 overflow-auto custom-scrollbar">
+                        <div class="grid grid-cols-7 gap-1 text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 text-center">
+                            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                        </div>
+                        <div id="calGrid" class="grid grid-cols-7 gap-1"></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
+                    <span id="cnt" class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">Showing 0 holidays</span>
+                </div>
+
+            </section>
+        </div>
+
+    </main>
+  </div>
+
+  <div id="mb" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="w-full max-w-lg rounded-[2px] border border-slate-400 bg-white shadow-2xl overflow-hidden">
+      
+      <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white">
+        <h3 id="mt" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">event</span> New Holiday
+        </h3>
+        <button id="mx" class="text-slate-400 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
+      </div>
+
+      <form id="f" class="p-4 bg-slate-50 space-y-3">
+        <input type="hidden" id="eid" value="" />
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="col-span-2 sm:col-span-1">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Date</label>
+            <input id="d" required type="date" class="gov-input w-full" />
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Type</label>
+            <select id="t" required class="gov-input w-full cursor-pointer">
               <option value="REGULAR">Regular Holiday</option>
               <option value="SPECIAL_NON_WORKING">Special (Non-working)</option>
               <option value="SPECIAL_WORKING">Special (Working)</option>
               <option value="LOCAL">Local Holiday</option>
             </select>
           </div>
+
+          <div class="col-span-2">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Holiday Name</label>
+            <input id="nm" required type="text" class="gov-input w-full" placeholder="e.g., Araw ng Kagitingan" />
+          </div>
+
+          <div class="col-span-2">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Scope</label>
+            <select id="scope" required class="gov-input w-full cursor-pointer">
+              <option value="NATIONAL">National</option>
+              <option value="REGIONAL">Regional</option>
+              <option value="MUNICIPALITY">Municipality</option>
+            </select>
+          </div>
+
+          <div class="col-span-2 sm:col-span-1">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Region</label>
+            <select id="r" class="gov-input w-full cursor-pointer">
+                <option value="" disabled selected>Loading Regions...</option>
+            </select>
+          </div>
+          <div class="col-span-2 sm:col-span-1">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Municipality / City</label>
+            <select id="m" class="gov-input w-full cursor-pointer" disabled>
+                <option value="">Select Region First</option>
+            </select>
+          </div>
+
+          <div class="col-span-2">
+            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Notes (Optional)</label>
+            <input id="nt" type="text" class="gov-input w-full" placeholder="Proclamation / Ordinance Reference" />
+          </div>
         </div>
 
-        <div class="mt-4 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-          <span class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1">
-            <span class="material-icons-round text-[16px]">info</span>
-            Regional requires Region • Municipality requires Region + Municipality
-          </span>
-
-          <button id="btnCopyNationalToRegion"
-            class="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 font-black text-indigo-700 hover:bg-indigo-100">
-            <span class="material-icons-round text-[16px]">content_copy</span>
-            Copy National → Region
-          </button>
-
-          <button id="btnCloneRegionToMunicipalities"
-            class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 font-black text-sky-700 hover:bg-sky-100">
-            <span class="material-icons-round text-[16px]">hub</span>
-            Clone Region → Municipalities
-          </button>
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-200 mt-2">
+          <button type="button" id="mc" class="gov-btn bg-white border border-slate-300 text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button type="submit" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Save Record</button>
         </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="imb" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="w-full max-w-2xl rounded-[2px] border border-slate-400 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      
+      <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white shrink-0">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">upload_file</span> Import Excel/CSV
+        </h3>
+        <button id="imx" class="text-slate-400 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
       </div>
 
-      <!-- Stats -->
-      <div class="lg:col-span-4 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
-        <div class="bg-white border border-gray-200 rounded-2xl p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="text-[11px] font-bold text-slate-600 uppercase">Holidays</div>
-              <div id="stAll" class="text-2xl font-black mt-1">0</div>
-            </div>
-            <div class="h-10 w-10 rounded-2xl border border-gray-200 bg-white grid place-items-center">
-              <span class="material-icons-round">event_note</span>
-            </div>
+      <div class="p-3 bg-slate-50 shrink-0 border-b border-slate-200">
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-2">
+              <input id="importFile" type="file" accept=".xlsx,.xls,.csv" class="text-[10px] w-full sm:w-auto" />
+              <div class="flex items-center gap-2">
+                <label class="inline-flex items-center gap-1 text-[9px] font-bold text-slate-700 cursor-pointer">
+                    <input id="skipConflicts" type="checkbox" checked class="cursor-pointer" /> Skip conflicts
+                </label>
+                <button id="btnParse" class="gov-btn bg-slate-800 text-white hover:bg-slate-900 shadow-sm">Parse Data</button>
+              </div>
           </div>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-2xl p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="text-[11px] font-bold text-slate-600 uppercase">Regular</div>
-              <div id="stReg" class="text-2xl font-black mt-1">0</div>
-            </div>
-            <div class="h-10 w-10 rounded-2xl border border-gray-200 bg-white grid place-items-center">
-              <span class="material-icons-round text-emerald-700">verified</span>
-            </div>
-          </div>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-2xl p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="text-[11px] font-bold text-slate-600 uppercase">Special</div>
-              <div id="stSpec" class="text-2xl font-black mt-1">0</div>
-            </div>
-            <div class="h-10 w-10 rounded-2xl border border-gray-200 bg-white grid place-items-center">
-              <span class="material-icons-round text-sky-700">stars</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Analytics + Working Days + Payroll -->
-    <section class="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
-      <div class="lg:col-span-7 bg-white border border-gray-200 rounded-2xl p-4">
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <h2 class="text-[13px] font-black">Analytics</h2>
-            <p class="text-[12px] text-slate-600 mt-1">Charts update based on current filters.</p>
-          </div>
-          <span class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-black text-slate-700">
-            <span class="material-icons-round text-[16px]">insights</span>
-            Live
-          </span>
-        </div>
-
-        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div class="rounded-2xl border border-gray-200 bg-white p-3">
-            <div class="text-[11px] font-black text-slate-700 mb-2">By Type</div>
-            <canvas id="chType" height="160"></canvas>
-          </div>
-          <div class="rounded-2xl border border-gray-200 bg-white p-3">
-            <div class="text-[11px] font-black text-slate-700 mb-2">By Scope</div>
-            <canvas id="chScope" height="160"></canvas>
-          </div>
-          <div class="md:col-span-2 rounded-2xl border border-gray-200 bg-white p-3">
-            <div class="text-[11px] font-black text-slate-700 mb-2">By Region (Top)</div>
-            <canvas id="chRegion" height="140"></canvas>
-          </div>
-        </div>
+          <p class="text-[8px] font-bold text-slate-500 uppercase mt-2">Required Columns: Date, Holiday Name, Type, Scope, Region, Municipality, Notes</p>
       </div>
 
-      <div class="lg:col-span-5 grid grid-cols-1 gap-3">
-        <!-- Working days -->
-        <div class="bg-white border border-gray-200 rounded-2xl p-4">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <h2 class="text-[13px] font-black">Working Days Calculator</h2>
-              <p class="text-[12px] text-slate-600 mt-1">
-                Weekdays (Mon–Fri) minus applicable holidays (National + matches Region/Municipality).
-              </p>
-            </div>
-          </div>
-
-          <div class="mt-3 grid grid-cols-1 md:grid-cols-12 gap-3">
-            <div class="md:col-span-4">
-              <label class="block text-[11px] font-bold text-slate-700">Month</label>
-              <select id="wdMonth"
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100"></select>
-            </div>
-
-            <div class="md:col-span-4">
-              <label class="block text-[11px] font-bold text-slate-700">Region (optional)</label>
-              <select id="wdRegion"
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
-                <option value="">(None)</option>
-                <option>NCR</option><option>CAR</option><option>Region I</option><option>Region II</option><option>Region III</option>
-                <option>Region IV-A</option><option>Region IV-B</option><option>Region V</option><option>Region VI</option><option>Region VII</option>
-                <option>Region VIII</option><option>Region IX</option><option>Region X</option><option>Region XI</option><option>Region XII</option>
-                <option>Region XIII</option><option>BARMM</option>
-              </select>
-            </div>
-
-            <div class="md:col-span-4">
-              <label class="block text-[11px] font-bold text-slate-700">Municipality (optional)</label>
-              <input id="wdMuni" placeholder="e.g., San Pedro"
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
-            </div>
-          </div>
-
-          <div class="mt-3 flex items-center gap-2">
-            <button id="btnCalcWD"
-              class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-[12px] font-bold text-white hover:bg-slate-800">
-              <span class="material-icons-round text-[18px]">calculate</span>
-              Calculate
-            </button>
-
-            <div class="ml-auto rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-              <div class="text-[11px] font-bold text-slate-600 uppercase">Working days</div>
-              <div id="wdOut" class="text-[18px] font-black">—</div>
-            </div>
-          </div>
-
-          <div id="wdExplain" class="mt-2 text-[12px] text-slate-600"></div>
-        </div>
-
-        <!-- Payroll preview -->
-        <div class="bg-white border border-gray-200 rounded-2xl p-4">
-          <div>
-            <h2 class="text-[13px] font-black">Payroll Integration Preview</h2>
-            <p class="text-[12px] text-slate-600 mt-1">
-              Quick estimate using working-days output. (This is a preview UI; wire it to payroll later.)
-            </p>
-          </div>
-
-          <div class="mt-3 grid grid-cols-1 md:grid-cols-12 gap-3">
-            <div class="md:col-span-6">
-              <label class="block text-[11px] font-bold text-slate-700">Daily Rate</label>
-              <input id="payDaily" type="number" min="0" step="0.01" placeholder="e.g., 750"
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
-            </div>
-            <div class="md:col-span-6">
-              <label class="block text-[11px] font-bold text-slate-700">Hours per Day</label>
-              <input id="payHrs" type="number" min="1" step="0.5" placeholder="e.g., 8"
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none focus:ring-4 focus:ring-emerald-100">
-            </div>
-          </div>
-
-          <div class="mt-3 flex items-center gap-2">
-            <button id="btnCalcPay"
-              class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
-              <span class="material-icons-round text-[18px]">receipt_long</span>
-              Compute Preview
-            </button>
-
-            <div class="ml-auto rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-              <div class="text-[11px] font-bold text-slate-600 uppercase">Est. Monthly</div>
-              <div id="payOut" class="text-[18px] font-black">—</div>
-            </div>
-          </div>
-
-          <div id="payExplain" class="mt-2 text-[12px] text-slate-600"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Table View -->
-    <section id="tableView" class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-      <div class="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 class="text-[13px] font-black">Holiday List</h2>
-          <p class="text-[12px] text-slate-600 mt-1">
-            Conflicts are blocked by scope rules (National/Regional/Municipality).
-          </p>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <button id="btnBulkDelete"
-            class="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700 hover:bg-red-100">
-            <span class="material-icons-round text-[18px]">delete</span>
-            Remove Selected
-          </button>
-        </div>
-      </div>
-
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-left">
-          <thead class="bg-gray-50 border-y border-gray-200">
-            <tr class="text-[11px] uppercase tracking-wide text-slate-600">
-              <th class="px-4 py-3 w-10">
-                <input id="sa" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-200" />
-              </th>
-              <th class="px-4 py-3 font-bold">Date</th>
-              <th class="px-4 py-3 font-bold">Holiday</th>
-              <th class="px-4 py-3 font-bold">Type</th>
-              <th class="px-4 py-3 font-bold">Scope</th>
-              <th class="px-4 py-3 font-bold">Region</th>
-              <th class="px-4 py-3 font-bold">Municipality</th>
-              <th class="px-4 py-3 font-bold text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="tb" class="divide-y divide-gray-200"></tbody>
+      <div class="flex-1 overflow-auto custom-scrollbar bg-white">
+        <table class="w-full text-left border-collapse">
+            <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
+                <tr>
+                    <th class="border-r border-slate-200">Date</th>
+                    <th class="border-r border-slate-200">Holiday</th>
+                    <th class="border-r border-slate-200">Type</th>
+                    <th class="border-r border-slate-200">Scope</th>
+                    <th class="border-r border-slate-200">Region/Muni</th>
+                    <th class="text-center">Status</th>
+                </tr>
+            </thead>
+            <tbody id="impTb" class="text-[10px] divide-y divide-slate-100"></tbody>
         </table>
       </div>
 
-      <div class="p-4 text-[12px] text-slate-600" id="cnt">Showing 0 holidays</div>
-    </section>
-
-    <!-- Calendar View -->
-    <section id="calendarView" class="hidden mt-3 bg-white border border-gray-200 rounded-2xl overflow-hidden">
-      <div class="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-200">
-        <div>
-          <h2 class="text-[13px] font-black">Calendar View</h2>
-          <p class="text-[12px] text-slate-600 mt-1">
-            Holidays appear on their dates; filters apply.
-          </p>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <button id="calPrev"
-            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50">
-            <span class="material-icons-round text-[18px]">chevron_left</span>
-            Prev
-          </button>
-
-          <div class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] font-black">
-            <span id="calLabel">—</span>
+      <div class="bg-slate-50 border-t border-slate-200 px-3 py-2 flex justify-between items-center shrink-0">
+          <div id="impSummary" class="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Awaiting File... <span id="impCount" class="text-slate-400"></span></div>
+          <div class="flex gap-2">
+            <button id="btnImportCancel" class="gov-btn bg-white border border-slate-300 text-slate-600 hover:bg-slate-100">Cancel</button>
+            <button id="btnImportApply" class="gov-btn bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm">Apply Import</button>
           </div>
-
-          <button id="calNext"
-            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50">
-            Next
-            <span class="material-icons-round text-[18px]">chevron_right</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="p-4">
-        <div class="grid grid-cols-7 gap-2 text-[11px] font-black text-slate-600 mb-2">
-          <div class="text-center">Sun</div><div class="text-center">Mon</div><div class="text-center">Tue</div>
-          <div class="text-center">Wed</div><div class="text-center">Thu</div><div class="text-center">Fri</div>
-          <div class="text-center">Sat</div>
-        </div>
-        <div id="calGrid" class="grid grid-cols-7 gap-2"></div>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- Create/Edit Modal -->
-  <div id="mb" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-slate-900/40"></div>
-    <div class="absolute inset-0 flex items-center justify-center p-4">
-      <div class="w-full max-w-3xl rounded-2xl bg-white border border-gray-200 shadow-xl overflow-hidden">
-        <div class="p-4 border-b border-gray-200 flex items-start justify-between">
-          <div>
-            <div class="text-[11px] font-bold text-slate-600 uppercase">Human Resource</div>
-            <h3 id="mt" class="text-[14px] font-black mt-1">New Holiday</h3>
-          </div>
-          <button id="mx" class="h-10 w-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 grid place-items-center">
-            <span class="material-icons-round">close</span>
-          </button>
-        </div>
-
-        <form id="f" class="p-4">
-          <input id="eid" type="hidden" />
-          <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <div class="md:col-span-3">
-              <label class="block text-[11px] font-bold text-slate-700">Date</label>
-              <input id="d" type="date" required
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
-            </div>
-
-            <div class="md:col-span-9">
-              <label class="block text-[11px] font-bold text-slate-700">Holiday Name</label>
-              <input id="nm" required placeholder="e.g., Araw ng Kagitingan"
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
-            </div>
-
-            <div class="md:col-span-4">
-              <label class="block text-[11px] font-bold text-slate-700">Type</label>
-              <select id="t" required
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
-                <option value="REGULAR">Regular Holiday</option>
-                <option value="SPECIAL_NON_WORKING">Special (Non-working)</option>
-                <option value="SPECIAL_WORKING">Special (Working)</option>
-                <option value="LOCAL">Local Holiday</option>
-              </select>
-            </div>
-
-            <div class="md:col-span-4">
-              <label class="block text-[11px] font-bold text-slate-700">Scope</label>
-              <select id="scope" required
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
-                <option value="NATIONAL">National</option>
-                <option value="REGIONAL">Regional</option>
-                <option value="MUNICIPALITY">Municipality</option>
-              </select>
-              <p class="mt-1 text-[11px] text-slate-500">National = applies to all.</p>
-            </div>
-
-            <div class="md:col-span-4">
-              <label class="block text-[11px] font-bold text-slate-700">Region</label>
-              <select id="r"
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100">
-                <option value="">(Optional)</option>
-                <option>NCR</option><option>CAR</option><option>Region I</option><option>Region II</option><option>Region III</option>
-                <option>Region IV-A</option><option>Region IV-B</option><option>Region V</option><option>Region VI</option><option>Region VII</option>
-                <option>Region VIII</option><option>Region IX</option><option>Region X</option><option>Region XI</option><option>Region XII</option>
-                <option>Region XIII</option><option>BARMM</option>
-              </select>
-              <p class="mt-1 text-[11px] text-slate-500">Required when scope is Regional/Municipality.</p>
-            </div>
-
-            <div class="md:col-span-6">
-              <label class="block text-[11px] font-bold text-slate-700">Municipality</label>
-              <input id="m" placeholder="e.g., San Pedro"
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
-              <p class="mt-1 text-[11px] text-slate-500">Required when scope is Municipality.</p>
-            </div>
-
-            <div class="md:col-span-6">
-              <label class="block text-[11px] font-bold text-slate-700">Notes (Optional)</label>
-              <input id="nt" placeholder="e.g., Proclamation / local ordinance reference"
-                class="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-semibold focus:ring-4 focus:ring-emerald-100" />
-            </div>
-          </div>
-
-          <div class="mt-4 flex items-center justify-between gap-3">
-            <div class="text-[12px] text-slate-600">
-              <b>Validation:</b> Conflicts blocked per scope key.
-            </div>
-            <div class="flex items-center gap-2">
-              <button type="button" id="mc"
-                class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
-                Cancel
-              </button>
-              <button
-                class="rounded-xl bg-slate-900 px-4 py-2 text-[12px] font-bold text-white hover:bg-slate-800 inline-flex items-center gap-2">
-                <span class="material-icons-round text-[18px]">save</span>
-                Save
-              </button>
-            </div>
-          </div>
-        </form>
-
       </div>
     </div>
   </div>
 
-  <!-- Import Modal -->
-  <div id="imb" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-slate-900/40"></div>
-    <div class="absolute inset-0 flex items-center justify-center p-4">
-      <div class="w-full max-w-4xl rounded-2xl bg-white border border-gray-200 shadow-xl overflow-hidden">
-        <div class="p-4 border-b border-gray-200 flex items-start justify-between gap-3">
-          <div>
-            <div class="text-[11px] font-bold text-slate-600 uppercase">Import</div>
-            <h3 class="text-[14px] font-black mt-1">Excel/CSV Import</h3>
-            <p class="text-[12px] text-slate-600 mt-1">
-              Expected columns: <b>Date</b>, <b>Holiday Name</b>, <b>Type</b>, <b>Scope</b>, <b>Region</b>, <b>Municipality</b>, <b>Notes</b>
-            </p>
-          </div>
-          <button id="imx" class="h-10 w-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 grid place-items-center">
-            <span class="material-icons-round">close</span>
-          </button>
-        </div>
-
-        <div class="p-4">
-          <div class="flex flex-col md:flex-row md:items-center gap-3">
-            <input id="importFile" type="file" accept=".xlsx,.xls,.csv"
-              class="w-full md:w-auto text-[12px]" />
-            <button id="btnParse"
-              class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-[12px] font-bold text-white hover:bg-slate-800">
-              <span class="material-icons-round text-[18px]">upload_file</span>
-              Parse
-            </button>
-
-            <div class="ml-auto flex items-center gap-2">
-              <label class="inline-flex items-center gap-2 text-[12px] font-bold text-slate-700">
-                <input id="skipConflicts" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-200" checked>
-                Skip conflicts
-              </label>
-            </div>
-          </div>
-
-          <div class="mt-4 rounded-2xl border border-gray-200 overflow-hidden">
-            <div class="bg-gray-50 border-b border-gray-200 px-4 py-2 text-[12px] font-black text-slate-700">
-              Preview
-              <span id="impCount" class="ml-2 text-slate-500 font-bold">(0 rows)</span>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-left">
-                <thead class="bg-white border-b border-gray-200">
-                  <tr class="text-[11px] uppercase tracking-wide text-slate-600">
-                    <th class="px-4 py-2 font-bold">Date</th>
-                    <th class="px-4 py-2 font-bold">Holiday Name</th>
-                    <th class="px-4 py-2 font-bold">Type</th>
-                    <th class="px-4 py-2 font-bold">Scope</th>
-                    <th class="px-4 py-2 font-bold">Region</th>
-                    <th class="px-4 py-2 font-bold">Municipality</th>
-                    <th class="px-4 py-2 font-bold">Notes</th>
-                    <th class="px-4 py-2 font-bold">Status</th>
-                  </tr>
-                </thead>
-                <tbody id="impTb" class="divide-y divide-gray-200"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="mt-4 flex items-center justify-between gap-3">
-            <div id="impSummary" class="text-[12px] text-slate-600"></div>
-            <div class="flex items-center gap-2">
-              <button id="btnImportApply"
-                class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-[12px] font-bold text-white hover:bg-emerald-700">
-                <span class="material-icons-round text-[18px]">done_all</span>
-                Import
-              </button>
-              <button id="btnImportCancel"
-                class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[12px] font-bold hover:bg-gray-50">
-                Cancel
-              </button>
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast -->
-  <div id="toast" class="fixed bottom-4 right-4 z-50 hidden">
-    <div class="rounded-2xl border border-gray-200 bg-white shadow-lg px-4 py-3 max-w-sm">
-      <div class="flex items-start gap-3">
-        <div class="h-9 w-9 rounded-xl bg-emerald-50 border border-emerald-200 grid place-items-center">
-          <span class="material-icons-round text-emerald-700">check</span>
-        </div>
+  <div id="toast" class="fixed bottom-4 right-4 z-[4000] hidden">
+    <div class="rounded-[2px] border border-emerald-300 bg-emerald-50 shadow-lg px-4 py-3 flex items-center gap-3">
+        <span class="material-icons-round text-emerald-700 text-[18px]">check_circle</span>
         <div>
-          <div id="tt" class="text-[12px] font-black">Done</div>
-          <div id="tm" class="text-[12px] text-slate-600 mt-0.5">—</div>
+          <div id="tt" class="text-[10px] font-black text-slate-900 uppercase">Saved</div>
+          <div id="tm" class="text-[9px] text-slate-600 font-bold">Holiday updated.</div>
         </div>
-      </div>
     </div>
   </div>
 
   <script>
-    // ---------- Tiny utils ----------
     const $ = id => document.getElementById(id);
     const q = s => document.querySelectorAll(s);
-    const esc = s => String(s ?? "")
-      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
-    const toast = (a,b) => {
-      $("tt").textContent = a; $("tm").textContent = b;
-      $("toast").classList.remove("hidden");
-      clearTimeout(window.__t);
-      window.__t = setTimeout(()=> $("toast").classList.add("hidden"), 2200);
+    const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+    const norm = s => String(s ?? "").trim();
+    const low = s => norm(s).toLowerCase();
+    
+    const toast = (a,b) => { 
+        $("tt").textContent = a; $("tm").textContent = b; 
+        $("toast").classList.remove("hidden"); 
+        clearTimeout(window.__t); window.__t = setTimeout(()=> $("toast").classList.add("hidden"), 2200); 
     };
 
-    const chip = (txt, cls, dot) =>
-      `<span class="inline-flex items-center gap-2 rounded-full border ${cls} px-3 py-1 text-[11px] font-black">
-        <span class="h-2 w-2 rounded-full ${dot}"></span>${txt}
-      </span>`;
-
+    const chip = (txt, cls) => `<span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase ${cls} border w-24 text-center leading-none">${txt}</span>`;
+    
     const chipType = t => {
       const m = ({
-        REGULAR:["Regular","border-emerald-200 bg-emerald-50 text-emerald-800","bg-emerald-500"],
-        SPECIAL_NON_WORKING:["Special (NW)","border-sky-200 bg-sky-50 text-sky-800","bg-sky-500"],
-        SPECIAL_WORKING:["Special (W)","border-amber-200 bg-amber-50 text-amber-800","bg-amber-500"],
-        LOCAL:["Local","border-indigo-200 bg-indigo-50 text-indigo-800","bg-indigo-500"]
-      })[t] || ["—","border-gray-200 bg-gray-50 text-slate-700","bg-gray-400"];
-      return chip(m[0], m[1], m[2]);
+        REGULAR:["Regular","border-emerald-200 bg-emerald-50 text-emerald-700"],
+        SPECIAL_NON_WORKING:["Special (NW)","border-sky-200 bg-sky-50 text-sky-700"],
+        SPECIAL_WORKING:["Special (W)","border-amber-200 bg-amber-50 text-amber-700"],
+        LOCAL:["Local","border-indigo-200 bg-indigo-50 text-indigo-700"]
+      })[t] || ["—","border-slate-200 bg-slate-50 text-slate-700"];
+      return chip(m[0], m[1]);
     };
 
     const chipScope = s => {
       const m = ({
-        NATIONAL:["National","border-slate-200 bg-slate-50 text-slate-800","bg-slate-600"],
-        REGIONAL:["Regional","border-sky-200 bg-sky-50 text-sky-800","bg-sky-500"],
-        MUNICIPALITY:["Municipality","border-indigo-200 bg-indigo-50 text-indigo-800","bg-indigo-500"]
-      })[s] || ["—","border-gray-200 bg-gray-50 text-slate-700","bg-gray-400"];
-      return chip(m[0], m[1], m[2]);
+        NATIONAL:["National","border-slate-300 bg-slate-100 text-slate-800"],
+        REGIONAL:["Regional","border-blue-200 bg-blue-50 text-blue-800"],
+        MUNICIPALITY:["Municipality","border-indigo-200 bg-indigo-50 text-indigo-800"]
+      })[s] || ["—","border-gray-200 bg-gray-50 text-slate-700"];
+      return chip(m[0], m[1]);
     };
 
-    const norm = s => String(s ?? "").trim();
-    const low = s => norm(s).toLowerCase();
+    // --- PSGC API INTEGRATION ---
+    let apiMuniCache = {};
 
-    // ---------- Dynamic year + months ----------
-    const fy = $("fy");
-    const nowY = new Date().getFullYear();
-    for(let y = nowY - 2; y <= nowY + 10; y++){
-      const opt = document.createElement("option");
-      opt.value = String(y);
-      opt.textContent = String(y);
-      if(y === 2026) opt.selected = true;
-      fy.appendChild(opt);
+    async function initLocationAPI() {
+        try {
+            const res = await fetch('https://psgc.gitlab.io/api/regions/');
+            const regions = await res.json();
+            regions.sort((a, b) => a.name.localeCompare(b.name));
+
+            const drops = [
+                { r: $("fr"), d: "All Regions" },
+                { r: $("r"), d: "Select Region" },
+                { r: $("wdRegion"), d: "(All Regions)" }
+            ];
+
+            drops.forEach(d => {
+                d.r.innerHTML = `<option value="ALL" data-code="ALL">${d.d}</option>`;
+                regions.forEach(reg => {
+                    const opt = document.createElement('option');
+                    opt.value = reg.name; opt.dataset.code = reg.code; opt.textContent = reg.name;
+                    d.r.appendChild(opt);
+                });
+            });
+        } catch (err) {
+            console.error("Failed to load regions", err);
+        }
     }
 
-    const wdMonth = $("wdMonth");
+    async function loadMunicipalities(regionCode, selectElementId, defaultText, isFilter = false) {
+        const selectEl = $(selectElementId);
+        selectEl.innerHTML = `<option value="${isFilter ? 'ALL' : ''}">${isFilter ? 'All Municipalities' : 'Loading...'}</option>`;
+        selectEl.disabled = true;
+
+        if (!regionCode || regionCode === 'ALL') {
+            if(!isFilter) selectEl.innerHTML = '<option value="">Select Region first</option>';
+            return;
+        }
+
+        try {
+            let munis = apiMuniCache[regionCode];
+            if (!munis) {
+                const res = await fetch(`https://psgc.gitlab.io/api/regions/${regionCode}/cities-municipalities/`);
+                munis = await res.json();
+                munis.sort((a, b) => a.name.localeCompare(b.name));
+                apiMuniCache[regionCode] = munis; 
+            }
+
+            selectEl.innerHTML = `<option value="${isFilter ? 'ALL' : ''}" ${isFilter ? '' : 'disabled selected'}>${defaultText}</option>`;
+            munis.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name; opt.textContent = m.name;
+                selectEl.appendChild(opt);
+            });
+            selectEl.disabled = false;
+        } catch (err) {
+            console.error("Failed to load municipalities", err);
+            selectEl.innerHTML = `<option value="${isFilter ? 'ALL' : ''}">API Error</option>`;
+        }
+    }
+
+    // Bind API Drops
+    $("fr").addEventListener("change", function() { loadMunicipalities(this.options[this.selectedIndex].dataset.code, 'fm', 'All Municipalities', true); rerenderAll(); });
+    $("r").addEventListener("change", function() { loadMunicipalities(this.options[this.selectedIndex].dataset.code, 'm', 'Select Municipality / City', false); });
+    $("wdRegion").addEventListener("change", function() { loadMunicipalities(this.options[this.selectedIndex].dataset.code, 'wdMuni', '(All Municipalities)', true); });
+
+    // Dynamic Year & Month
+    const nowY = new Date().getFullYear();
+    for(let y = nowY - 2; y <= nowY + 10; y++){
+      const opt = document.createElement("option"); opt.value = String(y); opt.textContent = String(y);
+      if(y === 2026) opt.selected = true; $("fy").appendChild(opt);
+    }
     const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     monthNames.forEach((m, i)=>{
-      const opt = document.createElement("option");
-      opt.value = String(i);
-      opt.textContent = m;
-      if(i === 1) opt.selected = true; // Feb default
-      wdMonth.appendChild(opt);
+      const opt = document.createElement("option"); opt.value = String(i); opt.textContent = m;
+      if(i === 1) opt.selected = true; $("wdMonth").appendChild(opt);
     });
 
-    // ---------- Data model ----------
-    // {id,date,name,type,scope,reg,mun,notes}
+    // Mock DB
     let holidays = [
       {id:crypto.randomUUID(),date:"2026-01-01",name:"New Year's Day",type:"REGULAR",scope:"NATIONAL",reg:"",mun:"",notes:""},
       {id:crypto.randomUUID(),date:"2026-04-09",name:"Araw ng Kagitingan",type:"REGULAR",scope:"NATIONAL",reg:"",mun:"",notes:""},
-      {id:crypto.randomUUID(),date:"2026-02-25",name:"Local Foundation Day",type:"LOCAL",scope:"MUNICIPALITY",reg:"Region IV-A",mun:"San Pedro",notes:"Ordinance #12"},
+      {id:crypto.randomUUID(),date:"2026-02-25",name:"Local Foundation Day",type:"LOCAL",scope:"MUNICIPALITY",reg:"CALABARZON",mun:"City of San Pedro",notes:"Ordinance #12"},
       {id:crypto.randomUUID(),date:"2026-08-21",name:"Ninoy Aquino Day",type:"SPECIAL_NON_WORKING",scope:"NATIONAL",reg:"",mun:"",notes:""}
     ];
 
-    // ---------- Conflict key rules ----------
-    // National: date + scope(NATIONAL)
-    // Regional: date + scope(REGIONAL) + reg
-    // Municipality: date + scope(MUNICIPALITY) + reg + mun(lower)
     const keyFor = (h) => {
-      const date = norm(h.date);
-      const scope = norm(h.scope);
-      const reg = norm(h.reg);
-      const mun = low(h.mun);
-      if(scope === "NATIONAL") return `${date}|NATIONAL`;
-      if(scope === "REGIONAL") return `${date}|REGIONAL|${reg}`;
-      if(scope === "MUNICIPALITY") return `${date}|MUNICIPALITY|${reg}|${mun}`;
-      return `${date}|${scope}|${reg}|${mun}`;
+      const d = norm(h.date), s = norm(h.scope), r = norm(h.reg), m = low(h.mun);
+      if(s === "NATIONAL") return `${d}|NATIONAL`;
+      if(s === "REGIONAL") return `${d}|REGIONAL|${r}`;
+      if(s === "MUNICIPALITY") return `${d}|MUNICIPALITY|${r}|${m}`;
+      return `${d}|${s}|${r}|${m}`;
     };
 
     const validateScopeFields = (h) => {
-      if(!h.date) return "Date is required.";
-      if(!h.name) return "Holiday name is required.";
-      if(!h.type) return "Type is required.";
-      if(!h.scope) return "Scope is required.";
-
-      if(h.scope === "NATIONAL"){
-        return null;
-      }
-      if(h.scope === "REGIONAL"){
-        if(!h.reg) return "Region is required for Regional scope.";
-        return null;
-      }
-      if(h.scope === "MUNICIPALITY"){
-        if(!h.reg) return "Region is required for Municipality scope.";
-        if(!h.mun) return "Municipality is required for Municipality scope.";
-        return null;
-      }
+      if(!h.date) return "Date required."; if(!h.name) return "Name required."; if(!h.type) return "Type required."; if(!h.scope) return "Scope required.";
+      if(h.scope === "REGIONAL" && !h.reg) return "Region required.";
+      if(h.scope === "MUNICIPALITY" && (!h.reg || !h.mun)) return "Region & Municipality required.";
       return null;
     };
 
     const hasConflict = (h, ignoreId=null) => {
-      const k = keyFor(h);
-      return holidays.some(x => keyFor(x) === k && x.id !== ignoreId);
+      const k = keyFor(h); return holidays.some(x => keyFor(x) === k && x.id !== ignoreId);
     };
 
-    // ---------- Filters ----------
     const getF = () => ({
-      y: fy.value,
-      scope: $("fscope").value,
-      r: $("fr").value,
-      m: low($("fm").value),
-      t: $("ft").value,
-      s: low($("fs").value)
+      y: $("fy").value, scope: $("fscope").value, r: $("fr").value, m: $("fm").value, t: $("ft").value, s: low($("fs").value)
     });
 
     const filt = (arr) => {
@@ -745,664 +534,281 @@
       return arr.filter(x => {
         const year = (x.date || "").slice(0,4);
         const hay = [x.date,x.name,x.type,x.scope,x.reg,x.mun,x.notes].join(" ").toLowerCase();
-
-        return (f.y === "ALL" || year === f.y)
-          && (f.scope === "ALL" || x.scope === f.scope)
-          && (f.r === "ALL" || (x.reg || "") === f.r)
-          && (!f.m || low(x.mun).includes(f.m))
-          && (f.t === "ALL" || x.type === f.t)
-          && (!f.s || hay.includes(f.s));
+        return (f.y === "ALL" || year === f.y) && (f.scope === "ALL" || x.scope === f.scope)
+          && (f.r === "ALL" || (x.reg || "") === f.r) && (f.m === "ALL" || f.m === "" || x.mun === f.m)
+          && (f.t === "ALL" || x.type === f.t) && (!f.s || hay.includes(f.s));
       }).sort((a,b)=> (a.date||"").localeCompare(b.date||""));
     };
 
-    // ---------- Render: table ----------
-    const tb = $("tb");
-    const cnt = $("cnt");
-
-    const selectedIds = () => Array.from(document.querySelectorAll(".rc:checked")).map(x=>x.dataset.id);
-
     const renderTable = () => {
       const rows = filt(holidays);
-
       $("stAll").textContent = rows.length;
       $("stReg").textContent = rows.filter(x=>x.type==="REGULAR").length;
       $("stSpec").textContent = rows.filter(x=>String(x.type||"").startsWith("SPECIAL")).length;
-      cnt.textContent = `Showing ${rows.length} holidays`;
+      $("cnt").textContent = `Showing ${rows.length} holidays`;
       $("sa").checked = false;
 
-      tb.innerHTML = rows.map(x=>`
-        <tr class="hover:bg-gray-50">
-          <td class="px-4 py-3 align-top">
-            <input type="checkbox" class="rc h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-200" data-id="${x.id}">
+      $("tb").innerHTML = rows.map(x=>`
+        <tr class="hover:bg-blue-50 transition border-b border-slate-100">
+          <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
+            <input type="checkbox" class="rc cursor-pointer" data-id="${x.id}">
           </td>
-          <td class="px-4 py-3 align-top">
-            <div class="text-[12px] font-bold">${esc(x.date)}</div>
+          <td class="px-4 py-3 align-middle border-r border-slate-100 font-mono text-slate-500 font-bold">${esc(x.date)}</td>
+          <td class="px-4 py-3 align-middle border-r border-slate-100">
+            <div class="text-[10px] font-black text-slate-900 uppercase">${esc(x.name)}</div>
+            <div class="text-[9px] text-slate-500 mt-0.5 font-bold">${esc(x.notes||"")}</div>
           </td>
-          <td class="px-4 py-3 align-top">
-            <div class="text-[13px] font-black">${esc(x.name)}</div>
-            <div class="text-[11px] text-slate-600 mt-1">${esc(x.notes||"")}</div>
-          </td>
-          <td class="px-4 py-3 align-top">${chipType(x.type)}</td>
-          <td class="px-4 py-3 align-top">${chipScope(x.scope)}</td>
-          <td class="px-4 py-3 align-top"><div class="text-[12px] font-bold">${esc(x.reg||"—")}</div></td>
-          <td class="px-4 py-3 align-top"><div class="text-[12px] font-bold">${esc(x.mun||"—")}</div></td>
-          <td class="px-4 py-3 align-top text-right">
-            <div class="inline-flex gap-2">
-              <button class="ed inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold hover:bg-gray-50" data-id="${x.id}">
-                <span class="material-icons-round text-[18px]">edit</span> Edit
-              </button>
-              <button class="rm inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700 hover:bg-red-100" data-id="${x.id}">
-                <span class="material-icons-round text-[18px]">delete</span> Remove
-              </button>
+          <td class="px-4 py-3 align-middle text-center border-r border-slate-100">${chipType(x.type)}</td>
+          <td class="px-4 py-3 align-middle text-center border-r border-slate-100">${chipScope(x.scope)}</td>
+          <td class="px-4 py-3 align-middle text-center border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase">${esc(x.reg||"—")}</td>
+          <td class="px-4 py-3 align-middle text-center border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase">${esc(x.mun||"—")}</td>
+          <td class="px-4 py-3 align-middle text-center">
+            <div class="flex justify-center gap-1">
+              <button class="ed btn-action btn-edit" title="Edit" data-id="${x.id}"><span class="material-icons-round text-[14px]">edit</span></button>
+              <button class="rm btn-action btn-delete" title="Delete" data-id="${x.id}"><span class="material-icons-round text-[14px]">delete</span></button>
             </div>
           </td>
         </tr>
       `).join("");
     };
 
-    // ---------- Calendar ----------
-    let calMonth = 0; // 0-11
-    const calLabel = $("calLabel");
-    const calGrid = $("calGrid");
-
-    const holidaysOn = (dateStr) => {
-      // applies filters too (calendar respects current list filter, not just year)
-      const rows = filt(holidays);
-      return rows.filter(h => h.date === dateStr);
-    };
-
+    let calMonth = 0; 
     const renderCalendar = () => {
-      const year = parseInt(fy.value, 10);
-      const month = calMonth;
+      const year = parseInt($("fy").value, 10); const month = calMonth;
+      $("calLabel").textContent = `${monthNames[month]} ${year}`;
+      $("calGrid").innerHTML = "";
 
-      calLabel.textContent = `${monthNames[month]} ${year}`;
-      calGrid.innerHTML = "";
-
-      const first = new Date(year, month, 1);
-      const startDay = first.getDay(); // 0 Sun
+      const first = new Date(year, month, 1); const startDay = first.getDay(); 
       const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-      // Fill leading blanks
-      for(let i=0; i<startDay; i++){
-        const cell = document.createElement("div");
-        cell.className = "h-28 rounded-2xl border border-gray-200 bg-gray-50";
-        calGrid.appendChild(cell);
-      }
+      for(let i=0; i<startDay; i++) $("calGrid").innerHTML += `<div class="h-16 rounded-[2px] border border-slate-100 bg-slate-50/50"></div>`;
 
       for(let day=1; day<=daysInMonth; day++){
-        const d = new Date(year, month, day);
         const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-        const list = holidaysOn(dateStr);
+        const list = filt(holidays).filter(h => h.date === dateStr);
+        const weekend = (new Date(year, month, day).getDay() % 6 === 0);
 
-        const cell = document.createElement("div");
-        cell.className = "h-28 rounded-2xl border border-gray-200 bg-white p-2 overflow-hidden";
-
-        const dow = d.getDay();
-        const weekend = (dow === 0 || dow === 6);
-
-        cell.innerHTML = `
-          <div class="flex items-start justify-between gap-2">
-            <div class="text-[12px] font-black ${weekend ? "text-slate-400" : "text-slate-900"}">${day}</div>
-            ${list.length ? `<span class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-800">
-              <span class="material-icons-round text-[14px]">event</span>${list.length}
-            </span>` : ``}
-          </div>
-          <div class="mt-1 space-y-1">
-            ${list.slice(0,3).map(h=>`
-              <div class="truncate rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-bold text-slate-700">
-                ${esc(h.name)}
-              </div>
-            `).join("")}
-            ${list.length > 3 ? `<div class="text-[10px] font-bold text-slate-500">+${list.length-3} more</div>` : ``}
-          </div>
-        `;
-        calGrid.appendChild(cell);
+        let cellHTML = `
+          <div class="h-16 rounded-[2px] border border-slate-200 bg-white p-1 overflow-hidden flex flex-col hover:border-blue-400 transition">
+            <div class="flex justify-between items-start shrink-0">
+                <span class="text-[10px] font-black ${weekend ? 'text-slate-400' : 'text-slate-800'}">${day}</span>
+                ${list.length ? `<span class="bg-emerald-100 text-emerald-800 text-[8px] font-black px-1 rounded-[2px]">${list.length}</span>` : ''}
+            </div>
+            <div class="flex-1 overflow-hidden mt-1 space-y-0.5">
+                ${list.map(h => `<div class="text-[8px] font-bold text-slate-600 truncate bg-slate-100 px-1 rounded-[1px] uppercase" title="${esc(h.name)}">${esc(h.name)}</div>`).join("")}
+            </div>
+          </div>`;
+        $("calGrid").innerHTML += cellHTML;
       }
     };
 
-    // ---------- Charts ----------
+    Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+    Chart.defaults.font.size = 8;
+    Chart.defaults.color = "#64748b";
     let chType, chScope, chRegion;
-
-    const countBy = (rows, fnKey) => {
-      const m = new Map();
-      rows.forEach(r=>{
-        const k = fnKey(r);
-        m.set(k, (m.get(k)||0) + 1);
-      });
-      return Array.from(m.entries()).sort((a,b)=>b[1]-a[1]);
-    };
 
     const renderCharts = () => {
       const rows = filt(holidays);
-
+      const countBy = (arr, fn) => { const m = new Map(); arr.forEach(r => { const k=fn(r); m.set(k,(m.get(k)||0)+1); }); return Array.from(m.entries()).sort((a,b)=>b[1]-a[1]); };
+      
       const byType = countBy(rows, r=>r.type || "—");
       const byScope = countBy(rows, r=>r.scope || "—");
       const byRegion = countBy(rows.filter(r=>r.scope!=="NATIONAL"), r=>r.reg || "—").slice(0,8);
 
-      const typeLabels = byType.map(x=>x[0]);
-      const typeValues = byType.map(x=>x[1]);
-
-      const scopeLabels = byScope.map(x=>x[0]);
-      const scopeValues = byScope.map(x=>x[1]);
-
-      const regLabels = byRegion.map(x=>x[0]);
-      const regValues = byRegion.map(x=>x[1]);
-
-      // destroy old
       [chType,chScope,chRegion].forEach(c=>{ if(c) c.destroy(); });
 
-      chType = new Chart($("chType"), {
-        type: "bar",
-        data: { labels: typeLabels, datasets: [{ label: "Count", data: typeValues }] },
-        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
-      });
+      // COLOR ARRAY FOR BAR CHARTS
+      const barColors = ['#1e40af', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#475569', '#ec4899', '#14b8a6'];
 
-      chScope = new Chart($("chScope"), {
-        type: "doughnut",
-        data: { labels: scopeLabels, datasets: [{ label: "Count", data: scopeValues }] },
-        options: { responsive:true, plugins:{ legend:{ position:"bottom" } } }
-      });
-
-      chRegion = new Chart($("chRegion"), {
-        type: "bar",
-        data: { labels: regLabels, datasets: [{ label:"Count", data: regValues }] },
-        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
-      });
-    };
-
-    // ---------- Working days calculator ----------
-    const applicableHolidayDates = ({year, month, region, muni}) => {
-      // Applies:
-      // - all NATIONAL
-      // - REGIONAL matching region
-      // - MUNICIPALITY matching region + muni (case-insensitive)
-      const ym = `${year}-${String(month+1).padStart(2,"0")}`;
-      const muniLow = low(muni);
-
-      return holidays
-        .filter(h => (h.date || "").startsWith(ym))
-        .filter(h => {
-          if(h.scope === "NATIONAL") return true;
-          if(h.scope === "REGIONAL") return region && h.reg === region;
-          if(h.scope === "MUNICIPALITY") return region && muniLow && h.reg === region && low(h.mun) === muniLow;
-          return false;
-        })
-        .map(h => h.date);
+      chType = new Chart($("chType"), { type: "bar", data: { labels: byType.map(x=>x[0].replace('SPECIAL_','S_').substring(0,8)), datasets: [{ data: byType.map(x=>x[1]), backgroundColor: barColors, borderRadius:2, borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{ display:false, beginAtZero:true } } } });
+      chScope = new Chart($("chScope"), { type: "doughnut", data: { labels: byScope.map(x=>x[0]), datasets: [{ data: byScope.map(x=>x[1]), backgroundColor:['#64748b','#10b981','#f59e0b'], borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, cutout:'65%', layout:{padding:{bottom:10}}, plugins:{ legend:{ position:"bottom", labels:{boxWidth:6} } } } });
+      chRegion = new Chart($("chRegion"), { type: "bar", data: { labels: byRegion.map(x=>x[0].substring(0,8)), datasets: [{ data: byRegion.map(x=>x[1]), backgroundColor: barColors, borderRadius:2, borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{ grid:{display:false} } } } });
     };
 
     const calcWorkingDays = ({year, month, region, muni}) => {
       const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const holidaySet = new Set(applicableHolidayDates({year,month,region,muni}));
+      const ym = `${year}-${String(month+1).padStart(2,"0")}`;
+      const muniLow = low(muni);
+      const holidaySet = new Set(holidays.filter(h => (h.date || "").startsWith(ym)).filter(h => {
+        if(h.scope === "NATIONAL") return true;
+        if(h.scope === "REGIONAL") return region && h.reg === region;
+        if(h.scope === "MUNICIPALITY") return region && muniLow && h.reg === region && low(h.mun) === muniLow;
+        return false;
+      }).map(h => h.date));
 
-      let weekdays = 0;
-      let removed = 0;
-
+      let weekdays = 0, removed = 0;
       for(let d=1; d<=daysInMonth; d++){
-        const date = new Date(year, month, d);
-        const dow = date.getDay();
-        const isWeekday = dow >= 1 && dow <= 5;
-        if(!isWeekday) continue;
-
-        weekdays++;
-        const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-        if(holidaySet.has(dateStr)) removed++;
+        if(new Date(year, month, d).getDay() % 6 !== 0 && new Date(year, month, d).getDay() !== 0) {
+            weekdays++;
+            if(holidaySet.has(`${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`)) removed++;
+        }
       }
-      return {weekdays, removed, working: weekdays - removed, holidayDates: Array.from(holidaySet).sort()};
+      return {weekdays, removed, working: weekdays - removed};
     };
 
-    // ---------- Payroll preview ----------
-    const money = (n) => {
-      const x = Number(n);
-      if(!Number.isFinite(x)) return "—";
-      return x.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-    };
-
-    // ---------- CRUD ----------
-    const upsert = (payload, id) => {
-      if(!id){
-        holidays.unshift({ id: crypto.randomUUID(), ...payload });
-      }else{
-        holidays = holidays.map(x => x.id === id ? { ...x, ...payload } : x);
-      }
-    };
+    const upsert = (payload, id) => { if(!id) holidays.unshift({ id: crypto.randomUUID(), ...payload }); else holidays = holidays.map(x => x.id === id ? { ...x, ...payload } : x); };
     const del = (id) => holidays = holidays.filter(x => x.id !== id);
 
-    // ---------- Modal ----------
-    const openM = (mode, id) => {
-      $("mb").classList.remove("hidden");
-      $("eid").value = "";
-      $("f").reset();
-      $("mt").textContent = mode === "edit" ? "Edit Holiday" : "New Holiday";
+    async function openM(mode, id) {
+      $("mb").classList.replace("hidden", "flex");
+      $("eid").value = ""; $("f").reset();
+      $("mt").innerHTML = mode === "edit" ? '<span class="material-icons-round text-[14px]">edit</span> Edit Holiday' : '<span class="material-icons-round text-[14px]">event</span> New Holiday';
+      $("m").innerHTML = '<option value="">Select Region First</option>'; $("m").disabled = true;
 
       if(mode === "edit"){
-        const x = holidays.find(z=>z.id===id);
-        if(!x) return;
-        $("eid").value = x.id;
-        $("d").value = x.date;
-        $("nm").value = x.name;
-        $("t").value = x.type;
-        $("scope").value = x.scope;
-        $("r").value = x.reg || "";
-        $("m").value = x.mun || "";
+        const x = holidays.find(z=>z.id===id); if(!x) return;
+        $("eid").value = x.id; $("d").value = x.date; $("nm").value = x.name; $("t").value = x.type; $("scope").value = x.scope;
         $("nt").value = x.notes || "";
+        
+        const fReg = $("r"); fReg.value = x.reg || "";
+        const selectedOption = Array.from(fReg.options).find(opt => opt.value === x.reg);
+        if (selectedOption && selectedOption.dataset.code) {
+           await loadMunicipalities(selectedOption.dataset.code, 'm', 'Select Municipality / City', false);
+           $("m").value = x.mun || "";
+        }
       }
     };
-    const closeM = () => $("mb").classList.add("hidden");
+    const closeM = () => $("mb").classList.replace("flex", "hidden");
 
-    // ---------- Bulk tools ----------
-    const copyNationalToRegion = () => {
-      const region = prompt("Enter Region (exact label e.g., NCR, Region IV-A):");
-      if(!region) return;
+    const rerenderAll = () => { renderTable(); renderCalendar(); renderCharts(); };
 
-      const year = fy.value;
-      const nationals = holidays.filter(h => h.scope === "NATIONAL" && (h.date||"").startsWith(year + "-"));
+    document.addEventListener("DOMContentLoaded", async () => {
+      await initLocationAPI();
 
-      let added = 0, skipped = 0;
-      nationals.forEach(h=>{
-        const payload = {
-          date: h.date,
-          name: h.name,
-          type: h.type,
-          scope: "REGIONAL",
-          reg: region,
-          mun: "",
-          notes: `Copied from National (${year})`
-        };
-        if(hasConflict(payload)){
-          skipped++;
-        }else{
-          upsert(payload, null);
-          added++;
+      $("btnToggleView").onclick = ()=>{
+        $("tableView").classList.toggle("hidden"); $("calendarView").classList.toggle("hidden");
+        $("btnToggleView").innerHTML = !$("calendarView").classList.contains("hidden") ? `<span class="material-icons-round text-[14px]">table_rows</span> Table` : `<span class="material-icons-round text-[14px]">calendar_month</span> Calendar`;
+        renderCalendar();
+      };
+
+      $("calPrev").onclick = ()=>{ calMonth = (calMonth + 11) % 12; renderCalendar(); };
+      $("calNext").onclick = ()=>{ calMonth = (calMonth + 1) % 12; renderCalendar(); };
+      $("btnOpenCreate").onclick = ()=> openM("create");
+      $("mx").onclick = $("mc").onclick = closeM;
+      $("mb").onclick = (e)=>{ if(e.target === $("mb")) closeM(); };
+
+      $("f").onsubmit = (e) => {
+        e.preventDefault();
+        const payload = { date: $("d").value, name: norm($("nm").value), type: $("t").value, scope: $("scope").value, reg: norm($("r").value), mun: norm($("m").value), notes: norm($("nt").value) };
+        const err = validateScopeFields(payload); if(err) return toast("Validation", err);
+        if(payload.scope === "NATIONAL"){ payload.reg=""; payload.mun=""; }
+        if(payload.scope === "REGIONAL"){ payload.mun=""; }
+        const id = norm($("eid").value) || null;
+        if(hasConflict(payload, id)) return toast("Conflict", "Holiday already exists.");
+        upsert(payload, id); closeM(); rerenderAll(); toast("Saved", "Holiday saved.");
+      };
+
+      document.addEventListener("click", (e)=>{
+        const ed = e.target.closest(".ed"), rm = e.target.closest(".rm");
+        if(ed) openM("edit", ed.dataset.id);
+        if(rm){
+          const id = rm.dataset.id; const x = holidays.find(z=>z.id===id); if(!x) return;
+          if(confirm(`Remove "${x.name}" on ${x.date}?`)){ del(id); rerenderAll(); toast("Removed", "Holiday deleted."); }
         }
       });
 
-      rerenderAll();
-      toast("Bulk copy done", `Added ${added}, skipped ${skipped} conflicts.`);
-    };
+      $("sa").onchange = (e)=> q(".rc").forEach(x=>x.checked = e.target.checked);
+      $("btnBulkDelete").onclick = ()=>{
+        const ids = Array.from(document.querySelectorAll(".rc:checked")).map(x=>x.dataset.id);
+        if(!ids.length) return toast("No selection", "Select at least one holiday.");
+        if(!confirm(`Remove ${ids.length} selected holiday(s)?`)) return;
+        ids.forEach(del); rerenderAll(); toast("Removed", "Selected holidays deleted.");
+      };
 
-    const cloneRegionToMunicipalities = () => {
-      const region = prompt("Enter Region to clone from (must match Regional holidays):");
-      if(!region) return;
+      ["fy","fscope","fr","ft"].forEach(id => $(id).addEventListener("change", rerenderAll));
+      ["fm","fs"].forEach(id => $(id).addEventListener("input", rerenderAll));
+      $("btnClear").onclick = ()=>{
+        $("fscope").value="ALL"; $("fr").value="ALL"; $("fm").innerHTML='<option value="ALL">All Municipalities</option>'; $("fm").disabled=true; $("ft").value="ALL"; $("fs").value="";
+        rerenderAll(); toast("Cleared", "Filters reset.");
+      };
 
-      const muniCsv = prompt("Enter municipality names (comma-separated), e.g., San Pedro, Biñan, Santa Rosa:");
-      if(!muniCsv) return;
-
-      const year = fy.value;
-      const munis = muniCsv.split(",").map(s=>norm(s)).filter(Boolean);
-      if(!munis.length) return;
-
-      const regionals = holidays.filter(h =>
-        h.scope === "REGIONAL" &&
-        h.reg === region &&
-        (h.date||"").startsWith(year + "-")
-      );
-
-      let added = 0, skipped = 0;
-      regionals.forEach(h=>{
-        munis.forEach(muni=>{
-          const payload = {
-            date: h.date,
-            name: h.name,
-            type: h.type,
-            scope: "MUNICIPALITY",
-            reg: region,
-            mun: muni,
-            notes: `Cloned from Regional (${region})`
-          };
-          if(hasConflict(payload)){
-            skipped++;
-          }else{
-            upsert(payload, null);
-            added++;
-          }
+      $("btnCopyNationalToRegion").onclick = () => {
+        const region = prompt("Enter Region exactly as shown in dropdown (e.g., National Capital Region):"); if(!region) return;
+        const year = $("fy").value; let added = 0, skipped = 0;
+        holidays.filter(h => h.scope === "NATIONAL" && (h.date||"").startsWith(year + "-")).forEach(h=>{
+          const payload = { date: h.date, name: h.name, type: h.type, scope: "REGIONAL", reg: region, mun: "", notes: `Copied from National` };
+          if(hasConflict(payload)) skipped++; else { upsert(payload, null); added++; }
         });
-      });
-
-      rerenderAll();
-      toast("Clone done", `Added ${added}, skipped ${skipped} conflicts.`);
-    };
-
-    // ---------- Export ----------
-    const exportCSV = () => {
-      const rows = filt(holidays);
-      const headers = ["Date","Holiday Name","Type","Scope","Region","Municipality","Notes"];
-      const body = rows.map(x => [x.date,x.name,x.type,x.scope,x.reg||"",x.mun||"",x.notes||""]);
-      const csv = [headers, ...body]
-        .map(r => r.map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(","))
-        .join("\n");
-
-      const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `denr_hr_holidays_${fy.value}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast("Exported", "CSV file downloaded.");
-    };
-
-    // ---------- Import (Excel/CSV) ----------
-    let importRows = []; // normalized payloads
-    const openImport = () => {
-      $("imb").classList.remove("hidden");
-      $("importFile").value = "";
-      $("impTb").innerHTML = "";
-      $("impCount").textContent = "(0 rows)";
-      $("impSummary").textContent = "";
-      importRows = [];
-    };
-    const closeImport = () => $("imb").classList.add("hidden");
-
-    const parseFile = async () => {
-      const file = $("importFile").files?.[0];
-      if(!file) return toast("No file", "Choose an .xlsx or .csv file.");
-
-      const data = await file.arrayBuffer();
-      const wb = XLSX.read(data, {type:"array"});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(ws, {defval:""});
-
-      // Map expected columns (case-insensitive)
-      const col = (row, name) => {
-        const key = Object.keys(row).find(k => low(k) === low(name));
-        return key ? row[key] : "";
+        rerenderAll(); toast("Copy Done", `Added ${added}, skipped ${skipped}.`);
       };
 
-      const mapped = json.map((row, idx) => {
-        // Allow Date as excel date number; SheetJS may output as number or string
-        let dateVal = col(row, "Date");
-        if(typeof dateVal === "number"){
-          const d = XLSX.SSF.parse_date_code(dateVal);
-          if(d){
-            dateVal = `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`;
-          }
-        }
-        const payload = {
-          date: norm(dateVal),
-          name: norm(col(row, "Holiday Name")) || norm(col(row, "Holiday")) || norm(col(row, "Name")),
-          type: norm(col(row, "Type")).toUpperCase().replaceAll(" ", "_"),
-          scope: norm(col(row, "Scope")).toUpperCase(),
-          reg: norm(col(row, "Region")),
-          mun: norm(col(row, "Municipality")),
-          notes: norm(col(row, "Notes"))
-        };
-
-        // Normalize common labels
-        const typeMap = {
-          "REGULAR HOLIDAY":"REGULAR",
-          "SPECIAL (NON-WORKING)":"SPECIAL_NON_WORKING",
-          "SPECIAL NON WORKING":"SPECIAL_NON_WORKING",
-          "SPECIAL_NON_WORKING":"SPECIAL_NON_WORKING",
-          "SPECIAL (WORKING)":"SPECIAL_WORKING",
-          "SPECIAL WORKING":"SPECIAL_WORKING",
-          "SPECIAL_WORKING":"SPECIAL_WORKING",
-          "LOCAL HOLIDAY":"LOCAL",
-          "LOCAL":"LOCAL"
-        };
-        payload.type = typeMap[payload.type] || payload.type || "REGULAR";
-
-        const scopeMap = {
-          "NATIONAL":"NATIONAL",
-          "REGIONAL":"REGIONAL",
-          "MUNICIPALITY":"MUNICIPALITY",
-          "LOCAL":"MUNICIPALITY"
-        };
-        payload.scope = scopeMap[payload.scope] || payload.scope || "NATIONAL";
-
-        return { idx: idx+1, payload };
-      });
-
-      // Validate and mark conflicts
-      const skip = $("skipConflicts").checked;
-      let ok = 0, bad = 0, conflicts = 0;
-
-      importRows = mapped.map(({idx, payload})=>{
-        const err = validateScopeFields(payload);
-        if(err){
-          bad++;
-          return {idx, payload, status:"INVALID", note: err};
-        }
-        if(hasConflict(payload)){
-          conflicts++;
-          if(skip){
-            return {idx, payload, status:"CONFLICT", note:"Will be skipped (already exists)."};
-          }
-          return {idx, payload, status:"CONFLICT", note:"Conflict detected."};
-        }
-        ok++;
-        return {idx, payload, status:"OK", note:"Ready to import."};
-      });
-
-      $("impCount").textContent = `(${importRows.length} rows)`;
-      $("impSummary").textContent = `Ready: ${ok} • Conflicts: ${conflicts} • Invalid: ${bad}`;
-
-      $("impTb").innerHTML = importRows.slice(0, 200).map(r=>`
-        <tr>
-          <td class="px-4 py-2 text-[12px] font-bold">${esc(r.payload.date)}</td>
-          <td class="px-4 py-2 text-[12px] font-black">${esc(r.payload.name)}</td>
-          <td class="px-4 py-2 text-[12px]">${esc(r.payload.type)}</td>
-          <td class="px-4 py-2 text-[12px]">${esc(r.payload.scope)}</td>
-          <td class="px-4 py-2 text-[12px]">${esc(r.payload.reg || "—")}</td>
-          <td class="px-4 py-2 text-[12px]">${esc(r.payload.mun || "—")}</td>
-          <td class="px-4 py-2 text-[12px]">${esc(r.payload.notes || "")}</td>
-          <td class="px-4 py-2 text-[11px] font-black ${
-            r.status==="OK" ? "text-emerald-700" :
-            r.status==="CONFLICT" ? "text-amber-700" : "text-red-700"
-          }">${esc(r.status)} • ${esc(r.note)}</td>
-        </tr>
-      `).join("");
-
-      if(importRows.length > 200){
-        $("impTb").innerHTML += `
-          <tr><td colspan="8" class="px-4 py-3 text-[12px] text-slate-600">
-            Showing first 200 rows only.
-          </td></tr>`;
-      }
-
-      toast("Parsed", `Loaded ${importRows.length} rows from file.`);
-    };
-
-    const applyImport = () => {
-      if(!importRows.length) return toast("Nothing to import", "Parse a file first.");
-
-      const skip = $("skipConflicts").checked;
-      let added = 0, skipped = 0, invalid = 0;
-
-      importRows.forEach(r=>{
-        if(r.status === "INVALID"){ invalid++; return; }
-        if(r.status === "CONFLICT" && skip){ skipped++; return; }
-
-        // If not skipping conflicts, still block inserting conflicting rows (safety)
-        if(hasConflict(r.payload)){ skipped++; return; }
-
-        upsert({
-          ...r.payload,
-          // auto-clear irrelevant fields for National/Regional
-          reg: r.payload.scope === "NATIONAL" ? "" : r.payload.reg,
-          mun: r.payload.scope !== "MUNICIPALITY" ? "" : r.payload.mun
-        }, null);
-        added++;
-      });
-
-      closeImport();
-      rerenderAll();
-      toast("Import complete", `Added ${added}, skipped ${skipped}, invalid ${invalid}.`);
-    };
-
-    // ---------- Re-render everything ----------
-    const rerenderAll = () => {
-      renderTable();
-      renderCalendar();
-      renderCharts();
-    };
-
-    // ---------- Events ----------
-    $("btnOpenCreate").onclick = ()=> openM("create");
-    $("mx").onclick = $("mc").onclick = closeM;
-    $("mb").onclick = (e)=>{ if(e.target === $("mb")) closeM(); };
-
-    // save
-    $("f").onsubmit = (e) => {
-      e.preventDefault();
-
-      const payload = {
-        date: $("d").value,
-        name: norm($("nm").value),
-        type: $("t").value,
-        scope: $("scope").value,
-        reg: norm($("r").value),
-        mun: norm($("m").value),
-        notes: norm($("nt").value)
+      $("btnCloneRegionToMunicipalities").onclick = () => {
+        const region = prompt("Enter Region to clone from:"); if(!region) return;
+        const muniCsv = prompt("Enter municipalities (comma-separated):"); if(!muniCsv) return;
+        const year = $("fy").value; const munis = muniCsv.split(",").map(s=>norm(s)).filter(Boolean); if(!munis.length) return;
+        let added = 0, skipped = 0;
+        holidays.filter(h => h.scope === "REGIONAL" && h.reg === region && (h.date||"").startsWith(year + "-")).forEach(h=>{
+          munis.forEach(muni=>{
+            const payload = { date: h.date, name: h.name, type: h.type, scope: "MUNICIPALITY", reg: region, mun: muni, notes: `Cloned from Region` };
+            if(hasConflict(payload)) skipped++; else { upsert(payload, null); added++; }
+          });
+        });
+        rerenderAll(); toast("Clone Done", `Added ${added}, skipped ${skipped}.`);
       };
 
-      // validate scope fields
-      const err = validateScopeFields(payload);
-      if(err) return toast("Validation", err);
+      $("btnExport").onclick = () => {
+        const rows = filt(holidays);
+        const csv = [["Date","Holiday Name","Type","Scope","Region","Municipality","Notes"], ...rows.map(x => [x.date,x.name,x.type,x.scope,x.reg||"",x.mun||"",x.notes||""])].map(r => r.map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
+        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"})); a.download = `holidays_${$("fy").value}.csv`;
+        document.body.appendChild(a); a.click(); a.remove(); toast("Exported", "CSV downloaded.");
+      };
 
-      // auto-clear irrelevant fields
-      if(payload.scope === "NATIONAL"){ payload.reg=""; payload.mun=""; }
-      if(payload.scope === "REGIONAL"){ payload.mun=""; }
+      // Import
+      let importRows = [];
+      $("btnImport").onclick = () => { $("imb").classList.replace("hidden", "flex"); $("importFile").value=""; $("impTb").innerHTML=""; $("impCount").textContent="(0 rows)"; importRows=[]; };
+      $("imx").onclick = $("btnImportCancel").onclick = () => $("imb").classList.replace("flex", "hidden");
+      $("btnParse").onclick = async () => {
+        const file = $("importFile").files?.[0]; if(!file) return toast("Error", "Choose file.");
+        const json = XLSX.utils.sheet_to_json(XLSX.read(await file.arrayBuffer(), {type:"array"}).Sheets[XLSX.read(await file.arrayBuffer(), {type:"array"}).SheetNames[0]], {defval:""});
+        const col = (row, name) => row[Object.keys(row).find(k => low(k) === low(name))] || "";
+        
+        let ok = 0, bad = 0, conflicts = 0; const skip = $("skipConflicts").checked;
+        importRows = json.map((row, idx) => {
+          let dateVal = col(row, "Date");
+          if(typeof dateVal === "number"){ const d = XLSX.SSF.parse_date_code(dateVal); if(d) dateVal = `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`; }
+          const payload = { date: norm(dateVal), name: norm(col(row, "Holiday Name")) || norm(col(row, "Name")), type: norm(col(row, "Type")).toUpperCase().replaceAll(" ", "_"), scope: norm(col(row, "Scope")).toUpperCase(), reg: norm(col(row, "Region")), mun: norm(col(row, "Municipality")), notes: norm(col(row, "Notes")) };
+          payload.type = {"REGULAR HOLIDAY":"REGULAR", "SPECIAL NON WORKING":"SPECIAL_NON_WORKING", "LOCAL HOLIDAY":"LOCAL"}[payload.type] || payload.type || "REGULAR";
+          payload.scope = {"NATIONAL":"NATIONAL", "REGIONAL":"REGIONAL", "LOCAL":"MUNICIPALITY"}[payload.scope] || payload.scope || "NATIONAL";
+          
+          const err = validateScopeFields(payload);
+          if(err){ bad++; return {idx, payload, status:"INVALID", note: err}; }
+          if(hasConflict(payload)){ conflicts++; return {idx, payload, status:"CONFLICT", note: skip ? "Will skip" : "Conflict"}; }
+          ok++; return {idx, payload, status:"OK", note:"Ready"};
+        });
 
-      // conflict detection
-      const id = norm($("eid").value) || null;
-      if(hasConflict(payload, id)) return toast("Conflict", "This holiday already exists for the same scope/date/region/municipality.");
+        $("impCount").textContent = `(${importRows.length} rows)`; $("impSummary").innerHTML = `Ready: <b class="text-emerald-700">${ok}</b> • Conflicts: <b class="text-amber-700">${conflicts}</b> • Invalid: <b class="text-rose-700">${bad}</b>`;
+        $("impTb").innerHTML = importRows.slice(0, 200).map(r=>`<tr><td class="px-4 py-2">${esc(r.payload.date)}</td><td class="px-4 py-2 font-black">${esc(r.payload.name)}</td><td class="px-4 py-2">${esc(r.payload.type)}</td><td class="px-4 py-2">${esc(r.payload.scope)}</td><td class="px-4 py-2">${esc(r.payload.reg)}</td><td class="px-4 py-2 text-[9px] ${r.status==="OK"?"text-emerald-700":r.status==="CONFLICT"?"text-amber-700":"text-rose-700"}">${esc(r.status)}</td></tr>`).join("");
+      };
 
-      upsert(payload, id);
-      closeM();
+      $("btnImportApply").onclick = () => {
+        if(!importRows.length) return toast("Empty", "Parse first.");
+        const skip = $("skipConflicts").checked; let added = 0;
+        importRows.forEach(r=>{
+          if(r.status === "INVALID" || (r.status === "CONFLICT" && skip) || hasConflict(r.payload)) return;
+          upsert({...r.payload, reg: r.payload.scope === "NATIONAL" ? "" : r.payload.reg, mun: r.payload.scope !== "MUNICIPALITY" ? "" : r.payload.mun}, null); added++;
+        });
+        $("imb").classList.replace("flex", "hidden"); rerenderAll(); toast("Imported", `Added ${added} holidays.`);
+      };
+
+      // WD Calc
+      $("btnCalcWD").onclick = ()=>{
+        const out = calcWorkingDays({year: parseInt($("fy").value, 10), month: parseInt($("wdMonth").value, 10), region: norm($("wdRegion").value), muni: norm($("wdMuni").value)});
+        $("wdOut").textContent = String(out.working);
+        $("wdExplain").textContent = `${out.weekdays} weekdays minus ${out.removed} holidays.`;
+      };
+
+      // Pay Calc
+      $("btnCalcPay").onclick = ()=>{
+        const wd = Number($("wdOut").textContent), daily = Number($("payDaily").value), hrs = Number($("payHrs").value);
+        if(!Number.isFinite(wd)) return toast("Missing", "Compute working days first.");
+        if(!Number.isFinite(daily) || daily <= 0) return toast("Missing", "Enter daily rate.");
+        $("payOut").textContent = (wd * daily).toLocaleString(undefined, {minimumFractionDigits:2});
+        $("payExplain").textContent = hrs > 0 ? `${wd} days × ₱${daily} = ${(wd*daily).toLocaleString()}. (₱${(daily/hrs).toFixed(2)}/hr)` : '';
+      };
+
+      calMonth = (new Date()).getMonth();
       rerenderAll();
-      toast("Saved", "Holiday saved.");
-    };
-
-    // table actions
-    document.addEventListener("click", (e)=>{
-      const ed = e.target.closest(".ed");
-      const rm = e.target.closest(".rm");
-      if(ed) openM("edit", ed.dataset.id);
-      if(rm){
-        const id = rm.dataset.id;
-        const x = holidays.find(z=>z.id===id);
-        if(!x) return;
-        if(confirm(`Remove "${x.name}" on ${x.date}?`)){
-          del(id);
-          rerenderAll();
-          toast("Removed", "Holiday deleted.");
-        }
-      }
     });
-
-    // select all
-    $("sa").onchange = (e)=> q(".rc").forEach(x=>x.checked = e.target.checked);
-
-    // bulk delete
-    $("btnBulkDelete").onclick = ()=>{
-      const ids = selectedIds();
-      if(!ids.length) return toast("No selection", "Select at least one holiday.");
-      if(!confirm(`Remove ${ids.length} selected holiday(s)?`)) return;
-      ids.forEach(del);
-      rerenderAll();
-      toast("Removed", "Selected holidays deleted.");
-    };
-
-    // filters rerender
-    ["fy","fscope","fr","ft"].forEach(id => $(id).addEventListener("change", rerenderAll));
-    ["fm","fs"].forEach(id => $(id).addEventListener("input", rerenderAll));
-
-    $("btnClear").onclick = ()=>{
-      $("fscope").value="ALL";
-      $("fr").value="ALL";
-      $("fm").value="";
-      $("ft").value="ALL";
-      $("fs").value="";
-      rerenderAll();
-      toast("Cleared", "Filters reset.");
-    };
-
-    // view toggle
-    $("btnToggleView").onclick = ()=>{
-      $("tableView").classList.toggle("hidden");
-      $("calendarView").classList.toggle("hidden");
-      // button text
-      const showingCal = !$("calendarView").classList.contains("hidden");
-      $("btnToggleView").innerHTML = showingCal
-        ? `<span class="material-icons-round text-[18px]">table_rows</span> Table View`
-        : `<span class="material-icons-round text-[18px]">calendar_month</span> Calendar View`;
-      renderCalendar();
-    };
-
-    // calendar nav
-    $("calPrev").onclick = ()=>{
-      calMonth = (calMonth + 11) % 12;
-      renderCalendar();
-    };
-    $("calNext").onclick = ()=>{
-      calMonth = (calMonth + 1) % 12;
-      renderCalendar();
-    };
-
-    // export
-    $("btnExport").onclick = exportCSV;
-
-    // bulk tools
-    $("btnCopyNationalToRegion").onclick = copyNationalToRegion;
-    $("btnCloneRegionToMunicipalities").onclick = cloneRegionToMunicipalities;
-
-    // import
-    $("btnImport").onclick = openImport;
-    $("imx").onclick = $("btnImportCancel").onclick = closeImport;
-    $("imb").onclick = (e)=>{ if(e.target === $("imb")) closeImport(); };
-    $("btnParse").onclick = parseFile;
-    $("btnImportApply").onclick = applyImport;
-
-    // working days calc
-    $("btnCalcWD").onclick = ()=>{
-      const year = parseInt(fy.value, 10);
-      const month = parseInt($("wdMonth").value, 10);
-      const region = norm($("wdRegion").value);
-      const muni = norm($("wdMuni").value);
-
-      const out = calcWorkingDays({year,month,region,muni});
-      $("wdOut").textContent = String(out.working);
-
-      const parts = [];
-      parts.push(`${out.weekdays} weekdays`);
-      parts.push(`minus ${out.removed} holiday weekdays`);
-      if(region) parts.push(`Region: ${region}`);
-      if(muni) parts.push(`Municipality: ${muni}`);
-      $("wdExplain").textContent = `${parts.join(" • ")}.`;
-
-      // also nudge payroll if possible
-      toast("Calculated", `Working days: ${out.working}`);
-    };
-
-    // payroll calc
-    $("btnCalcPay").onclick = ()=>{
-      const wd = Number($("wdOut").textContent);
-      if(!Number.isFinite(wd)) return toast("Missing", "Compute working days first.");
-
-      const daily = Number($("payDaily").value);
-      const hrs = Number($("payHrs").value);
-
-      if(!Number.isFinite(daily) || daily <= 0) return toast("Missing", "Enter a valid daily rate.");
-      const est = wd * daily;
-
-      $("payOut").textContent = money(est);
-      if(Number.isFinite(hrs) && hrs > 0){
-        const hourly = daily / hrs;
-        $("payExplain").textContent = `Estimate = ${wd} working days × ${money(daily)} daily rate = ${money(est)}. Hourly approx: ${money(hourly)}/hr.`;
-      }else{
-        $("payExplain").textContent = `Estimate = ${wd} working days × ${money(daily)} daily rate = ${money(est)}.`;
-      }
-
-      toast("Preview ready", "Payroll estimate computed.");
-    };
-
-    // ---------- Init ----------
-    // calendar starts at current month
-    calMonth = (new Date()).getMonth();
-    rerenderAll();
-    renderCalendar();
   </script>
 </body>
 </html>
