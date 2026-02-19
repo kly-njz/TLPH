@@ -43,7 +43,7 @@ async function renderPayroll() {
             <span class="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-[2px] font-black text-[8px] border border-blue-200 uppercase">ATM-LBP</span>
           </td>
           <td class="p-2 text-right">
-            <button class="text-gov-primary font-black uppercase text-[9px] hover:underline">Details</button>
+            <button class="text-gov-primary font-black uppercase text-[9px] hover:underline" onclick="showPayslip('${emp.id}')">View Payslip</button>
           </td>
         </tr>
         `;
