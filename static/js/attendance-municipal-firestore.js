@@ -64,12 +64,28 @@ function renderAttendance(employees) {
                 }
             }
         }
-        // Attendance status
-        const status = emp.attendance_status || 'N/A';
+        // Attendance status and color
+        let status = 'N/A';
+        let statusClass = 'bg-slate-100 text-slate-500 border-slate-200';
+        if (emp.attendance_status) {
+            const stat = emp.attendance_status.toLowerCase();
+            if (stat.includes('on time')) {
+                status = 'On Time';
+                statusClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+            } else if (stat.includes('late')) {
+                status = 'Late';
+                statusClass = 'bg-rose-100 text-rose-800 border-rose-200';
+            } else if (stat.includes('official business')) {
+                status = 'Official Business';
+                statusClass = 'bg-blue-100 text-blue-800 border-blue-200';
+            } else {
+                status = emp.attendance_status;
+            }
+        }
         // Verification icons (mock logic, adjust as needed)
         const verification = `<span class=\"material-icons-round text-emerald-500 text-sm\" title=\"Biometric Verified\">fingerprint</span>`;
         tbody.innerHTML += `
-        <tr class=\"hover:bg-slate-50 transition-colors\">\n          <td class=\"p-2\">\n            <p class=\"font-bold text-gov-primary leading-none\">${fullName || 'N/A'}</p>\n            <p class=\"text-[9px] text-slate-400 font-mono mt-1\">ID: ${emp.emp_id || emp.id}</p>\n          </td>\n          <td class=\"p-2\">\n            <p class=\"font-bold text-slate-700\">${inTime}</p>\n          </td>\n          <td class=\"p-2\">\n            <p class=\"font-bold text-slate-700\">${outTime}</p>\n          </td>\n          <td class=\"p-2 text-slate-600 font-mono\">${duration}</td>\n          <td class=\"p-2 text-center\">\n            <span class=\"bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-emerald-200\">${status}</span>\n          </td>\n          <td class=\"p-2 text-right\">\n            ${verification}\n          </td>\n        </tr>\n        `;
+        <tr class=\"hover:bg-slate-50 transition-colors\">\n          <td class=\"p-2\">\n            <p class=\"font-bold text-gov-primary leading-none\">${fullName || 'N/A'}</p>\n            <p class=\"text-[9px] text-slate-400 font-mono mt-1\">ID: ${emp.emp_id || emp.id}</p>\n          </td>\n          <td class=\"p-2\">\n            <p class=\"font-bold text-slate-700\">${inTime}</p>\n          </td>\n          <td class=\"p-2\">\n            <p class=\"font-bold text-slate-700\">${outTime}</p>\n          </td>\n          <td class=\"p-2 text-slate-600 font-mono\">${duration}</td>\n          <td class=\"p-2 text-center\">\n            <span class=\"${statusClass} px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border\">${status}</span>\n          </td>\n          <td class=\"p-2 text-right\">\n            ${verification}\n          </td>\n        </tr>\n        `;
     });
 }
 
