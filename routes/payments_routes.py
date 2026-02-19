@@ -110,7 +110,7 @@ def create_invoice():
         if response.status_code in [200, 201]:
             invoice = response.json()
             
-            # Save transaction record
+            # Save transaction record with userId
             transaction_storage.add_transaction(
                 user_email=email,
                 external_id=external_id,
@@ -118,7 +118,8 @@ def create_invoice():
                 amount=amount,
                 item_name=data.get('item_name', 'License/Permit'),
                 description=data.get('description', 'DENR License/Permit Payment'),
-                status='Pending'
+                status='Pending',
+                user_id=data.get('user_id')
             )
             
             return jsonify({
@@ -259,16 +260,17 @@ def payment_form(service_type):
 def get_transactions():
     """Get transactions for the logged-in user"""
     try:
-        # Get user email from query parameter (sent from frontend)
+        # Get user email and userId from query parameters
         user_email = request.args.get('email')
+        user_id = request.args.get('userId')
         
-        if not user_email:
+        if not user_id and not user_email:
             return jsonify({
                 'status': 'error',
-                'message': 'User email is required'
+                'message': 'User ID or email is required'
             }), 400
         
-        transactions = transaction_storage.get_user_transactions(user_email)
+        transactions = transaction_storage.get_user_transactions(user_email=user_email, user_id=user_id)
         
         # Convert status to display format
         for transaction in transactions:
