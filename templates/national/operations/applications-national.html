@@ -131,6 +131,7 @@
                                 <th class="border-r border-slate-200">Reference ID</th>
                                 <th class="border-r border-slate-200">Applicant Name</th>
                                 <th class="border-r border-slate-200">Category</th>
+                                <th class="border-r border-slate-200">Region</th>
                                 <th class="border-r border-slate-200">Location</th>
                                 <th class="text-center border-r border-slate-200">Status</th>
                                 <th class="text-center">Manage</th>
@@ -139,7 +140,7 @@
                         <tbody id="tbody" class="text-[10px] divide-y divide-slate-100">
                             <!-- Loading State -->
                             <tr x-show="loading">
-                                <td colspan="7" class="text-center py-8">
+                                <td colspan="8" class="text-center py-8">
                                     <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900"></div>
                                     <p class="mt-2 text-xs font-bold text-slate-600 uppercase">Loading applications...</p>
                                 </td>
@@ -147,7 +148,7 @@
 
                             <!-- Empty State -->
                             <tr x-show="!loading && filteredApps.length === 0">
-                                <td colspan="7" class="text-center py-8">
+                                <td colspan="8" class="text-center py-8">
                                     <span class="material-icons-round text-slate-300 text-5xl">inbox</span>
                                     <p class="mt-2 text-xs font-bold text-slate-500 uppercase">No applications found</p>
                                 </td>
@@ -160,6 +161,7 @@
                                     <td class="font-black text-blue-700 border-r border-slate-100" x-text="app.refId"></td>
                                     <td class="font-bold text-slate-900 border-r border-slate-100 uppercase" x-text="app.applicantName"></td>
                                     <td class="font-bold text-slate-700 border-r border-slate-100 uppercase" x-text="app.category"></td>
+                                    <td class="text-slate-600 border-r border-slate-100 uppercase text-[9px]" x-text="app.region"></td>
                                     <td class="text-slate-600 border-r border-slate-100 uppercase" x-text="app.location"></td>
                                     <td class="text-center border-r border-slate-100">
                                         <span 
@@ -250,6 +252,7 @@
               app.category.toLowerCase().includes(this.searchQuery.toLowerCase());
             
             const regionMatch = this.regionFilter === 'ALL' || 
+              app.region.toUpperCase().includes(this.regionFilter.toUpperCase()) ||
               app.location.toUpperCase().includes(this.regionFilter.toUpperCase());
             
             const categoryMatch = this.categoryFilter === 'ALL' || 
@@ -340,12 +343,25 @@
                   ? `${userInfo.municipality}, ${userInfo.province}`
                   : 'Unknown Location';
 
+              const province = (data.province || userInfo?.province || '').toLowerCase();
+              let region = 'N/A';
+              
+              // Map province to region
+              if (['oriental mindoro', 'occidental mindoro', 'marinduque', 'romblon', 'palawan'].includes(province)) {
+                region = 'MIMAROPA';
+              } else if (['batangas', 'cavite', 'laguna', 'quezon', 'rizal'].includes(province)) {
+                region = 'REGION IV-A';
+              } else if (['albay', 'camarines norte', 'camarines sur', 'catanduanes', 'masbate', 'sorsogon'].includes(province)) {
+                region = 'REGION V';
+              }
+
               this.apps.push({
                 id: doc.id,
                 dateFiled: data.submittedAt ? new Date(data.submittedAt.toDate()).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A',
                 refId: 'APP-' + doc.id.substring(0, 8).toUpperCase(),
                 applicantName: (userInfo?.name || data.userName || 'Unknown').toUpperCase(),
                 category: categoryLabels[data.category] || data.category || 'N/A',
+                region: region,
                 location: location,
                 nationalStatus: nationalStatus,
                 province: data.province || userInfo?.province || ''
