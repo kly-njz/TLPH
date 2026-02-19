@@ -7,6 +7,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script type="module" src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
 
   <script>
     tailwind.config = {
@@ -150,32 +151,107 @@
     </div>
   </main>
 
-  <script>
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
     function applicantProfile() {
       return {
+        loading: true,
         applicant: {
-          name: "Paolo Dave Alqzd",
-          ref: "DENR-2026-CAL-042",
-          photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=1974&auto=format&fit=crop",
-          status: "Pending Regional Review",
-          email: "paolodave.alqzd@gmail.com",
-          phone: "+63 912 345 6789",
-          address: "124 Mabuhay St., Brgy. San Jose, Carmona, Cavite, 4116",
-          area: "15.50"
+          name: "Loading...",
+          ref: "---",
+          photo: "https://via.placeholder.com/150",
+          status: "Loading",
+          email: "---",
+          phone: "---",
+          address: "---",
+          area: "0"
         },
         stats: {
-          species: "24",
-          harvest: "18.2"
+          species: "0",
+          harvest: "0"
         },
-        documents: [
-          { name: "Approved Land Survey Plan", icon: "architecture" },
-          { name: "Duly Notarized Farm Plan", icon: "assignment" },
-          { name: "Recent Land Site Photo", icon: "terrain" },
-          { name: "Crop Inventory List", icon: "grass" },
-          { name: "Barangay Business Clearance", icon: "storefront" }
-        ]
+        documents: [],
+
+        async init() {
+          try {
+            // Get application ID from URL
+            const pathParts = window.location.pathname.split('/');
+            const applicationId = pathParts[pathParts.length - 1];
+            
+            console.log('Loading application:', applicationId);
+
+            if (!applicationId || applicationId === 'application-view') {
+              alert('No application ID provided');
+              window.history.back();
+              return;
+            }
+
+            // Fetch application data
+            const appDoc = await getDoc(doc(db, 'applications', applicationId));
+            
+            if (!appDoc.exists()) {
+              alert('Application not found');
+              window.history.back();
+              return;
+            }
+
+            const appData = appDoc.data();
+            console.log('Application data:', appData);
+
+            // Fetch user data
+            let userData = {};
+            if (appData.userId) {
+              const userDoc = await getDoc(doc(db, 'users', appData.userId));
+              if (userDoc.exists()) {
+                userData = userDoc.data();
+              }
+            }
+
+            // Populate applicant data
+            this.applicant = {
+              name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || appData.userName || 'N/A',
+              ref: applicationId.substring(0, 12).toUpperCase(),
+              photo: userData.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + (userData.firstName || 'User'),
+              status: (appData.status || 'pending').toUpperCase().replace('-', ' '),
+              email: userData.email || appData.userEmail || 'N/A',
+              phone: userData.phone || 'N/A',
+              address: `${appData.municipality || 'N/A'}, ${appData.province || 'Oriental Mindoro'}`,
+              area: "N/A"
+            };
+
+            // Populate stats
+            this.stats = {
+              species: "1",
+              harvest: appData.harvestQty || appData.maxHarvestQty || "0"
+            };
+
+            // Populate documents
+            this.documents = [
+              { name: "Land Title / Tax Declaration", icon: "description" },
+              { name: "Tax Receipt", icon: "receipt_long" },
+              { name: "Blueprint / Site Plan", icon: "architecture" },
+              { name: "Land / Site Photo", icon: "terrain" },
+              { name: "Crop / Product Photo", icon: "grass" },
+              { name: "Business Plan", icon: "assignment" },
+              { name: "Barangay Clearance", icon: "storefront" }
+            ];
+
+            this.loading = false;
+            
+          } catch (error) {
+            console.error('Error loading application:', error);
+            alert('Error loading application: ' + error.message);
+            this.loading = false;
+          }
+        }
       }
     }
+
+    // Make function globally available
+    window.applicantProfile = applicantProfile;
   </script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
