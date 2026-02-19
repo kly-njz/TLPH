@@ -156,9 +156,9 @@
           <p class="mt-1 text-xs font-bold italic text-slate-500 uppercase">Final action will be recorded in the regional audit trail.</p>
 
           <div class="mt-5 grid gap-2 md:grid-cols-3">
-            <button class="border-2 border-rose-600 py-3 text-[11px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-600 hover:text-white transition-all">Reject Request</button>
-            <button class="border-2 border-slate-400 py-3 text-[11px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-400 hover:text-white transition-all">To Review</button>
-            <button class="bg-emerald-700 py-3 text-[11px] font-black uppercase tracking-widest text-white hover:bg-emerald-800 transition-all shadow-md">Approve Permit</button>
+            <button @click="updateStatus('rejected')" class="border-2 border-rose-600 py-3 text-[11px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-600 hover:text-white transition-all">Reject Request</button>
+            <button @click="forwardToNational()" class="border-2 border-blue-600 py-3 text-[11px] font-black uppercase tracking-widest text-blue-600 hover:bg-blue-600 hover:text-white transition-all">Forward to National</button>
+            <button @click="updateStatus('approved')" class="bg-emerald-700 py-3 text-[11px] font-black uppercase tracking-widest text-white hover:bg-emerald-800 transition-all shadow-md">Approve Permit</button>
           </div>
         </section>
       </section>
@@ -286,6 +286,59 @@
             console.error('Error loading application:', error);
             alert('Error loading application: ' + error.message);
             this.loading = false;
+          }
+        },
+
+        async updateStatus(newStatus) {
+          if (!confirm(`Are you sure you want to ${newStatus} this application?`)) {
+            return;
+          }
+
+          try {
+            const pathParts = window.location.pathname.split('/');
+            const applicationId = pathParts[pathParts.length - 1];
+
+            const { updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+
+            await updateDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId), {
+              status: newStatus,
+              regionalStatus: newStatus,
+              regionalUpdatedAt: new Date().toISOString(),
+              regionalUpdatedBy: window.firebaseAuth.currentUser?.email || 'regional-admin'
+            });
+
+            alert(`Application ${newStatus} successfully!`);
+            window.location.href = '/regional/application-list';
+          } catch (error) {
+            console.error('Error updating status:', error);
+            alert('Error updating application status: ' + error.message);
+          }
+        },
+
+        async forwardToNational() {
+          if (!confirm('Forward this application to National Office for final review?')) {
+            return;
+          }
+
+          try {
+            const pathParts = window.location.pathname.split('/');
+            const applicationId = pathParts[pathParts.length - 1];
+
+            const { updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+
+            await updateDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId), {
+              status: 'forwarded-to-national',
+              regionalStatus: 'forwarded',
+              nationalStatus: 'pending',
+              forwardedToNationalAt: new Date().toISOString(),
+              forwardedBy: window.firebaseAuth.currentUser?.email || 'regional-admin'
+            });
+
+            alert('Application forwarded to National Office successfully!');
+            window.location.href = '/regional/application-list';
+          } catch (error) {
+            console.error('Error forwarding application:', error);
+            alert('Error forwarding application: ' + error.message);
           }
         }
       }));
