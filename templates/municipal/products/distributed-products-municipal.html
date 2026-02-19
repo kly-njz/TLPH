@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Distributed Products | Municipal Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+
+  <style>
+    /* Government Standard Typography & Layout */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+
+    /* Compact Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #1e40af; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+
+    /* Dense Table Formatting */
+    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 6px 8px !important; }
+    td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- Municipal sidenav -->
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'municipal/sidenav.html' %}
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar">
+
+      <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-slate-700">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-[2px] bg-slate-800 flex items-center justify-center text-white">
+            <span class="material-icons-round text-[18px]">transfer_within_a_station</span>
+          </div>
+          <div class="leading-tight">
+            <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Distributed Products Registry</h1>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+              Municipal allocation & dispatch log (scoped access)
+            </p>
+          </div>
+        </div>
+
+        <button class="gov-btn bg-slate-800 hover:bg-slate-900 text-white shadow-sm flex items-center gap-1.5">
+          <span class="material-icons-round text-[14px]">add</span> Add Record
+        </button>
+      </header>
+
+      <!-- Municipal Scope (locked to account) -->
+      <section class="gov-card p-2 px-3 shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-round text-slate-500 text-[16px]">place</span>
+            <div class="leading-tight">
+              <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Scope</div>
+              <div class="text-[10px] font-black uppercase text-slate-900">
+                Region:
+                <span class="text-slate-800">{{ user_region or 'NCR' }}</span>
+                • Municipality:
+                <span class="text-slate-800">{{ user_municipality or 'Quezon City' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- municipal only: keep disabled -->
+          <div class="flex flex-wrap gap-1.5 items-center">
+            <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Filter Scope</div>
+            <select id="regionScope" class="gov-input cursor-pointer" disabled>
+              <option selected>{{ user_region or 'NCR' }}</option>
+            </select>
+            <select id="municipalityScope" class="gov-input cursor-pointer" disabled>
+              <option selected>{{ user_municipality or 'Quezon City' }}</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
+        <div class="gov-card p-2 px-3 border-l-4 border-l-slate-600 flex flex-col justify-between">
+          <div class="flex justify-between items-start">
+            <div>
+              <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Distributions</div>
+              <div class="text-xl font-black text-slate-900 leading-none mt-1">138</div>
+            </div>
+            <span class="material-icons-round text-slate-300 text-[20px]">inventory_2</span>
+          </div>
+          <div class="mt-1 pt-1 border-t border-slate-100 text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+            Within this municipality
+          </div>
+        </div>
+
+        <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600 bg-blue-50/30 flex flex-col justify-between">
+          <div class="flex justify-between items-start">
+            <div>
+              <div class="text-[9px] font-black uppercase text-blue-800 tracking-widest">Dispatched This Month</div>
+              <div class="text-xl font-black text-blue-700 leading-none mt-1">17</div>
+            </div>
+            <span class="material-icons-round text-blue-200 text-[20px]">calendar_month</span>
+          </div>
+          <div class="mt-1 pt-1 border-t border-blue-100/50 text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+            New recorded transactions
+          </div>
+        </div>
+
+        <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 bg-emerald-50/30 flex flex-col justify-between">
+          <div class="flex justify-between items-start">
+            <div>
+              <div class="text-[9px] font-black uppercase text-emerald-800 tracking-widest">Top Recipient Entity</div>
+              <div class="text-lg font-black text-emerald-700 leading-none mt-1 uppercase">
+                {{ user_municipality or 'Quezon City' }}
+              </div>
+            </div>
+            <span class="material-icons-round text-emerald-200 text-[20px]">hub</span>
+          </div>
+          <div class="mt-1 pt-1 border-t border-emerald-100/50 text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+            Highest allocation volume
+          </div>
+        </div>
+      </section>
+
+      <section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white">
+
+        <div class="p-2 border-b border-slate-200 shrink-0 flex flex-wrap gap-1.5 items-center bg-slate-50 justify-between">
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1 mr-2">
+            <span class="material-icons-round text-[14px]">local_shipping</span> Dispatch Records
+          </h2>
+
+          <div class="flex items-center gap-2">
+            <div class="relative min-w-[220px]">
+              <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+              <input type="text" id="searchDist" class="gov-input pl-6 w-full" placeholder="Search product / recipient...">
+            </div>
+
+            <button onclick="resetFilters()" class="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[9px] uppercase rounded-[2px] transition border border-slate-300">
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-auto custom-scrollbar">
+          <table class="w-full text-left border-collapse" id="distTable">
+            <thead class="sticky top-0 z-10 shadow-sm">
+              <tr>
+                <th class="border-r border-slate-200">Asset / Product Name</th>
+                <th class="border-r border-slate-200">Official Recipient</th>
+                <th class="border-r border-slate-200 text-right">Volume / Qty</th>
+
+                <!-- Municipal-only column -->
+                <th class="border-r border-slate-200">Municipality</th>
+
+                <th class="text-center border-r border-slate-200">Date Dispatched</th>
+                <th class="text-center">Action</th>
+              </tr>
+            </thead>
+
+            <tbody class="text-[10px] divide-y divide-slate-100">
+
+              <!-- Static Example -->
+              <tr class="hover:bg-blue-50 transition dist-row">
+                <td class="border-r border-slate-100 font-bold text-slate-900 uppercase">Mahogany Seedlings</td>
+                <td class="border-r border-slate-100 font-bold text-slate-700 uppercase">
+                  {{ user_municipality or 'Quezon City' }} LGU
+                </td>
+                <td class="border-r border-slate-100 text-right font-mono font-black text-blue-700">100</td>
+                <td class="border-r border-slate-100 font-bold text-slate-700 uppercase">
+                  {{ user_municipality or 'Quezon City' }}
+                </td>
+                <td class="text-center border-r border-slate-100 font-mono text-slate-600">2026-02-17</td>
+                <td class="text-center">
+                  <button class="text-blue-700 font-bold uppercase hover:underline text-[9px]">View Detail</button>
+                </td>
+              </tr>
+
+              {% for record in distributed_products %}
+              <tr class="hover:bg-blue-50 transition dist-row">
+                <td class="border-r border-slate-100 font-bold text-slate-900 uppercase">{{ record.product_name }}</td>
+                <td class="border-r border-slate-100 font-bold text-slate-700 uppercase">{{ record.recipient }}</td>
+                <td class="border-r border-slate-100 text-right font-mono font-black
+                  {% if record.quantity > 500 %} text-rose-700 {% else %} text-blue-700 {% endif %}">
+                  {{ record.quantity }}
+                </td>
+
+                <!-- Prefer record.municipality if present; else lock to user's municipality -->
+                <td class="border-r border-slate-100 font-bold text-slate-700 uppercase">
+                  {{ record.municipality if record.municipality is defined else (user_municipality or 'Quezon City') }}
+                </td>
+
+                <td class="text-center border-r border-slate-100 font-mono text-slate-600">{{ record.date }}</td>
+                <td class="text-center">
+                  <button class="text-blue-700 font-bold uppercase hover:underline text-[9px]">View Detail</button>
+                </td>
+              </tr>
+              {% endfor %}
+
+            </tbody>
+          </table>
+        </div>
+
+        <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
+          <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">
+            Showing <span id="visibleCount">0</span> of <span id="totalCount">0</span> records • System Verified
+          </span>
+          <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
+            <span class="material-icons-round text-[12px]">file_download</span> Export CSV
+          </button>
+        </div>
+
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const searchDist = document.getElementById('searchDist');
+
+    function applyFilter() {
+      const filter = (searchDist.value || '').toLowerCase().trim();
+      const rows = document.querySelectorAll('.dist-row');
+
+      let visible = 0;
+      let total = 0;
+
+      rows.forEach(row => {
+        total++;
+        const text = row.innerText.toLowerCase();
+        const show = text.includes(filter);
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+
+      document.getElementById('visibleCount').innerText = visible;
+      document.getElementById('totalCount').innerText = total;
+    }
+
+    searchDist.addEventListener('input', applyFilter);
+
+    function resetFilters() {
+      searchDist.value = '';
+      applyFilter();
+    }
+
+    // Init
+    applyFilter();
+  </script>
+
+</body>
+</html>

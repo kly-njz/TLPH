@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Application Registry | Municipal Operations</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; }
+    .gov-input:focus { border-color: #1e40af; }
+
+    .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; }
+    .chart-container { position: absolute; inset: 0; }
+
+    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 8px !important; }
+    td { padding: 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+
+    .btn-action { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; color: #94a3b8; cursor: pointer; }
+    .btn-view:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
+    .btn-approve:hover { color: white; background: #10b981; border-color: #059669; }
+    .btn-reject:hover { color: white; background: #ef4444; border-color: #dc2626; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+<div class="flex-1 flex overflow-hidden">
+
+    <!-- Municipal Sidebar -->
+    <aside class="hidden lg:block">
+        {% include 'municipal/sidenav.html' %}
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar">
+
+        <!-- HEADER -->
+        <header class="gov-card p-2 px-3 flex justify-between items-center border-b-4 border-b-blue-900">
+          <div>
+              <h1 class="text-sm font-black uppercase">Municipal Application Registry</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                Applications Filed Within Municipality
+              </p>
+          </div>
+          <span class="px-2 py-1 bg-slate-200 text-slate-700 font-black text-[9px] uppercase rounded-[2px]">
+            FEB 14, 2026
+          </span>
+        </header>
+
+        <!-- STAT CARDS -->
+        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+          <div class="gov-card p-2 border-l-4 border-l-slate-600">
+            <span class="text-[9px] font-black uppercase text-slate-500">Total Applications</span>
+            <div class="text-lg font-black">{{ total_count|default("0") }}</div>
+          </div>
+          <div class="gov-card p-2 border-l-4 border-l-emerald-500 bg-emerald-50/30">
+            <span class="text-[9px] font-black uppercase text-slate-500">Approved</span>
+            <div class="text-lg font-black text-emerald-700">{{ approved_count|default("0") }}</div>
+          </div>
+          <div class="gov-card p-2 border-l-4 border-l-amber-500 bg-amber-50/30">
+            <span class="text-[9px] font-black uppercase text-slate-500">Pending</span>
+            <div class="text-lg font-black text-amber-700">{{ pending_count|default("0") }}</div>
+          </div>
+          <div class="gov-card p-2 border-l-4 border-l-rose-500 bg-rose-50/30">
+            <span class="text-[9px] font-black uppercase text-slate-500">Rejected</span>
+            <div class="text-lg font-black text-rose-700">{{ rejected_count|default("0") }}</div>
+          </div>
+        </section>
+
+        <div class="flex-1 flex flex-col xl:flex-row gap-2 min-h-0">
+
+            <!-- LEFT CHARTS -->
+            <aside class="w-full xl:w-[260px] flex flex-col gap-2">
+                <div class="gov-card p-2 flex flex-col min-h-[150px]">
+                    <h2 class="text-[9px] font-black uppercase text-slate-500 mb-1">Monthly Trend</h2>
+                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="trendChart"></canvas></div></div>
+                </div>
+                <div class="gov-card p-2 flex flex-col min-h-[150px]">
+                    <h2 class="text-[9px] font-black uppercase text-slate-500 mb-1">Status Breakdown</h2>
+                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="statusChart"></canvas></div></div>
+                </div>
+                <div class="gov-card p-2 flex flex-col min-h-[150px]">
+                    <h2 class="text-[9px] font-black uppercase text-slate-500 mb-1">Barangay Volume</h2>
+                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="barangayChart"></canvas></div></div>
+                </div>
+            </aside>
+
+            <!-- TABLE -->
+            <section class="gov-card flex-1 flex flex-col overflow-hidden">
+
+                <!-- FILTERS -->
+                <div class="bg-slate-50 border-b px-3 py-2 flex flex-wrap gap-1.5">
+                    <input type="text" id="search" placeholder="Search..." class="gov-input flex-1 min-w-[150px]">
+
+                    <select id="barangayFilter" class="gov-input min-w-[120px]">
+                        <option value="ALL">All Barangays</option>
+                        <option>Barangay 1</option>
+                        <option>Barangay 2</option>
+                        <option>Barangay 3</option>
+                    </select>
+
+                    <select id="statusFilter" class="gov-input min-w-[100px]">
+                        <option value="ALL">All Status</option>
+                        <option>Approved</option>
+                        <option>Pending</option>
+                        <option>Rejected</option>
+                    </select>
+
+                    <button onclick="clearFilters()" class="px-3 py-1 bg-blue-900 text-white text-[9px] font-bold uppercase rounded-[2px]">
+                        Reset
+                    </button>
+                </div>
+
+                <!-- TABLE BODY -->
+                <div class="flex-1 overflow-auto custom-scrollbar bg-white">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 bg-white">
+                            <tr>
+                                <th>Date Filed</th>
+                                <th>Reference</th>
+                                <th>Applicant</th>
+                                <th>Category</th>
+                                <th>Barangay</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-center">Manage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody" class="text-[10px]">
+
+                            {% for app in applications %}
+                            <tr class="hover:bg-blue-50">
+                                <td>{{ app.date_filed }}</td>
+                                <td class="font-bold text-blue-700">APP-{{ app.reference_id }}</td>
+                                <td class="font-bold uppercase">{{ app.applicant_name }}</td>
+                                <td>{{ app.category }}</td>
+                                <td class="uppercase">{{ app.barangay }}</td>
+                                <td class="text-center uppercase">{{ app.status }}</td>
+                                <td class="text-center">
+                                    <div class="flex justify-center gap-1">
+                                        <button class="btn-action btn-view"><span class="material-icons-round text-[14px]">visibility</span></button>
+                                        <button class="btn-action btn-approve"><span class="material-icons-round text-[14px]">check_circle</span></button>
+                                        <button class="btn-action btn-reject"><span class="material-icons-round text-[14px]">cancel</span></button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+
+                        </tbody>
+                    </table>
+                </div>
+
+            </section>
+        </div>
+    </main>
+</div>
+
+<script>
+Chart.defaults.font.size = 8;
+
+new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+        labels: ['Jan','Feb','Mar','Apr','May'],
+        datasets: [{
+            data: [5,8,6,12,9],
+            borderColor: '#1e3a8a',
+            backgroundColor: 'rgba(30,58,138,0.1)',
+            fill: true,
+            tension: .3
+        }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+});
+
+new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: {
+        labels:['Approved','Pending','Rejected'],
+        datasets:[{ data:[12,5,2], backgroundColor:['#10b981','#f59e0b','#ef4444'] }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'70%' }
+});
+
+new Chart(document.getElementById('barangayChart'), {
+    type: 'bar',
+    data: {
+        labels:['Brgy 1','Brgy 2','Brgy 3'],
+        datasets:[{ data:[6,8,5], backgroundColor:'#475569' }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+});
+</script>
+
+</body>
+</html>

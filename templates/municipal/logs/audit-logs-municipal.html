@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Audit Logs | Municipal Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    body { font-family: 'Verdana','Arial',sans-serif; background:#e2e8f0; font-size: 11px; }
+    .custom-scrollbar::-webkit-scrollbar { width:5px; height:5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background:#f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:2px; }
+    html, body { height: 100%; }
+    .gov-input{
+      padding: 4px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      border: 1px solid #cbd5e1;
+      border-radius: 2px;
+      background: #fff;
+      outline: none;
+    }
+    .gov-input:focus{ border-color:#1e3a8a; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- Municipal sidenav -->
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'municipal/sidenav.html' %}
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar"
+          x-data="auditLogsPage()">
+
+      <!-- Header -->
+      <header class="bg-white border border-slate-300 rounded-[2px] p-3 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-2 shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-[2px] bg-slate-900 flex items-center justify-center">
+            <span class="material-icons-round text-white text-[18px]">policy</span>
+          </div>
+          <div class="leading-tight">
+            <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Audit Logs</h1>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+              Municipal activity trail & accountability
+            </p>
+
+            <div class="mt-1 flex flex-wrap items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+              <span>Municipality:</span>
+              <span class="px-2 py-1 rounded-[2px] border border-slate-300 bg-slate-50 text-slate-700">
+                {{ municipality_name if municipality_name else 'Selected Municipality' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+          <select class="gov-input bg-slate-50 uppercase text-slate-700" x-model="range" @change="applyFilters()">
+            <option value="TODAY">Today</option>
+            <option value="LAST_7">Last 7 Days</option>
+            <option value="LAST_30">Last 30 Days</option>
+            <option value="THIS_MONTH">This Month</option>
+          </select>
+
+          <button @click="exportCsv()"
+            class="inline-flex items-center justify-center gap-1 bg-blue-900 hover:bg-blue-800 transition
+                   text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm">
+            <span class="material-icons-round text-[14px]">download</span>
+            Export CSV
+          </button>
+
+          <button @click="openRetentionModal()"
+            class="inline-flex items-center justify-center gap-1 border border-slate-300 bg-white hover:bg-slate-50 transition
+                   text-slate-700 px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm">
+            <span class="material-icons-round text-[14px]">tune</span>
+            Retention
+          </button>
+        </div>
+      </header>
+
+      <!-- KPIs -->
+      <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-800">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Events</p>
+          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.total">0</div>
+          <p class="text-[9px] text-slate-500 mt-0.5 font-medium">In selected range</p>
+        </div>
+
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-emerald-700">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Success</p>
+          <div class="text-lg font-black text-emerald-700 mt-0.5 leading-none" x-text="stats.success">0</div>
+          <p class="text-[9px] text-slate-500 mt-0.5 font-medium">OK actions</p>
+        </div>
+
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-amber-600">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Warnings</p>
+          <div class="text-lg font-black text-amber-700 mt-0.5 leading-none" x-text="stats.warn">0</div>
+          <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Needs review</p>
+        </div>
+
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-rose-700">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Failures</p>
+          <div class="text-lg font-black text-rose-700 mt-0.5 leading-none" x-text="stats.fail">0</div>
+          <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Denied/errors</p>
+        </div>
+      </section>
+
+      <!-- Filters -->
+      <section class="bg-white border border-slate-300 rounded-[2px] shadow-sm p-3 shrink-0">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 items-end">
+          <div class="lg:col-span-4">
+            <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Search</label>
+            <div class="relative">
+              <span class="material-icons-round text-slate-400 absolute left-2 top-1/2 -translate-y-1/2 text-[14px]">search</span>
+              <input x-model="q" @input.debounce.150ms="applyFilters()"
+                     class="gov-input w-full pl-7 bg-white"
+                     placeholder="user, module, action, record id, ip..." />
+            </div>
+          </div>
+
+          <div class="lg:col-span-2">
+            <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Module</label>
+            <select class="gov-input w-full bg-white uppercase text-slate-700"
+                    x-model="module" @change="applyFilters()">
+              <option value="ALL">All</option>
+              <option value="ACCOUNTING">Accounting</option>
+              <option value="DEPOSITS">Deposits</option>
+              <option value="EXPENSES">Expenses</option>
+              <option value="COA">COA</option>
+              <option value="ENTITIES">Entities</option>
+              <option value="USERS">Users</option>
+              <option value="PERMISSIONS">Permissions</option>
+              <option value="SYSTEM">System</option>
+            </select>
+          </div>
+
+          <div class="lg:col-span-2">
+            <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Action</label>
+            <select class="gov-input w-full bg-white uppercase text-slate-700"
+                    x-model="action" @change="applyFilters()">
+              <option value="ALL">All</option>
+              <option value="CREATE">Create</option>
+              <option value="EDIT">Edit</option>
+              <option value="DELETE">Delete</option>
+              <option value="APPROVE">Approve</option>
+              <option value="EXPORT">Export</option>
+              <option value="LOGIN">Login</option>
+              <option value="LOGOUT">Logout</option>
+              <option value="PERMISSION_CHANGE">Permission Change</option>
+            </select>
+          </div>
+
+          <div class="lg:col-span-2">
+            <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Outcome</label>
+            <select class="gov-input w-full bg-white uppercase text-slate-700"
+                    x-model="outcome" @change="applyFilters()">
+              <option value="ALL">All</option>
+              <option value="SUCCESS">Success</option>
+              <option value="WARN">Warning</option>
+              <option value="FAIL">Fail</option>
+            </select>
+          </div>
+
+          <div class="lg:col-span-2 flex gap-2">
+            <button @click="resetFilters()"
+              class="w-full px-3 py-1.5 rounded-[2px] border border-slate-300 bg-slate-100 hover:bg-slate-200 transition
+                     text-slate-800 text-[10px] font-black uppercase">
+              Reset
+            </button>
+            <button @click="openAdvancedModal()"
+              class="w-full px-3 py-1.5 rounded-[2px] border border-slate-300 bg-white hover:bg-slate-50 transition
+                     text-slate-700 text-[10px] font-black uppercase inline-flex items-center justify-center gap-1">
+              <span class="material-icons-round text-[14px]">filter_alt</span>
+              Advanced
+            </button>
+          </div>
+        </div>
+
+        <!-- small helper line -->
+        <div class="mt-2 flex flex-wrap gap-2 items-center text-[9px] font-bold uppercase tracking-widest text-slate-500">
+          <span class="inline-flex items-center gap-1">
+            <span class="material-icons-round text-[14px] text-slate-400">info</span>
+            Sensitive fields are masked. Click “View” to inspect sanitized details.
+          </span>
+        </div>
+      </section>
+
+      <!-- Table -->
+      <section class="flex-1 min-h-[250px] bg-white rounded-[2px] border border-slate-300 shadow-sm flex flex-col overflow-hidden">
+        <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex items-center justify-between gap-2">
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
+            <span class="material-icons-round text-[14px]">history</span> Audit Trail
+          </h2>
+
+          <div class="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+            <span>Showing:</span>
+            <span class="text-slate-700" x-text="visibleCount"></span>
+            <span>/</span>
+            <span x-text="logs.length"></span>
+          </div>
+        </div>
+
+        <div class="flex-1 min-h-0 overflow-auto custom-scrollbar">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-100 border-b border-slate-300 sticky top-0 z-10">
+              <tr>
+                <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Time</th>
+                <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">User</th>
+                <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Module</th>
+                <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Action</th>
+                <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Target</th>
+                <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">IP</th>
+                <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Outcome</th>
+                <th class="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody id="auditTable" class="text-[10px] divide-y divide-slate-100">
+              <template x-for="row in filteredLogs" :key="row.id">
+                <tr class="hover:bg-slate-50 transition"
+                    :data-module="row.module"
+                    :data-action="row.action"
+                    :data-outcome="row.outcome">
+
+                  <td class="px-3 py-2 border-r border-slate-100">
+                    <div class="font-bold text-slate-900" x-text="row.date"></div>
+                    <div class="text-slate-500 font-medium" x-text="row.time"></div>
+                  </td>
+
+                  <td class="px-3 py-2 border-r border-slate-100">
+                    <div class="font-bold text-slate-900" x-text="row.user"></div>
+                    <div class="text-slate-500 font-medium" x-text="row.role"></div>
+                  </td>
+
+                  <td class="px-3 py-2 border-r border-slate-100">
+                    <span class="px-2 py-0.5 rounded-[2px] border text-[8px] font-black uppercase"
+                          :class="moduleBadgeClass(row.module)"
+                          x-text="row.module">
+                    </span>
+                  </td>
+
+                  <td class="px-3 py-2 border-r border-slate-100">
+                    <span class="px-2 py-0.5 rounded-[2px] border text-[8px] font-black uppercase"
+                          :class="actionBadgeClass(row.action)"
+                          x-text="row.action">
+                    </span>
+                  </td>
+
+                  <td class="px-3 py-2 border-r border-slate-100">
+                    <div class="font-bold text-slate-900" x-text="row.target"></div>
+                    <div class="text-slate-500 font-mono" x-text="row.targetId"></div>
+                  </td>
+
+                  <td class="px-3 py-2 border-r border-slate-100 font-mono text-slate-600" x-text="row.ip"></td>
+
+                  <td class="px-3 py-2 border-r border-slate-100 text-center">
+                    <span class="px-2 py-0.5 rounded-[2px] border text-[8px] font-black uppercase"
+                          :class="outcomeBadgeClass(row.outcome)"
+                          x-text="row.outcome">
+                    </span>
+                  </td>
+
+                  <td class="px-3 py-2 text-center">
+                    <button class="text-blue-800 hover:text-blue-950 font-black uppercase text-[9px]"
+                            @click="openDetails(row)">
+                      View
+                    </button>
+                  </td>
+
+                </tr>
+              </template>
+
+              <!-- Empty state -->
+              <tr x-show="filteredLogs.length === 0">
+                <td colspan="8" class="px-3 py-10 text-center">
+                  <div class="inline-flex flex-col items-center gap-2 text-slate-500">
+                    <span class="material-icons-round text-[28px] text-slate-300">manage_search</span>
+                    <div class="text-[10px] font-black uppercase tracking-widest text-slate-600">No matching records</div>
+                    <div class="text-[10px] font-medium">Adjust filters or date range.</div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer / Pagination (simple) -->
+        <div class="bg-slate-50 border-t border-slate-300 px-3 py-2 shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div class="text-[9px] font-bold uppercase tracking-widest text-slate-500">
+            Tip: keep audit logs immutable. Use retention policy for archiving.
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button class="px-3 py-1 rounded-[2px] border border-slate-300 bg-white hover:bg-slate-50 text-[9px] font-black uppercase"
+                    @click="prevPage()" :disabled="page===1"
+                    :class="page===1 ? 'opacity-50 cursor-not-allowed' : ''">
+              Prev
+            </button>
+
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">
+              Page <span class="text-slate-800" x-text="page"></span> / <span x-text="totalPages"></span>
+            </div>
+
+            <button class="px-3 py-1 rounded-[2px] border border-slate-300 bg-white hover:bg-slate-50 text-[9px] font-black uppercase"
+                    @click="nextPage()" :disabled="page>=totalPages"
+                    :class="page>=totalPages ? 'opacity-50 cursor-not-allowed' : ''">
+              Next
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Details Modal -->
+      <div x-show="detailsOpen" style="display:none;"
+           class="fixed inset-0 z-[4000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.away="detailsOpen=false" class="bg-white w-full max-w-2xl border border-slate-400 rounded-[2px] shadow-2xl overflow-hidden">
+          <div class="bg-slate-800 text-white px-4 py-2 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="material-icons-round text-[16px]">manage_accounts</span>
+              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Audit Event Details</h3>
+            </div>
+            <button class="text-slate-300 hover:text-white" @click="detailsOpen=false">
+              <span class="material-icons-round text-[18px]">close</span>
+            </button>
+          </div>
+
+          <div class="p-4 bg-slate-50">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div class="bg-white border border-slate-300 rounded-[2px] p-3">
+                <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Time</div>
+                <div class="mt-1 font-bold text-slate-900" x-text="selected?.date + ' ' + selected?.time"></div>
+                <div class="text-slate-500 font-medium text-[10px]" x-text="'Event ID: ' + selected?.id"></div>
+              </div>
+              <div class="bg-white border border-slate-300 rounded-[2px] p-3">
+                <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">User</div>
+                <div class="mt-1 font-bold text-slate-900" x-text="selected?.user"></div>
+                <div class="text-slate-500 font-medium text-[10px]" x-text="selected?.role"></div>
+              </div>
+              <div class="bg-white border border-slate-300 rounded-[2px] p-3">
+                <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Outcome</div>
+                <div class="mt-1">
+                  <span class="px-2 py-0.5 rounded-[2px] border text-[9px] font-black uppercase"
+                        :class="outcomeBadgeClass(selected?.outcome)"
+                        x-text="selected?.outcome">
+                  </span>
+                </div>
+                <div class="text-slate-500 font-medium text-[10px] mt-1" x-text="'IP: ' + (selected?.ip || '—')"></div>
+              </div>
+            </div>
+
+            <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="bg-white border border-slate-300 rounded-[2px] p-3">
+                <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Module / Action</div>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <span class="px-2 py-0.5 rounded-[2px] border text-[9px] font-black uppercase"
+                        :class="moduleBadgeClass(selected?.module)"
+                        x-text="selected?.module"></span>
+                  <span class="px-2 py-0.5 rounded-[2px] border text-[9px] font-black uppercase"
+                        :class="actionBadgeClass(selected?.action)"
+                        x-text="selected?.action"></span>
+                </div>
+                <div class="mt-2 text-slate-600 text-[10px] font-medium" x-text="selected?.message"></div>
+              </div>
+
+              <div class="bg-white border border-slate-300 rounded-[2px] p-3">
+                <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Target</div>
+                <div class="mt-1 font-bold text-slate-900" x-text="selected?.target"></div>
+                <div class="text-slate-500 font-mono text-[10px]" x-text="selected?.targetId"></div>
+
+                <div class="mt-2 text-[9px] font-black uppercase tracking-widest text-slate-500">Sanitized Changes</div>
+                <pre class="mt-1 bg-slate-900 text-slate-100 rounded-[2px] p-2 text-[10px] overflow-auto custom-scrollbar"
+                     x-text="formatJson(selected?.diff)"></pre>
+              </div>
+            </div>
+
+            <div class="mt-3 flex justify-end gap-2">
+              <button class="px-4 py-1.5 rounded-[2px] border border-slate-300 bg-white hover:bg-slate-100 text-[9px] font-black uppercase"
+                      @click="detailsOpen=false">
+                Close
+              </button>
+              <button class="px-4 py-1.5 rounded-[2px] bg-blue-900 hover:bg-blue-800 text-white text-[9px] font-black uppercase"
+                      @click="copyDetails()">
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced Modal -->
+      <div x-show="advancedOpen" style="display:none;"
+           class="fixed inset-0 z-[3500] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.away="advancedOpen=false" class="bg-white w-full max-w-lg border border-slate-400 rounded-[2px] shadow-2xl overflow-hidden">
+          <div class="bg-slate-800 text-white px-4 py-2 flex items-center justify-between">
+            <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Advanced Filters</h3>
+            <button class="text-slate-300 hover:text-white" @click="advancedOpen=false">
+              <span class="material-icons-round text-[18px]">close</span>
+            </button>
+          </div>
+
+          <div class="p-4 bg-slate-50 space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">From Date</label>
+                <input type="date" class="gov-input w-full" x-model="fromDate" @change="applyFilters()" />
+              </div>
+              <div>
+                <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">To Date</label>
+                <input type="date" class="gov-input w-full" x-model="toDate" @change="applyFilters()" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">User</label>
+                <input class="gov-input w-full" placeholder="e.g. Maria Santos" x-model="userFilter" @input.debounce.150ms="applyFilters()">
+              </div>
+              <div>
+                <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">IP (partial)</label>
+                <input class="gov-input w-full" placeholder="e.g. 192.168" x-model="ipFilter" @input.debounce.150ms="applyFilters()">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Min Severity</label>
+                <select class="gov-input w-full bg-white uppercase text-slate-700" x-model="minSeverity" @change="applyFilters()">
+                  <option value="ALL">All</option>
+                  <option value="SUCCESS">Success+</option>
+                  <option value="WARN">Warning+</option>
+                  <option value="FAIL">Fail only</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Contains Record ID</label>
+                <input class="gov-input w-full" placeholder="e.g. JE-2026-00235" x-model="recordIdFilter" @input.debounce.150ms="applyFilters()">
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-1">
+              <button class="px-4 py-1.5 rounded-[2px] border border-slate-300 bg-white hover:bg-slate-100 text-[9px] font-black uppercase"
+                      @click="advancedOpen=false">
+                Close
+              </button>
+              <button class="px-4 py-1.5 rounded-[2px] bg-blue-900 hover:bg-blue-800 text-white text-[9px] font-black uppercase"
+                      @click="advancedOpen=false; applyFilters();">
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Retention Modal -->
+      <div x-show="retentionOpen" style="display:none;"
+           class="fixed inset-0 z-[3600] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.away="retentionOpen=false" class="bg-white w-full max-w-md border border-slate-400 rounded-[2px] shadow-2xl overflow-hidden">
+          <div class="bg-slate-800 text-white px-4 py-2 flex items-center justify-between">
+            <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Retention Policy (UI)</h3>
+            <button class="text-slate-300 hover:text-white" @click="retentionOpen=false">
+              <span class="material-icons-round text-[18px]">close</span>
+            </button>
+          </div>
+
+          <div class="p-4 bg-slate-50 space-y-3">
+            <div class="bg-white border border-slate-300 rounded-[2px] p-3">
+              <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Current Policy</div>
+              <div class="mt-1 text-[10px] font-bold text-slate-800">
+                Keep audit logs for <span class="text-blue-900">365 days</span>, then archive.
+              </div>
+              <div class="mt-1 text-[10px] text-slate-600 font-medium">
+                Changes to retention should be restricted to authorized municipal admins.
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Retention Days</label>
+              <input type="number" min="30" step="1" class="gov-input w-full" value="365" />
+            </div>
+
+            <div class="flex justify-end gap-2">
+              <button class="px-4 py-1.5 rounded-[2px] border border-slate-300 bg-white hover:bg-slate-100 text-[9px] font-black uppercase"
+                      @click="retentionOpen=false">
+                Close
+              </button>
+              <button class="px-4 py-1.5 rounded-[2px] bg-blue-900 hover:bg-blue-800 text-white text-[9px] font-black uppercase"
+                      @click="alert('Save retention policy (demo)'); retentionOpen=false;">
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    function auditLogsPage(){
+      return {
+        // ui state
+        q: '',
+        module: 'ALL',
+        action: 'ALL',
+        outcome: 'ALL',
+        range: 'LAST_7',
+
+        // advanced filters
+        advancedOpen: false,
+        retentionOpen: false,
+        fromDate: '',
+        toDate: '',
+        userFilter: '',
+        ipFilter: '',
+        minSeverity: 'ALL',
+        recordIdFilter: '',
+
+        // details modal
+        detailsOpen: false,
+        selected: null,
+
+        // paging
+        page: 1,
+        pageSize: 12,
+
+        // demo dataset (replace with server data)
+        logs: [
+          { id:'AL-000201', ts:'2026-02-19T09:14:12', user:'Juan Dela Cruz', role:'Municipal Admin', module:'DEPOSITS', action:'CREATE', target:'Deposit Category', targetId:'DC-REV-001', ip:'192.168.1.21', outcome:'SUCCESS',
+            message:'Created deposit category mapping for Business Permit Fees.',
+            diff:{ created:{ name:'Business Permit Fees', coa:'4101', tax:'None', budget_code:'REV-001' } }
+          },
+          { id:'AL-000202', ts:'2026-02-19T09:20:48', user:'Maria Santos', role:'Treasury', module:'EXPENSES', action:'EDIT', target:'Expense Category', targetId:'EC-5-02-03-010', ip:'192.168.1.44', outcome:'SUCCESS',
+            message:'Updated default VAT rate for Office Supplies.',
+            diff:{ before:{ tax_type:'VAT', rate:'0%' }, after:{ tax_type:'VAT', rate:'12%' } }
+          },
+          { id:'AL-000203', ts:'2026-02-18T16:02:11', user:'Maria Santos', role:'Treasury', module:'ACCOUNTING', action:'EXPORT', target:'Journal Entries', targetId:'JE-EXPORT-20260218', ip:'192.168.1.44', outcome:'WARN',
+            message:'Exported journal entries. Large dataset, verify access scope.',
+            diff:{ params:{ range:'THIS_MONTH', format:'CSV' } }
+          },
+          { id:'AL-000204', ts:'2026-02-18T14:55:03', user:'System', role:'System', module:'SYSTEM', action:'LOGIN', target:'User Session', targetId:'SSN-9F22', ip:'192.168.1.21', outcome:'SUCCESS',
+            message:'User authenticated via municipal portal.',
+            diff:{ method:'password', mfa:'enabled' }
+          },
+          { id:'AL-000205', ts:'2026-02-18T10:41:29', user:'Auditor', role:'Audit', module:'COA', action:'EDIT', target:'COA Template', targetId:'COA-MUN-STD', ip:'192.168.1.90', outcome:'FAIL',
+            message:'Edit denied. Insufficient permission (COA_LOCKED).',
+            diff:{ required:'COA_EDIT', granted:false }
+          },
+          { id:'AL-000206', ts:'2026-02-17T13:09:10', user:'Juan Dela Cruz', role:'Municipal Admin', module:'PERMISSIONS', action:'PERMISSION_CHANGE', target:'User', targetId:'USR-00123', ip:'192.168.1.21', outcome:'SUCCESS',
+            message:'Granted CREATE/EDIT on Expenses module.',
+            diff:{ added:['EXPENSES_CREATE','EXPENSES_EDIT'], removed:[] }
+          },
+          { id:'AL-000207', ts:'2026-02-17T11:33:51', user:'Maria Santos', role:'Treasury', module:'DEPOSITS', action:'DELETE', target:'Deposit Category', targetId:'DC-REV-009', ip:'192.168.1.44', outcome:'SUCCESS',
+            message:'Deleted obsolete category mapping (replaced by REV-001).',
+            diff:{ deleted:{ id:'DC-REV-009' } }
+          },
+          { id:'AL-000208', ts:'2026-02-16T15:18:20', user:'Juan Dela Cruz', role:'Municipal Admin', module:'ENTITIES', action:'EDIT', target:'Bank Account', targetId:'LBP-1234-XXXX', ip:'192.168.1.21', outcome:'WARN',
+            message:'Updated bank alias. Verify with bank statement reconciliation.',
+            diff:{ before:{ alias:'Treasury Main' }, after:{ alias:'Treasury Collections' } }
+          },
+          { id:'AL-000209', ts:'2026-02-15T09:02:47', user:'Maria Santos', role:'Treasury', module:'ACCOUNTING', action:'APPROVE', target:'Journal Entry', targetId:'JE-2026-00235', ip:'192.168.1.44', outcome:'SUCCESS',
+            message:'Approved journal entry.',
+            diff:{ status:{ from:'PENDING', to:'APPROVED' } }
+          },
+          { id:'AL-000210', ts:'2026-02-14T17:40:05', user:'System', role:'System', module:'SYSTEM', action:'LOGOUT', target:'User Session', targetId:'SSN-88B1', ip:'192.168.1.44', outcome:'SUCCESS',
+            message:'User logged out.',
+            diff:{ reason:'manual' }
+          },
+        ],
+
+        // computed
+        get totalPages(){
+          return Math.max(1, Math.ceil(this.filteredAll.length / this.pageSize));
+        },
+
+        get filteredAll(){
+          // filter by range + advanced date window + fields
+          const now = new Date();
+          const start = this.getRangeStart(now, this.range);
+          const from = this.fromDate ? new Date(this.fromDate + 'T00:00:00') : null;
+          const to = this.toDate ? new Date(this.toDate + 'T23:59:59') : null;
+
+          const q = (this.q || '').toLowerCase().trim();
+          const mod = (this.module || 'ALL').toUpperCase();
+          const act = (this.action || 'ALL').toUpperCase();
+          const out = (this.outcome || 'ALL').toUpperCase();
+
+          const userQ = (this.userFilter || '').toLowerCase().trim();
+          const ipQ = (this.ipFilter || '').toLowerCase().trim();
+          const recQ = (this.recordIdFilter || '').toLowerCase().trim();
+          const min = (this.minSeverity || 'ALL').toUpperCase();
+
+          const severityRank = { SUCCESS: 1, WARN: 2, FAIL: 3 };
+          const minRank = min === 'ALL' ? 0 : severityRank[min] || 0;
+
+          return this.logs
+            .map(r => ({ ...r, _dt: new Date(r.ts) }))
+            .filter(r => {
+              // base range
+              if (start && r._dt < start) return false;
+
+              // advanced dates
+              if (from && r._dt < from) return false;
+              if (to && r._dt > to) return false;
+
+              // module/action/outcome
+              if (mod !== 'ALL' && (r.module || '').toUpperCase() !== mod) return false;
+              if (act !== 'ALL' && (r.action || '').toUpperCase() !== act) return false;
+              if (out !== 'ALL' && (r.outcome || '').toUpperCase() !== out) return false;
+
+              // min severity (SUCCESS+ / WARN+ / FAIL only)
+              if (minRank > 0) {
+                const rnk = severityRank[(r.outcome || 'SUCCESS').toUpperCase()] || 1;
+                if (min === 'FAIL') return (r.outcome || '').toUpperCase() === 'FAIL';
+                if (rnk < minRank) return false;
+              }
+
+              // text search
+              const hay = `${r.id} ${r.user} ${r.role} ${r.module} ${r.action} ${r.target} ${r.targetId} ${r.ip} ${r.message}`
+                .toLowerCase();
+
+              if (q && !hay.includes(q)) return false;
+              if (userQ && !(r.user || '').toLowerCase().includes(userQ)) return false;
+              if (ipQ && !(r.ip || '').toLowerCase().includes(ipQ)) return false;
+              if (recQ && !(`${r.targetId || ''} ${r.id || ''}`.toLowerCase().includes(recQ))) return false;
+
+              return true;
+            })
+            .sort((a,b) => b._dt - a._dt);
+        },
+
+        get filteredLogs(){
+          const startIdx = (this.page - 1) * this.pageSize;
+          return this.filteredAll.slice(startIdx, startIdx + this.pageSize).map(r => this.decorate(r));
+        },
+
+        get visibleCount(){
+          return this.filteredLogs.length;
+        },
+
+        stats: { total: 0, success: 0, warn: 0, fail: 0 },
+
+        // helpers
+        decorate(r){
+          const dt = new Date(r.ts);
+          const date = dt.toISOString().slice(0,10);
+          const time = dt.toTimeString().slice(0,8);
+          return { ...r, date, time };
+        },
+
+        getRangeStart(now, range){
+          const n = new Date(now);
+          if (range === 'TODAY') {
+            return new Date(n.getFullYear(), n.getMonth(), n.getDate(), 0,0,0);
+          }
+          if (range === 'LAST_7') {
+            const d = new Date(n); d.setDate(n.getDate() - 7); return d;
+          }
+          if (range === 'LAST_30') {
+            const d = new Date(n); d.setDate(n.getDate() - 30); return d;
+          }
+          if (range === 'THIS_MONTH') {
+            return new Date(n.getFullYear(), n.getMonth(), 1, 0,0,0);
+          }
+          return null;
+        },
+
+        moduleBadgeClass(m){
+          const v = (m || '').toUpperCase();
+          if (v === 'ACCOUNTING') return 'bg-slate-50 text-slate-700 border-slate-200';
+          if (v === 'DEPOSITS') return 'bg-teal-50 text-teal-700 border-teal-200';
+          if (v === 'EXPENSES') return 'bg-rose-50 text-rose-700 border-rose-200';
+          if (v === 'COA') return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+          if (v === 'ENTITIES') return 'bg-blue-50 text-blue-700 border-blue-200';
+          if (v === 'USERS') return 'bg-amber-50 text-amber-700 border-amber-200';
+          if (v === 'PERMISSIONS') return 'bg-violet-50 text-violet-700 border-violet-200';
+          return 'bg-slate-100 text-slate-700 border-slate-300';
+        },
+
+        actionBadgeClass(a){
+          const v = (a || '').toUpperCase();
+          if (v === 'CREATE') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+          if (v === 'EDIT') return 'bg-blue-50 text-blue-700 border-blue-200';
+          if (v === 'DELETE') return 'bg-rose-50 text-rose-700 border-rose-200';
+          if (v === 'APPROVE') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+          if (v === 'EXPORT') return 'bg-slate-50 text-slate-700 border-slate-200';
+          if (v === 'LOGIN') return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+          if (v === 'LOGOUT') return 'bg-slate-50 text-slate-700 border-slate-200';
+          if (v === 'PERMISSION_CHANGE') return 'bg-violet-50 text-violet-700 border-violet-200';
+          return 'bg-slate-100 text-slate-700 border-slate-300';
+        },
+
+        outcomeBadgeClass(o){
+          const v = (o || '').toUpperCase();
+          if (v === 'SUCCESS') return 'bg-emerald-100 text-emerald-900 border-emerald-200';
+          if (v === 'WARN') return 'bg-amber-100 text-amber-900 border-amber-200';
+          return 'bg-rose-100 text-rose-900 border-rose-200';
+        },
+
+        formatJson(obj){
+          try { return JSON.stringify(obj || {}, null, 2); }
+          catch(e){ return String(obj || ''); }
+        },
+
+        // actions
+        applyFilters(){
+          this.page = 1;
+          const all = this.filteredAll;
+          const counts = { total: all.length, success: 0, warn: 0, fail: 0 };
+          all.forEach(r => {
+            const o = (r.outcome || 'SUCCESS').toUpperCase();
+            if (o === 'SUCCESS') counts.success++;
+            else if (o === 'WARN') counts.warn++;
+            else counts.fail++;
+          });
+          this.stats = counts;
+        },
+
+        resetFilters(){
+          this.q = '';
+          this.module = 'ALL';
+          this.action = 'ALL';
+          this.outcome = 'ALL';
+          this.range = 'LAST_7';
+          this.fromDate = '';
+          this.toDate = '';
+          this.userFilter = '';
+          this.ipFilter = '';
+          this.minSeverity = 'ALL';
+          this.recordIdFilter = '';
+          this.applyFilters();
+        },
+
+        openDetails(row){
+          this.selected = row;
+          this.detailsOpen = true;
+        },
+
+        openAdvancedModal(){ this.advancedOpen = true; },
+        openRetentionModal(){ this.retentionOpen = true; },
+
+        prevPage(){ if (this.page > 1) this.page--; },
+        nextPage(){ if (this.page < this.totalPages) this.page++; },
+
+        exportCsv(){
+          // client-side demo export from filteredAll (sanitized fields)
+          const cols = ['id','ts','user','role','module','action','target','targetId','ip','outcome','message'];
+          const rows = this.filteredAll.map(r => cols.map(c => {
+            const v = (r[c] ?? '');
+            const s = String(v).replace(/"/g,'""');
+            return `"${s}"`;
+          }).join(','));
+          const csv = cols.join(',') + '\n' + rows.join('\n');
+
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `audit_logs_municipal_${new Date().toISOString().slice(0,10)}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        },
+
+        async copyDetails(){
+          if(!this.selected) return;
+          const payload = {
+            id: this.selected.id,
+            ts: this.selected.ts,
+            user: this.selected.user,
+            role: this.selected.role,
+            module: this.selected.module,
+            action: this.selected.action,
+            target: this.selected.target,
+            targetId: this.selected.targetId,
+            ip: this.selected.ip,
+            outcome: this.selected.outcome,
+            message: this.selected.message,
+            diff: this.selected.diff
+          };
+          try{
+            await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+            alert('Copied (demo).');
+          }catch(e){
+            alert('Copy failed in this browser context.');
+          }
+        },
+
+        init(){
+          this.applyFilters();
+        }
+      }
+    }
+  </script>
+
+</body>
+</html>
