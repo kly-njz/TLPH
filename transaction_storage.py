@@ -9,7 +9,7 @@ def get_transactions_collection():
     """Get transactions collection reference"""
     return get_db().collection('transactions')
 
-def add_transaction(user_email, external_id, invoice_id, amount, item_name, description, status='Pending'):
+def add_transaction(user_email, external_id, invoice_id, amount, item_name, description, status='Pending', user_id=None):
     """Add a new transaction record to Firestore"""
     try:
         transactions_ref = get_transactions_collection()
@@ -17,6 +17,7 @@ def add_transaction(user_email, external_id, invoice_id, amount, item_name, desc
         
         transaction = {
             'user_email': normalized_email,
+            'userId': user_id,
             'external_id': external_id,
             'invoice_id': invoice_id,
             'transaction_name': item_name,
@@ -80,19 +81,24 @@ def update_transaction_status(invoice_id, status, payment_method=None, paid_at=N
         print(f"Error updating transaction: {e}")
         return None
 
-def get_user_transactions(user_email):
+def get_user_transactions(user_email=None, user_id=None):
     """Get all transactions for a specific user from Firestore"""
     try:
         transactions_ref = get_transactions_collection()
-        normalized_email = (user_email or '').strip().lower()
-
+        
         transactions_by_id = {}
         queries = []
 
-        if normalized_email:
+        # Primary: Query by userId if provided
+        if user_id:
+            queries.append(transactions_ref.where(filter=firestore.FieldFilter('userId', '==', user_id)))
+        
+        # Fallback: Query by email for backwards compatibility (old records)
+        if user_email:
+            normalized_email = user_email.strip().lower()
             queries.append(transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', normalized_email)))
-        if user_email and user_email != normalized_email:
-            queries.append(transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', user_email)))
+            if user_email != normalized_email:
+                queries.append(transactions_ref.where(filter=firestore.FieldFilter('user_email', '==', user_email)))
 
         for query in queries:
             for doc in query.stream():
@@ -152,7 +158,7 @@ def find_transaction_by_external_id(external_id):
         print(f"Error finding transaction: {e}")
         return None
 
-def cancel_transaction_by_reference(reference, user_email):
+def cancel_transaction_by_reference(reference, user_email=None, user_id=None):
     """Cancel a transaction by reference number (only if pending)"""
     try:
         transactions_ref = get_transactions_collection()
@@ -171,8 +177,10 @@ def cancel_transaction_by_reference(reference, user_email):
         doc = docs[0]
         transaction = doc.to_dict()
         
-        # Verify it's the user's transaction
-        if transaction.get('user_email') != user_email:
+        # Verify it's the user's transaction (check userId first, then email)
+        if user_id and transaction.get('userId') != user_id:
+            return {'success': False, 'message': 'Unauthorized to cancel this transaction'}
+        elif not user_id and transaction.get('user_email') != user_email:
             return {'success': False, 'message': 'Unauthorized to cancel this transaction'}
         
         # Only allow canceling pending transactions
