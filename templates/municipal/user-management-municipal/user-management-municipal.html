@@ -75,6 +75,7 @@
             <button id="btnCloseAddUserModal" type="button" class="text-slate-400 hover:text-rose-600 transition-colors"><span class="material-icons-round text-xl">close</span></button>
           </div>
           <form id="addUserForm" class="p-6 grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
+            
             <div>
               <label class="label-sm" for="add-lastName">Surname</label>
               <input id="add-lastName" name="lastName" type="text" class="input-gov uppercase bg-white border border-gray-300 rounded px-3 py-2 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 transition w-full" required>
@@ -87,26 +88,27 @@
               <label class="label-sm" for="add-middleName">Middle Name</label>
               <input id="add-middleName" name="middleName" type="text" class="input-gov uppercase bg-white border border-gray-300 rounded px-3 py-2 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 transition w-full">
             </div>
+            
             <div>
               <label class="label-sm" for="add-employeeId">Employee ID No.</label>
               <input id="add-employeeId" name="employeeId" type="text" class="input-gov font-mono text-slate-600 bg-gray-100 border border-gray-300 rounded px-3 py-2 w-full" readonly>
             </div>
             <div class="md:col-span-2">
               <label class="label-sm" for="add-division">Division / Section Assignment</label>
-              <input id="add-division" name="division" type="text" class="input-gov uppercase font-bold text-slate-800 bg-gray-100 border border-gray-200 rounded px-3 py-2 w-full" value="" readonly tabindex="-1" aria-readonly="true">
+              <input id="add-division" name="division" type="text" class="input-gov uppercase font-bold text-slate-800 bg-white border border-gray-200 rounded px-3 py-2 w-full" readonly>
             </div>
             
             <div>
               <label class="label-sm" for="add-municipality">Municipality</label>
               <input id="add-municipality" name="municipality" type="text" class="input-gov uppercase bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold rounded px-3 py-2 w-full" readonly>
             </div>
-            
             <div>
               <label class="label-sm" for="add-province">Province</label>
               <input id="add-province" name="province" type="text" class="input-gov uppercase bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold rounded px-3 py-2 w-full" readonly>
             </div>
             
             <div class="hidden md:block"></div>
+
             <div>
               <label class="label-sm" for="add-phone">Phone</label>
               <input id="add-phone" name="phone" type="text" class="input-gov bg-white border border-gray-300 rounded px-3 py-2 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 transition w-full">
@@ -119,6 +121,7 @@
               <label class="label-sm" for="add-password">Password</label>
               <input id="add-password" name="password" type="password" class="input-gov bg-white border border-gray-300 rounded px-3 py-2 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 transition w-full" required autocomplete="new-password" />
             </div>
+
             <div class="md:col-span-3 mt-2">
               <div class="bg-[#fffbe6] border border-[#ffe58f] rounded p-3 flex gap-3 items-start">
                 <span class="material-icons-round text-[#d4b106] text-sm mt-0.5">lock</span>
@@ -129,7 +132,7 @@
               </div>
             </div>
             <div class="md:col-span-3 flex justify-end mt-2">
-              <button type="submit" class="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-white font-bold text-xs uppercase tracking-widest hover:bg-emerald-800 transition-colors">
+              <button type="submit" id="btnSubmitAddUser" class="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-white font-bold text-xs uppercase tracking-widest hover:bg-emerald-800 transition-colors">
                 <span class="material-icons-round text-[14px]">person_add</span> Add User
               </button>
             </div>
@@ -246,10 +249,14 @@
       appId: "1:499245517370:web:c66598d7c86d5567a64303"
     };
 
-    // Initialize
+    // Initialize Main App (For Auth State)
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
+
+    // Initialize SECONDARY App (For Creating Users without logging out)
+    const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+    const secondaryAuth = getAuth(secondaryApp);
 
     // Global State
     let adminProfile = {
@@ -265,26 +272,30 @@
     // 1. AUTH & INITIAL LOADING
     onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Fetch logged-in admin's profile
+        console.log("Logged in user:", user.uid);
         try {
           const uDoc = await getDoc(doc(db, 'users', user.uid));
           if (uDoc.exists()) {
             const data = uDoc.data();
-            // Store Admin Location
-            adminProfile.municipality = data.municipality || "Unknown";
-            adminProfile.province = data.province || "Unknown";
             
+            // Fix: Check for case sensitivity in Firestore fields
+            adminProfile.municipality = data.municipality || data.Municipality || "";
+            adminProfile.province = data.province || data.Province || "";
+            
+            console.log("Admin Profile Loaded:", adminProfile);
+
             // Update Scope Chip
-            $('scopeChip').textContent = `Municipality: ${adminProfile.municipality}`;
+            $('scopeChip').textContent = `Municipality: ${adminProfile.municipality || 'Unknown'}`;
             
             // Load Users for this municipality
             loadUsers();
+          } else {
+            console.error("No profile document found for user.");
           }
         } catch (error) {
           console.error("Error loading admin profile:", error);
         }
       } else {
-        // Not logged in
         window.location.href = '/login'; 
       }
     });
@@ -310,7 +321,7 @@
       }
     }
 
-    // 3. RENDER TABLE
+    // 3. RENDER TABLE & FILTERS
     function renderTable(list) {
       const tbody = $('usersTbody');
       tbody.innerHTML = list.length === 0 
@@ -388,12 +399,19 @@
 
     // Add User Modal Trigger
     $('btnAddMunicipalUser').addEventListener('click', () => {
-        // GENERATE RANDOM ID
+        // Validation: Ensure we actually have the admin's location before opening
+        if (!adminProfile.municipality || !adminProfile.province) {
+            console.warn("Admin profile incomplete:", adminProfile);
+            alert("Your administrative data (Municipality/Province) hasn't loaded yet. Please wait a moment or refresh the page.");
+            return;
+        }
+
+        // Generate Random ID
         const year = new Date().getFullYear();
         const rand = Math.floor(100 + Math.random() * 900);
         $('add-employeeId').value = `DENR-${year}-${rand}`;
         
-        // AUTO-FILL MUNICIPALITY & PROVINCE FROM ADMIN PROFILE
+        // AUTO-FILL - Explicitly setting values
         $('add-municipality').value = adminProfile.municipality;
         $('add-province').value = adminProfile.province;
 
@@ -404,9 +422,16 @@
     $('addUserForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const form = e.target;
-      const auth = getAuth();
+      const btn = $('btnSubmitAddUser');
+      
+      // Values
       const email = form['email'].value;
       const password = form['password'].value;
+      
+      // UI State
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-icons-round animate-spin text-[14px]">sync</span> Saving...';
+
       const newUser = {
         firstName: form['firstName'].value.toUpperCase(),
         lastName: form['lastName'].value.toUpperCase(),
@@ -415,27 +440,35 @@
         phone: form['phone'].value,
         division: form['division'].value.toUpperCase(),
         employeeId: form['employeeId'].value,
-        // Do NOT store password in Firestore
+        
+        // Use value from form (which was auto-filled)
         municipality: form['municipality'].value, 
         province: form['province'].value,
+
         role: "municipal",
         applicationType: "municipal",
         status: "Active",
         createdAt: new Date().toISOString()
       };
+
       try {
-        // Create user in Firebase Auth first
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Fix: Use SECONDARY auth instance so Admin doesn't get logged out
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
         const user = userCredential.user;
-        // Save user data in Firestore with Auth UID as document ID
+
+        // Save to Firestore using Main DB
         await setDoc(doc(db, "users", user.uid), newUser);
+        
         alert('User added successfully!');
         $('addUserModal').classList.add('hidden');
         form.reset();
-        loadUsers(); // Refresh table
+        loadUsers(); 
       } catch (err) {
         alert('Failed to add user: ' + err.message);
         console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons-round text-[14px]">person_add</span> Add User';
       }
     });
 
