@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" x-data="nationalApplicationView()">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -30,6 +30,7 @@
   <style>
     * { font-family: Arial, Verdana, sans-serif !important; }
     .material-icons-round { font-family: 'Material Icons Round' !important; }
+    [x-cloak] { display: none !important; }
     @media print {
       .no-print { display: none !important; }
       body { background: #fff !important; }
@@ -61,7 +62,7 @@
   </style>
 </head>
 
-<body class="min-h-screen bg-gov-bg font-gov text-gov-text">
+<body class="min-h-screen bg-gov-bg font-gov text-gov-text" x-data="nationalApplicationView()" x-cloak>
   <div class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]" style="background-image:url('/static/images/denr.jpg'); background-position:center 28%; background-size:520px;"></div>
 
   {% include 'national/sidenav-national.html' %}
@@ -338,6 +339,11 @@
 
   <!-- Register Alpine component -->
   <script>
+    // Debug: Check if Alpine is available
+    window.addEventListener('DOMContentLoaded', () => {
+      console.log('DOM loaded, waiting for Alpine...');
+    });
+
     document.addEventListener('alpine:init', () => {
       console.log('Alpine:init event fired, registering nationalApplicationView...');
       Alpine.data('nationalApplicationView', () => ({
@@ -374,6 +380,20 @@
 
         async init() {
           try {
+            // Wait for Firebase modules to be available
+            let retries = 0;
+            while (!window.firebaseGetDoc && retries < 50) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              retries++;
+            }
+            
+            if (!window.firebaseGetDoc) {
+              console.error('Firebase modules not loaded after waiting');
+              alert('Error: Firebase modules failed to load. Please refresh the page.');
+              this.loading = false;
+              return;
+            }
+
             // Get application ID from URL
             const pathParts = window.location.pathname.split('/');
             const applicationId = pathParts[pathParts.length - 1];
@@ -469,11 +489,17 @@
               remarks: appData.remarks || appData.notes || 'N/A'
             };
 
+            console.log('Application data loaded successfully');
+            console.log('Applicant:', this.applicant);
+            console.log('Form data:', this.formData);
+            
             this.loading = false;
             
           } catch (error) {
             console.error('Error loading application:', error);
+            console.error('Error stack:', error.stack);
             alert('Error loading application: ' + error.message);
+            this.loading = false;
             this.loading = false;
           }
         },
