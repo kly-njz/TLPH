@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Deposit Categories | Regional Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    .gov-card { background:#fff; border:1px solid #cbd5e1; border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: 800; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; }
+    .gov-input:focus { border-color: #0f766e; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 900; text-transform: uppercase; font-size: 9px; letter-spacing: .06em; transition: all .2s; cursor: pointer; }
+
+    .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; }
+    .chart-container { position: absolute; inset: 0; }
+
+    th { font-size: 9px; font-weight: 900; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 8px !important; letter-spacing: .06em; }
+    td { padding: 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+
+    .badge { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; padding: 2px 6px; border-radius: 2px; border: 1px solid; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden">
+  <div class="h-full lg:grid lg:grid-cols-[260px_1fr]">
+
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'regional/sidenav.html' %}
+    </aside>
+
+    <div class="h-full flex flex-col overflow-hidden" x-data="{ modalOpen:false }">
+      <main class="flex-1 min-h-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar flex flex-col">
+
+        <!-- Header -->
+        <header class="gov-card p-3 flex justify-between items-center shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-teal-50 border border-teal-200 flex items-center justify-center">
+              <span class="material-icons-round text-teal-700 text-[18px]">savings</span>
+            </div>
+            <div class="leading-tight">
+              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Deposit Categories</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+                Regional Revenue Mapping & Tax Configuration (Municipalities under this region)
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Region scope badge -->
+            <span class="hidden sm:inline badge bg-blue-50 text-blue-800 border-blue-200">
+              {{ user_region|default('Region Assigned') }}
+            </span>
+
+            <button @click="modalOpen=true" class="gov-btn bg-teal-700 hover:bg-teal-800 text-white shadow-sm flex items-center gap-1.5">
+              <span class="material-icons-round text-[14px]">add</span> Add Category
+            </button>
+          </div>
+        </header>
+
+        <!-- Stats -->
+        <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-teal-700">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deposits (YTD)</p>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" id="statTotalDeposits">₱ 1,200,000</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-indigo-600">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Categories</p>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" id="statActiveCategories">12</div>
+          </div>
+          <div class="gov-card p-2 px-3 bg-slate-800 text-white border-l-4 border-l-slate-800">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">MoM Growth</p>
+            <div class="text-lg font-black text-teal-400 mt-0.5 leading-none" id="statMoMGrowth">+8%</div>
+          </div>
+        </section>
+
+        <!-- Charts -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 h-[160px]">
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Deposit Trends (Region Scoped)
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="depositTrendChart"></canvas></div>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Revenue Mix (Region Scoped)
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="revenueMixChart"></canvas></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Table -->
+        <section class="gov-card flex-1 min-h-[260px] flex flex-col overflow-hidden">
+          <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
+                <span class="material-icons-round text-[14px]">account_balance_wallet</span> Category Mappings
+              </h2>
+              <span class="badge bg-slate-100 text-slate-700 border-slate-200" id="scopeBadge">REGION SCOPED</span>
+            </div>
+
+            <div class="flex gap-1.5 flex-wrap items-center">
+              <!-- ✅ Municipality filter -->
+              <select id="municipalityFilter" class="gov-input cursor-pointer">
+                <option value="ALL">All Municipalities</option>
+                {% for m in municipalities %}
+                  <option value="{{ m|upper }}">{{ m }}</option>
+                {% endfor %}
+              </select>
+
+              <div class="relative">
+                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                <input id="searchCategory" type="text" placeholder="Search category..." class="gov-input pl-6 w-44">
+              </div>
+
+              <select id="filterRevenue" class="gov-input cursor-pointer">
+                <option value="">All Revenue Types</option>
+                <option value="service">Service Revenue</option>
+                <option value="permit">Permit Fees</option>
+                <option value="grant">Grants</option>
+                <option value="other">Other Income</option>
+              </select>
+
+              <button type="button" onclick="resetFilters()"
+                class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 font-black uppercase text-[9px] rounded-[2px] transition">
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-auto custom-scrollbar bg-white">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th class="border-r border-slate-200">Category</th>
+                  <th class="border-r border-slate-200">COA Account</th>
+                  <th class="border-r border-slate-200 text-center">Revenue Type</th>
+                  <th class="border-r border-slate-200 text-center">Tax</th>
+                  <th class="border-r border-slate-200 text-center">Budget Code</th>
+                  <th class="border-r border-slate-200 text-center">Municipality</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+
+              <!-- ✅ IMPORTANT:
+                   Every row includes:
+                   data-region="REGION IV-A"
+                   data-municipality="CABUYAO" (or "ALL" if region-wide)
+                   so we can enforce region + municipality filtering.
+              -->
+              <tbody id="categoryTable" class="text-[10px] divide-y divide-slate-100">
+                <!-- Demo row -->
+                <tr class="hover:bg-slate-50 transition"
+                    data-revenue="permit"
+                    data-region="REGION IV-A"
+                    data-municipality="CABUYAO">
+                  <td class="font-bold text-slate-900 border-r border-slate-100">Permit Application Fees</td>
+                  <td class="border-r border-slate-100">
+                    <span class="font-mono font-black text-slate-800">4101</span>
+                    <span class="text-slate-500 ml-0.5">— Permit Revenue</span>
+                  </td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 text-[8px]">
+                      Permit Fees
+                    </span>
+                  </td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-slate-100 text-slate-700 border-slate-300 text-[8px]">
+                      No Tax
+                    </span>
+                  </td>
+                  <td class="font-mono text-slate-600 text-center border-r border-slate-100">REV-001</td>
+                  <td class="font-bold text-slate-700 text-center border-r border-slate-100 uppercase text-[9px]">Cabuyao</td>
+                  <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                      <button class="text-blue-700 hover:text-blue-900 font-black uppercase text-[9px]">Edit</button>
+                      <button class="text-rose-700 hover:text-rose-900 font-black uppercase text-[9px]">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Jinja rows -->
+                {% for c in deposit_categories %}
+                <tr class="hover:bg-slate-50 transition"
+                    data-revenue="{{ c.revenue_type|lower }}"
+                    data-region="{{ c.region|upper }}"
+                    data-municipality="{{ (c.municipality or 'ALL')|upper }}">
+                  <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">{{ c.name }}</td>
+                  <td class="border-r border-slate-100">
+                    <span class="font-mono font-black text-slate-800">{{ c.coa_code }}</span>
+                    <span class="text-slate-500 ml-0.5">— {{ c.coa_name }}</span>
+                  </td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 text-[8px]">
+                      {{ c.revenue_type }}
+                    </span>
+                  </td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border text-[8px]
+                      {% if c.tax_type == 'VAT' %} bg-blue-50 text-blue-700 border-blue-200
+                      {% elif c.tax_type == 'Withholding' %} bg-amber-50 text-amber-700 border-amber-200
+                      {% else %} bg-slate-100 text-slate-700 border-slate-300 {% endif %}">
+                      {{ c.tax_type }}{% if c.tax_rate %} ({{ c.tax_rate }}%){% endif %}
+                    </span>
+                  </td>
+                  <td class="font-mono text-slate-600 text-center border-r border-slate-100">{{ c.budget_code or '—' }}</td>
+
+                  <td class="font-bold text-slate-700 text-center border-r border-slate-100 uppercase text-[9px]">
+                    {{ c.municipality or 'ALL MUNICIPALITIES' }}
+                  </td>
+
+                  <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                      <button class="text-blue-700 hover:text-blue-900 font-black uppercase text-[9px]">Edit</button>
+                      <button class="text-rose-700 hover:text-rose-900 font-black uppercase text-[9px]">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex items-center justify-between text-[9px] text-slate-500 shrink-0">
+            <span class="font-bold italic uppercase tracking-wider">Filter by municipality and revenue type to quickly find COA mappings.</span>
+            <button class="font-black uppercase text-teal-700 hover:underline text-[9px]">Export CSV</button>
+          </div>
+        </section>
+
+        <!-- Modal -->
+        <div x-show="modalOpen" style="display:none" class="fixed inset-0 z-[100] bg-slate-900/60 flex items-center justify-center p-3 backdrop-blur-sm">
+          <div @click.away="modalOpen=false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-400">
+            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white">
+              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Add Deposit Category (Regional)</h3>
+              <button type="button" @click="modalOpen=false" class="text-slate-400 hover:text-white">
+                <span class="material-icons-round text-[16px]">close</span>
+              </button>
+            </div>
+
+            <div class="p-4 bg-slate-50">
+              <form id="categoryForm" class="space-y-3" onsubmit="event.preventDefault(); alert('Saved (demo)'); modalOpen=false;">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Category Name *</label>
+                    <input required type="text" class="gov-input w-full uppercase" placeholder="e.g., Permit Fees" />
+                  </div>
+                  <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">COA Account *</label>
+                    <select required class="gov-input w-full cursor-pointer">
+                      <option value="">Choose account...</option>
+                      <option value="4001">4001 — Service Revenue</option>
+                      <option value="4101">4101 — Permit Revenue</option>
+                      <option value="4201">4201 — Grants</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Revenue Type *</label>
+                    <select id="modalRevenue" required class="gov-input w-full cursor-pointer">
+                      <option value="">Select...</option>
+                      <option value="service">Service Revenue</option>
+                      <option value="permit">Permit Fees</option>
+                      <option value="grant">Grants</option>
+                      <option value="other">Other Income</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Tax Type *</label>
+                    <select id="taxType" required class="gov-input w-full cursor-pointer">
+                      <option value="">Select...</option>
+                      <option value="vat">VAT</option>
+                      <option value="withholding">Withholding</option>
+                      <option value="none">No Tax</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Tax Rate (%)</label>
+                    <input id="taxRate" type="number" step="0.01" class="gov-input w-full disabled:bg-slate-200" placeholder="e.g., 12.00" />
+                  </div>
+                  <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Budget Code (Optional)</label>
+                    <input type="text" class="gov-input w-full uppercase" placeholder="e.g., REV-001" />
+                  </div>
+                </div>
+
+                <!-- ✅ Region fixed, Municipality selectable -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Region</label>
+                    <input type="text" class="gov-input w-full bg-slate-200" value="{{ user_region|default('') }}" readonly>
+                  </div>
+                  <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Municipality Scope</label>
+                    <select id="modalMunicipality" class="gov-input w-full cursor-pointer">
+                      <option value="ALL">All Municipalities</option>
+                      {% for m in municipalities %}
+                        <option value="{{ m|upper }}">{{ m }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Description</label>
+                  <textarea rows="2" class="gov-input w-full" placeholder="Optional notes..."></textarea>
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                  <button type="button" @click="modalOpen=false"
+                    class="px-4 py-1.5 border border-slate-300 text-slate-600 font-black uppercase text-[9px] rounded-[2px] bg-white hover:bg-slate-100">
+                    Cancel
+                  </button>
+                  <button type="submit"
+                    class="gov-btn bg-teal-700 hover:bg-teal-800 text-white px-5 py-1.5 rounded-[2px] shadow-sm">
+                    Save Category
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // ✅ REGION SCOPE (Injected by backend)
+    // ==========================================
+    // This page must show ONLY rows where:
+    //   row.data-region == USER_REGION
+    // Additionally, municipality filter can narrow to a single municipality,
+    // and "ALL" rows should still appear when a specific municipality is selected.
+    const USER_REGION = ("{{ user_region|default('') }}").trim().toUpperCase();
+
+    // Disable tax rate if "No Tax" is selected
+    const taxTypeEl = document.getElementById('taxType');
+    const taxRateEl = document.getElementById('taxRate');
+    if (taxTypeEl && taxRateEl) {
+      taxTypeEl.addEventListener('change', function(){
+        if(this.value === 'none'){ taxRateEl.value=''; taxRateEl.disabled=true; }
+        else { taxRateEl.disabled=false; }
+      });
+    }
+
+    // Filtering Logic
+    const search = document.getElementById('searchCategory');
+    const filterRevenue = document.getElementById('filterRevenue');
+    const municipalityFilter = document.getElementById('municipalityFilter');
+
+    function applyFilters(){
+      const q = (search.value || '').toLowerCase().trim();
+      const rev = filterRevenue.value;
+      const muni = (municipalityFilter.value || 'ALL').toUpperCase().trim();
+
+      document.querySelectorAll('#categoryTable tr').forEach(tr=>{
+        const text = tr.innerText.toLowerCase();
+
+        const matchText = text.includes(q);
+
+        const rowRev = tr.getAttribute('data-revenue') || '';
+        const matchRev = !rev || rowRev === rev;
+
+        const rowRegion = (tr.getAttribute('data-region') || '').toUpperCase().trim();
+        const matchRegion = !USER_REGION || rowRegion === USER_REGION;
+
+        const rowMuni = (tr.getAttribute('data-municipality') || 'ALL').toUpperCase().trim();
+        // Municipality logic:
+        // - muni=ALL => show all municipalities under region
+        // - muni=XYZ => show rows for XYZ OR rows that are region-wide (ALL)
+        const matchMuni = (muni === 'ALL') || (rowMuni === muni) || (rowMuni === 'ALL');
+
+        tr.style.display = (matchText && matchRev && matchRegion && matchMuni) ? '' : 'none';
+      });
+    }
+
+    function resetFilters(){
+      search.value = '';
+      filterRevenue.value = '';
+      municipalityFilter.value = 'ALL';
+      applyFilters();
+    }
+
+    search.addEventListener('input', applyFilters);
+    filterRevenue.addEventListener('change', applyFilters);
+    municipalityFilter.addEventListener('change', applyFilters);
+
+    // Charts
+    Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+    Chart.defaults.font.size = 9;
+    Chart.defaults.color = "#64748b";
+    const chartConfig = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 } };
+
+    // Deposit Trend (demo)
+    new Chart(document.getElementById('depositTrendChart'),{
+      type:'line',
+      data:{
+        labels:['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],
+        datasets:[{
+          label:'Deposits',
+          data:[120,130,125,140,135,150,155,160],
+          borderColor: '#0f766e',
+          backgroundColor: 'rgba(15, 118, 110, 0.12)',
+          borderWidth: 1.5,
+          fill:true,
+          tension: 0.35,
+          pointRadius: 1
+        }]
+      },
+      options:{ ...chartConfig, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}}, y:{grid:{display:false}, beginAtZero:true}} }
+    });
+
+    // Revenue Mix (demo)
+    new Chart(document.getElementById('revenueMixChart'),{
+      type:'doughnut',
+      data:{
+        labels:['Service','Permits','Grants','Other'],
+        datasets:[{
+          data:[60,30,20,10],
+          backgroundColor:['#0f766e', '#4f46e5', '#10b981', '#cbd5e1'],
+          borderWidth:0
+        }]
+      },
+      options:{
+        ...chartConfig,
+        cutout:'65%',
+        plugins:{ legend:{ position:'right', labels:{ boxWidth:8, font:{ size:8, weight:'bold' } } } }
+      }
+    });
+
+    // Initial enforce region scope
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!USER_REGION) {
+        const badge = document.getElementById('scopeBadge');
+        if (badge) {
+          badge.textContent = 'NO REGION SET';
+          badge.className = 'badge bg-rose-50 text-rose-800 border-rose-200';
+        }
+      }
+      applyFilters();
+    });
+  </script>
+</body>
+</html>

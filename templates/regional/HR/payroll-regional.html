@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Payroll Management | Regional Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    /* Government Typography & Layout */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+
+    /* Compact Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #1e3a8a; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+    .gov-label { display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 2px; letter-spacing: 0.025em; }
+
+    /* Table specific density */
+    .payroll-table th { background: #f8fafc; color: #475569; border-bottom: 2px solid #e2e8f0; padding: 6px 8px; font-size: 9px; }
+    .payroll-table td { padding: 4px 8px; border-bottom: 1px solid #f1f5f9; }
+    .val-positive { color: #047857; font-weight: bold; }
+    .val-negative { color: #b91c1c; font-weight: bold; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- Regional Sidenav -->
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'regional/sidenav.html' %}
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 overflow-y-auto custom-scrollbar"
+      x-data="{
+        payrollModalOpen:false,
+        selectedScope:'REGIONWIDE',       // REGIONWIDE | REGIONAL | MUNICIPAL
+        selectedMunicipality:'Municipality A'
+      }">
+
+      <!-- Header -->
+      <header class="gov-card p-3 flex justify-between items-center shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white">
+            <span class="material-icons-round text-[18px]">payments</span>
+          </div>
+          <div class="leading-tight">
+            <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Payroll Registry</h1>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+              Regional + Municipal Payroll Ledger (Within This Region Only)
+            </p>
+          </div>
+        </div>
+        <div class="flex gap-2 items-center">
+          <span class="hidden md:inline-flex px-2 py-0.5 bg-indigo-50 text-indigo-800 border border-indigo-200 font-black text-[8px] uppercase rounded-[2px]">
+            This Region & Its Municipalities
+          </span>
+
+          <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">picture_as_pdf</span> Payslip Batch
+          </button>
+          <button @click="payrollModalOpen = true" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">account_balance</span> Generate Payroll
+          </button>
+        </div>
+      </header>
+
+      <!-- Scope + KPI -->
+      <section class="grid grid-cols-1 lg:grid-cols-5 gap-2 shrink-0">
+        <!-- Scope Selector -->
+        <div class="gov-card p-2 px-3 border-l-4 border-l-blue-900">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Scope Filter</p>
+
+          <div class="mt-1 grid grid-cols-3 gap-1">
+            <button type="button"
+              @click="selectedScope='REGIONWIDE'; filterTable()"
+              class="px-2 py-1 rounded-[2px] border text-[9px] font-black uppercase tracking-widest transition"
+              :class="selectedScope==='REGIONWIDE'
+                ? 'bg-blue-800 text-white border-blue-900'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">
+              Region-wide
+            </button>
+
+            <button type="button"
+              @click="selectedScope='REGIONAL'; filterTable()"
+              class="px-2 py-1 rounded-[2px] border text-[9px] font-black uppercase tracking-widest transition"
+              :class="selectedScope==='REGIONAL'
+                ? 'bg-blue-800 text-white border-blue-900'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">
+              Regional
+            </button>
+
+            <button type="button"
+              @click="selectedScope='MUNICIPAL'; filterTable()"
+              class="px-2 py-1 rounded-[2px] border text-[9px] font-black uppercase tracking-widest transition"
+              :class="selectedScope==='MUNICIPAL'
+                ? 'bg-blue-800 text-white border-blue-900'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">
+              Municipal
+            </button>
+          </div>
+
+          <div class="mt-2" x-show="selectedScope==='MUNICIPAL'" style="display:none;">
+            <label class="gov-label">Municipality</label>
+            <select class="gov-input w-full cursor-pointer"
+                    x-model="selectedMunicipality"
+                    @change="filterTable()">
+              <option>Municipality A</option>
+              <option>Municipality B</option>
+              <option>Municipality C</option>
+            </select>
+            <p class="text-[8px] text-slate-500 italic mt-1">Only municipalities under this region are selectable.</p>
+          </div>
+        </div>
+
+        <div class="gov-card p-2 px-3 border-l-4 border-l-blue-800">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Gross Amount (Monthly)</p>
+          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">₱ 2,145,800.00</div>
+        </div>
+
+        <div class="gov-card p-2 px-3 border-l-4 border-l-rose-700">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deductions</p>
+          <div class="text-lg font-black text-rose-700 mt-0.5 leading-none">₱ 318,250.00</div>
+        </div>
+
+        <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Net Take-Home Pay</p>
+          <div class="text-lg font-black text-emerald-700 mt-0.5 leading-none">₱ 1,827,550.00</div>
+        </div>
+
+        <div class="gov-card p-2 px-3 bg-slate-800 text-white border-none">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Next Pay Date</p>
+          <div class="text-lg font-black text-blue-300 mt-0.5 leading-none">Feb 28, 2026</div>
+        </div>
+      </section>
+
+      <!-- Ledger -->
+      <section class="gov-card flex-1 min-h-[300px] flex flex-col overflow-hidden">
+
+        <div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-2 shrink-0">
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">receipt_long</span>
+            Compensation Ledger (Feb 01–15)
+          </h2>
+
+          <div class="flex flex-wrap gap-1.5 items-center">
+            <div class="relative">
+              <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+              <input type="text" id="searchPayroll" placeholder="Search employee..." class="gov-input pl-6 w-48" oninput="filterTable()">
+            </div>
+
+            <!-- Regional-only: office scope is within region -->
+            <select id="officeFilter" class="gov-input cursor-pointer" onchange="filterTable()">
+              <option value="">All Offices</option>
+              <option value="Regional Office">Regional Office</option>
+              <option value="Municipality A">Municipality A</option>
+              <option value="Municipality B">Municipality B</option>
+              <option value="Municipality C">Municipality C</option>
+            </select>
+
+            <!-- Optional: status filter -->
+            <select id="statusFilter" class="gov-input cursor-pointer" onchange="filterTable()">
+              <option value="">All Status</option>
+              <option value="Posted">Posted</option>
+              <option value="Pending">Pending</option>
+              <option value="On Hold">On Hold</option>
+            </select>
+
+            <!-- Scope dropdown (matches your “regional+municipal only” rule) -->
+            <select id="scopeFilter" class="gov-input cursor-pointer" onchange="filterTable()">
+              <option value="">All Scope</option>
+              <option value="REGIONWIDE">Region-wide</option>
+              <option value="REGIONAL">Regional Office</option>
+              <option value="MUNICIPAL">Municipality</option>
+            </select>
+
+            <button onclick="resetFilters()"
+              class="px-2 py-0.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] shadow-sm transition">
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-auto custom-scrollbar bg-white">
+          <table class="w-full text-left border-collapse payroll-table">
+            <thead class="sticky top-0 z-10 uppercase tracking-widest">
+              <tr>
+                <th class="border-r border-slate-200">Personnel Name</th>
+                <th class="border-r border-slate-200">Office</th>
+                <th class="border-r border-slate-200 text-right">Basic Pay</th>
+                <th class="border-r border-slate-200 text-right">PERA</th>
+                <th class="border-r border-slate-200 text-right">Gross Pay</th>
+                <th class="border-r border-slate-200 text-right">GSIS/Tax</th>
+                <th class="border-r border-slate-200 text-right">Loans</th>
+                <th class="border-r border-slate-200 text-right">Net Pay</th>
+                <th class="border-r border-slate-200 text-center">Scope</th>
+                <th class="text-center">Status</th>
+              </tr>
+            </thead>
+
+            <tbody id="payrollBody" class="text-[10px]">
+
+              <!-- REGIONAL -->
+              <tr class="hover:bg-slate-50 transition payroll-row"
+                  data-office="Regional Office"
+                  data-scope="REGIONAL"
+                  data-mun=""
+                  data-status="Posted">
+                <td class="border-r border-slate-100">
+                  <span class="font-black text-slate-900 uppercase">Santos, Maria Clara P.</span><br>
+                  <span class="text-[8px] text-slate-400 uppercase">Chief Accountant • SG-24</span>
+                </td>
+                <td class="border-r border-slate-100 font-bold text-slate-700">Regional Office</td>
+                <td class="text-right border-r border-slate-100 font-mono">45,102.50</td>
+                <td class="text-right border-r border-slate-100 font-mono">1,000.00</td>
+                <td class="text-right border-r border-slate-100 font-mono font-bold">46,102.50</td>
+                <td class="text-right border-r border-slate-100 font-mono val-negative">8,210.45</td>
+                <td class="text-right border-r border-slate-100 font-mono val-negative">2,500.00</td>
+                <td class="text-right border-r border-slate-100 font-mono val-positive">35,392.05</td>
+                <td class="text-center border-r border-slate-100">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-blue-50 text-blue-800 border border-blue-200 w-20 text-center">Regional</span>
+                </td>
+                <td class="text-center">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">Posted</span>
+                </td>
+              </tr>
+
+              <!-- REGIONWIDE (applies to region + all its municipalities for a special run/adjustment) -->
+              <tr class="hover:bg-slate-50 transition payroll-row"
+                  data-office="Regional Office"
+                  data-scope="REGIONWIDE"
+                  data-mun=""
+                  data-status="Posted">
+                <td class="border-r border-slate-100">
+                  <span class="font-black text-slate-900 uppercase">Pelaez, Juanito R.</span><br>
+                  <span class="text-[8px] text-slate-400 uppercase">Director IV • SG-28</span>
+                </td>
+                <td class="border-r border-slate-100 font-bold text-slate-700">Regional Office</td>
+                <td class="text-right border-r border-slate-100 font-mono">75,890.00</td>
+                <td class="text-right border-r border-slate-100 font-mono">1,000.00</td>
+                <td class="text-right border-r border-slate-100 font-mono font-bold">76,890.00</td>
+                <td class="text-right border-r border-slate-100 font-mono val-negative">15,450.20</td>
+                <td class="text-right border-r border-slate-100 font-mono val-negative">0.00</td>
+                <td class="text-right border-r border-slate-100 font-mono val-positive">61,439.80</td>
+                <td class="text-center border-r border-slate-100">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-indigo-50 text-indigo-800 border border-indigo-200 w-24 text-center">Region-wide</span>
+                </td>
+                <td class="text-center">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">Posted</span>
+                </td>
+              </tr>
+
+              <!-- MUNICIPAL: Municipality B -->
+              <tr class="hover:bg-slate-50 transition payroll-row"
+                  data-office="Municipality B"
+                  data-scope="MUNICIPAL"
+                  data-mun="Municipality B"
+                  data-status="Pending">
+                <td class="border-r border-slate-100">
+                  <span class="font-black text-slate-900 uppercase">Crisostomo, Rizalino M.</span><br>
+                  <span class="text-[8px] text-slate-400 uppercase">PDO II • SG-15</span>
+                </td>
+                <td class="border-r border-slate-100 font-bold text-slate-700">Municipality B</td>
+                <td class="text-right border-r border-slate-100 font-mono">18,500.00</td>
+                <td class="text-right border-r border-slate-100 font-mono">1,000.00</td>
+                <td class="text-right border-r border-slate-100 font-mono font-bold">19,500.00</td>
+                <td class="text-right border-r border-slate-100 font-mono val-negative">3,120.00</td>
+                <td class="text-right border-r border-slate-100 font-mono val-negative">4,500.00</td>
+                <td class="text-right border-r border-slate-100 font-mono val-positive">11,880.00</td>
+                <td class="text-center border-r border-slate-100">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-amber-50 text-amber-800 border border-amber-200 w-20 text-center">Municipal</span>
+                </td>
+                <td class="text-center">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-amber-50 text-amber-700 border border-amber-300">Pending</span>
+                </td>
+              </tr>
+
+              <!-- MUNICIPAL: Municipality A -->
+              <tr class="hover:bg-slate-50 transition payroll-row"
+                  data-office="Municipality A"
+                  data-scope="MUNICIPAL"
+                  data-mun="Municipality A"
+                  data-status="Posted">
+                <td class="border-r border-slate-100">
+                  <span class="font-black text-slate-900 uppercase">Macaraeg, Luzviminda T.</span><br>
+                  <span class="text-[8px] text-slate-400 uppercase">ITO I • SG-19</span>
+                </td>
+                <td class="border-r border-slate-100 font-bold text-slate-700">Municipality A</td>
+                <td class="text-right border-r border-slate-100 font-mono">25,450.00</td>
+                <td class="text-right border-r border-slate-100 font-mono">1,000.00</td>
+                <td class="text-right border-r border-slate-100 font-mono font-bold">26,450.00</td>
+                <td class="text-right border-r border-slate-100 font-mono val-negative">4,890.00</td>
+                <td class="text-right border-r border-slate-100 font-mono val-negative">12,000.00</td>
+                <td class="text-right border-r border-slate-100 font-mono val-positive">9,560.00</td>
+                <td class="text-center border-r border-slate-100">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-amber-50 text-amber-800 border border-amber-200 w-20 text-center">Municipal</span>
+                </td>
+                <td class="text-center">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">Posted</span>
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+
+        <div class="bg-slate-50 border-t border-slate-200 px-3 py-1.5 text-[9px] text-slate-500 shrink-0 flex justify-between items-center">
+          <span>Note: Mandatory GSIS, PhilHealth, and Pag-IBIG contributions are auto-computed.</span>
+          <span>Visible Records: <b id="visibleCount" class="text-slate-800">4</b></span>
+        </div>
+      </section>
+
+      <!-- Modal: Generate Payroll -->
+      <div x-show="payrollModalOpen" style="display:none;"
+           class="fixed inset-0 z-[100] bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div @click.away="payrollModalOpen = false"
+             class="bg-white rounded-[2px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-400">
+
+          <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white">
+            <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Generate Payroll Period</h3>
+            <button @click="payrollModalOpen = false" class="text-slate-400 hover:text-white">
+              <span class="material-icons-round text-[16px]">close</span>
+            </button>
+          </div>
+
+          <form class="p-4 bg-slate-50 space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="gov-label">Pay Month</label>
+                <select class="gov-input w-full cursor-pointer">
+                  <option>February 2026</option>
+                  <option>March 2026</option>
+                </select>
+              </div>
+              <div>
+                <label class="gov-label">Payroll Cycle</label>
+                <select class="gov-input w-full cursor-pointer">
+                  <option>1st Quincena (1–15)</option>
+                  <option>2nd Quincena (16–30)</option>
+                  <option>Full Month</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Regional restriction -->
+            <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-[2px]">
+              <p class="text-[9px] font-black text-indigo-900 uppercase mb-2 flex items-center gap-1">
+                <span class="material-icons-round text-[14px]">shield</span> Scope Restriction
+              </p>
+              <p class="text-[10px] text-slate-700">
+                Payroll processing applies only to the <b>Regional Office</b> and its <b>municipalities</b>. National scope is not available.
+              </p>
+            </div>
+
+            <div class="p-3 bg-blue-50 border border-blue-200 rounded-[2px]">
+              <p class="text-[9px] font-bold text-blue-800 uppercase mb-2">Automated Checks</p>
+              <div class="space-y-1">
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" checked class="w-3 h-3">
+                  <span class="text-[10px] text-slate-700">Apply DTR-based tardiness deductions</span>
+                </label>
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" checked class="w-3 h-3">
+                  <span class="text-[10px] text-slate-700">Compute GSIS/PhilHealth/PagIBIG Share</span>
+                </label>
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" checked class="w-3 h-3">
+                  <span class="text-[10px] text-slate-700">Apply approved loan amortizations</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-200 mt-2 flex justify-end gap-2">
+              <button type="button" @click="payrollModalOpen = false"
+                      class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 shadow-sm">
+                Cancel
+              </button>
+              <button type="button" @click="payrollModalOpen = false"
+                      class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">
+                Process Payroll
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    function filterTable() {
+      const query = document.getElementById('searchPayroll').value.toLowerCase().trim();
+      const office = document.getElementById('officeFilter').value;
+      const status = document.getElementById('statusFilter').value;
+      const scopeFilter = (document.getElementById('scopeFilter').value || '').toUpperCase();
+
+      // Alpine state (scope buttons + municipal selector)
+      const root = document.querySelector('main[x-data]');
+      const alpine = root && root.__x ? root.__x.$data : null;
+      const selectedScope = alpine ? (alpine.selectedScope || '').toUpperCase() : '';
+      const selectedMunicipality = alpine ? (alpine.selectedMunicipality || '') : '';
+
+      const rows = document.querySelectorAll('.payroll-row');
+      let visibleCount = 0;
+
+      rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        const rowOffice = row.getAttribute('data-office') || '';
+        const rowScope = (row.getAttribute('data-scope') || '').toUpperCase();
+        const rowMun = row.getAttribute('data-mun') || '';
+        const rowStatus = row.getAttribute('data-status') || '';
+
+        const matchQuery = text.includes(query);
+        const matchOffice = !office || rowOffice === office;
+        const matchStatus = !status || rowStatus === status;
+
+        // dropdown scope filter
+        const matchScopeDropdown = !scopeFilter || rowScope === scopeFilter;
+
+        // top scope buttons
+        let matchScopeButtons = true;
+        if (selectedScope) {
+          matchScopeButtons = (rowScope === selectedScope);
+          if (selectedScope === 'MUNICIPAL') {
+            matchScopeButtons = matchScopeButtons && (!selectedMunicipality || rowMun === selectedMunicipality);
+          }
+        }
+
+        const ok = matchQuery && matchOffice && matchStatus && matchScopeDropdown && matchScopeButtons;
+        row.style.display = ok ? '' : 'none';
+        if (ok) visibleCount++;
+      });
+
+      document.getElementById('visibleCount').innerText = visibleCount;
+    }
+
+    function resetFilters() {
+      document.getElementById('searchPayroll').value = '';
+      document.getElementById('officeFilter').value = '';
+      document.getElementById('statusFilter').value = '';
+      document.getElementById('scopeFilter').value = '';
+
+      // reset Alpine
+      const root = document.querySelector('main[x-data]');
+      const alpine = root && root.__x ? root.__x.$data : null;
+      if (alpine) {
+        alpine.selectedScope = 'REGIONWIDE';
+        alpine.selectedMunicipality = 'Municipality A';
+      }
+
+      filterTable();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => filterTable());
+  </script>
+</body>
+</html>

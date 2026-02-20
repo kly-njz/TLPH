@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Permissions | Regional Admin</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <!-- Alpine -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    body { font-family: Verdana, Arial, sans-serif; background:#e2e8f0; font-size:11px; }
+    .custom-scrollbar::-webkit-scrollbar{ width:5px; height:5px; }
+    .custom-scrollbar::-webkit-scrollbar-track{ background:#f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb{ background:#94a3b8; border-radius:2px; }
+
+    .gov-card{ background:#fff; border:1px solid #cbd5e1; border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    .gov-input{ padding:4px 8px; font-size:10px; font-weight:800; border:1px solid #cbd5e1; border-radius:2px; background:#fff; outline:none; }
+    .gov-input:focus{ border-color:#0f766e; }
+    .gov-btn{ padding:4px 10px; border-radius:2px; font-weight:900; text-transform:uppercase; font-size:9px; letter-spacing:.06em; transition:all .2s; cursor:pointer; }
+
+    th{ font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.12em; color:#64748b; background:#f8fafc; border-bottom:2px solid #e2e8f0; padding:8px !important; }
+    td{ padding:8px !important; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+
+    .badge{ font-size:8px; font-weight:900; text-transform:uppercase; letter-spacing:.12em; padding:2px 6px; border-radius:2px; border:1px solid; display:inline-flex; align-items:center; gap:4px; }
+    .chip{ font-size:8px; font-weight:900; text-transform:uppercase; letter-spacing:.12em; padding:2px 6px; border-radius:999px; border:1px solid; display:inline-flex; align-items:center; gap:4px; }
+
+    .btn-icon{ width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:2px; border:1px solid #e2e8f0; background:#f8fafc; color:#64748b; transition:.2s; }
+    .btn-icon:hover{ background:#e2e8f0; color:#0f172a; }
+    .btn-danger:hover{ background:#fee2e2; border-color:#fecaca; color:#b91c1c; }
+    .btn-primary:hover{ background:#d1fae5; border-color:#a7f3d0; color:#065f46; }
+
+    [x-cloak]{ display:none !important; }
+
+    /* Toggle switch (simple, gov-ish) */
+    .switch { position: relative; width: 34px; height: 18px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 999px; transition: .2s; }
+    .switch::after { content:""; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:999px; background:#fff; border:1px solid #cbd5e1; transition:.2s; }
+    .switch.on { background:#d1fae5; border-color:#a7f3d0; }
+    .switch.on::after { left:17px; border-color:#6ee7b7; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden">
+  <div class="h-full lg:grid lg:grid-cols-[260px_1fr]">
+
+    {% include 'regional/sidenav.html' %}
+
+    <div class="h-full flex flex-col overflow-hidden" x-data="permissionsApp()" x-init="init()">
+
+      <main class="flex-1 min-h-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar flex flex-col">
+
+        <!-- Header -->
+        <header class="gov-card p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0 border-b-4 border-b-teal-800">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-teal-800 flex items-center justify-center text-white">
+              <span class="material-icons-round text-[18px]">admin_panel_settings</span>
+            </div>
+            <div class="leading-tight">
+              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Permissions</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+                Regional Admin • Assign access to municipal accounts (own municipality, other municipalities, or region-wide)
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span class="badge bg-teal-50 text-teal-800 border-teal-200">
+              <span class="material-icons-round text-[12px]">map</span>
+              <span x-text="USER_REGION"></span>
+            </span>
+
+            <button class="gov-btn bg-teal-700 hover:bg-teal-800 text-white shadow-sm flex items-center gap-1.5"
+                    @click="openGrantModal()">
+              <span class="material-icons-round text-[14px]">add</span>
+              Grant Access
+            </button>
+          </div>
+        </header>
+
+        <!-- Summary -->
+        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-slate-600">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Accounts</span>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.accounts"></div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-teal-700 bg-teal-50/30">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Grants</span>
+            <div class="text-lg font-black text-teal-800 mt-0.5 leading-none" x-text="stats.grants"></div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-amber-600 bg-amber-50/30">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Region-wide</span>
+            <div class="text-lg font-black text-amber-700 mt-0.5 leading-none" x-text="stats.regionWide"></div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-indigo-600 bg-indigo-50/30">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Cross-municipal</span>
+            <div class="text-lg font-black text-indigo-700 mt-0.5 leading-none" x-text="stats.crossMuni"></div>
+          </div>
+        </section>
+
+        <!-- Two Column: Accounts + Access Matrix -->
+        <section class="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-2 flex-1 min-h-0">
+
+          <!-- Left: Accounts List -->
+          <div class="gov-card flex flex-col overflow-hidden min-h-0">
+            <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex items-center justify-between">
+              <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+                <span class="material-icons-round text-[14px]">group</span> Municipal Accounts
+              </h2>
+              <span class="text-[9px] text-slate-500 font-bold uppercase">Select one</span>
+            </div>
+
+            <div class="p-2 border-b border-slate-100 shrink-0">
+              <div class="relative">
+                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                <input class="gov-input pl-6 w-full bg-white"
+                       placeholder="Search name/email/municipality..."
+                       x-model="filters.accountQ"
+                       @input.debounce.150ms="applyAccountSearch()">
+              </div>
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-auto custom-scrollbar p-2 space-y-2">
+              <template x-for="a in accountsFiltered" :key="a.id">
+                <button type="button"
+                        class="w-full text-left border rounded-[2px] p-2 transition"
+                        :class="selectedAccount?.id === a.id ? 'border-teal-700 bg-teal-50' : 'border-slate-200 bg-white hover:bg-slate-50'"
+                        @click="selectAccount(a)">
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <div class="text-[11px] font-black uppercase text-slate-900" x-text="a.name"></div>
+                      <div class="text-[9px] font-mono text-slate-600 mt-0.5" x-text="a.email"></div>
+                      <div class="mt-1 flex flex-wrap gap-1">
+                        <span class="chip bg-indigo-50 text-indigo-700 border-indigo-200">
+                          <span class="material-icons-round text-[10px]">location_city</span>
+                          <span x-text="a.municipality"></span>
+                        </span>
+                        <span class="chip bg-slate-50 text-slate-700 border-slate-200">
+                          <span class="material-icons-round text-[10px]">badge</span>
+                          <span x-text="prettyRole(a.role)"></span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <span class="chip"
+                          :class="a.status==='ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : (a.status==='PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200')">
+                      <span class="material-icons-round text-[10px]" x-text="statusIcon(a.status)"></span>
+                      <span x-text="a.status"></span>
+                    </span>
+                  </div>
+                </button>
+              </template>
+
+              <div x-show="accountsFiltered.length===0" class="text-center py-10 text-slate-500 font-bold uppercase text-[10px]">
+                No accounts found
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Permissions for selected account -->
+          <div class="gov-card flex flex-col overflow-hidden min-h-0">
+            <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <div>
+                <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+                  <span class="material-icons-round text-[14px]">lock</span> Access Controls
+                </h2>
+                <p class="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
+                  Selected: <span class="text-teal-800" x-text="selectedAccount ? selectedAccount.name : 'None'"></span>
+                  <template x-if="selectedAccount">
+                    <span class="text-slate-400">•</span>
+                  </template>
+                  <template x-if="selectedAccount">
+                    <span class="text-slate-600" x-text="selectedAccount.municipality"></span>
+                  </template>
+                </p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 flex items-center gap-1"
+                        @click="exportSelectedPermissions()"
+                        :disabled="!selectedAccount">
+                  <span class="material-icons-round text-[14px]">file_download</span> Export
+                </button>
+
+                <button class="gov-btn bg-teal-700 hover:bg-teal-800 text-white flex items-center gap-1"
+                        @click="savePermissions()"
+                        :disabled="!selectedAccount">
+                  <span class="material-icons-round text-[14px]">save</span> Save
+                </button>
+              </div>
+            </div>
+
+            <div class="p-3 flex-1 min-h-0 overflow-auto custom-scrollbar bg-white">
+              <template x-if="!selectedAccount">
+                <div class="text-center py-14">
+                  <span class="material-icons-round text-slate-300 text-6xl">touch_app</span>
+                  <div class="mt-2 text-[10px] font-black uppercase text-slate-500">Select a municipal account on the left</div>
+                  <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-1">
+                    Then configure access to region-wide or other municipalities.
+                  </div>
+                </div>
+              </template>
+
+              <template x-if="selectedAccount">
+                <div class="space-y-3">
+
+                  <!-- Region-wide Toggle -->
+                  <div class="gov-card p-3 border border-slate-200">
+                    <div class="flex items-start justify-between gap-3">
+                      <div>
+                        <div class="text-[10px] font-black uppercase text-slate-800 flex items-center gap-1">
+                          <span class="material-icons-round text-[14px] text-amber-700">public</span>
+                          Region-wide access
+                        </div>
+                        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-1">
+                          Grants access to ALL municipalities under <span class="text-slate-700" x-text="USER_REGION"></span>.
+                        </div>
+                        <div class="text-[9px] text-slate-400 font-bold mt-1">
+                          Note: Still enforce this in the backend.
+                        </div>
+                      </div>
+
+                      <button type="button" class="switch"
+                              :class="perm.regionWide ? 'on' : ''"
+                              @click="toggleRegionWide()"
+                              title="Toggle region-wide access"></button>
+                    </div>
+                  </div>
+
+                  <!-- Municipality Access List -->
+                  <div class="gov-card border border-slate-200 overflow-hidden">
+                    <div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                      <div class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+                        <span class="material-icons-round text-[14px]">location_city</span>
+                        Municipality access
+                      </div>
+
+                      <div class="flex items-center gap-2">
+                        <span class="text-[9px] font-bold uppercase text-slate-500">
+                          Own municipality:
+                          <span class="text-slate-700" x-text="selectedAccount.municipality"></span>
+                        </span>
+                        <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700"
+                                @click="grantOwnMunicipality()">
+                          Ensure Own Access
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="p-2">
+                      <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                        Toggle municipalities this account can view/manage
+                      </div>
+
+                      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        <template x-for="m in municipalities" :key="m">
+                          <div class="border border-slate-200 rounded-[2px] p-2 flex items-center justify-between"
+                               :class="(selectedAccount.municipality===m) ? 'bg-slate-50' : 'bg-white'">
+                            <div class="flex items-center gap-2">
+                              <span class="material-icons-round text-[16px] text-slate-500">domain</span>
+                              <div>
+                                <div class="text-[10px] font-black uppercase text-slate-800" x-text="m"></div>
+                                <div class="text-[9px] font-bold uppercase tracking-wider"
+                                     :class="hasMuni(m) ? 'text-emerald-700' : 'text-slate-400'">
+                                  <span x-text="hasMuni(m) ? 'Granted' : 'Not granted'"></span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <button type="button"
+                                    class="switch"
+                                    :class="hasMuni(m) ? 'on' : ''"
+                                    @click="toggleMunicipality(m)"
+                                    :disabled="perm.regionWide"
+                                    :title="perm.regionWide ? 'Disabled because Region-wide is ON' : 'Toggle municipality access'"></button>
+                          </div>
+                        </template>
+                      </div>
+
+                      <div class="mt-2 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                        <span class="text-slate-700" x-text="perm.regionWide ? 'Region-wide ON:' : 'Region-wide OFF:'"></span>
+                        <span x-text="perm.regionWide ? 'Municipality toggles disabled (implied access to all).' : 'Municipality list controls access.'"></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Features (optional) -->
+                  <div class="gov-card border border-slate-200 overflow-hidden">
+                    <div class="bg-slate-50 border-b border-slate-200 px-3 py-2">
+                      <div class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+                        <span class="material-icons-round text-[14px]">tune</span>
+                        Feature permissions (optional)
+                      </div>
+                      <div class="text-[9px] font-bold uppercase tracking-wider text-slate-500 mt-0.5">
+                        Control what they can do when they have access.
+                      </div>
+                    </div>
+
+                    <div class="p-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <template x-for="f in featureList" :key="f.key">
+                        <div class="border border-slate-200 rounded-[2px] p-2 flex items-center justify-between bg-white">
+                          <div class="flex items-center gap-2">
+                            <span class="material-icons-round text-[16px]" x-text="f.icon"></span>
+                            <div>
+                              <div class="text-[10px] font-black uppercase text-slate-800" x-text="f.label"></div>
+                              <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400" x-text="f.note"></div>
+                            </div>
+                          </div>
+
+                          <button type="button"
+                                  class="switch"
+                                  :class="perm.features[f.key] ? 'on' : ''"
+                                  @click="perm.features[f.key] = !perm.features[f.key]"></button>
+                        </div>
+                      </template>
+                    </div>
+
+                    <div class="px-3 py-2 border-t border-slate-200 bg-slate-50 text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">
+                      Tip: Keep “View” enabled by default; enable “Approve” only for trusted roles.
+                    </div>
+                  </div>
+
+                </div>
+              </template>
+            </div>
+
+            <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex items-center justify-between text-[9px] text-slate-500 shrink-0">
+              <span class="font-bold italic uppercase tracking-wider">
+                Demo page — wire to backend endpoints for real enforcement.
+              </span>
+              <span class="font-mono text-slate-400">v1.0</span>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Grant Access Modal (quick action) -->
+        <div x-cloak x-show="modal.grant.open" class="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3">
+          <div @click.away="closeModal()"
+               class="bg-white rounded-[2px] shadow-2xl w-full max-w-xl overflow-hidden border border-slate-400">
+            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white">
+              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Grant Access</h3>
+              <button type="button" @click="closeModal()" class="text-slate-300 hover:text-white">
+                <span class="material-icons-round text-[16px]">close</span>
+              </button>
+            </div>
+
+            <div class="p-4 bg-slate-50 space-y-3">
+              <div class="gov-card p-3">
+                <div class="text-[10px] font-black uppercase text-slate-800">1) Choose municipal account</div>
+                <select class="gov-input w-full mt-2 cursor-pointer"
+                        x-model="modal.grant.accountId">
+                  <option value="">Select account...</option>
+                  <template x-for="a in accounts" :key="a.id">
+                    <option :value="a.id" x-text="a.name + ' — ' + a.municipality"></option>
+                  </template>
+                </select>
+
+                <div class="text-[10px] font-black uppercase text-slate-800 mt-3">2) Grant type</div>
+
+                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <label class="border border-slate-200 bg-white rounded-[2px] p-2 flex gap-2 cursor-pointer">
+                    <input type="radio" name="grantType" value="REGION_WIDE" x-model="modal.grant.type" class="mt-1">
+                    <div>
+                      <div class="text-[10px] font-black uppercase text-amber-800">Region-wide</div>
+                      <div class="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                        All municipalities in <span x-text="USER_REGION"></span>
+                      </div>
+                    </div>
+                  </label>
+
+                  <label class="border border-slate-200 bg-white rounded-[2px] p-2 flex gap-2 cursor-pointer">
+                    <input type="radio" name="grantType" value="MUNICIPALITIES" x-model="modal.grant.type" class="mt-1">
+                    <div>
+                      <div class="text-[10px] font-black uppercase text-indigo-800">Specific municipalities</div>
+                      <div class="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                        Pick one or more municipalities
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                <template x-if="modal.grant.type === 'MUNICIPALITIES'">
+                  <div class="mt-3">
+                    <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Select municipalities</div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      <template x-for="m in municipalities" :key="m">
+                        <label class="border border-slate-200 bg-white rounded-[2px] p-2 flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" :value="m" @change="toggleGrantMuni(m)" :checked="modal.grant.municipalities.includes(m)">
+                          <span class="text-[10px] font-black uppercase text-slate-800" x-text="m"></span>
+                        </label>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+
+                <div class="mt-3 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                  This is a demo. On “Apply”, it will update the selected account’s permission panel.
+                </div>
+              </div>
+
+              <div class="flex justify-end gap-2">
+                <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700"
+                        @click="closeModal()">Cancel</button>
+                <button class="gov-btn bg-teal-700 hover:bg-teal-800 text-white"
+                        @click="applyGrant()">Apply Grant</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    function permissionsApp(){
+      return {
+        // ✅ Demo: set region + municipalities here (replace with backend later)
+        USER_REGION: "REGION IV-A",
+        municipalities: ["CABUYAO","CALAMBA","SANTA ROSA","BINAN","SAN PEDRO","STA. CRUZ"],
+
+        // ✅ Demo accounts (replace with backend later)
+        accounts: [
+          { id:"u1", name:"MARIA SANTOS", email:"maria@cabuyao.gov.ph", municipality:"CABUYAO", role:"MUNICIPAL_ACCOUNTANT", status:"ACTIVE", region:"REGION IV-A" },
+          { id:"u2", name:"JUAN DELA CRUZ", email:"juan@calamba.gov.ph", municipality:"CALAMBA", role:"MUNICIPAL_ADMIN", status:"PENDING", region:"REGION IV-A" },
+          { id:"u3", name:"ANNA REYES", email:"anna@santarosa.gov.ph", municipality:"SANTA ROSA", role:"MUNICIPAL_ENCODER", status:"ACTIVE", region:"REGION IV-A" }
+        ],
+
+        // Permissions store (per account)
+        // regionWide: boolean
+        // municipalities: array
+        // features: map
+        permissionsByAccount: {},
+
+        // UI state
+        selectedAccount: null,
+        perm: { regionWide:false, municipalities:[], features:{} },
+
+        filters: { accountQ:'' },
+        accountsFiltered: [],
+
+        featureList: [
+          { key:"VIEW", label:"View Records", note:"Read-only access", icon:"visibility" },
+          { key:"CREATE", label:"Create Entries", note:"Add/encode records", icon:"add_circle" },
+          { key:"EDIT", label:"Edit Entries", note:"Modify records", icon:"edit" },
+          { key:"APPROVE", label:"Approve/Finalize", note:"Approval authority", icon:"task_alt" },
+          { key:"EXPORT", label:"Export Reports", note:"CSV/PDF exports", icon:"file_download" },
+          { key:"AUDIT", label:"View Audit Logs", note:"Security trail", icon:"history" }
+        ],
+
+        modal: {
+          grant: { open:false, accountId:'', type:'REGION_WIDE', municipalities:[] }
+        },
+
+        stats: { accounts:0, grants:0, regionWide:0, crossMuni:0 },
+
+        init(){
+          // Initialize defaults: every account always has OWN municipality at least
+          this.accounts.forEach(a => {
+            const key = a.id;
+            if (!this.permissionsByAccount[key]) {
+              this.permissionsByAccount[key] = {
+                regionWide: false,
+                municipalities: [a.municipality], // default own municipality
+                features: { VIEW:true, CREATE:true, EDIT:true, APPROVE:false, EXPORT:true, AUDIT:false }
+              };
+            }
+          });
+
+          this.applyAccountSearch();
+          this.recalcStats();
+        },
+
+        prettyRole(role){
+          const r = (role||'').toUpperCase();
+          if (r === 'MUNICIPAL_ADMIN') return 'Municipal Admin';
+          if (r === 'MUNICIPAL_ENCODER') return 'Municipal Encoder';
+          if (r === 'MUNICIPAL_ACCOUNTANT') return 'Municipal Accountant';
+          return role || '—';
+        },
+
+        statusIcon(status){
+          const s = (status||'').toUpperCase();
+          if (s === 'ACTIVE') return 'check_circle';
+          if (s === 'PENDING') return 'pending';
+          if (s === 'DISABLED') return 'block';
+          return 'help';
+        },
+
+        applyAccountSearch(){
+          const q = (this.filters.accountQ||'').toLowerCase().trim();
+          this.accountsFiltered = this.accounts.filter(a => {
+            const text = `${a.name} ${a.email} ${a.municipality} ${a.role} ${a.status}`.toLowerCase();
+            return !q || text.includes(q);
+          });
+          this.stats.accounts = this.accounts.length;
+        },
+
+        selectAccount(a){
+          this.selectedAccount = a;
+          const saved = this.permissionsByAccount[a.id];
+          // deep copy
+          this.perm = JSON.parse(JSON.stringify(saved));
+          // Ensure own municipality always included
+          this.ensureOwnMunicipality();
+        },
+
+        ensureOwnMunicipality(){
+          if (!this.selectedAccount) return;
+          const own = this.selectedAccount.municipality;
+          const set = new Set((this.perm.municipalities||[]).map(x => String(x).toUpperCase().trim()));
+          set.add(String(own).toUpperCase().trim());
+          this.perm.municipalities = Array.from(set);
+        },
+
+        hasMuni(m){
+          const set = new Set((this.perm.municipalities||[]).map(x => String(x).toUpperCase().trim()));
+          return set.has(String(m).toUpperCase().trim());
+        },
+
+        toggleMunicipality(m){
+          if (!this.selectedAccount) return;
+          if (this.perm.regionWide) return;
+
+          const own = String(this.selectedAccount.municipality).toUpperCase().trim();
+          const target = String(m).toUpperCase().trim();
+
+          // Do not allow removing own municipality
+          if (target === own) {
+            this.ensureOwnMunicipality();
+            return;
+          }
+
+          const set = new Set((this.perm.municipalities||[]).map(x => String(x).toUpperCase().trim()));
+          if (set.has(target)) set.delete(target);
+          else set.add(target);
+
+          // keep as array
+          this.perm.municipalities = Array.from(set);
+        },
+
+        toggleRegionWide(){
+          if (!this.selectedAccount) return;
+          this.perm.regionWide = !this.perm.regionWide;
+          if (this.perm.regionWide) {
+            // keep own municipality at least (display), but region-wide implies all anyway
+            this.ensureOwnMunicipality();
+          }
+        },
+
+        grantOwnMunicipality(){
+          this.ensureOwnMunicipality();
+          alert("Own municipality access ensured (demo).");
+        },
+
+        savePermissions(){
+          if (!this.selectedAccount) return;
+
+          // Enforce own municipality
+          this.ensureOwnMunicipality();
+
+          // Save (demo)
+          this.permissionsByAccount[this.selectedAccount.id] = JSON.parse(JSON.stringify(this.perm));
+          alert("Saved permissions (demo). Wire to backend save endpoint.");
+          this.recalcStats();
+        },
+
+        recalcStats(){
+          const ids = Object.keys(this.permissionsByAccount);
+          let totalGrants = 0;
+          let regionWide = 0;
+          let cross = 0;
+
+          ids.forEach(id => {
+            const p = this.permissionsByAccount[id];
+            if (!p) return;
+            totalGrants++;
+
+            if (p.regionWide) regionWide++;
+
+            // Cross municipal means has at least 2 municipalities or has a municipality not equal to own
+            const acct = this.accounts.find(a => a.id === id);
+            const own = acct ? String(acct.municipality).toUpperCase().trim() : "";
+            const set = new Set((p.municipalities||[]).map(x => String(x).toUpperCase().trim()));
+            if (p.regionWide) {
+              // region wide already counts as cross (optional)
+              cross++;
+            } else {
+              const hasOther = Array.from(set).some(m => m && m !== own);
+              if (hasOther) cross++;
+            }
+          });
+
+          this.stats.accounts = this.accounts.length;
+          this.stats.grants = totalGrants;
+          this.stats.regionWide = regionWide;
+          this.stats.crossMuni = cross;
+        },
+
+        exportSelectedPermissions(){
+          if (!this.selectedAccount) return;
+
+          const id = this.selectedAccount.id;
+          const p = this.permissionsByAccount[id] || this.perm;
+
+          const rows = [{
+            AccountName: this.selectedAccount.name,
+            Email: this.selectedAccount.email,
+            OwnMunicipality: this.selectedAccount.municipality,
+            Region: this.USER_REGION,
+            RegionWide: p.regionWide ? "YES" : "NO",
+            Municipalities: p.regionWide ? "ALL" : (p.municipalities||[]).join("|"),
+            Features: Object.keys(p.features||{}).filter(k => p.features[k]).join("|")
+          }];
+
+          const headers = Object.keys(rows[0]);
+          const csv = [
+            headers.join(","),
+            ...rows.map(r => headers.map(h => `"${String(r[h] ?? "").replace(/"/g,'""')}"`).join(","))
+          ].join("\n");
+
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `permissions_${this.USER_REGION.replace(/\s+/g,'_')}_${this.selectedAccount.municipality}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        },
+
+        // ----- Grant Modal -----
+        openGrantModal(){
+          this.modal.grant.open = true;
+          this.modal.grant.accountId = "";
+          this.modal.grant.type = "REGION_WIDE";
+          this.modal.grant.municipalities = [];
+        },
+
+        closeModal(){
+          this.modal.grant.open = false;
+        },
+
+        toggleGrantMuni(m){
+          const t = String(m).toUpperCase().trim();
+          const set = new Set(this.modal.grant.municipalities.map(x => String(x).toUpperCase().trim()));
+          if (set.has(t)) set.delete(t); else set.add(t);
+          this.modal.grant.municipalities = Array.from(set);
+        },
+
+        applyGrant(){
+          const id = this.modal.grant.accountId;
+          if (!id) { alert("Please select an account."); return; }
+
+          const acct = this.accounts.find(a => a.id === id);
+          if (!acct) { alert("Account not found."); return; }
+
+          const own = String(acct.municipality).toUpperCase().trim();
+
+          if (this.modal.grant.type === "REGION_WIDE") {
+            this.permissionsByAccount[id].regionWide = true;
+            this.permissionsByAccount[id].municipalities = [own]; // keep own listed; regionWide implies all
+          } else {
+            this.permissionsByAccount[id].regionWide = false;
+            const set = new Set(this.modal.grant.municipalities.map(x => String(x).toUpperCase().trim()));
+            set.add(own); // ensure own
+            this.permissionsByAccount[id].municipalities = Array.from(set);
+          }
+
+          // If the granted account is currently selected, refresh right panel
+          if (this.selectedAccount && this.selectedAccount.id === id) {
+            this.perm = JSON.parse(JSON.stringify(this.permissionsByAccount[id]));
+            this.ensureOwnMunicipality();
+          }
+
+          alert("Grant applied (demo). Wire this to backend grant endpoints.");
+          this.closeModal();
+          this.recalcStats();
+        }
+      }
+    }
+  </script>
+</body>
+</html>
