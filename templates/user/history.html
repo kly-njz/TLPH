@@ -1051,7 +1051,9 @@
 
   <script type="module">
     import { auth, db, onAuthStateChanged } from "{{ url_for('static', filename='js/firebase-config.js') }}";
-    import { query, where, getDocs, collection, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { query, where, getDocs, onSnapshot, collection, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    let historyReloadTimeout = null;
 
     const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
@@ -1169,14 +1171,19 @@
             }) : 'N/A';
             
             const statusInfo = getStatusInfo(app.status);
+            const borderColor = statusInfo.label === 'APPROVED' ? 'border-l-green-500' :
+                                statusInfo.label === 'REJECTED' ? 'border-l-red-500' :
+                                statusInfo.label === 'FORWARDED TO NATIONAL' ? 'border-l-purple-500' :
+                                statusInfo.label === 'CANCELLED' ? 'border-l-gray-400' : 'border-l-yellow-400';
             
             applications.push({
               date: app.submittedAt || new Date(),
               html: `
-                <div class="bg-white border border-gray-200 rounded-lg p-4 sm:p-5 hover:border-blue-500 transition-all">
+                <div class="bg-white border border-gray-200 border-l-4 ${borderColor} rounded-lg p-4 sm:p-5 hover:border-blue-500 transition-all">
                   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 pb-3 border-b border-gray-100">
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
                       <span class="status-badge ${statusInfo.bgClass} ${statusInfo.textClass} text-xs font-bold px-2.5 py-1 rounded">${categoryLabel}</span>
+                      ${app.productName ? `<span class="text-[10px] font-bold text-slate-700">${app.productName}</span>` : ''}
                       <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">${date}</span>
                     </div>
                     <a href="/user/inventory/stock-info/${doc.id}" class="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition">
@@ -1207,6 +1214,9 @@
                       </div>
                     </div>
                   </div>
+                  ${statusInfo.label === 'APPROVED' ? `<div class="mt-3 pt-3 border-t border-green-100 bg-green-50 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 px-4 sm:px-5 py-2 rounded-b-lg flex items-center gap-2"><i class="fa-solid fa-circle-check text-green-600 text-xs"></i><span class="text-xs font-bold text-green-700">Application Approved</span></div>` : ''}
+                  ${statusInfo.label === 'REJECTED' ? `<div class="mt-3 pt-3 border-t border-red-100 bg-red-50 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 px-4 sm:px-5 py-2 rounded-b-lg flex items-center gap-2"><i class="fa-solid fa-circle-xmark text-red-500 text-xs"></i><span class="text-xs font-bold text-red-600">Application Rejected</span></div>` : ''}
+                  ${statusInfo.label === 'FORWARDED TO NATIONAL' ? `<div class="mt-3 pt-3 border-t border-purple-100 bg-purple-50 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 px-4 sm:px-5 py-2 rounded-b-lg flex items-center gap-2"><i class="fa-solid fa-arrow-right text-purple-600 text-xs"></i><span class="text-xs font-bold text-purple-700">Forwarded to National Office</span></div>` : ''}
                 </div>
               `
             });
@@ -1404,11 +1414,13 @@
         normalized === 'accepted' ? 'approved' :
         normalized === 'to-review' ? 'under-review' :
         normalized === 'submitted' ? 'pending' :
+        normalized === 'forwarded-to-national' ? 'forwarded' :
         normalized;
       const statusMap = {
         'approved': { label: 'APPROVED', bgClass: 'bg-green-100', textClass: 'text-green-700' },
         'pending': { label: 'PENDING', bgClass: 'bg-yellow-100', textClass: 'text-yellow-700' },
         'under-review': { label: 'UNDER REVIEW', bgClass: 'bg-blue-100', textClass: 'text-blue-700' },
+        'forwarded': { label: 'FORWARDED TO NATIONAL', bgClass: 'bg-purple-100', textClass: 'text-purple-700' },
         'rejected': { label: 'REJECTED', bgClass: 'bg-red-100', textClass: 'text-red-700' },
         'cancelled': { label: 'CANCELLED', bgClass: 'bg-gray-100', textClass: 'text-gray-700' }
       };
@@ -2241,12 +2253,24 @@
     };
 
     // Wait for Firebase auth to be ready before loading history
+    let appStatusUnsubscribe = null;
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         console.log('User authenticated:', user.email);
         loadHistory();
+
+        // Real-time listener: reload history when any application status changes
+        if (appStatusUnsubscribe) appStatusUnsubscribe();
+        const appQ = query(collection(db, 'applications'), where('userId', '==', user.uid));
+        appStatusUnsubscribe = onSnapshot(appQ, () => {
+          // Debounce to avoid multiple rapid reloads
+          clearTimeout(historyReloadTimeout);
+          historyReloadTimeout = setTimeout(() => loadHistory(), 800);
+        });
       } else {
         console.log('No user authenticated');
+        if (appStatusUnsubscribe) { appStatusUnsubscribe(); appStatusUnsubscribe = null; }
         const historyContainer = document.getElementById('historyContainer');
         historyContainer.innerHTML = `
           <div class="empty-message">
