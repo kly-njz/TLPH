@@ -14,6 +14,7 @@ function getStatusBadge(status) {
   return '<span class="bg-slate-100 text-slate-400 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-slate-200">Unknown</span>';
 }
 
+
 function formatDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -43,9 +44,24 @@ async function renderLeaveTable() {
     const fullName = `${lastname}, ${firstname} ${middleInitial}`.trim();
     const leaveType = emp.leave_type || 'Unknown';
     const leaveColor = getLeaveColor(leaveType);
-    const startDate = emp.leave_start || emp.on_leave_date;
-    const endDate = emp.leave_end || emp.on_leave_date;
-    const days = calcDays(startDate, endDate);
+    // Use on_leave_date for start, end_leave_date for end
+    const startDate = emp.on_leave_date || '';
+    // If end_leave_date is missing, use time_out if available, else on_leave_date
+    let endDate = emp.end_leave_date || '';
+    if (!endDate && emp.time_out) endDate = emp.time_out;
+    if (!endDate && startDate) endDate = startDate;
+    // Inclusive dates display
+    let inclusiveDates = '-';
+    if (startDate && endDate) {
+      inclusiveDates = `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    } else if (startDate) {
+      inclusiveDates = `${formatDate(startDate)}`;
+    }
+    // Days calculation
+    let totalLeave = emp.total_leave;
+    if (!totalLeave && startDate && endDate) {
+      totalLeave = calcDays(startDate, endDate);
+    }
     const status = emp.on_leave_status || 'unknown';
     const badge = getStatusBadge(status);
     tbody.innerHTML += `
@@ -61,9 +77,9 @@ async function renderLeaveTable() {
           </div>
         </td>
         <td class="p-2">
-          <span class="text-slate-600 font-mono">${formatDate(startDate)} - ${formatDate(endDate)}</span>
+          <span class="text-slate-600 font-mono">${inclusiveDates}</span>
         </td>
-        <td class="p-2 text-center font-bold">${days}</td>
+        <td class="p-2 text-center font-bold">${totalLeave || '-'}</td>
         <td class="p-2">${badge}</td>
         <td class="p-2 text-right">
           <button class="text-gov-primary hover:text-emerald-700 font-black uppercase text-[10px] tracking-tighter">Review</button>
