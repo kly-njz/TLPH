@@ -188,3 +188,24 @@ def stock_adjustment_municipal():
 def stock_reorder_municipal():
     return render_template('municipal/products/stock-reorder-municipal.html')
 
+# --- Operations (Superadmin Extra) ---
+@bp.route('/operations/quotations-municipal')
+@role_required('municipal','municipal_admin')
+def quotations_municipal():
+    return render_template('municipal/operations/quotations-municipal.html')
+
+@bp.route('/operations/projects-municipal')
+@role_required('municipal','municipal_admin')
+def projects_municipal():
+    return render_template('municipal/operations/projects-municipal.html')
+
+@bp.route('/operations/tasks-municipal')
+@role_required('municipal','municipal_admin')
+def tasks_municipal():
+    return render_template('municipal/operations/tasks-municipal.html')
+
+@bp.route('/operations/applicants-municipal')
+@role_required('municipal','municipal_admin')
+def applicants_municipal():
+    return render_template('municipal/operations/applicants-municipal.html')
+
