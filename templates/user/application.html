@@ -129,6 +129,15 @@
             return normalized || 'pending';
         }
 
+        // Returns the true effective status accounting for nationalStatus/regionalStatus overrides.
+        // This prevents the card showing "forwarded" when the national office has already approved/rejected.
+        function getEffectiveStatus(app) {
+            if (app.nationalStatus === 'approved' || app.nationalStatus === 'rejected') {
+                return app.nationalStatus;
+            }
+            return app.status || 'pending';
+        }
+
         function getStatusBadge(status) {
             const baseClass = "px-2.5 py-1 rounded-lg text-[9px] md:text-[10px] font-black uppercase flex items-center gap-1.5 w-fit";
             const badges = {
@@ -168,7 +177,7 @@
                 apps.sort((a, b) => (b.submittedAt?.toDate?.() || 0) - (a.submittedAt?.toDate?.() || 0));
 
                 applicationsList.innerHTML = apps.map(app => {
-                    const ns = normalizeApplicationStatus(app.status);
+                    const ns = normalizeApplicationStatus(getEffectiveStatus(app));
                     const borderColor = ns === 'approved' ? 'border-l-green-500' :
                                         ns === 'rejected' ? 'border-l-red-500' :
                                         ns === 'forwarded' ? 'border-l-purple-500' :
@@ -182,7 +191,7 @@
                                     <h3 class="text-xs md:text-sm font-black text-slate-800 uppercase tracking-tight leading-none">
                                         ${categoryLabels[app.category] || app.category}
                                     </h3>
-                                    ${getStatusBadge(app.status)}
+                                    ${getStatusBadge(getEffectiveStatus(app))}
                                 </div>
                                 ${app.productName ? `<p class="text-[10px] md:text-[11px] font-bold text-slate-600">${app.productName}</p>` : ''}
                                 <p class="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-widest">
@@ -206,7 +215,7 @@
                                             class="flex-1 md:flex-none bg-slate-50 hover:bg-green-700 hover:text-white text-slate-600 px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2">
                                         <i class="fa-solid fa-arrow-right-long"></i> Details
                                     </button>
-                                    ${['pending', 'under-review'].includes(normalizeApplicationStatus(app.status)) ? `
+                                    ${['pending', 'under-review'].includes(normalizeApplicationStatus(getEffectiveStatus(app))) ? `
                                     <button onclick="cancelApplication('${app.id}')" 
                                             class="px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-600 hover:bg-red-50 rounded-lg transition border border-red-200">
                                         <i class="fa-solid fa-times mr-1"></i> Cancel
@@ -268,7 +277,7 @@
                 };
                 
                 const categoryLabel = categoryLabels[app.category] || app.category || 'Application';
-                const normalizedStatus = normalizeApplicationStatus(app.status);
+                const normalizedStatus = normalizeApplicationStatus(getEffectiveStatus(app));
                 const statusBadgeClass = {
                     'approved': 'bg-green-100 text-green-700',
                     'pending': 'bg-yellow-100 text-yellow-700',
