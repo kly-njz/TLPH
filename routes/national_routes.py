@@ -11,6 +11,7 @@ bp = Blueprint('national', __name__, url_prefix='/national')
 @bp.route('/application-national')
 @role_required('national', 'national_admin')
 def application_national_view():
+
     try:
         db = get_firestore_db()
 
@@ -161,6 +162,13 @@ def application_national_view():
             status_labels=['Approved', 'Pending', 'Rejected'],
             status_data=[0, 0, 0]
         )
+
+
+# View individual application
+@bp.route('/application-view/<application_id>')
+@role_required('national', 'national_admin')
+def application_view_national(application_id):
+    return render_template('national/operations/application-national-view.html')
 
 
 # -----------------------------
