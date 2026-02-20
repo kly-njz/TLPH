@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en" x-data="nationalApplicationView()">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Application Review | National Office</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script type="module" src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { gov: ['Arial', 'Verdana', 'sans-serif'] },
+          colors: {
+            gov: {
+              text: '#111827', muted: '#4b5563', border: '#d1d5db',
+              bg: '#f3f4f6', panel: '#ffffff', primary: '#1e3a8a',
+              focus: 'rgba(5, 150, 105, 0.18)',
+            }
+          },
+          letterSpacing: { gov: '0.12em', gov2: '0.16em', gov3: '0.18em' }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * { font-family: Arial, Verdana, sans-serif !important; }
+    .material-icons-round { font-family: 'Material Icons Round' !important; }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #fff !important; }
+      .main-wrapper { padding: 0 !important; }
+    }
+    .gov-form-section {
+      background: white;
+      border: 1px solid #cbd5e1;
+      border-radius: 2px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .gov-form-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #64748b;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.25rem;
+      display: block;
+    }
+    .gov-form-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: #0f172a;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-gov-bg font-gov text-gov-text">
+  <div class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]" style="background-image:url('/static/images/denr.jpg'); background-position:center 28%; background-size:520px;"></div>
+
+  {% include 'national/sidenav-national.html' %}
+
+  <main class="px-6 py-8 md:px-10 lg:ml-[300px]">
+    <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between border-b border-gov-border pb-4">
+      <div>
+        <p class="text-[10px] font-black uppercase tracking-gov3 text-gov-primary">National Office - Final Review</p>
+        <h1 class="text-2xl font-black text-slate-900 uppercase">Application Details</h1>
+      </div>
+
+      <button onclick="window.history.back()" class="no-print inline-flex items-center gap-2 border border-gov-border bg-white px-4 py-2 text-[11px] font-black uppercase tracking-gov text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+        <span class="material-icons-round text-[18px]">arrow_back</span> Back to Registry
+      </button>
+    </div>
+
+    <!-- Loading State -->
+    <div x-show="loading" class="text-center py-20">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gov-primary"></div>
+      <p class="mt-4 text-sm font-bold text-slate-600 uppercase">Loading application details...</p>
+    </div>
+
+    <div x-show="!loading" class="grid gap-4 lg:grid-cols-12">
+      <aside class="lg:col-span-4 space-y-4">
+        <section class="border border-gov-border bg-gov-panel p-5 shadow-sm border-t-4 border-t-gov-primary">
+          <div class="flex flex-col items-center text-center sm:flex-row sm:text-left sm:items-start gap-4">
+            <div class="h-24 w-24 overflow-hidden border border-gray-300 bg-gray-50 flex-shrink-0">
+              <img :src="applicant.photo" alt="Photo" class="h-full w-full object-cover" />
+            </div>
+            <div class="min-w-0">
+              <h2 class="text-lg font-black text-slate-900 uppercase" x-text="applicant.name"></h2>
+              <p class="mt-1 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                Ref: <span class="text-gov-primary" x-text="applicant.ref"></span>
+              </p>
+              <div class="mt-3 inline-flex items-center gap-2 rounded-0 border px-3 py-1 text-[10px] font-black uppercase"
+                   :class="{
+                     'border-emerald-200 bg-emerald-50 text-emerald-700': applicant.nationalStatus === 'approved',
+                     'border-rose-200 bg-rose-50 text-rose-700': applicant.nationalStatus === 'rejected',
+                     'border-amber-200 bg-amber-50 text-amber-700': applicant.nationalStatus === 'pending'
+                   }">
+                <span class="h-2 w-2 rounded-full" 
+                      :class="{
+                        'bg-emerald-500': applicant.nationalStatus === 'approved',
+                        'bg-rose-500': applicant.nationalStatus === 'rejected',
+                        'bg-amber-500': applicant.nationalStatus === 'pending'
+                      }"></span>
+                <span x-text="applicant.nationalStatus.toUpperCase()"></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="border border-gov-border bg-gov-panel p-5 shadow-sm">
+          <div class="flex items-center justify-between border-b pb-2 mb-4">
+            <h3 class="text-[11px] font-black uppercase tracking-gov2 text-gov-primary">Contact Information</h3>
+            <span class="material-icons-round text-slate-400">contact_page</span>
+          </div>
+
+          <dl class="space-y-4">
+            <div>
+              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Full Name</dt>
+              <dd class="text-sm font-bold text-slate-900" x-text="applicant.name"></dd>
+            </div>
+            <div>
+              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Email Address</dt>
+              <dd class="text-sm font-bold text-slate-900" x-text="applicant.email"></dd>
+            </div>
+            <div>
+              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Contact Number</dt>
+              <dd class="text-sm font-bold text-slate-900" x-text="applicant.phone"></dd>
+            </div>
+            <div>
+              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Complete Address</dt>
+              <dd class="text-sm font-bold leading-relaxed text-slate-900" x-text="applicant.address"></dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="border border-gov-border bg-gov-panel p-5 shadow-sm">
+          <div class="flex items-center justify-between border-b pb-2 mb-4">
+            <h3 class="text-[11px] font-black uppercase tracking-gov2 text-gov-primary">Processing Timeline</h3>
+            <span class="material-icons-round text-slate-400">schedule</span>
+          </div>
+
+          <dl class="space-y-3">
+            <div>
+              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Date Submitted</dt>
+              <dd class="text-sm font-bold text-slate-900" x-text="timeline.submitted"></dd>
+            </div>
+            <div x-show="timeline.forwarded">
+              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Forwarded to National</dt>
+              <dd class="text-sm font-bold text-slate-900" x-text="timeline.forwarded"></dd>
+            </div>
+            <div x-show="timeline.updated">
+              <dt class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Last Updated</dt>
+              <dd class="text-sm font-bold text-slate-900" x-text="timeline.updated"></dd>
+            </div>
+          </dl>
+        </section>
+      </aside>
+
+      <section class="lg:col-span-8 space-y-4">
+        <!-- Application Category Card -->
+        <div class="border border-gov-border bg-gov-panel p-5 shadow-sm border-l-4 border-l-blue-600">
+          <h3 class="text-[11px] font-black uppercase tracking-gov2 text-gov-primary mb-3">Application Category</h3>
+          <p class="text-2xl font-black text-blue-700" x-text="applicant.categoryLabel"></p>
+        </div>
+
+        <!-- Application Form Data -->
+        <section class="border border-gov-border bg-white shadow-sm">
+          <div class="bg-slate-50 border-b border-slate-300 px-5 py-3">
+            <h3 class="text-[11px] font-black uppercase tracking-gov2 text-gov-primary">Application Form Details</h3>
+            <p class="text-[10px] font-bold text-slate-500 uppercase mt-1">Complete information submitted by the applicant</p>
+          </div>
+
+          <div class="p-5 space-y-5">
+            <!-- Product/Project Information -->
+            <div class="gov-form-section border-l-4 border-l-emerald-500">
+              <h4 class="text-xs font-black uppercase text-emerald-700 mb-3 flex items-center gap-2">
+                <span class="material-icons-round text-[16px]">shopping_bag</span>
+                Product/Project Information
+              </h4>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label class="gov-form-label">Product/Crop Name</label>
+                  <div class="gov-form-value" x-text="formData.productName || 'N/A'"></div>
+                </div>
+                <div>
+                  <label class="gov-form-label">Category Type</label>
+                  <div class="gov-form-value" x-text="formData.category || 'N/A'"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Location Information -->
+            <div class="gov-form-section border-l-4 border-l-blue-500">
+              <h4 class="text-xs font-black uppercase text-blue-700 mb-3 flex items-center gap-2">
+                <span class="material-icons-round text-[16px]">location_on</span>
+                Location Details
+              </h4>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label class="gov-form-label">Province</label>
+                  <div class="gov-form-value" x-text="formData.province || 'N/A'"></div>
+                </div>
+                <div>
+                  <label class="gov-form-label">Municipality</label>
+                  <div class="gov-form-value" x-text="formData.municipality || 'N/A'"></div>
+                </div>
+                <div class="md:col-span-2">
+                  <label class="gov-form-label">Barangay</label>
+                  <div class="gov-form-value" x-text="formData.barangay || 'N/A'"></div>
+                </div>
+                <div class="md:col-span-2">
+                  <label class="gov-form-label">Complete Address</label>
+                  <div class="gov-form-value" x-text="formData.completeAddress || 'N/A'"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Project/Investment Details -->
+            <div class="gov-form-section border-l-4 border-l-purple-500">
+              <h4 class="text-xs font-black uppercase text-purple-700 mb-3 flex items-center gap-2">
+                <span class="material-icons-round text-[16px]">account_balance_wallet</span>
+                Investment & Capacity
+              </h4>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label class="gov-form-label">Investment Amount</label>
+                  <div class="gov-form-value text-emerald-700 font-black">
+                    ₱ <span x-text="formData.investment || '0.00'"></span>
+                  </div>
+                </div>
+                <div>
+                  <label class="gov-form-label">Expected Harvest/Yield</label>
+                  <div class="gov-form-value" x-text="formData.harvest || 'N/A'"></div>
+                </div>
+                <div>
+                  <label class="gov-form-label">Land Area (Hectares)</label>
+                  <div class="gov-form-value" x-text="formData.landArea || 'N/A'"></div>
+                </div>
+                <div>
+                  <label class="gov-form-label">Employment Generated</label>
+                  <div class="gov-form-value" x-text="formData.employment || 'N/A'"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Additional Information -->
+            <div class="gov-form-section border-l-4 border-l-slate-500">
+              <h4 class="text-xs font-black uppercase text-slate-700 mb-3 flex items-center gap-2">
+                <span class="material-icons-round text-[16px]">description</span>
+                Additional Details
+              </h4>
+              <div class="space-y-3">
+                <div>
+                  <label class="gov-form-label">Project Description</label>
+                  <div class="gov-form-value whitespace-pre-wrap" x-text="formData.description || 'N/A'"></div>
+                </div>
+                <div>
+                  <label class="gov-form-label">Remarks/Comments</label>
+                  <div class="gov-form-value whitespace-pre-wrap" x-text="formData.remarks || 'N/A'"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Action Buttons (only show if pending) -->
+        <section class="border border-gov-border bg-white p-5 shadow-sm border-t-4 border-t-slate-900 no-print" x-show="applicant.nationalStatus === 'pending'">
+          <h3 class="text-[11px] font-black uppercase tracking-gov2 text-gov-primary">National Office Decision</h3>
+          <p class="mt-1 text-xs font-bold italic text-slate-500 uppercase">Final decision will be recorded in the national audit trail.</p>
+
+          <div class="mt-5 grid gap-2 md:grid-cols-2">
+            <button @click="updateNationalStatus('rejected')" class="border-2 border-rose-600 py-3 text-[11px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-600 hover:text-white transition-all">
+              <span class="material-icons-round text-[14px] align-middle">cancel</span> Reject Application
+            </button>
+            <button @click="updateNationalStatus('approved')" class="bg-emerald-700 py-3 text-[11px] font-black uppercase tracking-widest text-white hover:bg-emerald-800 transition-all shadow-md">
+              <span class="material-icons-round text-[14px] align-middle">check_circle</span> Approve Application
+            </button>
+          </div>
+        </section>
+
+        <!-- Status Message (if already approved/rejected) -->
+        <section class="border p-5 shadow-sm no-print" 
+                 x-show="applicant.nationalStatus !== 'pending'"
+                 :class="{
+                   'border-emerald-600 bg-emerald-50': applicant.nationalStatus === 'approved',
+                   'border-rose-600 bg-rose-50': applicant.nationalStatus === 'rejected'
+                 }">
+          <div class="flex items-center gap-3">
+            <span class="material-icons-round text-3xl" 
+                  :class="{
+                    'text-emerald-600': applicant.nationalStatus === 'approved',
+                    'text-rose-600': applicant.nationalStatus === 'rejected'
+                  }"
+                  x-text="applicant.nationalStatus === 'approved' ? 'check_circle' : 'cancel'"></span>
+            <div>
+              <h3 class="text-sm font-black uppercase" 
+                  :class="{
+                    'text-emerald-700': applicant.nationalStatus === 'approved',
+                    'text-rose-700': applicant.nationalStatus === 'rejected'
+                  }">
+                Application <span x-text="applicant.nationalStatus"></span>
+              </h3>
+              <p class="text-xs font-bold text-slate-600 mt-1">
+                This application has already been processed by the National Office.
+              </p>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <!-- Load Firebase config first -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    // Expose to window for Alpine
+    window.firebaseAuth = auth;
+    window.firebaseDB = db;
+    window.firebaseDoc = doc;
+    window.firebaseGetDoc = getDoc;
+    window.firebaseUpdateDoc = updateDoc;
+    window.firebaseOnAuthStateChanged = onAuthStateChanged;
+    console.log('Firebase modules loaded and exposed to window');
+  </script>
+
+  <!-- Load Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Register Alpine component -->
+  <script>
+    document.addEventListener('alpine:init', () => {
+      console.log('Alpine:init event fired, registering nationalApplicationView...');
+      Alpine.data('nationalApplicationView', () => ({
+        loading: true,
+        applicant: {
+          name: "Loading...",
+          ref: "---",
+          photo: "https://via.placeholder.com/150",
+          nationalStatus: "pending",
+          email: "---",
+          phone: "---",
+          address: "---",
+          categoryLabel: "---"
+        },
+        timeline: {
+          submitted: "---",
+          forwarded: "",
+          updated: ""
+        },
+        formData: {
+          productName: "",
+          category: "",
+          province: "",
+          municipality: "",
+          barangay: "",
+          completeAddress: "",
+          investment: "0.00",
+          harvest: "",
+          landArea: "",
+          employment: "",
+          description: "",
+          remarks: ""
+        },
+
+        async init() {
+          try {
+            // Get application ID from URL
+            const pathParts = window.location.pathname.split('/');
+            const applicationId = pathParts[pathParts.length - 1];
+            
+            console.log('Loading application:', applicationId);
+
+            if (!applicationId || applicationId === 'application-view') {
+              alert('No application ID provided');
+              window.history.back();
+              return;
+            }
+
+            // Fetch application data
+            const appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId));
+            
+            if (!appDoc.exists()) {
+              alert('Application not found');
+              window.history.back();
+              return;
+            }
+
+            const appData = appDoc.data();
+            console.log('Application data:', appData);
+
+            // Fetch user data
+            let userData = {};
+            if (appData.userId) {
+              const userDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'users', appData.userId));
+              if (userDoc.exists()) {
+                userData = userDoc.data();
+              }
+            }
+
+            // Category labels mapping
+            const categoryLabels = {
+              'farming': 'Crop & Plant',
+              'livestock': 'Fisheries & Agriculture',
+              'agribusiness': 'Agribusiness & Agro-Processing',
+              'trade': 'Agricultural Trade',
+              'infrastructure': 'Infrastructure'
+            };
+
+            // Populate applicant data
+            this.applicant = {
+              name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || appData.userName || 'N/A',
+              ref: applicationId.substring(0, 12).toUpperCase(),
+              photo: userData.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + (userData.firstName || 'User'),
+              nationalStatus: (appData.nationalStatus || 'pending').toLowerCase(),
+              email: userData.email || appData.userEmail || 'N/A',
+              phone: userData.phone || userData.contactNumber || 'N/A',
+              address: `${appData.barangay || ''}, ${appData.municipality || ''}, ${appData.province || 'Oriental Mindoro'}`.replace(/^,\s*/, ''),
+              categoryLabel: categoryLabels[appData.category] || appData.category || 'N/A'
+            };
+
+            // Populate timeline
+            const formatDate = (timestamp) => {
+              if (!timestamp) return '';
+              if (timestamp.toDate) {
+                return timestamp.toDate().toLocaleString('en-US', {
+                  month: 'short', day: 'numeric', year: 'numeric', 
+                  hour: '2-digit', minute: '2-digit'
+                });
+              }
+              try {
+                return new Date(timestamp).toLocaleString('en-US', {
+                  month: 'short', day: 'numeric', year: 'numeric', 
+                  hour: '2-digit', minute: '2-digit'
+                });
+              } catch {
+                return timestamp;
+              }
+            };
+
+            this.timeline = {
+              submitted: formatDate(appData.submittedAt || appData.createdAt) || 'N/A',
+              forwarded: formatDate(appData.forwardedToNationalAt),
+              updated: formatDate(appData.nationalApprovedAt || appData.nationalRejectedAt)
+            };
+
+            // Populate form data
+            this.formData = {
+              productName: appData.productName || appData.cropName || 'N/A',
+              category: categoryLabels[appData.category] || appData.category || 'N/A',
+              province: appData.province || 'N/A',
+              municipality: appData.municipality || 'N/A',
+              barangay: appData.barangay || 'N/A',
+              completeAddress: appData.address || appData.completeAddress || 'N/A',
+              investment: appData.investmentQty ? Number(appData.investmentQty).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00',
+              harvest: appData.harvestQty || appData.maxHarvestQty || 'N/A',
+              landArea: appData.landArea || appData.farmArea || 'N/A',
+              employment: appData.employmentGenerated || appData.workers || 'N/A',
+              description: appData.description || appData.projectDescription || 'N/A',
+              remarks: appData.remarks || appData.notes || 'N/A'
+            };
+
+            this.loading = false;
+            
+          } catch (error) {
+            console.error('Error loading application:', error);
+            alert('Error loading application: ' + error.message);
+            this.loading = false;
+          }
+        },
+
+        async updateNationalStatus(newStatus) {
+          const action = newStatus === 'approved' ? 'approve' : 'reject';
+          if (!confirm(`Are you sure you want to ${action} this application at the National level?`)) {
+            return;
+          }
+
+          try {
+            const pathParts = window.location.pathname.split('/');
+            const applicationId = pathParts[pathParts.length - 1];
+
+            const updateData = {
+              nationalStatus: newStatus,
+              [`national${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}edAt`]: new Date().toISOString(),
+              [`national${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}edBy`]: window.firebaseAuth.currentUser?.email || 'national-admin'
+            };
+
+            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId), updateData);
+
+            alert(`Application ${newStatus} successfully!`);
+            window.location.reload();
+          } catch (error) {
+            console.error('Error updating status:', error);
+            alert('Error updating application status: ' + error.message);
+          }
+        }
+      }));
+    });
+  </script>
+</body>
+</html>
