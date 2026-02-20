@@ -240,3 +240,9 @@ def accounting_deposit_category_municipal():
 def accounting_permission_municipal():
     return render_template('municipal/accounting/permission-municipal.html')
 
+# --- Logs ---
+@bp.route('/logs/audit-logs-municipal')
+@role_required('municipal','municipal_admin')
+def logs_audit_logs_municipal():
+    return render_template('municipal/logs/audit-logs-municipal.html')
+
