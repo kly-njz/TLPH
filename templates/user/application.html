@@ -84,7 +84,7 @@
     <script type="module">
         import { auth, db } from '/static/js/firebase-config.js';
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-        import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+        import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
         const loadingState = document.getElementById('loadingState');
         const emptyState = document.getElementById('emptyState');
@@ -149,17 +149,20 @@
             return date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
         }
 
-        async function loadApplications(userId) {
-            try {
-                const q = query(collection(db, 'applications'), where('userId', '==', userId));
-                const querySnapshot = await getDocs(q);
+        function loadApplications(userId) {
+            const q = query(collection(db, 'applications'), where('userId', '==', userId));
+            
+            // Real-time listener - updates instantly when admin approves/rejects
+            onSnapshot(q, (querySnapshot) => {
                 loadingState.classList.add('hidden');
 
                 if (querySnapshot.empty) {
                     emptyState.classList.remove('hidden');
+                    applicationsList.innerHTML = '';
                     return;
                 }
 
+                emptyState.classList.add('hidden');
                 const apps = [];
                 querySnapshot.forEach(doc => apps.push({ id: doc.id, ...doc.data() }));
                 apps.sort((a, b) => (b.submittedAt?.toDate?.() || 0) - (a.submittedAt?.toDate?.() || 0));
@@ -208,10 +211,10 @@
                     </div>
                 `).join('');
 
-            } catch (error) {
+            }, (error) => {
                 console.error(error);
                 loadingState.innerHTML = `<p class="text-red-500 font-bold uppercase text-xs">Error loading data</p>`;
-            }
+            });
         }
 
         window.cancelApplication = async function(applicationId) {
