@@ -328,7 +328,18 @@
     if (normalized === 'accepted') return 'approved';
     if (normalized === 'to-review') return 'under-review';
     if (normalized === 'submitted') return 'pending';
+    if (normalized === 'forwarded-to-national') return 'forwarded';
+    if (normalized === 'under-review') return 'pending';
+    if (normalized === 'forwarded') return 'pending';
     return normalized || 'pending';
+  }
+
+  // Returns effective status: nationalStatus overrides main status after national decision
+  function getEffectiveAppStatus(app) {
+    if (app.nationalStatus === 'approved' || app.nationalStatus === 'rejected') {
+      return app.nationalStatus;
+    }
+    return app.status || 'pending';
   }
 
   async function loadLicenseStatusMap(userId) {
@@ -356,6 +367,30 @@
     return statusMap;
   }
 
+  async function loadApplicationsStatusMap(userId) {
+    const statusMap = new Map();
+    const statusKeys = [];
+    if (!userId) return statusMap;
+    try {
+      const q = query(collection(db, 'applications'), where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const effectiveStatus = getEffectiveAppStatus(data);
+        const normalized = normalizeStatus(effectiveStatus);
+        const externalId = (data.externalId || data.external_id || '').toString();
+        if (externalId) {
+          statusMap.set(externalId, normalized);
+          statusKeys.push(externalId);
+        }
+      });
+    } catch (error) {
+      console.error('Error loading application statuses:', error);
+    }
+    statusMap.__keys = statusKeys.sort((a, b) => b.length - a.length);
+    return statusMap;
+  }
+
   function findLicenseStatus(externalId, statusMap) {
     if (!externalId || !statusMap) return null;
     if (statusMap.has(externalId)) return statusMap.get(externalId);
@@ -376,6 +411,7 @@
       const result = await response.json();
       
       const licenseStatusMap = await loadLicenseStatusMap(userId);
+      const appStatusMap = await loadApplicationsStatusMap(userId);
 
       let paymentTransactions = [];
       if (result.status === 'success') {
@@ -384,7 +420,7 @@
           name_of_application: t.transaction_name || 'Unknown',
           type_of_application: mapApplicationType(t.transaction_name || '', 'payment'),
           payment_status: getActualPaymentStatus(t),
-          status: mapApplicationStatus(findLicenseStatus((t.external_id || t.reference || '').toString(), licenseStatusMap) || normalizeStatus(t.display_status || t.status || '')),
+          status: mapApplicationStatus(findLicenseStatus((t.external_id || t.reference || '').toString(), licenseStatusMap) || findLicenseStatus((t.external_id || t.reference || '').toString(), appStatusMap) || normalizeStatus(t.display_status || t.status || '')),
           amount: t.amount || 0,
           created_at: t.created_at || '',
           invoice_id: t.invoice_id,
@@ -437,10 +473,11 @@
 
   async function fetchInventoryStats(userId) {
     try {
+      // Fetch all user applications and count approved using effective status
+      // (handles nationalStatus = 'approved' even when main status is still 'forwarded-to-national')
       const q = query(
         collection(db, 'applications'),
-        where('userId', '==', userId),
-        where('status', '==', 'approved')
+        where('userId', '==', userId)
       );
       const querySnapshot = await getDocs(q);
 
@@ -448,7 +485,7 @@
 
       querySnapshot.forEach((doc) => {
         const item = doc.data();
-        count += 1;
+        if (getEffectiveAppStatus(item) === 'approved') count += 1;
       });
 
       inventoryStats = { count, totalQty: count };
@@ -506,6 +543,7 @@
     const s = (status || '').toLowerCase().trim();
     if (s === 'approved' || s === 'accepted') return 'Approved';
     if (s === 'rejected' || s === 'cancelled') return 'Rejected';
+    if (s === 'forwarded' || s === 'forwarded-to-national') return 'Pending';
     if (s === 'pending' || s === 'under-review' || s === 'to-review') return 'Pending';
     return 'Unknown';
   }

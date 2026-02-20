@@ -52,7 +52,7 @@ def inventory():
 @bp.route('/user-inventory')
 @role_required('municipal','municipal_admin')
 def user_inventory():
-    return render_template('municipal/user-inventory-municipal/user-inventory-municiapl.html')
+    return render_template('municipal/user-inventory-municipal/user-inventory-municipal.html')
 
 @bp.route('/license-permit')
 @role_required('municipal','municipal_admin')
@@ -187,4 +187,57 @@ def stock_adjustment_municipal():
 @role_required('municipal','municipal_admin')
 def stock_reorder_municipal():
     return render_template('municipal/products/stock-reorder-municipal.html')
+
+# --- Operations (Superadmin Extra) ---
+@bp.route('/operations/quotations-municipal')
+@role_required('municipal','municipal_admin')
+def quotations_municipal():
+    return render_template('municipal/operations/quotations-municipal.html')
+
+@bp.route('/operations/projects-municipal')
+@role_required('municipal','municipal_admin')
+def projects_municipal():
+    return render_template('municipal/operations/projects-municipal.html')
+
+@bp.route('/operations/tasks-municipal')
+@role_required('municipal','municipal_admin')
+def tasks_municipal():
+    return render_template('municipal/operations/task-municipal.html')
+
+@bp.route('/operations/applicants-municipal')
+@role_required('municipal','municipal_admin')
+def applicants_municipal():
+    return render_template('municipal/operations/applicants-municipal.html')
+
+# --- Accounting ---
+@bp.route('/accounting/dashboard-municipal')
+@role_required('municipal','municipal_admin')
+def accounting_dashboard_municipal():
+    return render_template('municipal/accounting/dashboard-municipal.html')
+
+@bp.route('/accounting/entities-municipal')
+@role_required('municipal','municipal_admin')
+def accounting_entities_municipal():
+    return render_template('municipal/accounting/entities-municipal.html')
+
+@bp.route('/accounting/coa-templates-municipal')
+@role_required('municipal','municipal_admin')
+def accounting_coa_templates_municipal():
+    return render_template('municipal/accounting/coa-templates-municipal.html')
+
+@bp.route('/accounting/expense-category-municipal')
+@role_required('municipal','municipal_admin')
+def accounting_expense_category_municipal():
+    return render_template('municipal/accounting/expense-category-municipal.html')
+
+@bp.route('/accounting/deposit-category-municipal')
+@role_required('municipal','municipal_admin')
+def accounting_deposit_category_municipal():
+    return render_template('municipal/accounting/deposit-category-municipal.html')
+
+# --- Logs ---
+@bp.route('/logs/audit-logs-municipal')
+@role_required('municipal','municipal_admin')
+def logs_audit_logs_municipal():
+    return render_template('municipal/logs/audit-logs-municipal.html')
 

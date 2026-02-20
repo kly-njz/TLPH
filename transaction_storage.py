@@ -102,14 +102,11 @@ def get_user_transactions(user_email=None, user_id=None):
                 for doc in query.stream():
                     transaction = doc.to_dict()
                     
-                    # Filter logic when userId is provided:
-                    # - Include if transaction has NO userId field (old records)
-                    # - Include if transaction userId matches current user_id
-                    # - Exclude if transaction userId exists but doesn't match (other user's record)
+                    # When userId is available, ONLY show transactions belonging to
+                    # the current user. Excludes old records from deleted accounts
+                    # that shared the same email.
                     if user_id:
-                        transaction_user_id = transaction.get('userId')
-                        if transaction_user_id and transaction_user_id != user_id:
-                            # This transaction belongs to a different user (old account with same email)
+                        if transaction.get('userId') != user_id:
                             continue
                     
                     transaction['id'] = doc.id

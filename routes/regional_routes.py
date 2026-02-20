@@ -52,3 +52,4 @@ def audit_logs_view():
 @role_required('regional','regional_admin')
 def application_view(application_id):
     return render_template('regional/application-regional-view.html')
+        

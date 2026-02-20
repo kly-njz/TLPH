@@ -84,7 +84,7 @@
     <script type="module">
         import { auth, db } from '/static/js/firebase-config.js';
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-        import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+        import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
         const loadingState = document.getElementById('loadingState');
         const emptyState = document.getElementById('emptyState');
@@ -124,7 +124,18 @@
             if (normalized === 'accepted') return 'approved';
             if (normalized === 'to-review') return 'under-review';
             if (normalized === 'submitted') return 'pending';
+            if (normalized === 'forwarded-to-national') return 'forwarded';
+            if (normalized === 'forwarded') return 'forwarded';
             return normalized || 'pending';
+        }
+
+        // Returns the true effective status accounting for nationalStatus/regionalStatus overrides.
+        // This prevents the card showing "forwarded" when the national office has already approved/rejected.
+        function getEffectiveStatus(app) {
+            if (app.nationalStatus === 'approved' || app.nationalStatus === 'rejected') {
+                return app.nationalStatus;
+            }
+            return app.status || 'pending';
         }
 
         function getStatusBadge(status) {
@@ -134,6 +145,7 @@
                 'approved': `<span class="${baseClass} bg-green-50 text-green-700 border border-green-200"><i class="fa-solid fa-check-double"></i> Approved</span>`,
                 'rejected': `<span class="${baseClass} bg-red-50 text-red-700 border border-red-200"><i class="fa-solid fa-ban"></i> Rejected</span>`,
                 'under-review': `<span class="${baseClass} bg-blue-50 text-blue-700 border border-blue-200"><i class="fa-solid fa-magnifying-glass"></i> Reviewing</span>`,
+                'forwarded': `<span class="${baseClass} bg-purple-50 text-purple-700 border border-purple-200"><i class="fa-solid fa-arrow-right-arrow-left"></i> Forwarded to National</span>`,
                 'cancelled': `<span class="${baseClass} bg-gray-50 text-gray-700 border border-gray-200"><i class="fa-solid fa-ban"></i> Cancelled</span>`
             };
             const normalizedStatus = normalizeApplicationStatus(status);
@@ -146,23 +158,32 @@
             return date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
         }
 
-        async function loadApplications(userId) {
-            try {
-                const q = query(collection(db, 'applications'), where('userId', '==', userId));
-                const querySnapshot = await getDocs(q);
+        function loadApplications(userId) {
+            const q = query(collection(db, 'applications'), where('userId', '==', userId));
+            
+            // Real-time listener - updates instantly when admin approves/rejects
+            onSnapshot(q, (querySnapshot) => {
                 loadingState.classList.add('hidden');
 
                 if (querySnapshot.empty) {
                     emptyState.classList.remove('hidden');
+                    applicationsList.innerHTML = '';
                     return;
                 }
 
+                emptyState.classList.add('hidden');
                 const apps = [];
                 querySnapshot.forEach(doc => apps.push({ id: doc.id, ...doc.data() }));
                 apps.sort((a, b) => (b.submittedAt?.toDate?.() || 0) - (a.submittedAt?.toDate?.() || 0));
 
-                applicationsList.innerHTML = apps.map(app => `
-                    <div class="bg-white border border-gray-200 rounded-xl p-4 md:p-5 hover:border-green-600 transition-all shadow-sm group">
+                applicationsList.innerHTML = apps.map(app => {
+                    const ns = normalizeApplicationStatus(getEffectiveStatus(app));
+                    const borderColor = ns === 'approved' ? 'border-l-green-500' :
+                                        ns === 'rejected' ? 'border-l-red-500' :
+                                        ns === 'forwarded' ? 'border-l-purple-500' :
+                                        ns === 'cancelled' ? 'border-l-gray-400' : 'border-l-yellow-400';
+                    return `
+                    <div class="bg-white border border-gray-200 border-l-4 ${borderColor} rounded-xl p-4 md:p-5 hover:border-green-600 transition-all shadow-sm group">
                         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             
                             <div class="flex-1 space-y-1">
@@ -170,8 +191,9 @@
                                     <h3 class="text-xs md:text-sm font-black text-slate-800 uppercase tracking-tight leading-none">
                                         ${categoryLabels[app.category] || app.category}
                                     </h3>
-                                    ${getStatusBadge(app.status)}
+                                    ${getStatusBadge(getEffectiveStatus(app))}
                                 </div>
+                                ${app.productName ? `<p class="text-[10px] md:text-[11px] font-bold text-slate-600">${app.productName}</p>` : ''}
                                 <p class="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                                     ID: ${app.id?.substring(0, 8) || 'N/A'} • Submitted ${formatDate(app.submittedAt)}
                                 </p>
@@ -193,7 +215,7 @@
                                             class="flex-1 md:flex-none bg-slate-50 hover:bg-green-700 hover:text-white text-slate-600 px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2">
                                         <i class="fa-solid fa-arrow-right-long"></i> Details
                                     </button>
-                                    ${app.status === 'pending' || app.status === 'under-review' ? `
+                                    ${['pending', 'under-review'].includes(normalizeApplicationStatus(getEffectiveStatus(app))) ? `
                                     <button onclick="cancelApplication('${app.id}')" 
                                             class="px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-600 hover:bg-red-50 rounded-lg transition border border-red-200">
                                         <i class="fa-solid fa-times mr-1"></i> Cancel
@@ -203,12 +225,13 @@
                             </div>
                         </div>
                     </div>
-                `).join('');
+                `;
+                }).join('');
 
-            } catch (error) {
+            }, (error) => {
                 console.error(error);
                 loadingState.innerHTML = `<p class="text-red-500 font-bold uppercase text-xs">Error loading data</p>`;
-            }
+            });
         }
 
         window.cancelApplication = async function(applicationId) {
@@ -254,11 +277,12 @@
                 };
                 
                 const categoryLabel = categoryLabels[app.category] || app.category || 'Application';
-                const normalizedStatus = normalizeApplicationStatus(app.status);
+                const normalizedStatus = normalizeApplicationStatus(getEffectiveStatus(app));
                 const statusBadgeClass = {
                     'approved': 'bg-green-100 text-green-700',
                     'pending': 'bg-yellow-100 text-yellow-700',
                     'under-review': 'bg-blue-100 text-blue-700',
+                    'forwarded': 'bg-purple-100 text-purple-700',
                     'rejected': 'bg-red-100 text-red-700',
                     'cancelled': 'bg-gray-100 text-gray-700'
                 };
@@ -270,13 +294,43 @@
                 const modalContent = document.getElementById('modalContent');
                 modalContent.innerHTML = `
                     <div class="space-y-6">
+                        ${normalizedStatus === 'approved' ? `
+                        <div class="bg-green-600 text-white p-4 rounded-lg text-center">
+                            <i class="fa-solid fa-check-circle text-2xl mb-1"></i>
+                            <p class="font-black uppercase tracking-widest text-sm">Application Approved!</p>
+                            <p class="text-xs opacity-80 mt-1">Your application has been successfully approved.</p>
+                        </div>` : ''}
+                        ${normalizedStatus === 'rejected' ? `
+                        <div class="bg-red-600 text-white p-4 rounded-lg text-center">
+                            <i class="fa-solid fa-times-circle text-2xl mb-1"></i>
+                            <p class="font-black uppercase tracking-widest text-sm">Application Rejected</p>
+                            <p class="text-xs opacity-80 mt-1">Please contact the municipal office for details.</p>
+                        </div>` : ''}
                         <!-- Status Summary -->
                         <div class="bg-gray-50 p-4 rounded-lg border-l-4 border-green-700">
                             <div class="flex items-center justify-between mb-3">
                                 <h3 class="text-sm font-bold text-gray-600 uppercase tracking-wider">Status</h3>
                                 <span class="px-3 py-1 rounded-full text-xs font-bold ${statusClass}">${statusText}</span>
                             </div>
-                            <p class="text-xs text-gray-500">Last updated: ${submittedDate}</p>
+                            <p class="text-xs text-gray-500">Submitted: ${submittedDate}</p>
+                        </div>
+
+                        <!-- Processing Stage -->
+                        <div>
+                            <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Processing Stage</p>
+                            <div class="flex items-center gap-1 text-[10px] font-bold uppercase">
+                                <span class="px-2 py-1 rounded ${app.status && app.status !== 'under-review' && app.status !== 'pending' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">
+                                    Municipal
+                                </span>
+                                <span class="text-gray-300">→</span>
+                                <span class="px-2 py-1 rounded ${app.regionalStatus === 'approved' || app.regionalStatus === 'forwarded' ? 'bg-green-100 text-green-700' : app.status === 'forwarded-to-national' || app.nationalStatus ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">
+                                    Regional
+                                </span>
+                                <span class="text-gray-300">→</span>
+                                <span class="px-2 py-1 rounded ${app.nationalStatus === 'approved' ? 'bg-green-100 text-green-700' : app.nationalStatus === 'rejected' ? 'bg-red-100 text-red-700' : app.nationalStatus === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}">
+                                    National
+                                </span>
+                            </div>
                         </div>
                         
                         <!-- Application Information -->
@@ -339,11 +393,12 @@
                         <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <p class="text-xs font-bold text-blue-900 uppercase tracking-wider mb-2">📋 Status Information</p>
                             <ul class="text-xs text-blue-800 space-y-1 list-disc list-inside">
-                                ${normalizedStatus === 'approved' ? '<li>Your application has been approved by the municipality</li>' : ''}
-                                ${normalizedStatus === 'under-review' ? '<li>Your application is currently being reviewed</li>' : ''}
-                                ${normalizedStatus === 'pending' ? '<li>Your application is waiting for review</li>' : ''}
-                                ${normalizedStatus === 'rejected' ? '<li>Your application has been rejected. Please contact the municipal office for details.</li>' : ''}
-                                ${normalizedStatus === 'cancelled' ? '<li>This application has been cancelled</li>' : ''}
+                                ${normalizedStatus === 'approved' ? '<li>Your application has been approved. ✅</li>' : ''}
+                                ${normalizedStatus === 'under-review' ? '<li>Your application is currently being reviewed by the office.</li>' : ''}
+                                ${normalizedStatus === 'forwarded' ? '<li>Your application has been forwarded to the National Office for final review.</li>' : ''}
+                                ${normalizedStatus === 'pending' ? '<li>Your application is waiting for review.</li>' : ''}
+                                ${normalizedStatus === 'rejected' ? '<li>Your application has been rejected. Please contact the office for details.</li>' : ''}
+                                ${normalizedStatus === 'cancelled' ? '<li>This application has been cancelled.</li>' : ''}
                             </ul>
                         </div>
                     </div>
