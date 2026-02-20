@@ -202,7 +202,7 @@ def projects_municipal():
 @bp.route('/operations/tasks-municipal')
 @role_required('municipal','municipal_admin')
 def tasks_municipal():
-    return render_template('municipal/operations/tasks-municipal.html')
+    return render_template('municipal/operations/task-municipal.html')
 
 @bp.route('/operations/applicants-municipal')
 @role_required('municipal','municipal_admin')
@@ -234,11 +234,6 @@ def accounting_expense_category_municipal():
 @role_required('municipal','municipal_admin')
 def accounting_deposit_category_municipal():
     return render_template('municipal/accounting/deposit-category-municipal.html')
-
-@bp.route('/accounting/permission-municipal')
-@role_required('municipal','municipal_admin')
-def accounting_permission_municipal():
-    return render_template('municipal/accounting/permission-municipal.html')
 
 # --- Logs ---
 @bp.route('/logs/audit-logs-municipal')
