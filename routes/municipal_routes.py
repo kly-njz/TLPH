@@ -52,7 +52,7 @@ def inventory():
 @bp.route('/user-inventory')
 @role_required('municipal','municipal_admin')
 def user_inventory():
-    return render_template('municipal/user-inventory-municipal/user-inventory-municiapl.html')
+    return render_template('municipal/user-inventory-municipal/user-inventory-municipal.html')
 
 @bp.route('/license-permit')
 @role_required('municipal','municipal_admin')
