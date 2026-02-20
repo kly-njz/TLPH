@@ -1,5 +1,3 @@
-# ...existing code...
-
 # Add this route at the end of the file:
 #
 # @bp.route('/municipal-profile-update')
@@ -135,3 +133,58 @@ def hrm_payroll():
 @role_required('municipal','municipal_admin')
 def municipal_profile_update():
     return render_template('municipal/municipal-profile-update.html')
+@bp.route('/products/products-municipal')
+@role_required('municipal','municipal_admin')
+def products_municipal():
+    return render_template('municipal/products/products-municipal.html')
+
+@bp.route('/products/purchases-municipal')
+@role_required('municipal','municipal_admin')
+def purchases_municipal():
+    return render_template('municipal/products/purchases-municipal.html')
+
+@bp.route('/products/sales-municipal')
+@role_required('municipal','municipal_admin')
+def sales_municipal():
+    return render_template('municipal/products/sales-municipal.html')
+
+@bp.route('/products/sales-return-municipal')
+@role_required('municipal','municipal_admin')
+def sales_return_municipal():
+    return render_template('municipal/products/sales-return-municipal.html')
+
+@bp.route('/products/distributed-products-municipal')
+@role_required('municipal','municipal_admin')
+def distributed_products_municipal():
+    return render_template('municipal/products/distributed-products-municipal.html')
+
+@bp.route('/products/damage-products-municipal')
+@role_required('municipal','municipal_admin')
+def damage_products_municipal():
+    return render_template('municipal/products/damage-products-municipal.html')
+
+@bp.route('/products/transfer-products-municipal')
+@role_required('municipal','municipal_admin')
+def transfer_products_municipal():
+    return render_template('municipal/products/transfer-products-municipal.html')
+
+@bp.route('/products/stock-list-municipal')
+@role_required('municipal','municipal_admin')
+def stock_list_municipal():
+    return render_template('municipal/products/stock-list-municipal.html')
+
+@bp.route('/products/stock-movement-municipal')
+@role_required('municipal','municipal_admin')
+def stock_movement_municipal():
+    return render_template('municipal/products/stock-movement-municipal.html')
+
+@bp.route('/products/stock-adjustment-municipal')
+@role_required('municipal','municipal_admin')
+def stock_adjustment_municipal():
+    return render_template('municipal/products/stock-adjustment-municipal.html')
+
+@bp.route('/products/stock-reorder-municipal')
+@role_required('municipal','municipal_admin')
+def stock_reorder_municipal():
+    return render_template('municipal/products/stock-reorder-municipal.html')
+
