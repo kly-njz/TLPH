@@ -384,7 +384,7 @@
           try {
             this.loading = true;
 
-            // Load all users first
+            // Load all users first (one-time fetch is fine for user names)
             const usersRef = window.firebaseCollection(window.firebaseDB, 'users');
             const usersSnapshot = await window.firebaseGetDocs(usersRef);
             const usersMap = {};
@@ -398,14 +398,6 @@
               };
             });
 
-            // Query applications forwarded to national (all that have forwardedToNationalAt)
-            const appsRef = window.firebaseCollection(window.firebaseDB, 'applications');
-            // Get all applications and filter those that were forwarded to national
-            const querySnapshot = await window.firebaseGetDocs(appsRef);
-
-            this.apps = [];
-            let approved = 0, pending = 0, rejected = 0;
-
             const categoryLabels = {
               'farming': 'Crop & Plant',
               'livestock': 'Fisheries & Agriculture',
@@ -414,61 +406,76 @@
               'infrastructure': 'Infrastructure'
             };
 
-            querySnapshot.forEach((doc) => {
-              const data = doc.data();
-              
-              // Only include applications that were forwarded to national
-              if (!data.forwardedToNationalAt && data.status !== 'forwarded-to-national') {
-                return;
-              }
-              
-              const userInfo = usersMap[data.userId];
-              const nationalStatus = (data.nationalStatus || 'pending').toLowerCase();
+            // Unsubscribe any previous listener before attaching a new one
+            if (this._unsubscribeApps) { this._unsubscribeApps(); this._unsubscribeApps = null; }
 
-              if (nationalStatus === 'approved') approved++;
-              else if (nationalStatus === 'rejected') rejected++;
-              else pending++;
+            // Real-time listener on applications forwarded to national
+            const appsRef = window.firebaseCollection(window.firebaseDB, 'applications');
+            this._unsubscribeApps = window.firebaseOnSnapshot(appsRef, (querySnapshot) => {
+              const newApps = [];
+              let approved = 0, pending = 0, rejected = 0;
 
-              const location = data.province && data.municipality 
-                ? `${data.municipality}, ${data.province}`
-                : userInfo?.province && userInfo?.municipality
-                  ? `${userInfo.municipality}, ${userInfo.province}`
-                  : 'Unknown Location';
+              querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                
+                // Only include applications forwarded to national
+                if (!data.forwardedToNationalAt && data.status !== 'forwarded-to-national') {
+                  return;
+                }
+                
+                const userInfo = usersMap[data.userId];
+                const nationalStatus = (data.nationalStatus || 'pending').toLowerCase();
 
-              const province = (data.province || userInfo?.province || '').toLowerCase();
-              let region = 'N/A';
-              
-              // Map province to region
-              if (['oriental mindoro', 'occidental mindoro', 'marinduque', 'romblon', 'palawan'].includes(province)) {
-                region = 'MIMAROPA';
-              } else if (['batangas', 'cavite', 'laguna', 'quezon', 'rizal'].includes(province)) {
-                region = 'REGION IV-A';
-              } else if (['albay', 'camarines norte', 'camarines sur', 'catanduanes', 'masbate', 'sorsogon'].includes(province)) {
-                region = 'REGION V';
-              }
+                if (nationalStatus === 'approved') approved++;
+                else if (nationalStatus === 'rejected') rejected++;
+                else pending++;
 
-              this.apps.push({
-                id: doc.id,
-                dateFiled: data.submittedAt ? new Date(data.submittedAt.toDate()).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A',
-                submittedAtRaw: data.submittedAt ? data.submittedAt.toDate().getTime() : null,
-                refId: 'APP-' + doc.id.substring(0, 8).toUpperCase(),
-                applicantName: (userInfo?.name || data.userName || 'Unknown').toUpperCase(),
-                category: categoryLabels[data.category] || data.category || 'N/A',
-                region: region,
-                location: location,
-                nationalStatus: nationalStatus,
-                province: data.province || userInfo?.province || ''
+                const location = data.province && data.municipality 
+                  ? `${data.municipality}, ${data.province}`
+                  : userInfo?.province && userInfo?.municipality
+                    ? `${userInfo.municipality}, ${userInfo.province}`
+                    : 'Unknown Location';
+
+                const province = (data.province || userInfo?.province || '').toLowerCase();
+                let region = 'N/A';
+                
+                // Map province to region
+                if (['oriental mindoro', 'occidental mindoro', 'marinduque', 'romblon', 'palawan'].includes(province)) {
+                  region = 'MIMAROPA';
+                } else if (['batangas', 'cavite', 'laguna', 'quezon', 'rizal'].includes(province)) {
+                  region = 'REGION IV-A';
+                } else if (['albay', 'camarines norte', 'camarines sur', 'catanduanes', 'masbate', 'sorsogon'].includes(province)) {
+                  region = 'REGION V';
+                }
+
+                newApps.push({
+                  id: doc.id,
+                  dateFiled: data.submittedAt ? new Date(data.submittedAt.toDate()).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A',
+                  submittedAtRaw: data.submittedAt ? data.submittedAt.toDate().getTime() : null,
+                  refId: 'APP-' + doc.id.substring(0, 8).toUpperCase(),
+                  applicantName: (userInfo?.name || data.userName || 'Unknown').toUpperCase(),
+                  category: categoryLabels[data.category] || data.category || 'N/A',
+                  region: region,
+                  location: location,
+                  nationalStatus: nationalStatus,
+                  province: data.province || userInfo?.province || ''
+                });
               });
+
+              this.apps = newApps;
+              this.totalCount = newApps.length;
+              this.approvedCount = approved;
+              this.pendingCount = pending;
+              this.rejectedCount = rejected;
+
+              console.log(`[onSnapshot] ${newApps.length} applications loaded`);
+              this.loading = false;
+              this.updateCharts();
+            }, (error) => {
+              console.error('Snapshot error:', error);
+              this.loading = false;
             });
 
-            this.totalCount = this.apps.length;
-            this.approvedCount = approved;
-            this.pendingCount = pending;
-            this.rejectedCount = rejected;
-
-            console.log(`Loaded ${this.apps.length} applications`);
-            this.loading = false;
-            this.updateCharts();
           } catch (error) {
             console.error('Error loading applications:', error);
             alert('Error loading applications: ' + error.message);
@@ -491,7 +498,6 @@
             });
 
             alert('Application approved successfully!');
-            await this.loadApplications();
           } catch (error) {
             console.error('Error approving:', error);
             alert('Error approving application: ' + error.message);
@@ -509,7 +515,6 @@
             });
 
             alert('Application rejected.');
-            await this.loadApplications();
           } catch (error) {
             console.error('Error rejecting:', error);
             alert('Error rejecting application: ' + error.message);
