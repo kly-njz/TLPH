@@ -297,55 +297,70 @@
         },
 
         initCharts() {
-          const sharedOpts = {
-            responsive: true,
-            maintainAspectRatio: false,
-            layout: { padding: 5 },
-            plugins: { legend: { position: 'bottom', labels: { boxWidth: 6, font: { weight: 'bold' } } } }
-          };
-
-        // Destroy existing instances: check both stored refs and any Chart.js-registered instances
+          // Destroy existing instances safely
           ['trendChartInst', 'statusChartInst', 'regionChartInst'].forEach(ref => {
             if (this[ref]) { this[ref].destroy(); this[ref] = null; }
           });
           ['appsTrendChart', 'appsStatusChart', 'appsRegionChart'].forEach(id => {
-            const existing = Chart.getChart(id);
+            const existing = Chart.getChart(document.getElementById(id));
             if (existing) existing.destroy();
           });
 
-          // 1. Trend chart (Line) — empty on init
+          // 1. Trend chart (Line) — plain options, no spread
           this.trendChartInst = new Chart(document.getElementById('appsTrendChart'), {
             type: 'line',
             data: {
               labels: [],
               datasets: [{ label: 'Submissions', data: [], borderColor: '#1e3a8a', backgroundColor: 'rgba(30,58,138,0.1)', borderWidth: 1.5, fill: true, tension: 0.3, pointRadius: 2 }]
             },
-            options: { ...sharedOpts, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } } }
+            options: {
+              responsive: true, maintainAspectRatio: false, layout: { padding: 5 },
+              plugins: { legend: { display: false } },
+              scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } }
+            }
           });
 
-          // 2. Status chart (Doughnut) — empty on init
+          // 2. Status chart (Doughnut) — plain options, no spread
           this.statusChartInst = new Chart(document.getElementById('appsStatusChart'), {
             type: 'doughnut',
             data: {
               labels: ['Approved', 'Pending', 'Rejected'],
               datasets: [{ data: [0, 0, 0], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }]
             },
-            options: { ...sharedOpts, cutout: '70%' }
+            options: {
+              responsive: true, maintainAspectRatio: false, layout: { padding: 5 }, cutout: '70%',
+              plugins: { legend: { position: 'bottom', labels: { boxWidth: 6, font: { weight: 'bold' } } } }
+            }
           });
 
-          // 3. Region volume (Bar) — empty on init
+          // 3. Region volume (Bar) — plain options, no spread
           this.regionChartInst = new Chart(document.getElementById('appsRegionChart'), {
             type: 'bar',
             data: {
               labels: [],
               datasets: [{ label: 'Volume', data: [], backgroundColor: '#475569', borderRadius: 2 }]
             },
-            options: { ...sharedOpts, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { display: false, beginAtZero: true } } }
+            options: {
+              responsive: true, maintainAspectRatio: false, layout: { padding: 5 }, indexAxis: 'y',
+              plugins: { legend: { display: false } },
+              scales: { x: { display: false, beginAtZero: true } }
+            }
           });
         },
 
         updateCharts() {
           if (!this.trendChartInst || !this.statusChartInst || !this.regionChartInst) return;
+
+          // Dereference Alpine reactive data into plain primitives to avoid
+          // Chart.js triggering Alpine's reactive proxy and causing stack overflow.
+          const approved = Number(this.approvedCount);
+          const pending  = Number(this.pendingCount);
+          const rejected = Number(this.rejectedCount);
+          // Snapshot the apps array as a plain array of plain objects
+          const appsSnap = Array.from(this.apps).map(a => ({
+            submittedAtRaw: a.submittedAtRaw ? +a.submittedAtRaw : null,
+            region: String(a.region || 'Unknown')
+          }));
 
           // --- Trend chart: submissions per month (last 6 months) ---
           const now = new Date();
@@ -355,33 +370,30 @@
             const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
             trendMap[key] = 0;
           }
-          this.apps.forEach(app => {
+          appsSnap.forEach(app => {
             if (app.submittedAtRaw) {
               const d = new Date(app.submittedAtRaw);
               const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
-              if (trendMap.hasOwnProperty(key)) trendMap[key]++;
+              if (Object.prototype.hasOwnProperty.call(trendMap, key)) trendMap[key]++;
             }
           });
           this.trendChartInst.data.labels = Object.keys(trendMap);
           this.trendChartInst.data.datasets[0].data = Object.values(trendMap);
-          this.trendChartInst.update();
+          this.trendChartInst.update('none');
 
           // --- Status chart: approved / pending / rejected ---
-          this.statusChartInst.data.datasets[0].data = [
-            this.approvedCount, this.pendingCount, this.rejectedCount
-          ];
-          this.statusChartInst.update();
+          this.statusChartInst.data.datasets[0].data = [approved, pending, rejected];
+          this.statusChartInst.update('none');
 
           // --- Region chart: count per region ---
           const regionMap = {};
-          this.apps.forEach(app => {
-            const r = app.region || 'Unknown';
-            regionMap[r] = (regionMap[r] || 0) + 1;
+          appsSnap.forEach(app => {
+            regionMap[app.region] = (regionMap[app.region] || 0) + 1;
           });
           const sortedRegions = Object.entries(regionMap).sort((a, b) => b[1] - a[1]);
-          this.regionChartInst.data.labels = sortedRegions.map(e => e[0]);
-          this.regionChartInst.data.datasets[0].data = sortedRegions.map(e => e[1]);
-          this.regionChartInst.update();
+          this.regionChartInst.data.labels = sortedRegions.map(e => String(e[0]));
+          this.regionChartInst.data.datasets[0].data = sortedRegions.map(e => Number(e[1]));
+          this.regionChartInst.update('none');
         },
 
         async loadApplications() {
