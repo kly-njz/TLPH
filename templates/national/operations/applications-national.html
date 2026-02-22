@@ -340,6 +340,46 @@
           });
         },
 
+        updateCharts() {
+          if (!this.trendChartInst || !this.statusChartInst || !this.regionChartInst) return;
+
+          // --- Trend chart: submissions per month (last 6 months) ---
+          const now = new Date();
+          const trendMap = {};
+          for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+            trendMap[key] = 0;
+          }
+          this.apps.forEach(app => {
+            if (app.submittedAtRaw) {
+              const d = new Date(app.submittedAtRaw);
+              const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+              if (trendMap.hasOwnProperty(key)) trendMap[key]++;
+            }
+          });
+          this.trendChartInst.data.labels = Object.keys(trendMap);
+          this.trendChartInst.data.datasets[0].data = Object.values(trendMap);
+          this.trendChartInst.update();
+
+          // --- Status chart: approved / pending / rejected ---
+          this.statusChartInst.data.datasets[0].data = [
+            this.approvedCount, this.pendingCount, this.rejectedCount
+          ];
+          this.statusChartInst.update();
+
+          // --- Region chart: count per region ---
+          const regionMap = {};
+          this.apps.forEach(app => {
+            const r = app.region || 'Unknown';
+            regionMap[r] = (regionMap[r] || 0) + 1;
+          });
+          const sortedRegions = Object.entries(regionMap).sort((a, b) => b[1] - a[1]);
+          this.regionChartInst.data.labels = sortedRegions.map(e => e[0]);
+          this.regionChartInst.data.datasets[0].data = sortedRegions.map(e => e[1]);
+          this.regionChartInst.update();
+        },
+
         async loadApplications() {
           try {
             this.loading = true;
