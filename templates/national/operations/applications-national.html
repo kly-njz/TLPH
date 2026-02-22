@@ -245,69 +245,72 @@
         pendingCount: 0,
         rejectedCount: 0,
 
-        // Chart.js instance references
-        trendChartInst: null,
-        statusChartInst: null,
-        regionChartInst: null,
-        _unsubscribeApps: null,
+        // NOTE: chart instances are stored on window._natCharts (not in Alpine reactive data)
+        // to prevent Alpine's Proxy from wrapping Chart.js objects and causing stack overflows.
 
         get filteredApps() {
           return this.apps.filter(app => {
-            const searchMatch = !this.searchQuery || 
-              app.applicantName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-              app.refId.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-              app.category.toLowerCase().includes(this.searchQuery.toLowerCase());
-            
-            const regionMatch = this.regionFilter === 'ALL' || 
-              app.region.toUpperCase().includes(this.regionFilter.toUpperCase()) ||
-              app.location.toUpperCase().includes(this.regionFilter.toUpperCase());
-            
-            const categoryMatch = this.categoryFilter === 'ALL' || 
-              app.category.toUpperCase().includes(this.categoryFilter.toUpperCase());
-            
-            const statusMatch = this.statusFilter === 'ALL' || 
+            const name     = (app.applicantName || '').toLowerCase();
+            const ref      = (app.refId || '').toLowerCase();
+            const cat      = (app.category || '').toLowerCase();
+            const region   = (app.region || '').toUpperCase();
+            const location = (app.location || '').toUpperCase();
+
+            const searchMatch = !this.searchQuery ||
+              name.includes(this.searchQuery.toLowerCase()) ||
+              ref.includes(this.searchQuery.toLowerCase()) ||
+              cat.includes(this.searchQuery.toLowerCase());
+
+            const regionMatch = this.regionFilter === 'ALL' ||
+              region.includes(this.regionFilter.toUpperCase()) ||
+              location.includes(this.regionFilter.toUpperCase());
+
+            const categoryMatch = this.categoryFilter === 'ALL' ||
+              cat.toUpperCase().includes(this.categoryFilter.toUpperCase());
+
+            const statusMatch = this.statusFilter === 'ALL' ||
               (this.statusFilter === 'APPROVED' && app.nationalStatus === 'approved') ||
               (this.statusFilter === 'PENDING ACTION' && app.nationalStatus === 'pending') ||
               (this.statusFilter === 'REJECTED' && app.nationalStatus === 'rejected');
-            
+
             return searchMatch && regionMatch && categoryMatch && statusMatch;
           });
         },
 
         async init() {
           console.log('Initializing national app registry...');
-          
+          // Init chart namespace on window
+          window._natCharts = { trend: null, status: null, region: null, unsub: null };
+
           // Wait for Firebase modules to be available
           let retries = 0;
           while (!window.firebaseCollection && retries < 50) {
             await new Promise(resolve => setTimeout(resolve, 100));
             retries++;
           }
-          
+
           if (!window.firebaseCollection) {
             console.error('Firebase modules not loaded after waiting');
             alert('Error: Firebase modules failed to load. Please refresh the page.');
             this.loading = false;
             return;
           }
-          
+
           console.log('Firebase modules ready, loading applications...');
           this.initCharts();
           await this.loadApplications();
         },
 
         initCharts() {
-          // Destroy existing instances safely
-          ['trendChartInst', 'statusChartInst', 'regionChartInst'].forEach(ref => {
-            if (this[ref]) { this[ref].destroy(); this[ref] = null; }
-          });
+          // Destroy any pre-existing Chart.js instances on these canvases
           ['appsTrendChart', 'appsStatusChart', 'appsRegionChart'].forEach(id => {
-            const existing = Chart.getChart(document.getElementById(id));
+            const el = document.getElementById(id);
+            const existing = el && Chart.getChart(el);
             if (existing) existing.destroy();
           });
 
-          // 1. Trend chart (Line) — plain options, no spread
-          this.trendChartInst = new Chart(document.getElementById('appsTrendChart'), {
+          // Store on window — NOT in Alpine reactive data — to avoid Proxy wrapping
+          window._natCharts.trend = new Chart(document.getElementById('appsTrendChart'), {
             type: 'line',
             data: {
               labels: [],
@@ -320,8 +323,7 @@
             }
           });
 
-          // 2. Status chart (Doughnut) — plain options, no spread
-          this.statusChartInst = new Chart(document.getElementById('appsStatusChart'), {
+          window._natCharts.status = new Chart(document.getElementById('appsStatusChart'), {
             type: 'doughnut',
             data: {
               labels: ['Approved', 'Pending', 'Rejected'],
@@ -333,8 +335,7 @@
             }
           });
 
-          // 3. Region volume (Bar) — plain options, no spread
-          this.regionChartInst = new Chart(document.getElementById('appsRegionChart'), {
+          window._natCharts.region = new Chart(document.getElementById('appsRegionChart'), {
             type: 'bar',
             data: {
               labels: [],
@@ -349,51 +350,50 @@
         },
 
         updateCharts() {
-          if (!this.trendChartInst || !this.statusChartInst || !this.regionChartInst) return;
+          const c = window._natCharts;
+          if (!c || !c.trend || !c.status || !c.region) return;
 
-          // Dereference Alpine reactive data into plain primitives to avoid
-          // Chart.js triggering Alpine's reactive proxy and causing stack overflow.
+          // Extract plain primitives from Alpine reactive data
           const approved = Number(this.approvedCount);
           const pending  = Number(this.pendingCount);
           const rejected = Number(this.rejectedCount);
-          // Snapshot the apps array as a plain array of plain objects
-          const appsSnap = Array.from(this.apps).map(a => ({
-            submittedAtRaw: a.submittedAtRaw ? +a.submittedAtRaw : null,
-            region: String(a.region || 'Unknown')
-          }));
 
-          // --- Trend chart: submissions per month (last 6 months) ---
+          // Plain snapshot of apps — completely outside Alpine's Proxy
+          const appsSnap = JSON.parse(JSON.stringify(
+            Array.from(this.apps).map(a => ({
+              submittedAtRaw: a.submittedAtRaw || null,
+              region: a.region || 'Unknown'
+            }))
+          ));
+
+          // --- Trend chart ---
           const now = new Date();
           const trendMap = {};
           for (let i = 5; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
-            trendMap[key] = 0;
+            trendMap[d.toLocaleString('en-US', { month: 'short', year: '2-digit' })] = 0;
           }
-          appsSnap.forEach(app => {
-            if (app.submittedAtRaw) {
-              const d = new Date(app.submittedAtRaw);
-              const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
-              if (Object.prototype.hasOwnProperty.call(trendMap, key)) trendMap[key]++;
+          appsSnap.forEach(a => {
+            if (a.submittedAtRaw) {
+              const key = new Date(a.submittedAtRaw).toLocaleString('en-US', { month: 'short', year: '2-digit' });
+              if (key in trendMap) trendMap[key]++;
             }
           });
-          this.trendChartInst.data.labels = Object.keys(trendMap);
-          this.trendChartInst.data.datasets[0].data = Object.values(trendMap);
-          this.trendChartInst.update('none');
+          c.trend.data.labels = Object.keys(trendMap);
+          c.trend.data.datasets[0].data = Object.values(trendMap);
+          c.trend.update('none');
 
-          // --- Status chart: approved / pending / rejected ---
-          this.statusChartInst.data.datasets[0].data = [approved, pending, rejected];
-          this.statusChartInst.update('none');
+          // --- Status chart ---
+          c.status.data.datasets[0].data = [approved, pending, rejected];
+          c.status.update('none');
 
-          // --- Region chart: count per region ---
+          // --- Region chart ---
           const regionMap = {};
-          appsSnap.forEach(app => {
-            regionMap[app.region] = (regionMap[app.region] || 0) + 1;
-          });
-          const sortedRegions = Object.entries(regionMap).sort((a, b) => b[1] - a[1]);
-          this.regionChartInst.data.labels = sortedRegions.map(e => String(e[0]));
-          this.regionChartInst.data.datasets[0].data = sortedRegions.map(e => Number(e[1]));
-          this.regionChartInst.update('none');
+          appsSnap.forEach(a => { regionMap[a.region] = (regionMap[a.region] || 0) + 1; });
+          const sorted = Object.entries(regionMap).sort((a, b) => b[1] - a[1]);
+          c.region.data.labels = sorted.map(e => e[0]);
+          c.region.data.datasets[0].data = sorted.map(e => e[1]);
+          c.region.update('none');
         },
 
         async loadApplications() {
@@ -423,11 +423,11 @@
             };
 
             // Unsubscribe any previous listener before attaching a new one
-            if (this._unsubscribeApps) { this._unsubscribeApps(); this._unsubscribeApps = null; }
+            if (window._natCharts.unsub) { window._natCharts.unsub(); window._natCharts.unsub = null; }
 
             // Real-time listener on applications forwarded to national
             const appsRef = window.firebaseCollection(window.firebaseDB, 'applications');
-            this._unsubscribeApps = window.firebaseOnSnapshot(appsRef, (querySnapshot) => {
+            window._natCharts.unsub = window.firebaseOnSnapshot(appsRef, (querySnapshot) => {
               const newApps = [];
               let approved = 0, pending = 0, rejected = 0;
 
