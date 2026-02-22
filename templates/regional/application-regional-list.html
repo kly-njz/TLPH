@@ -87,10 +87,14 @@
                         <div style="width: 200px;">
                             <select x-model="filterStatus" class="form-select form-select-sm text-[10px] font-black uppercase">
                                 <option value="ALL">All Status</option>
-                                <option value="to-review">TO REVIEW</option>
-                                <option value="pending">PENDING</option>
-                                <option value="accepted">ACCEPTED</option>
+                                <option value="pending">PENDING REVIEW</option>
+                                <option value="to-review">FOR REGIONAL REVIEW</option>
+                                <option value="under-review">UNDER REVIEW</option>
+                                <option value="approved">APPROVED BY REGIONAL</option>
+                                <option value="forwarded-to-national">FORWARDED TO NATIONAL</option>
+                                <option value="approved-national">APPROVED BY NATIONAL</option>
                                 <option value="rejected">REJECTED</option>
+                                <option value="cancelled">CANCELLED</option>
                             </select>
                         </div>
                         
@@ -123,7 +127,8 @@
                                     <td class="py-3 text-slate-500 font-bold uppercase" x-text="app.category"></td>
                                     <td class="py-3 text-center">
                                         <span class="px-2 py-1 border font-black text-[8px] uppercase" 
-                                              :class="getStatusClass(app.status)" x-text="app.status"></span>
+                                              :class="getStatusClass(getStatusLabel(app).key)" 
+                                              x-text="getStatusLabel(app).text"></span>
                                     </td>
                                     <td class="py-3 text-center no-print">
                                         <a :href="'/regional/application-view/' + app.id" class="btn btn-sm btn-dark rounded-0 font-black text-[9px] uppercase px-3 py-1 text-decoration-none d-inline-block">Open</a>
@@ -252,10 +257,14 @@
                         
                         console.log('Users loaded:', Object.keys(usersMap).length);
                         
-                        // Query applications with status 'to-review' or 'pending'
+                        // Query ALL applications (filter by province client-side so regional admin
+                        // can see forwarded-to-national, approved, and all other statuses)
                         const q = window.firebaseQuery(
                             window.firebaseCollection(window.firebaseDB, 'applications'),
-                            window.firebaseWhere('status', 'in', ['to-review', 'pending', 'under-review'])
+                            window.firebaseWhere('status', 'in', [
+                                'to-review', 'pending', 'under-review',
+                                'approved', 'rejected', 'forwarded-to-national', 'cancelled'
+                            ])
                         );
                         
                         console.log('Query created, setting up listener...');
@@ -283,7 +292,9 @@
                                         municipality: appMunicipality,
                                         applicant: applicantName,
                                         category: (data.category || 'N/A').toUpperCase(),
-                                        status: (data.status || 'pending').toUpperCase()
+                                        status: (data.status || 'pending').toLowerCase(),
+                                        nationalStatus: (data.nationalStatus || '').toLowerCase(),
+                                        regionalStatus: (data.regionalStatus || '').toLowerCase()
                                     });
                                 } else {
                                     console.log('Skipping application from other region:', doc.id, 'Province:', appProvince);
@@ -313,7 +324,7 @@
                                             i.applicant.toLowerCase().includes(s) || 
                                             i.municipality.toLowerCase().includes(s);
                         const matchesProv = this.filterProvince === 'ALL' || i.province === this.filterProvince;
-                        const matchesStat = this.filterStatus === 'ALL' || i.status.toLowerCase() === this.filterStatus.toLowerCase();
+                        const matchesStat = this.filterStatus === 'ALL' || this.getStatusLabel(i).key === this.filterStatus;
                         return matchesSearch && matchesProv && matchesStat;
                     });
                     
@@ -331,9 +342,30 @@
                         'to-review': 'bg-indigo-50 text-indigo-700 border-indigo-200',
                         'accepted': 'bg-emerald-50 text-emerald-700 border-emerald-200',
                         'approved': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                        'rejected': 'bg-rose-50 text-rose-700 border-rose-200'
+                        'rejected': 'bg-rose-50 text-rose-700 border-rose-200',
+                        'forwarded-to-national': 'bg-purple-50 text-purple-700 border-purple-200',
+                        'approved-national': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                        'cancelled': 'bg-gray-100 text-gray-600 border-gray-300'
                     };
                     return colors[statusLower] || 'bg-slate-50 text-slate-600 border-slate-200';
+                },
+
+                // Returns { text, key } for display in list rows
+                getStatusLabel(app) {
+                    const nat = (app.nationalStatus || '').toLowerCase();
+                    const reg = (app.regionalStatus || '').toLowerCase();
+                    const main = (app.status || '').toLowerCase();
+
+                    if (nat === 'approved') return { text: 'Approved by National', key: 'approved-national' };
+                    if (nat === 'rejected') return { text: 'Rejected by National', key: 'rejected' };
+                    if (main === 'forwarded-to-national') return { text: 'Forwarded to National', key: 'forwarded-to-national' };
+                    if (reg === 'approved' || main === 'approved') return { text: 'Approved by Regional', key: 'approved' };
+                    if (reg === 'rejected') return { text: 'Rejected by Regional', key: 'rejected' };
+                    if (main === 'to-review') return { text: 'For Regional Review', key: 'to-review' };
+                    if (main === 'under-review') return { text: 'Under Review', key: 'under-review' };
+                    if (main === 'rejected') return { text: 'Rejected', key: 'rejected' };
+                    if (main === 'cancelled') return { text: 'Cancelled', key: 'cancelled' };
+                    return { text: 'Pending Review', key: 'pending' };
                 },
                 
                 resetFilters() {

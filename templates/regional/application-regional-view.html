@@ -73,9 +73,10 @@
               <p class="mt-1 text-[11px] font-bold uppercase tracking-widest text-slate-500">
                 Ref: <span class="text-gov-primary" x-text="applicant.ref"></span>
               </p>
-              <div class="mt-3 inline-flex items-center gap-2 rounded-0 border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase text-amber-700">
-                <span class="h-2 w-2 rounded-full bg-amber-500"></span>
-                <span x-text="applicant.status"></span>
+              <div class="mt-3 inline-flex items-center gap-2 rounded-0 border px-3 py-1 text-[10px] font-black uppercase"
+                   :class="applicant.effectiveClass">
+                <span class="h-2 w-2 rounded-full" :class="applicant.effectiveDot"></span>
+                <span x-text="applicant.effectiveLabel"></span>
               </div>
             </div>
           </div>
@@ -151,7 +152,8 @@
           </div>
         </section>
 
-        <section class="border border-gov-border bg-white p-5 shadow-sm border-t-4 border-t-slate-900 no-print">
+        <section class="border border-gov-border bg-white p-5 shadow-sm border-t-4 border-t-slate-900 no-print"
+                 x-show="!applicant.nationalStatus && applicant.status !== 'FORWARDED TO NATIONAL' && applicant.status !== 'APPROVED' && applicant.status !== 'REJECTED'">
           <h3 class="text-[11px] font-black uppercase tracking-gov2 text-gov-primary">Administrative Disposition</h3>
           <p class="mt-1 text-xs font-bold italic text-slate-500 uppercase">Final action will be recorded in the regional audit trail.</p>
 
@@ -249,12 +251,51 @@
               'infrastructure': 'Infrastructure'
             };
 
+            // Compute effective status label and styling for the badge
+            const natS = (appData.nationalStatus || '').toLowerCase();
+            const regS = (appData.regionalStatus || '').toLowerCase();
+            const mainS = (appData.status || '').toLowerCase();
+            let effectiveLabel, effectiveClass, effectiveDot;
+            if (natS === 'approved') {
+              effectiveLabel = '✓ Approved by National';
+              effectiveClass = 'border-emerald-300 bg-emerald-50 text-emerald-700';
+              effectiveDot = 'bg-emerald-500';
+            } else if (natS === 'rejected') {
+              effectiveLabel = 'Rejected by National';
+              effectiveClass = 'border-rose-200 bg-rose-50 text-rose-700';
+              effectiveDot = 'bg-rose-500';
+            } else if (mainS === 'forwarded-to-national') {
+              effectiveLabel = '→ Forwarded to National';
+              effectiveClass = 'border-purple-200 bg-purple-50 text-purple-700';
+              effectiveDot = 'bg-purple-500';
+            } else if (regS === 'approved' || mainS === 'approved') {
+              effectiveLabel = '✓ Approved by Regional';
+              effectiveClass = 'border-green-300 bg-green-50 text-green-700';
+              effectiveDot = 'bg-green-500';
+            } else if (regS === 'rejected' || mainS === 'rejected') {
+              effectiveLabel = 'Rejected';
+              effectiveClass = 'border-rose-200 bg-rose-50 text-rose-700';
+              effectiveDot = 'bg-rose-500';
+            } else if (mainS === 'to-review') {
+              effectiveLabel = '→ For Regional Review';
+              effectiveClass = 'border-blue-200 bg-blue-50 text-blue-700';
+              effectiveDot = 'bg-blue-500';
+            } else {
+              effectiveLabel = mainS === 'under-review' ? 'Under Review' : 'Pending Review';
+              effectiveClass = 'border-amber-200 bg-amber-50 text-amber-700';
+              effectiveDot = 'bg-amber-500';
+            }
+
             // Populate applicant data
             this.applicant = {
               name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || appData.userName || 'N/A',
               ref: applicationId.substring(0, 12).toUpperCase(),
               photo: userData.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + (userData.firstName || 'User'),
               status: (appData.status || 'pending').toUpperCase().replace('-', ' '),
+              effectiveLabel,
+              effectiveClass,
+              effectiveDot,
+              nationalStatus: appData.nationalStatus || '',
               productName: appData.productName || 'N/A',
               categoryLabel: categoryLabels[appData.category] || appData.category || 'N/A',
               email: userData.email || appData.userEmail || 'N/A',
