@@ -282,17 +282,36 @@
             
             let statusKey = 'pending';
             let statusText = 'Pending Review';
-            if (data.status === 'approved') {
-              statusKey = 'accepted';
-              statusText = 'Accepted';
-            } else if (data.status === 'rejected') {
+            const natStatus = (data.nationalStatus || '').toLowerCase();
+            const regStatus = (data.regionalStatus || '').toLowerCase();
+            const mainStatus = (data.status || '').toLowerCase();
+
+            if (natStatus === 'approved') {
+              statusKey = 'approved-national';
+              statusText = 'Approved by National';
+            } else if (natStatus === 'rejected') {
+              statusKey = 'rejected';
+              statusText = 'Rejected by National';
+            } else if (mainStatus === 'forwarded-to-national') {
+              statusKey = 'forwarded-national';
+              statusText = 'Forwarded to National';
+            } else if (regStatus === 'approved' || mainStatus === 'approved') {
+              statusKey = 'approved-regional';
+              statusText = 'Approved by Regional';
+            } else if (regStatus === 'rejected' || (mainStatus === 'rejected' && !natStatus)) {
               statusKey = 'rejected';
               statusText = 'Rejected';
-            } else if (data.status === 'under-review') {
+            } else if (mainStatus === 'to-review') {
+              statusKey = 'forwarded-regional';
+              statusText = 'Forwarded to Regional';
+            } else if (mainStatus === 'under-review' || mainStatus === 'pending') {
               statusKey = 'pending';
-              statusText = 'Under Review';
+              statusText = mainStatus === 'under-review' ? 'Under Review' : 'Pending Review';
+            } else if (mainStatus === 'cancelled') {
+              statusKey = 'cancelled';
+              statusText = 'Cancelled';
             }
-            
+
             const categoryLabel = categoryLabels[data.category] || data.category || 'Application';
             
             applicants.push({
@@ -302,7 +321,10 @@
               reference: doc.id.substring(0, 12),
               filedDate,
               status: data.status,
+              nationalStatus: data.nationalStatus || '',
+              regionalStatus: data.regionalStatus || '',
               statusKey,
+              statusText,
               categoryLabel,
               categoryValue: data.category || 'other',
               category: data.category
@@ -597,7 +619,7 @@
           </div>
 
           <div class="col-span-12 md:col-span-2 min-w-0">
-            ${statusBadge(a.statusKey, a.status)}
+            ${statusBadge(a.statusKey, a.statusText)}
           </div>
 
           <div class="col-span-12 md:col-span-1 md:text-right">
