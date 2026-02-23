@@ -6,11 +6,11 @@
   <title>Permissions & Roles | National Admin</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
-
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <style>
-    /* Government Typography & Layout */
+    /* Government Standard Typography & Layout */
     body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
     
     /* Compact Scrollbar */
@@ -22,17 +22,20 @@
     .chart-container { position: relative; height: 100%; width: 100%; overflow: hidden; }
 
     /* Inputs */
-    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; }
-    .gov-input:focus { border-color: #6d28d9; } /* Violet focus */
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #6d28d9; } 
+
+    /* Modal Animation */
+    [x-cloak] { display: none !important; }
   </style>
 </head>
 
-<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col" x-data="{ confirmModal: false }">
 
   <div class="flex-1 flex overflow-hidden">
-  <aside class="sidebar-container hidden lg:block">
-    {% include 'national/sidenav-national.html' %}
-  </aside>
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'national/sidenav-national.html' %}
+    </aside>
 
     <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar">
 
@@ -109,20 +112,19 @@
               <select id="scopeFilter" class="gov-input cursor-pointer" onchange="filterRoles()">
                 <option value="">All Scopes</option>
                 <option value="National">National</option>
-                <option value="National">Regional</option>
-                <option value="National">Municipal</option>
                 <option value="All Entities">All Entities</option>
               </select>
 
-              <span class="border-l border-slate-300 h-4 mx-1"></span> <button onclick="toggleSelectAll(true)" class="px-2 py-0.5 border border-slate-300 hover:bg-slate-200 text-slate-700 font-bold uppercase text-[9px] rounded-[2px]">Select All</button>
-              <button onclick="toggleSelectAll(false)" class="px-2 py-0.5 border border-slate-300 hover:bg-slate-200 text-slate-700 font-bold uppercase text-[9px] rounded-[2px]">Clear All</button>
-              <button onclick="resetSelectedRole()" class="px-2 py-0.5 bg-rose-700 hover:bg-rose-800 text-white font-bold uppercase text-[9px] rounded-[2px]">Reset Selected</button>
+              <span class="border-l border-slate-300 h-4 mx-1"></span> 
+              <button onclick="toggleSelectAll(true)" class="px-2 py-0.5 border border-slate-300 hover:bg-slate-200 text-slate-700 font-bold uppercase text-[9px] rounded-[2px]">Select All Rows</button>
+              <button onclick="toggleSelectAll(false)" class="px-2 py-0.5 border border-slate-300 hover:bg-slate-200 text-slate-700 font-bold uppercase text-[9px] rounded-[2px]">Clear All Rows</button>
+              <button onclick="resetSelectedRowPermissions()" class="px-2 py-0.5 bg-rose-700 hover:bg-rose-800 text-white font-bold uppercase text-[9px] rounded-[2px]">Reset Selected</button>
             </div>
           </div>
 
           <div class="flex-1 overflow-auto custom-scrollbar">
             <table class="w-full text-left border-collapse">
-              <thead class="bg-slate-100 border-b border-slate-300 sticky top-0 z-20">
+              <thead class="bg-slate-100 border-b border-slate-300 sticky top-0 z-10">
                 <tr>
                   <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 sticky left-0 bg-slate-100 z-30 border-r border-slate-300">Role</th>
                   <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">View</th>
@@ -151,7 +153,7 @@
                     <span class="inline-flex px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-violet-50 text-violet-700 border border-violet-200">National</span>
                   </td>
                   <td class="px-2 py-1.5 text-center bg-slate-50 border-l border-slate-200">
-                    <input type="radio" name="selectedRole" class="w-3 h-3 cursor-pointer" onclick="selectRole(this)">
+                    <input type="radio" name="selectedRole" class="w-3 h-3 cursor-pointer role-selector" onclick="handleRoleClick(this)">
                   </td>
                 </tr>
 
@@ -168,7 +170,7 @@
                     <span class="inline-flex px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-slate-100 text-slate-700 border border-slate-300">All Entities</span>
                   </td>
                   <td class="px-2 py-1.5 text-center bg-slate-50 border-l border-slate-200">
-                    <input type="radio" name="selectedRole" class="w-3 h-3 cursor-pointer" onclick="selectRole(this)">
+                    <input type="radio" name="selectedRole" class="w-3 h-3 cursor-pointer role-selector" onclick="handleRoleClick(this)">
                   </td>
                 </tr>
 
@@ -177,12 +179,34 @@
           </div>
 
           <div class="bg-slate-50 border-t border-slate-300 px-3 py-2 flex items-center justify-between shrink-0">
-            <span class="text-[9px] text-slate-500 italic">Select a role radio button to reset its specific permissions.</span>
-            <button class="px-4 py-1.5 rounded-[2px] bg-slate-800 text-white font-black uppercase text-[9px] hover:bg-slate-900 transition shadow-sm">Save Changes</button>
+            <span class="text-[9px] text-slate-500 italic">Toggle the radio button to select/deselect a role for editing.</span>
+            <button @click="confirmModal = true" class="px-4 py-1.5 rounded-[2px] bg-slate-800 text-white font-black uppercase text-[9px] hover:bg-slate-900 transition shadow-sm">Save Changes</button>
           </div>
         </section>
 
     </main>
+  </div>
+
+  <div x-cloak x-show="confirmModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-[2px]" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+    <div @click.away="confirmModal = false" class="bg-white w-full max-w-[320px] rounded-[2px] shadow-2xl border border-slate-300 overflow-hidden">
+      <div class="p-4">
+        <div class="flex items-center gap-3 text-violet-700 mb-3">
+          <span class="material-icons-round text-2xl">security</span>
+          <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Confirm Updates</h3>
+        </div>
+        <p class="text-[10px] text-slate-600 leading-relaxed font-bold">
+          You are about to modify the Access Control Matrix. This will immediately update permissions for all users assigned to these roles.
+        </p>
+      </div>
+      <div class="bg-slate-50 px-4 py-3 flex justify-end gap-2 border-t border-slate-200">
+        <button @click="confirmModal = false" class="px-3 py-1.5 rounded-[2px] border border-slate-300 bg-white text-slate-600 font-black uppercase text-[9px] hover:bg-slate-100 transition">
+          Cancel
+        </button>
+        <button onclick="saveFinalChanges()" class="px-3 py-1.5 rounded-[2px] bg-violet-700 text-white font-black uppercase text-[9px] hover:bg-violet-800 transition shadow-sm">
+          Yes, Apply
+        </button>
+      </div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -218,25 +242,48 @@
     // ===== Matrix Logic =====
     let selectedRow = null;
 
-    function selectRole(radioEl){
+    /**
+     * Allows unselecting a radio button by clicking it again.
+     */
+    function handleRoleClick(radioEl) {
+      if (radioEl.dataset.wasChecked === "true") {
+        radioEl.checked = false;
+        radioEl.dataset.wasChecked = "false";
+        clearSelection();
+      } else {
+        document.querySelectorAll('.role-selector').forEach(el => el.dataset.wasChecked = "false");
+        radioEl.dataset.wasChecked = "true";
+        selectRole(radioEl);
+      }
+    }
+
+    function selectRole(radioEl) {
       document.querySelectorAll('.role-row').forEach(r => r.classList.remove('bg-violet-50/50'));
       selectedRow = radioEl.closest('tr');
       selectedRow.classList.add('bg-violet-50/50');
     }
 
-    function resetSelectedRole(){
-      if(!selectedRow){ alert('Please select a role first using the radio button.'); return; }
+    function clearSelection() {
+      document.querySelectorAll('.role-row').forEach(r => r.classList.remove('bg-violet-50/50'));
+      selectedRow = null;
+    }
+
+    function resetSelectedRowPermissions() {
+      if(!selectedRow) { 
+        alert('Please select a role first using the radio button.'); 
+        return; 
+      }
       selectedRow.querySelectorAll('input.perm[type="checkbox"]').forEach(cb => cb.checked = false);
     }
 
-    function toggleSelectAll(isChecked){
+    function toggleSelectAll(isChecked) {
       document.querySelectorAll('.role-row').forEach(row => {
-        if(row.style.display === 'none') return; // Don't check hidden/filtered rows
+        if(row.style.display === 'none') return; 
         row.querySelectorAll('input.perm[type="checkbox"]').forEach(cb => cb.checked = isChecked);
       });
     }
 
-    function filterRoles(){
+    function filterRoles() {
       const q = (document.getElementById('searchRole').value || '').trim().toLowerCase();
       const scope = document.getElementById('scopeFilter').value;
 
@@ -249,7 +296,21 @@
       });
     }
 
-    function openRoleModal(){ alert('Open Create Role Modal logic here.'); }
+    function saveFinalChanges() {
+        // This is where your actual save logic goes
+        console.log("Permissions Saved Successfully");
+        
+        // Hide the modal using Alpine
+        // Note: Using document query because we are outside the Alpine scope in plain JS
+        const alpineRoot = document.querySelector('[x-data]');
+        if (alpineRoot && alpineRoot.__x) {
+            alpineRoot.__x.$data.confirmModal = false;
+        }
+        
+        alert("Permission matrix updated successfully.");
+    }
+
+    function openRoleModal() { alert('Open Create Role Modal logic here.'); }
   </script>
 </body>
 </html>
