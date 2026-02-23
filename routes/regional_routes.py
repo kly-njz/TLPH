@@ -106,6 +106,15 @@ def accounting_dashboard_view():
     db = firestore.client()
     finance_data = {}
     user_region = (session.get('region') or session.get('user_region') or '').upper().replace('–', '-').replace('—', '-').replace('  ', ' ').replace(' ', '-')
+    # If user_region is empty, fetch from Firestore user document
+    if not user_region:
+        user_email = session.get('user_email')
+        if user_email:
+            user_docs = db.collection('users').where('email', '==', user_email).stream()
+            for user_doc in user_docs:
+                user_data = user_doc.to_dict()
+                user_region = user_data.get('region', '').upper().replace('–', '-').replace('—', '-').replace('  ', ' ').replace(' ', '-')
+                break
     try:
         docs = db.collection('finance').stream()
         for doc in docs:
