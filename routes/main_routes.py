@@ -40,7 +40,22 @@ def create_regional_account():
 @bp.route('/national/dashboard')
 @role_required('national','national_admin')
 def national_dashboard():
-    return render_template('national/dashboard.html')
+    # TODO: Replace with real Firestore/database queries
+    total_collections = 0
+    total_applications = 0
+    total_service_requests = 0
+    total_count = 0
+    approved_count = 0
+    pending_count = 0
+    return render_template(
+        'national/landing-national.html',
+        total_collections=total_collections,
+        total_applications=total_applications,
+        total_service_requests=total_service_requests,
+        total_count=total_count,
+        approved_count=approved_count,
+        pending_count=pending_count
+    )
 
 # Add budget endpoint (must be top-level)
 @bp.route('/national/accounting/add-budget', methods=['POST'])
@@ -65,11 +80,13 @@ def national_accounting_dashboard_view():
         db = get_firestore_db()
         finance_data = {}
         try:
-            docs = db.collection('finance').stream()
-            for doc in docs:
-                finance_data.update(doc.to_dict())
+            doc = db.collection('finance').document('national').get()
+            if doc.exists:
+                finance_data['national'] = doc.to_dict()
+            else:
+                finance_data['national'] = {}
         except Exception:
-            pass
+            finance_data['national'] = {}
         return render_template('national/accounting/accounting-dashboard.html', finance=finance_data)
     except Exception as e:
         print(f"Error in national accounting dashboard: {str(e)}")
