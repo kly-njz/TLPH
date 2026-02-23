@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Expense Categories | Regional Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    .gov-card { background:#fff; border:1px solid #cbd5e1; border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    .gov-input { padding:4px 8px; font-size:10px; font-weight:800; border:1px solid #cbd5e1; border-radius:2px; background:#fff; outline:none; }
+    .gov-input:focus { border-color:#be123c; }
+    .gov-btn { padding:4px 12px; border-radius:2px; font-weight:900; text-transform:uppercase; font-size:9px; letter-spacing:.06em; transition:all .2s; cursor:pointer; }
+
+    .chart-safe-zone{ position:relative; flex:1; min-height:0; width:100%; }
+    .chart-container{ position:absolute; inset:0; }
+
+    th { font-size:9px; font-weight:900; text-transform:uppercase; color:#64748b; background:#f8fafc; border-bottom:2px solid #e2e8f0; padding:8px !important; }
+    td { padding:8px !important; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+
+    .badge { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; padding: 2px 6px; border-radius: 2px; border: 1px solid; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden">
+  <div class="h-full lg:grid lg:grid-cols-[260px_1fr]">
+
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'regional/sidenav.html' %}
+    </aside>
+
+    <div class="h-full flex flex-col overflow-hidden" x-data="{ modalOpen:false }">
+      <main class="flex-1 min-h-0 bg-slate-100 p-3 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
+
+        <!-- Header -->
+        <header class="gov-card p-3 flex justify-between items-center shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-rose-50 border border-rose-200 flex items-center justify-center">
+              <span class="material-icons-round text-rose-700 text-[18px]">category</span>
+            </div>
+            <div class="leading-tight">
+              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Expense Categories</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+                Regional COA Mapping & Tax Configuration (Municipalities under this region)
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Region scope badge -->
+            <span class="hidden sm:inline badge bg-blue-50 text-blue-800 border-blue-200">
+              {{ user_region|default('Region Assigned') }}
+            </span>
+
+            <button @click="modalOpen=true"
+              class="gov-btn bg-rose-700 hover:bg-rose-800 text-white shadow-sm flex items-center gap-1.5">
+              <span class="material-icons-round text-[14px]">add</span> Add Category
+            </button>
+          </div>
+        </header>
+
+        <!-- KPI -->
+        <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-rose-700">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Expenses</p>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">₱ 850,000</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-blue-700">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Categories</p>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">15</div>
+          </div>
+          <div class="gov-card p-2 px-3 bg-slate-800 text-white border-l-4 border-l-slate-800">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">MoM Growth</p>
+            <div class="text-lg font-black text-rose-400 mt-0.5 leading-none">+5%</div>
+          </div>
+        </section>
+
+        <!-- Charts -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 h-[160px]">
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Expense Trends (Region Scoped)
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="trendChart"></canvas></div>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Tax Distribution (Region Scoped)
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="taxChart"></canvas></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Table -->
+        <section class="gov-card flex-1 min-h-[260px] flex flex-col overflow-hidden">
+          <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
+                <span class="material-icons-round text-[14px]">table_chart</span> Mapped Categories
+              </h2>
+              <span class="badge bg-slate-100 text-slate-700 border-slate-200" id="scopeBadge">REGION SCOPED</span>
+            </div>
+
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <!-- ✅ Municipality filter -->
+              <select id="municipalityFilter" class="gov-input cursor-pointer">
+                <option value="ALL">All Municipalities</option>
+                {% for m in municipalities %}
+                  <option value="{{ m|upper }}">{{ m }}</option>
+                {% endfor %}
+              </select>
+
+              <div class="relative">
+                <span class="material-icons-round text-slate-400 absolute left-1.5 top-1/2 -translate-y-1/2 text-[12px]">search</span>
+                <input id="searchInput" type="text" placeholder="Search category..."
+                  class="gov-input pl-6 w-48 focus:border-rose-700">
+              </div>
+
+              <button type="button" onclick="resetFilters()"
+                class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 font-black uppercase text-[9px] rounded-[2px] transition">
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-auto custom-scrollbar bg-white">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th class="border-r border-slate-200">Category Name</th>
+                  <th class="border-r border-slate-200">COA Account Code</th>
+                  <th class="border-r border-slate-200 text-center">Tax Type</th>
+                  <th class="border-r border-slate-200 text-right">Default Rate</th>
+                  <th class="border-r border-slate-200 text-center">Municipality</th>
+                  <th class="text-center">Action</th>
+                </tr>
+              </thead>
+
+              <!-- ✅ IMPORTANT:
+                   Every row includes:
+                   data-region="REGION IV-A"
+                   data-municipality="CABUYAO" (or "ALL" if region-wide)
+                   so we can enforce region + municipality filtering.
+              -->
+              <tbody id="categoryTable" class="text-[10px] divide-y divide-slate-100">
+
+                <!-- Demo rows (for layout) -->
+                <tr class="hover:bg-slate-50 transition"
+                    data-region="REGION IV-A"
+                    data-municipality="CABUYAO">
+                  <td class="font-bold text-slate-900 border-r border-slate-100">Office Supplies</td>
+                  <td class="font-mono text-slate-600 border-r border-slate-100">5-02-03-010</td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="px-1 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-[2px] font-black text-[8px] uppercase">
+                      VAT Registered
+                    </span>
+                  </td>
+                  <td class="text-right font-bold text-slate-700 border-r border-slate-100">12%</td>
+                  <td class="text-center font-bold text-slate-700 border-r border-slate-100 uppercase text-[9px]">Cabuyao</td>
+                  <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                      <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
+                      <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr class="hover:bg-slate-50 transition"
+                    data-region="REGION IV-A"
+                    data-municipality="ALL">
+                  <td class="font-bold text-slate-900 border-r border-slate-100">Professional Services</td>
+                  <td class="font-mono text-slate-600 border-r border-slate-100">5-02-11-990</td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="px-1 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-[2px] font-black text-[8px] uppercase">
+                      Withholding Tax
+                    </span>
+                  </td>
+                  <td class="text-right font-bold text-slate-700 border-r border-slate-100">2%</td>
+                  <td class="text-center font-bold text-slate-700 border-r border-slate-100 uppercase text-[9px]">All Municipalities</td>
+                  <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                      <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
+                      <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Jinja rows -->
+                {% for c in expense_categories %}
+                <tr class="hover:bg-slate-50 transition"
+                    data-region="{{ c.region|upper }}"
+                    data-municipality="{{ (c.municipality or 'ALL')|upper }}">
+                  <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">{{ c.name }}</td>
+                  <td class="font-mono text-slate-600 border-r border-slate-100">{{ c.coa_code }}</td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="px-1 py-0.5 rounded-[2px] font-black text-[8px] uppercase border
+                      {% if c.tax_type|lower in ['vat','vat registered'] %} bg-blue-50 text-blue-700 border-blue-200
+                      {% elif c.tax_type|lower in ['withholding tax','ewt'] %} bg-amber-50 text-amber-700 border-amber-200
+                      {% elif c.tax_type|lower in ['none','n/a'] %} bg-slate-100 text-slate-600 border-slate-200
+                      {% else %} bg-emerald-50 text-emerald-700 border-emerald-200 {% endif %}">
+                      {{ c.tax_type }}
+                    </span>
+                  </td>
+                  <td class="text-right font-bold text-slate-700 border-r border-slate-100">{{ c.default_rate }}</td>
+
+                  <td class="text-center font-bold text-slate-700 border-r border-slate-100 uppercase text-[9px]">
+                    {{ c.municipality or 'ALL MUNICIPALITIES' }}
+                  </td>
+
+                  <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                      <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
+                      <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+
+              </tbody>
+            </table>
+          </div>
+
+          <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
+            <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">
+              Showing mapped categories • FY 2026 (Region Scoped)
+            </span>
+            <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
+              <span class="material-icons-round text-[14px]">file_download</span> Export CSV
+            </button>
+          </div>
+        </section>
+
+        <!-- Modal -->
+        <div x-show="modalOpen" style="display:none"
+          class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[3000] p-3">
+          <div @click.away="modalOpen=false"
+            class="bg-white rounded-[2px] w-full max-w-sm p-0 shadow-2xl border border-slate-400 overflow-hidden">
+            <div class="bg-slate-800 px-4 py-2 flex justify-between items-center">
+              <h3 class="text-[11px] font-black uppercase tracking-widest text-white m-0">New Expense Category (Regional)</h3>
+              <button type="button" @click="modalOpen=false" class="text-slate-400 hover:text-white">
+                <span class="material-icons-round text-[16px]">close</span>
+              </button>
+            </div>
+
+            <form class="p-4 space-y-3 bg-slate-50">
+              <div>
+                <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Category Name</label>
+                <input type="text" placeholder="e.g. Fuel & Lubricants"
+                  class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none focus:border-rose-700 uppercase">
+              </div>
+
+              <div>
+                <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Link to COA Account</label>
+                <select class="w-full px-2 py-1.5 text-[10px] font-mono border border-slate-300 rounded-[2px] bg-white focus:border-rose-700 outline-none">
+                  <option>5-02-03-090 — Fuel, Oil and Lubricants Expenses</option>
+                  <option>5-02-03-010 — Office Supplies Expenses</option>
+                </select>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Tax Type</label>
+                  <select class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none">
+                    <option>VAT</option>
+                    <option>Percentage Tax</option>
+                    <option>Withholding Tax</option>
+                    <option>None</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Default Rate (%)</label>
+                  <input type="number" placeholder="0"
+                    class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none text-right">
+                </div>
+              </div>
+
+              <!-- ✅ Region fixed + Municipality scope -->
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Region</label>
+                  <input type="text" value="{{ user_region|default('') }}" readonly
+                    class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-slate-200 outline-none uppercase">
+                </div>
+                <div>
+                  <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Municipality Scope</label>
+                  <select class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none uppercase">
+                    <option value="ALL">All Municipalities</option>
+                    {% for m in municipalities %}
+                      <option value="{{ m|upper }}">{{ m }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+
+              <div class="pt-2">
+                <button type="button" @click="modalOpen=false"
+                  class="w-full bg-rose-700 hover:bg-rose-800 text-white py-2 rounded-[2px] text-[10px] font-black uppercase shadow-sm">
+                  Save Mapping
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // ✅ REGION SCOPE (Injected by backend)
+    // ==========================================
+    // Enforced in UI:
+    // - Only rows where data-region == USER_REGION are visible
+    // Municipality filter:
+    // - ALL => show all municipalities
+    // - Specific => show that municipality + region-wide rows (data-municipality="ALL")
+    const USER_REGION = ("{{ user_region|default('') }}").trim().toUpperCase();
+
+    const searchInput = document.getElementById('searchInput');
+    const municipalityFilter = document.getElementById('municipalityFilter');
+
+    function applyFilters() {
+      const value = (searchInput.value || '').toLowerCase().trim();
+      const muni = (municipalityFilter.value || 'ALL').toUpperCase().trim();
+
+      document.querySelectorAll('#categoryTable tr').forEach(row => {
+        const textMatch = row.innerText.toLowerCase().includes(value);
+
+        const rowRegion = (row.getAttribute('data-region') || '').toUpperCase().trim();
+        const regionMatch = !USER_REGION || rowRegion === USER_REGION;
+
+        const rowMuni = (row.getAttribute('data-municipality') || 'ALL').toUpperCase().trim();
+        const muniMatch = (muni === 'ALL') || (rowMuni === muni) || (rowMuni === 'ALL');
+
+        row.style.display = (textMatch && regionMatch && muniMatch) ? '' : 'none';
+      });
+    }
+
+    function resetFilters() {
+      searchInput.value = '';
+      municipalityFilter.value = 'ALL';
+      applyFilters();
+    }
+
+    searchInput.addEventListener('input', applyFilters);
+    municipalityFilter.addEventListener('change', applyFilters);
+
+    // Chart defaults
+    Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+    Chart.defaults.font.size = 9;
+    Chart.defaults.color = "#64748b";
+
+    const chartConfig = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 } };
+
+    // Trend (demo)
+    new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],
+        datasets: [{
+          label: 'Expense',
+          data: [90,95,92,98,100,110,120,130],
+          borderColor: '#be123c',
+          backgroundColor: 'rgba(190,18,60,0.12)',
+          borderWidth: 1.5,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 1
+        }]
+      },
+      options: {
+        ...chartConfig,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 8 } } },
+          y: { grid: { display: false }, ticks: { font: { size: 8 } } }
+        }
+      }
+    });
+
+    // Tax distribution (demo)
+    new Chart(document.getElementById('taxChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['VAT', 'Withholding', 'None'],
+        datasets: [{
+          data: [8, 5, 2],
+          backgroundColor: ['#3b82f6', '#f59e0b', '#cbd5e1'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        ...chartConfig,
+        cutout: '65%',
+        plugins: {
+          legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8, weight: 'bold' } } }
+        }
+      }
+    });
+
+    // Initial apply (enforce region scope)
+    document.addEventListener('DOMContentLoaded', () => {
+      const badge = document.getElementById('scopeBadge');
+      if (!USER_REGION && badge) {
+        badge.textContent = 'NO REGION SET';
+        badge.className = 'badge bg-rose-50 text-rose-800 border-rose-200';
+      }
+      applyFilters();
+    });
+  </script>
+</body>
+</html>

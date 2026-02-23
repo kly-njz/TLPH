@@ -371,6 +371,9 @@
       if (normalized === 'accepted') return 'approved';
       if (normalized === 'to-review') return 'pending';
       if (normalized === 'submitted') return 'pending';
+      if (normalized === 'under-review') return 'pending';
+      if (normalized === 'forwarded-to-national') return 'pending';
+      if (normalized === 'forwarded') return 'pending';
       return normalized || 'pending';
     }
 
@@ -393,6 +396,39 @@
         });
       } catch (error) {
         console.error('Error loading license statuses:', error);
+      }
+
+      statusMap.__keys = statusKeys.sort((a, b) => b.length - a.length);
+      return statusMap;
+    }
+
+    // Load approval status from the `applications` collection (non-license applications).
+    // Applications store externalId from the Xendit payment, so we can match to transactions.
+    async function loadApplicationsStatusMap(userId) {
+      const statusMap = new Map();
+      const statusKeys = [];
+      if (!userId) return statusMap;
+
+      try {
+        const q = query(collection(db, 'applications'), where('userId', '==', userId));
+        const snapshot = await getDocs(q);
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          // Use effective status: nationalStatus overrides main status after national decision
+          let effectiveStatus = data.status || 'pending';
+          if (data.nationalStatus === 'approved' || data.nationalStatus === 'rejected') {
+            effectiveStatus = data.nationalStatus;
+          }
+          const normalized = normalizeStatus(effectiveStatus);
+          // Match by externalId stored in the application document
+          const externalId = (data.externalId || data.external_id || '').toString();
+          if (externalId) {
+            statusMap.set(externalId, normalized);
+            statusKeys.push(externalId);
+          }
+        });
+      } catch (error) {
+        console.error('Error loading application statuses:', error);
       }
 
       statusMap.__keys = statusKeys.sort((a, b) => b.length - a.length);
@@ -441,12 +477,14 @@
           const filteredTransactions = result.transactions.filter(t => !isServiceTransaction(t));
 
             const licenseStatusMap = await loadLicenseStatusMap(currentUserId);
+            const appStatusMap = await loadApplicationsStatusMap(currentUserId);
 
             allTransactions = filteredTransactions.map(t => {
                 const normalizedApiStatus = normalizeStatus(t.display_status || t.status || 'pending');
                 const externalId = (t.external_id || t.reference || '').toString();
-                      const licenseStatus = findLicenseStatus(externalId, licenseStatusMap);
-                const finalStatus = licenseStatus || normalizedApiStatus;
+                const licenseStatus = findLicenseStatus(externalId, licenseStatusMap);
+                const appStatus = findLicenseStatus(externalId, appStatusMap);
+                const finalStatus = licenseStatus || appStatus || normalizedApiStatus;
 
                 return ({
                     id: t.id,

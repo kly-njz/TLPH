@@ -1,3 +1,18 @@
+def add_holiday_to_firestore(date_iso, name, description, holiday_type, office_status='closed', open_time='', close_time=''):
+    """Add a holiday record to Firestore"""
+    db = firestore.client()
+    doc_id = f"{date_iso}|{name}"
+    holiday = {
+        'date': date_iso,
+        'name': name,
+        'description': description,
+        'type': holiday_type,
+        'office_status': office_status,
+        'open_time': open_time,
+        'close_time': close_time
+    }
+    db.collection('holidays').document(doc_id).set(holiday)
+    return doc_id
 from datetime import datetime
 from firebase_admin import firestore
 
@@ -102,14 +117,11 @@ def get_user_transactions(user_email=None, user_id=None):
                 for doc in query.stream():
                     transaction = doc.to_dict()
                     
-                    # Filter logic when userId is provided:
-                    # - Include if transaction has NO userId field (old records)
-                    # - Include if transaction userId matches current user_id
-                    # - Exclude if transaction userId exists but doesn't match (other user's record)
+                    # When userId is available, ONLY show transactions belonging to
+                    # the current user. Excludes old records from deleted accounts
+                    # that shared the same email.
                     if user_id:
-                        transaction_user_id = transaction.get('userId')
-                        if transaction_user_id and transaction_user_id != user_id:
-                            # This transaction belongs to a different user (old account with same email)
+                        if transaction.get('userId') != user_id:
                             continue
                     
                     transaction['id'] = doc.id

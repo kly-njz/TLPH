@@ -38,7 +38,7 @@ def license_view():
 def transaction_view():
     return render_template('regional/transaction-regional-list.html')
 
-@bp.route('/municipal-account-management-view')
+@bp.route('/user-management-regional-list')
 @role_required('regional','regional_admin')
 def municipal_account_management_view():
     return render_template('regional/user-management-regional-list.html')

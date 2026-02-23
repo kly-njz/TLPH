@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>System Audit Logs | Regional Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+
+  <style>
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; }
+    .gov-input:focus { border-color: #334155; }
+    .gov-btn { padding: 4px 10px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+
+    .badge { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; padding: 2px 6px; border-radius: 2px; border: 1px solid; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+
+  <div class="flex-1 flex overflow-hidden">
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'regional/sidenav-regional.html' %}
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar">
+
+      <!-- Header -->
+      <header class="gov-card p-3 flex justify-between items-center shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-[2px] bg-slate-800 flex items-center justify-center text-white">
+            <span class="material-icons-round text-[18px]">history</span>
+          </div>
+          <div class="leading-tight">
+            <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">System Audit Logs</h1>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+              Regional Activity Trail (Region + Municipalities only)
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="hidden sm:inline badge bg-blue-50 text-blue-800 border-blue-200">
+            {{ user_region|default('Region Assigned') }}
+          </span>
+
+          <button onclick="resetAll()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1 shadow-sm">
+            <span class="material-icons-round text-[14px]">refresh</span> Reset
+          </button>
+          <button onclick="exportLogs()" class="gov-btn bg-slate-800 hover:bg-slate-900 text-white flex items-center gap-1 shadow-sm">
+            <span class="material-icons-round text-[14px]">file_download</span> Export CSV
+          </button>
+        </div>
+      </header>
+
+      <!-- Stats -->
+      <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
+        <div class="gov-card p-2 px-3 border-l-4 border-l-slate-700">
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Visible Entries</span>
+            <span class="material-icons-round text-slate-400 text-[14px]">list</span>
+          </div>
+          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" id="statEntries">0</div>
+        </div>
+        <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Today's Activity</span>
+            <span class="material-icons-round text-blue-400 text-[14px]">today</span>
+          </div>
+          <div class="text-lg font-black text-blue-700 mt-0.5 leading-none" id="statToday">0</div>
+        </div>
+        <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Top Action</span>
+            <span class="material-icons-round text-emerald-400 text-[14px]">bolt</span>
+          </div>
+          <div class="text-lg font-black text-emerald-700 mt-0.5 leading-none" id="statTopAction">—</div>
+        </div>
+        <div class="gov-card p-2 px-3 border-l-4 border-l-violet-600">
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Unique Users</span>
+            <span class="material-icons-round text-violet-400 text-[14px]">group</span>
+          </div>
+          <div class="text-lg font-black text-violet-700 mt-0.5 leading-none" id="statUsers">0</div>
+        </div>
+      </section>
+
+      <!-- Filters -->
+      <section class="gov-card shrink-0">
+        <div class="bg-slate-50 border-b border-slate-200 px-3 py-1.5">
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">filter_alt</span> Log Filters (Region Scoped)
+          </h2>
+        </div>
+
+        <div class="p-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2 items-end">
+
+            <div class="lg:col-span-2">
+              <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Search Keyword</label>
+              <div class="relative">
+                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                <input id="q" type="text" class="gov-input w-full pl-6" placeholder="IP, Details, User...">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">User</label>
+              <select id="user" class="gov-input w-full cursor-pointer">
+                <option value="">All Users</option>
+                <!-- Optional: populate from backend -->
+                {% for u in audit_users %}
+                  <option value="{{ u }}">{{ u }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- ✅ Municipality filter (only for this region) -->
+            <div>
+              <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Municipality</label>
+              <select id="municipality" class="gov-input w-full cursor-pointer">
+                <option value="">All Municipalities</option>
+                {% for m in municipalities %}
+                  <option value="{{ m|upper }}">{{ m }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Action Type</label>
+              <select id="action" class="gov-input w-full cursor-pointer">
+                <option value="">All Actions</option>
+                <option value="Create">Create</option>
+                <option value="Edit">Edit</option>
+                <option value="Submit">Submit</option>
+                <option value="Approve">Approve</option>
+                <option value="Delete">Delete</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Scope</label>
+              <select id="scope" class="gov-input w-full cursor-pointer">
+                <option value="ALL">Region + Municipalities</option>
+                <option value="REGION_ONLY">Region HQ Only</option>
+                <option value="MUNI_ONLY">Municipalities Only</option>
+              </select>
+            </div>
+
+            <div class="flex gap-1">
+              <button onclick="applyFilters()" class="gov-btn bg-slate-800 text-white hover:bg-slate-900 flex-1 shadow-sm">Apply</button>
+              <button onclick="clearFilters()" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 flex-1">Clear</button>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- Table -->
+      <section class="gov-card flex-1 min-h-[250px] flex flex-col overflow-hidden">
+        <div class="bg-slate-50 border-b border-slate-200 px-3 py-1.5 flex justify-between items-center shrink-0">
+          <div>
+            <span class="text-[9px] font-bold uppercase text-slate-500">
+              Showing <b class="text-slate-800" id="countShown">0</b>-<b class="text-slate-800" id="countTo">0</b> of
+              <b class="text-slate-800" id="countTotal">0</b> Records (Region Scoped)
+            </span>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-auto custom-scrollbar bg-white">
+          <table class="w-full text-left border-collapse">
+            <thead class="sticky top-0 z-10 border-b border-slate-300 bg-slate-100">
+              <tr>
+                <th class="px-3 py-1.5 text-[9px] font-black uppercase text-slate-600 border-r border-slate-200">Timestamp</th>
+                <th class="px-3 py-1.5 text-[9px] font-black uppercase text-slate-600 border-r border-slate-200">User / Identity</th>
+                <th class="px-3 py-1.5 text-[9px] font-black uppercase text-slate-600 border-r border-slate-200">Target</th>
+                <th class="px-3 py-1.5 text-[9px] font-black uppercase text-slate-600 border-r border-slate-200 text-center">Event Type</th>
+                <th class="px-3 py-1.5 text-[9px] font-black uppercase text-slate-600 border-r border-slate-200">System Details</th>
+                <th class="px-3 py-1.5 text-[9px] font-black uppercase text-slate-600">IP Origin</th>
+              </tr>
+            </thead>
+
+            <!-- ✅ IMPORTANT:
+                 Each row MUST include:
+                 data-region="REGION IV-A"
+                 data-scope="REGION" or "MUNICIPAL"
+                 data-municipality="QUEZON CITY" (for municipal scope; empty for region scope)
+                 data-text="..." (search blob)
+            -->
+            <tbody id="auditBody" class="text-[10px] divide-y divide-slate-100">
+
+              <!-- Demo rows (replace with your backend data) -->
+              <tr class="hover:bg-slate-50 transition"
+                  data-region="REGION IV-A"
+                  data-scope="MUNICIPAL"
+                  data-municipality="CABUYAO"
+                  data-user="Maria Santos"
+                  data-action="Approve"
+                  data-date="2026-02-17"
+                  data-text="approved je-2026-00235 192.168.1.45 cabuyao region iv-a maria santos approve">
+                <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">2026-02-17 14:23:45</td>
+                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Maria Santos</td>
+                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100 font-bold">
+                  Region IV-A
+                  <span class="font-normal text-slate-400 block text-[8px] uppercase">Cabuyao (Municipality)</span>
+                </td>
+                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 w-16 text-center">Approve</span>
+                </td>
+                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">Approved Journal Entry: JE-2026-00235 (₱125,450.00)</td>
+                <td class="px-3 py-1.5 font-mono text-slate-500 text-[9px]">192.168.1.45</td>
+              </tr>
+
+              <tr class="hover:bg-slate-50 transition"
+                  data-region="REGION IV-A"
+                  data-scope="REGION"
+                  data-municipality=""
+                  data-user="Regional Accountant"
+                  data-action="Create"
+                  data-date="2026-02-16"
+                  data-text="created new coa mapping rule 10.0.4.12 region iv-a regional accountant create">
+                <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">2026-02-16 09:12:05</td>
+                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Regional Accountant</td>
+                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100 font-bold">
+                  Region IV-A
+                  <span class="font-normal text-slate-400 block text-[8px] uppercase">Regional HQ</span>
+                </td>
+                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-blue-50 text-blue-700 border border-blue-200 w-16 text-center">Create</span>
+                </td>
+                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">Created new COA mapping rule (ID: MAP-899)</td>
+                <td class="px-3 py-1.5 font-mono text-slate-500 text-[9px]">10.0.4.12</td>
+              </tr>
+
+              {% for log in audit_logs %}
+              <tr class="hover:bg-slate-50 transition"
+                  data-region="{{ log.region|upper }}"
+                  data-scope="{{ (log.scope or 'MUNICIPAL')|upper }}"
+                  data-municipality="{{ (log.municipality or '')|upper }}"
+                  data-user="{{ log.user }}"
+                  data-action="{{ log.action }}"
+                  data-date="{{ log.date }}"
+                  data-text="{{ (log.timestamp ~ ' ' ~ log.user ~ ' ' ~ (log.region or '') ~ ' ' ~ (log.municipality or '') ~ ' ' ~ log.action ~ ' ' ~ log.details ~ ' ' ~ log.ip) | lower }}">
+                <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">{{ log.timestamp }}</td>
+                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">{{ log.user }}</td>
+                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100 font-bold">
+                  {{ log.region }}
+                  <span class="font-normal text-slate-400 block text-[8px] uppercase">
+                    {% if log.municipality %}{{ log.municipality }} (Municipality){% else %}Regional HQ{% endif %}
+                  </span>
+                </td>
+                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                  <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase border w-16 text-center
+                    {% if log.action == 'Approve' %} bg-emerald-50 text-emerald-700 border-emerald-200
+                    {% elif log.action == 'Create' %} bg-blue-50 text-blue-700 border-blue-200
+                    {% elif log.action == 'Edit' %} bg-amber-50 text-amber-700 border-amber-200
+                    {% elif log.action == 'Delete' %} bg-rose-50 text-rose-700 border-rose-200
+                    {% else %} bg-slate-100 text-slate-700 border-slate-300 {% endif %}">
+                    {{ log.action }}
+                  </span>
+                </td>
+                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ log.details }}</td>
+                <td class="px-3 py-1.5 font-mono text-slate-500 text-[9px] whitespace-nowrap">{{ log.ip }}</td>
+              </tr>
+              {% endfor %}
+
+            </tbody>
+          </table>
+        </div>
+
+        <div class="bg-slate-50 border-t border-slate-200 px-3 py-1.5 flex justify-between items-center shrink-0">
+          <span class="text-[9px] text-slate-500 italic uppercase tracking-wider">Note: Audit logs are immutable and cannot be altered.</span>
+          <div class="flex gap-1">
+            <button onclick="prevPage()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-600">Prev</button>
+            <button onclick="nextPage()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-600">Next</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    // ✅ Region enforced in UI (must also be enforced in backend queries!)
+    const USER_REGION = ("{{ user_region|default('') }}").trim().toUpperCase();
+
+    function val(id){ return (document.getElementById(id).value || '').trim(); }
+
+    function applyFilters(){
+      const q = val('q').toLowerCase();
+      const user = val('user');
+      const muni = val('municipality').toUpperCase();
+      const action = val('action');
+      const scope = val('scope'); // ALL | REGION_ONLY | MUNI_ONLY
+
+      const rows = Array.from(document.querySelectorAll('#auditBody tr'));
+      let visible = 0;
+
+      const todayISO = new Date().toISOString().slice(0,10);
+      let todayCount = 0;
+
+      const userSet = new Set();
+      const actionCounts = {};
+
+      rows.forEach(tr => {
+        const trRegion = (tr.getAttribute('data-region') || '').toUpperCase().trim();
+        const trScope = (tr.getAttribute('data-scope') || '').toUpperCase().trim(); // REGION | MUNICIPAL
+        const trMuni  = (tr.getAttribute('data-municipality') || '').toUpperCase().trim();
+
+        const trUser = tr.getAttribute('data-user') || '';
+        const trAction = tr.getAttribute('data-action') || '';
+        const trDate = tr.getAttribute('data-date') || '';
+        const trText = (tr.getAttribute('data-text') || tr.innerText || '').toLowerCase();
+
+        // 1) Enforce region scope
+        const okRegion = !USER_REGION || trRegion === USER_REGION;
+
+        // 2) Search/user/action filters
+        const okQ = !q || trText.includes(q);
+        const okUser = !user || trUser === user;
+        const okAction = !action || trAction === action;
+
+        // 3) Municipality filter
+        // - if muni empty => all
+        // - for REGION scope rows, municipality may be empty; we still show if muni is empty OR scope isn't forcing muni-only
+        const okMuni = !muni || trMuni === muni;
+
+        // 4) Scope filter
+        const okScope =
+          scope === 'ALL' ||
+          (scope === 'REGION_ONLY' && trScope === 'REGION') ||
+          (scope === 'MUNI_ONLY' && trScope === 'MUNICIPAL');
+
+        // If user selects a municipality, typically they want municipal rows for that muni.
+        // Keep REGION rows visible only when muni is not selected OR scope is REGION_ONLY.
+        const muniAware =
+          !muni ? true :
+          (trScope === 'MUNICIPAL' && okMuni);
+
+        const show = okRegion && okQ && okUser && okAction && okScope && muniAware;
+
+        tr.style.display = show ? '' : 'none';
+
+        if(show){
+          visible++;
+          userSet.add(trUser);
+          actionCounts[trAction] = (actionCounts[trAction] || 0) + 1;
+          if(trDate === todayISO) todayCount++;
+        }
+      });
+
+      // Top action among visible
+      let topAction = '—';
+      let best = 0;
+      Object.entries(actionCounts).forEach(([k,v]) => {
+        if(v > best){ best = v; topAction = k || '—'; }
+      });
+
+      document.getElementById('countTotal').textContent = rows.length.toString();
+      document.getElementById('countShown').textContent = visible ? '1' : '0';
+      document.getElementById('countTo').textContent = visible.toString(); // no pagination logic here
+      document.getElementById('statEntries').textContent = visible.toString();
+      document.getElementById('statToday').textContent = todayCount.toString();
+      document.getElementById('statUsers').textContent = userSet.size.toString();
+      document.getElementById('statTopAction').textContent = topAction;
+    }
+
+    function clearFilters(){
+      ['q','user','municipality','action'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('scope').value = 'ALL';
+      applyFilters();
+    }
+
+    function resetAll(){ clearFilters(); }
+    function exportLogs(){ alert('Exporting scoped (region + municipalities) audit log to CSV...'); }
+    function prevPage(){ alert('Previous page'); }
+    function nextPage(){ alert('Next page'); }
+
+    document.addEventListener('DOMContentLoaded', () => applyFilters());
+  </script>
+</body>
+</html>

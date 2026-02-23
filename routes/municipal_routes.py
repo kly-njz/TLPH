@@ -1,11 +1,6 @@
-# Add this route at the end of the file:
-#
-# @bp.route('/municipal-profile-update')
-# @role_required('municipal','municipal_admin')
-# def municipal_profile_update():
-#     return render_template('municipal/municipal-profile-update.html')
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request, jsonify
 from firebase_auth_middleware import role_required
+from firebase_config import get_firestore_db
 
 bp = Blueprint('municipal', __name__, url_prefix='/municipal')
 
@@ -117,7 +112,46 @@ def hrm_attendance():
 @bp.route('/holiday')
 @role_required('municipal','municipal_admin')
 def hrm_holiday():
-    return render_template('municipal/hrm/holiday-municipal.html')
+
+    # Fetch holidays directly from Firestore
+    db = get_firestore_db()
+    holidays = []
+    try:
+        docs = db.collection('holidays').stream()
+        for doc in docs:
+            holidays.append(doc.to_dict())
+    except Exception:
+        pass
+    from datetime import datetime
+    year = datetime.now().year
+    return render_template(
+        'municipal/hrm/holiday-municipal.html',
+        holidays=holidays,
+        year=year
+    )
+
+# API endpoint to update office status/hours for a holiday
+@bp.route('/api/municipal/holiday/office-status', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def update_holiday_office_status():
+    db = get_firestore_db()
+    data = request.json
+    date = data.get('date')
+    name = data.get('name')
+    office_status = data.get('office_status')
+    open_time = data.get('open_time')
+    close_time = data.get('close_time')
+    if not date or not name:
+        return jsonify({'success': False, 'error': 'Missing date or name'}), 400
+    doc_id = f"{date}|{name}"
+    db.collection('holidays').document(doc_id).set({
+        'date': date,
+        'name': name,
+        'office_status': office_status,
+        'open_time': open_time,
+        'close_time': close_time
+    })
+    return jsonify({'success': True})
 
 @bp.route('/leave-request')
 @role_required('municipal','municipal_admin')
@@ -241,3 +275,49 @@ def accounting_deposit_category_municipal():
 def logs_audit_logs_municipal():
     return render_template('municipal/logs/audit-logs-municipal.html')
 
+@bp.route('/api/municipal/holiday/import-calendarific', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def import_calendarific_holidays():
+    import requests
+    from datetime import datetime
+    api_key = "IXURogg3lF44kINLW5AxDlIH0Pd33BGl"
+    year = datetime.now().year
+    url = f"https://calendarific.com/api/v2/holidays?api_key={api_key}&country=PH&year={year}&type=national"
+    resp = requests.get(url)
+    if resp.status_code != 200:
+        return jsonify({'success': False, 'error': 'Calendarific API error'}), 500
+    holidays = resp.json().get('response', {}).get('holidays', [])
+    imported = []
+    for h in holidays:
+        date_iso = h['date']['iso'] if 'date' in h and 'iso' in h['date'] else h.get('date', {}).get('datetime', {}).get('iso', '')
+        name = h.get('name', '')
+        description = h.get('description', '')
+        holiday_type = h['type'][0] if 'type' in h and h['type'] else 'National Holiday'
+        if date_iso and name:
+            from transaction_storage import add_holiday_to_firestore
+            doc_id = add_holiday_to_firestore(date_iso, name, description, holiday_type)
+            imported.append(doc_id)
+    return jsonify({'success': True, 'imported': imported})
+from transaction_storage import add_holiday_to_firestore
+
+@bp.route('/api/municipal/holiday/add', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def add_holiday():
+    data = request.json
+    date_iso = data.get('date')
+    name = data.get('name')
+    description = data.get('description', '')
+    holiday_type = data.get('type', 'National Holiday')
+    office_status = data.get('office_status', 'closed')
+    open_time = data.get('open_time', '')
+    close_time = data.get('close_time', '')
+    if not date_iso or not name:
+        return jsonify({'success': False, 'error': 'Missing date or name'}), 400
+    doc_id = add_holiday_to_firestore(date_iso, name, description, holiday_type, office_status, open_time, close_time)
+    return jsonify({'success': True, 'doc_id': doc_id})
+# Add this route at the end of the file:
+#
+# @bp.route('/municipal-profile-update')
+# @role_required('municipal','municipal_admin')
+# def municipal_profile_update():
+#     return render_template('municipal/municipal-profile-update.html')

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sales Return — Regional</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Icons + Font -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    body{ font-family:'Inter',sans-serif; background:#f8fafc; }
+    .custom-scrollbar::-webkit-scrollbar{ width:6px; height:6px; }
+    .custom-scrollbar::-webkit-scrollbar-track{ background:#f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb{ background:#cbd5e1; border-radius:6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover{ background:#94a3b8; }
+  </style>
+</head>
+
+<body class="min-h-screen text-slate-800">
+
+  <!-- ✅ Stable layout: sidebar + content -->
+  <div class="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
+
+    <!-- Sidebar -->
+    <aside class="hidden lg:block border-r border-slate-200 bg-white sticky top-0 h-screen overflow-auto custom-scrollbar">
+      {% include 'regional/sidenav.html' %}
+    </aside>
+
+    <!-- Main Column -->
+    <div class="min-h-screen flex flex-col">
+      <main class="p-5 pt-[92px] flex-1 min-h-0 flex flex-col gap-4">
+
+        <!-- Header -->
+        <header class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+                <span class="material-icons-round text-emerald-700">undo</span>
+              </div>
+              <div>
+                <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">
+                  Sales Return
+                </h1>
+                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                  Regional-level sales return records and management (assigned region only)
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <!-- Scope Badge -->
+              <div class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50">
+                <span class="material-icons-round text-[18px] text-emerald-700">hub</span>
+                <span class="text-[10px] font-black uppercase tracking-widest text-emerald-800">
+                  Scope: {{ user_region|default('Region Assigned') }}
+                </span>
+              </div>
+
+              <button
+                class="inline-flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-800 transition
+                       text-white px-4 py-2 rounded-xl text-xs font-black uppercase shadow-sm">
+                <span class="material-icons-round text-[18px]">add</span>
+                Add Return
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <!-- Scope + Filters (Regional) -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            <div class="flex items-start gap-3">
+              <div class="w-9 h-9 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
+                <span class="material-icons-round text-slate-600">tune</span>
+              </div>
+              <div class="leading-tight">
+                <div class="text-[11px] font-black uppercase tracking-widest text-slate-700">Regional Filters</div>
+                <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">
+                  Region is locked • Municipality filter available
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 items-center">
+              <!-- Region locked -->
+              <div class="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50">
+                <span class="material-icons-round text-[18px] text-slate-500">location_on</span>
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-700">
+                  {{ user_region|default('Assigned Region') }}
+                </span>
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">(locked)</span>
+              </div>
+
+              <!-- Municipality filter -->
+              <select id="municipalityFilter" class="px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white" onchange="filterTable()">
+                <option value="ALL">All Municipalities</option>
+                <option>Municipality A</option>
+                <option>Municipality B</option>
+                <option>Municipality C</option>
+              </select>
+
+              <!-- Status filter -->
+              <select id="statusFilter" class="px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white" onchange="filterTable()">
+                <option value="ALL">All Status</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+
+              <!-- Search -->
+              <input
+                id="searchInput"
+                class="px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white w-64"
+                placeholder="Search customer / product..."
+                type="text"
+                oninput="filterTable()"
+              />
+
+              <button
+                onclick="resetFilters()"
+                class="px-3 py-2 text-xs font-black uppercase rounded-xl border border-slate-300 hover:bg-white transition">
+                Reset
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Stats -->
+        <section class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+              <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Returns</p>
+              <span class="material-icons-round text-slate-400 text-[18px]">assignment_return</span>
+            </div>
+            <div class="mt-2 text-2xl font-black text-slate-900">14</div>
+            <p class="text-xs text-slate-500 mt-1">Within {{ user_region|default('assigned region') }}</p>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+              <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Pending</p>
+              <span class="material-icons-round text-yellow-600 text-[18px]">hourglass_top</span>
+            </div>
+            <div class="mt-2 text-2xl font-black text-yellow-700">3</div>
+            <p class="text-xs text-slate-500 mt-1">For review</p>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+              <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Approved</p>
+              <span class="material-icons-round text-green-700 text-[18px]">check_circle</span>
+            </div>
+            <div class="mt-2 text-2xl font-black text-green-700">11</div>
+            <p class="text-xs text-slate-500 mt-1">Accepted returns</p>
+          </div>
+        </section>
+
+        <!-- Table Card -->
+        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
+
+          <!-- Table header / caption -->
+          <div class="bg-slate-50 border-b border-slate-200 px-5 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">
+              Return Records (Regional)
+            </h2>
+
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              Region: <span class="text-slate-700">{{ user_region|default('Assigned Region') }}</span>
+            </div>
+          </div>
+
+          <!-- Scroll area -->
+          <div class="flex-1 min-h-0 overflow-auto custom-scrollbar">
+            <table class="w-full text-left border-collapse" id="returnTable">
+              <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
+                <tr>
+                  <th class="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600">Customer</th>
+                  <th class="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600">Product</th>
+                  <th class="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600">Quantity</th>
+
+                  <!-- Regional fields -->
+                  <th class="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600">Municipality</th>
+
+                  <th class="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600">Date</th>
+                  <th class="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 text-center">Status</th>
+                  <th class="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 text-center">Actions</th>
+                </tr>
+              </thead>
+
+              <tbody class="text-sm" id="returnTbody">
+
+                <!-- Static Example -->
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition return-row"
+                    data-status="PENDING" data-municipality="MUNICIPALITY A">
+                  <td class="px-5 py-3 font-bold text-slate-900">DENR {{ user_region|default('REGION') }}</td>
+                  <td class="px-5 py-3 text-slate-700">Seedlings</td>
+                  <td class="px-5 py-3 text-emerald-700 font-black">10</td>
+
+                  <td class="px-5 py-3 text-slate-700 font-bold">Municipality A</td>
+
+                  <td class="px-5 py-3 text-slate-600">2026-02-17</td>
+                  <td class="px-5 py-3 text-center">
+                    <span class="px-2 py-0.5 rounded-xl text-[10px] font-black uppercase bg-yellow-50 text-yellow-700 border border-yellow-200">
+                      Pending
+                    </span>
+                  </td>
+                  <td class="px-5 py-3 text-center">
+                    <div class="inline-flex items-center gap-2">
+                      <button class="px-3 py-1.5 rounded-xl text-xs font-black border border-slate-300 hover:bg-white transition">
+                        View
+                      </button>
+                      <button class="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 transition">
+                        Approve
+                      </button>
+                      <button class="px-3 py-1.5 rounded-xl text-xs font-black bg-red-600 text-white hover:bg-red-700 transition">
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Jinja Loop -->
+                {% for ret in sales_returns %}
+                {# Optional: server-side enforcement for regional scope #}
+                {% if (user_region is not defined) or (ret.region == user_region) %}
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition return-row"
+                    data-status="{{ ret.status|upper }}"
+                    data-municipality="{{ ret.municipality|default('N/A')|upper }}">
+                  <td class="px-5 py-3 font-bold text-slate-900">{{ ret.customer }}</td>
+                  <td class="px-5 py-3 text-slate-700">{{ ret.product }}</td>
+                  <td class="px-5 py-3 text-emerald-700 font-black">{{ ret.quantity }}</td>
+
+                  <td class="px-5 py-3 text-slate-700 font-bold">{{ ret.municipality|default('N/A') }}</td>
+
+                  <td class="px-5 py-3 text-slate-600">{{ ret.date }}</td>
+
+                  <td class="px-5 py-3 text-center">
+                    <span class="px-2 py-0.5 rounded-xl text-[10px] font-black uppercase
+                      {% if ret.status == 'Approved' %}
+                        bg-green-50 text-green-700 border border-green-200
+                      {% elif ret.status == 'Pending' %}
+                        bg-yellow-50 text-yellow-700 border border-yellow-200
+                      {% elif ret.status == 'Rejected' %}
+                        bg-red-50 text-red-700 border border-red-200
+                      {% else %}
+                        bg-slate-100 text-slate-700 border border-slate-300
+                      {% endif %}
+                    ">
+                      {{ ret.status }}
+                    </span>
+                  </td>
+
+                  <td class="px-5 py-3 text-center">
+                    <div class="inline-flex items-center gap-2">
+                      <button class="px-3 py-1.5 rounded-xl text-xs font-black border border-slate-300 hover:bg-white transition">
+                        View
+                      </button>
+                      <button class="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 transition">
+                        Approve
+                      </button>
+                      <button class="px-3 py-1.5 rounded-xl text-xs font-black bg-red-600 text-white hover:bg-red-700 transition">
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Footer -->
+          <div class="bg-white border-t border-slate-200 px-5 py-3 flex items-center justify-between text-xs text-slate-500">
+            <span>
+              Showing <b class="text-slate-700" id="visibleCount">1</b> results (regional view)
+            </span>
+            <button class="px-3 py-2 rounded-xl border border-slate-300 font-black uppercase text-[10px] hover:bg-slate-50">
+              Export CSV
+            </button>
+          </div>
+
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    function filterTable(){
+      const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+      const status = (document.getElementById('statusFilter').value || 'ALL').toUpperCase();
+      const mun = (document.getElementById('municipalityFilter').value || 'ALL').toUpperCase();
+
+      const rows = document.querySelectorAll('.return-row');
+      let count = 0;
+
+      rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        const rowStatus = (row.getAttribute('data-status') || '').toUpperCase();
+        const rowMun = (row.getAttribute('data-municipality') || '').toUpperCase();
+
+        const matchQ = text.includes(q);
+        const matchStatus = (status === 'ALL' || rowStatus.includes(status));
+        const matchMun = (mun === 'ALL' || rowMun.includes(mun));
+
+        if(matchQ && matchStatus && matchMun){
+          row.style.display = '';
+          count++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      document.getElementById('visibleCount').innerText = count;
+    }
+
+    function resetFilters(){
+      document.getElementById('searchInput').value = '';
+      document.getElementById('statusFilter').value = 'ALL';
+      document.getElementById('municipalityFilter').value = 'ALL';
+      filterTable();
+    }
+
+    // init
+    filterTable();
+  </script>
+
+</body>
+</html>

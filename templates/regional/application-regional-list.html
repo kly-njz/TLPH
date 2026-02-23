@@ -296,7 +296,10 @@
                         // Query applications with status 'to-review', 'pending', or 'under-review'
                         const q = window.firebaseQuery(
                             window.firebaseCollection(window.firebaseDB, 'applications'),
-                            window.firebaseWhere('status', 'in', ['to-review', 'pending', 'under-review'])
+                            window.firebaseWhere('status', 'in', [
+                                'to-review', 'pending', 'under-review',
+                                'approved', 'rejected', 'forwarded-to-national', 'cancelled'
+                            ])
                         );
                         
                         // Real-time listener
@@ -319,7 +322,9 @@
                                         municipality: appMunicipality,
                                         applicant: applicantName,
                                         category: (data.category || 'N/A').toUpperCase(),
-                                        status: (data.status || 'pending').toUpperCase()
+                                        status: (data.status || 'pending').toLowerCase(),
+                                        nationalStatus: (data.nationalStatus || '').toLowerCase(),
+                                        regionalStatus: (data.regionalStatus || '').toLowerCase()
                                     });
                                 }
                             });
@@ -346,7 +351,7 @@
                                             i.applicant.toLowerCase().includes(s) || 
                                             i.municipality.toLowerCase().includes(s);
                         const matchesProv = this.filterProvince === 'ALL' || i.province === this.filterProvince;
-                        const matchesStat = this.filterStatus === 'ALL' || i.status.toLowerCase() === this.filterStatus.toLowerCase();
+                        const matchesStat = this.filterStatus === 'ALL' || this.getStatusLabel(i).key === this.filterStatus;
                         return matchesSearch && matchesProv && matchesStat;
                     });
                     return filtered;
@@ -360,9 +365,30 @@
                         'to-review': 'bg-indigo-50 text-indigo-700 border-indigo-200',
                         'accepted': 'bg-emerald-50 text-emerald-700 border-emerald-200',
                         'approved': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                        'rejected': 'bg-rose-50 text-rose-700 border-rose-200'
+                        'rejected': 'bg-rose-50 text-rose-700 border-rose-200',
+                        'forwarded-to-national': 'bg-purple-50 text-purple-700 border-purple-200',
+                        'approved-national': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                        'cancelled': 'bg-gray-100 text-gray-600 border-gray-300'
                     };
                     return colors[statusLower] || 'bg-slate-50 text-slate-600 border-slate-200';
+                },
+
+                // Returns { text, key } for display in list rows
+                getStatusLabel(app) {
+                    const nat = (app.nationalStatus || '').toLowerCase();
+                    const reg = (app.regionalStatus || '').toLowerCase();
+                    const main = (app.status || '').toLowerCase();
+
+                    if (nat === 'approved') return { text: 'Approved by National', key: 'approved-national' };
+                    if (nat === 'rejected') return { text: 'Rejected by National', key: 'rejected' };
+                    if (main === 'forwarded-to-national') return { text: 'Forwarded to National', key: 'forwarded-to-national' };
+                    if (reg === 'approved' || main === 'approved') return { text: 'Approved by Regional', key: 'approved' };
+                    if (reg === 'rejected') return { text: 'Rejected by Regional', key: 'rejected' };
+                    if (main === 'to-review') return { text: 'For Regional Review', key: 'to-review' };
+                    if (main === 'under-review') return { text: 'Under Review', key: 'under-review' };
+                    if (main === 'rejected') return { text: 'Rejected', key: 'rejected' };
+                    if (main === 'cancelled') return { text: 'Cancelled', key: 'cancelled' };
+                    return { text: 'Pending Review', key: 'pending' };
                 },
                 
                 resetFilters() {

@@ -210,7 +210,7 @@
   <!-- Load Firebase modules first -->
   <script type="module">
     import { auth, db } from '/static/js/firebase-config.js';
-    import { collection, query, where, getDocs, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { collection, query, where, getDocs, doc, updateDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
     import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
     // Expose to window for Alpine
@@ -222,6 +222,7 @@
     window.firebaseGetDocs = getDocs;
     window.firebaseDoc = doc;
     window.firebaseUpdateDoc = updateDoc;
+    window.firebaseOnSnapshot = onSnapshot;
     window.firebaseOnAuthStateChanged = onAuthStateChanged;
     console.log('Firebase modules loaded and exposed to window');
   </script>
@@ -238,61 +239,168 @@
         regionFilter: 'ALL',
         categoryFilter: 'ALL',
         statusFilter: 'ALL',
-        
+
         totalCount: 0,
         approvedCount: 0,
         pendingCount: 0,
         rejectedCount: 0,
 
+        // NOTE: chart instances are stored on window._natCharts (not in Alpine reactive data)
+        // to prevent Alpine's Proxy from wrapping Chart.js objects and causing stack overflows.
+
         get filteredApps() {
           return this.apps.filter(app => {
-            const searchMatch = !this.searchQuery || 
-              app.applicantName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-              app.refId.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-              app.category.toLowerCase().includes(this.searchQuery.toLowerCase());
-            
-            const regionMatch = this.regionFilter === 'ALL' || 
-              app.region.toUpperCase().includes(this.regionFilter.toUpperCase()) ||
-              app.location.toUpperCase().includes(this.regionFilter.toUpperCase());
-            
-            const categoryMatch = this.categoryFilter === 'ALL' || 
-              app.category.toUpperCase().includes(this.categoryFilter.toUpperCase());
-            
-            const statusMatch = this.statusFilter === 'ALL' || 
+            const name     = (app.applicantName || '').toLowerCase();
+            const ref      = (app.refId || '').toLowerCase();
+            const cat      = (app.category || '').toLowerCase();
+            const region   = (app.region || '').toUpperCase();
+            const location = (app.location || '').toUpperCase();
+
+            const searchMatch = !this.searchQuery ||
+              name.includes(this.searchQuery.toLowerCase()) ||
+              ref.includes(this.searchQuery.toLowerCase()) ||
+              cat.includes(this.searchQuery.toLowerCase());
+
+            const regionMatch = this.regionFilter === 'ALL' ||
+              region.includes(this.regionFilter.toUpperCase()) ||
+              location.includes(this.regionFilter.toUpperCase());
+
+            const categoryMatch = this.categoryFilter === 'ALL' ||
+              cat.toUpperCase().includes(this.categoryFilter.toUpperCase());
+
+            const statusMatch = this.statusFilter === 'ALL' ||
               (this.statusFilter === 'APPROVED' && app.nationalStatus === 'approved') ||
               (this.statusFilter === 'PENDING ACTION' && app.nationalStatus === 'pending') ||
               (this.statusFilter === 'REJECTED' && app.nationalStatus === 'rejected');
-            
+
             return searchMatch && regionMatch && categoryMatch && statusMatch;
           });
         },
 
         async init() {
           console.log('Initializing national app registry...');
-          
+          // Init chart namespace on window
+          window._natCharts = { trend: null, status: null, region: null, unsub: null };
+
           // Wait for Firebase modules to be available
           let retries = 0;
           while (!window.firebaseCollection && retries < 50) {
             await new Promise(resolve => setTimeout(resolve, 100));
             retries++;
           }
-          
+
           if (!window.firebaseCollection) {
             console.error('Firebase modules not loaded after waiting');
             alert('Error: Firebase modules failed to load. Please refresh the page.');
             this.loading = false;
             return;
           }
-          
+
           console.log('Firebase modules ready, loading applications...');
+          this.initCharts();
           await this.loadApplications();
+        },
+
+        initCharts() {
+          // Destroy any pre-existing Chart.js instances on these canvases
+          ['appsTrendChart', 'appsStatusChart', 'appsRegionChart'].forEach(id => {
+            const el = document.getElementById(id);
+            const existing = el && Chart.getChart(el);
+            if (existing) existing.destroy();
+          });
+
+          // Store on window — NOT in Alpine reactive data — to avoid Proxy wrapping
+          window._natCharts.trend = new Chart(document.getElementById('appsTrendChart'), {
+            type: 'line',
+            data: {
+              labels: [],
+              datasets: [{ label: 'Submissions', data: [], borderColor: '#1e3a8a', backgroundColor: 'rgba(30,58,138,0.1)', borderWidth: 1.5, fill: true, tension: 0.3, pointRadius: 2 }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false, layout: { padding: 5 },
+              plugins: { legend: { display: false } },
+              scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } }
+            }
+          });
+
+          window._natCharts.status = new Chart(document.getElementById('appsStatusChart'), {
+            type: 'doughnut',
+            data: {
+              labels: ['Approved', 'Pending', 'Rejected'],
+              datasets: [{ data: [0, 0, 0], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false, layout: { padding: 5 }, cutout: '70%',
+              plugins: { legend: { position: 'bottom', labels: { boxWidth: 6, font: { weight: 'bold' } } } }
+            }
+          });
+
+          window._natCharts.region = new Chart(document.getElementById('appsRegionChart'), {
+            type: 'bar',
+            data: {
+              labels: [],
+              datasets: [{ label: 'Volume', data: [], backgroundColor: '#475569', borderRadius: 2 }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false, layout: { padding: 5 }, indexAxis: 'y',
+              plugins: { legend: { display: false } },
+              scales: { x: { display: false, beginAtZero: true } }
+            }
+          });
+        },
+
+        updateCharts() {
+          const c = window._natCharts;
+          if (!c || !c.trend || !c.status || !c.region) return;
+
+          // Extract plain primitives from Alpine reactive data
+          const approved = Number(this.approvedCount);
+          const pending  = Number(this.pendingCount);
+          const rejected = Number(this.rejectedCount);
+
+          // Plain snapshot of apps — completely outside Alpine's Proxy
+          const appsSnap = JSON.parse(JSON.stringify(
+            Array.from(this.apps).map(a => ({
+              submittedAtRaw: a.submittedAtRaw || null,
+              region: a.region || 'Unknown'
+            }))
+          ));
+
+          // --- Trend chart ---
+          const now = new Date();
+          const trendMap = {};
+          for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            trendMap[d.toLocaleString('en-US', { month: 'short', year: '2-digit' })] = 0;
+          }
+          appsSnap.forEach(a => {
+            if (a.submittedAtRaw) {
+              const key = new Date(a.submittedAtRaw).toLocaleString('en-US', { month: 'short', year: '2-digit' });
+              if (key in trendMap) trendMap[key]++;
+            }
+          });
+          c.trend.data.labels = Object.keys(trendMap);
+          c.trend.data.datasets[0].data = Object.values(trendMap);
+          c.trend.update('none');
+
+          // --- Status chart ---
+          c.status.data.datasets[0].data = [approved, pending, rejected];
+          c.status.update('none');
+
+          // --- Region chart ---
+          const regionMap = {};
+          appsSnap.forEach(a => { regionMap[a.region] = (regionMap[a.region] || 0) + 1; });
+          const sorted = Object.entries(regionMap).sort((a, b) => b[1] - a[1]);
+          c.region.data.labels = sorted.map(e => e[0]);
+          c.region.data.datasets[0].data = sorted.map(e => e[1]);
+          c.region.update('none');
         },
 
         async loadApplications() {
           try {
             this.loading = true;
 
-            // Load all users first
+            // Load all users first (one-time fetch is fine for user names)
             const usersRef = window.firebaseCollection(window.firebaseDB, 'users');
             const usersSnapshot = await window.firebaseGetDocs(usersRef);
             const usersMap = {};
@@ -306,14 +414,6 @@
               };
             });
 
-            // Query applications forwarded to national (all that have forwardedToNationalAt)
-            const appsRef = window.firebaseCollection(window.firebaseDB, 'applications');
-            // Get all applications and filter those that were forwarded to national
-            const querySnapshot = await window.firebaseGetDocs(appsRef);
-
-            this.apps = [];
-            let approved = 0, pending = 0, rejected = 0;
-
             const categoryLabels = {
               'farming': 'Crop & Plant',
               'livestock': 'Fisheries & Agriculture',
@@ -322,59 +422,76 @@
               'infrastructure': 'Infrastructure'
             };
 
-            querySnapshot.forEach((doc) => {
-              const data = doc.data();
-              
-              // Only include applications that were forwarded to national
-              if (!data.forwardedToNationalAt && data.status !== 'forwarded-to-national') {
-                return;
-              }
-              
-              const userInfo = usersMap[data.userId];
-              const nationalStatus = (data.nationalStatus || 'pending').toLowerCase();
+            // Unsubscribe any previous listener before attaching a new one
+            if (window._natCharts.unsub) { window._natCharts.unsub(); window._natCharts.unsub = null; }
 
-              if (nationalStatus === 'approved') approved++;
-              else if (nationalStatus === 'rejected') rejected++;
-              else pending++;
+            // Real-time listener on applications forwarded to national
+            const appsRef = window.firebaseCollection(window.firebaseDB, 'applications');
+            window._natCharts.unsub = window.firebaseOnSnapshot(appsRef, (querySnapshot) => {
+              const newApps = [];
+              let approved = 0, pending = 0, rejected = 0;
 
-              const location = data.province && data.municipality 
-                ? `${data.municipality}, ${data.province}`
-                : userInfo?.province && userInfo?.municipality
-                  ? `${userInfo.municipality}, ${userInfo.province}`
-                  : 'Unknown Location';
+              querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                
+                // Only include applications forwarded to national
+                if (!data.forwardedToNationalAt && data.status !== 'forwarded-to-national') {
+                  return;
+                }
+                
+                const userInfo = usersMap[data.userId];
+                const nationalStatus = (data.nationalStatus || 'pending').toLowerCase();
 
-              const province = (data.province || userInfo?.province || '').toLowerCase();
-              let region = 'N/A';
-              
-              // Map province to region
-              if (['oriental mindoro', 'occidental mindoro', 'marinduque', 'romblon', 'palawan'].includes(province)) {
-                region = 'MIMAROPA';
-              } else if (['batangas', 'cavite', 'laguna', 'quezon', 'rizal'].includes(province)) {
-                region = 'REGION IV-A';
-              } else if (['albay', 'camarines norte', 'camarines sur', 'catanduanes', 'masbate', 'sorsogon'].includes(province)) {
-                region = 'REGION V';
-              }
+                if (nationalStatus === 'approved') approved++;
+                else if (nationalStatus === 'rejected') rejected++;
+                else pending++;
 
-              this.apps.push({
-                id: doc.id,
-                dateFiled: data.submittedAt ? new Date(data.submittedAt.toDate()).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A',
-                refId: 'APP-' + doc.id.substring(0, 8).toUpperCase(),
-                applicantName: (userInfo?.name || data.userName || 'Unknown').toUpperCase(),
-                category: categoryLabels[data.category] || data.category || 'N/A',
-                region: region,
-                location: location,
-                nationalStatus: nationalStatus,
-                province: data.province || userInfo?.province || ''
+                const location = data.province && data.municipality 
+                  ? `${data.municipality}, ${data.province}`
+                  : userInfo?.province && userInfo?.municipality
+                    ? `${userInfo.municipality}, ${userInfo.province}`
+                    : 'Unknown Location';
+
+                const province = (data.province || userInfo?.province || '').toLowerCase();
+                let region = 'N/A';
+                
+                // Map province to region
+                if (['oriental mindoro', 'occidental mindoro', 'marinduque', 'romblon', 'palawan'].includes(province)) {
+                  region = 'MIMAROPA';
+                } else if (['batangas', 'cavite', 'laguna', 'quezon', 'rizal'].includes(province)) {
+                  region = 'REGION IV-A';
+                } else if (['albay', 'camarines norte', 'camarines sur', 'catanduanes', 'masbate', 'sorsogon'].includes(province)) {
+                  region = 'REGION V';
+                }
+
+                newApps.push({
+                  id: doc.id,
+                  dateFiled: data.submittedAt ? new Date(data.submittedAt.toDate()).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A',
+                  submittedAtRaw: data.submittedAt ? data.submittedAt.toDate().getTime() : null,
+                  refId: 'APP-' + doc.id.substring(0, 8).toUpperCase(),
+                  applicantName: (userInfo?.name || data.userName || 'Unknown').toUpperCase(),
+                  category: categoryLabels[data.category] || data.category || 'N/A',
+                  region: region,
+                  location: location,
+                  nationalStatus: nationalStatus,
+                  province: data.province || userInfo?.province || ''
+                });
               });
+
+              this.apps = newApps;
+              this.totalCount = newApps.length;
+              this.approvedCount = approved;
+              this.pendingCount = pending;
+              this.rejectedCount = rejected;
+
+              console.log(`[onSnapshot] ${newApps.length} applications loaded`);
+              this.loading = false;
+              this.updateCharts();
+            }, (error) => {
+              console.error('Snapshot error:', error);
+              this.loading = false;
             });
 
-            this.totalCount = this.apps.length;
-            this.approvedCount = approved;
-            this.pendingCount = pending;
-            this.rejectedCount = rejected;
-
-            console.log(`Loaded ${this.apps.length} applications`);
-            this.loading = false;
           } catch (error) {
             console.error('Error loading applications:', error);
             alert('Error loading applications: ' + error.message);
@@ -397,7 +514,6 @@
             });
 
             alert('Application approved successfully!');
-            await this.loadApplications();
           } catch (error) {
             console.error('Error approving:', error);
             alert('Error approving application: ' + error.message);
@@ -415,7 +531,6 @@
             });
 
             alert('Application rejected.');
-            await this.loadApplications();
           } catch (error) {
             console.error('Error rejecting:', error);
             alert('Error rejecting application: ' + error.message);
@@ -424,53 +539,11 @@
       }));
     });
 
-    // --- CHARTS CONFIG ---
+    // Charts are now managed by the Alpine nationalAppRegistry component (initCharts / updateCharts).
+    // Chart.defaults are still set here for consistent styling across all chart instances.
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
     Chart.defaults.font.size = 8;
     Chart.defaults.color = "#64748b";
-
-    const sharedOpts = {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: { padding: 5 },
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 6, font: { weight: 'bold' } } } }
-    };
-
-    // Dummy Data for charts (will be replaced with real data later)
-    var statusLabels = ['Approved', 'Pending', 'Rejected'];
-    var statusData = [0, 0, 0];
-    var regionLabels = ['Loading...'];
-    var regionCounts = [0];
-
-    // 1. Trend Chart (Line)
-    new Chart(document.getElementById('appsTrendChart'), {
-        type: 'line',
-        data: {
-            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
-            datasets: [{ label: 'Submissions', data: [0, 0, 0, 0, 0], borderColor: '#1e3a8a', backgroundColor: 'rgba(30,58,138,0.1)', borderWidth: 1.5, fill: true, tension: 0.3, pointRadius: 1 }]
-        },
-        options: { ...sharedOpts, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
-    });
-
-    // 2. Status Chart (Doughnut)
-    new Chart(document.getElementById('appsStatusChart'), {
-        type: 'doughnut',
-        data: {
-            labels: statusLabels,
-            datasets: [{ data: statusData, backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }]
-        },
-        options: { ...sharedOpts, cutout: '70%' }
-    });
-
-    // 3. Region Volume (Bar)
-    new Chart(document.getElementById('appsRegionChart'), {
-        type: 'bar',
-        data: {
-            labels: regionLabels,
-            datasets: [{ label: 'Volume', data: regionCounts, backgroundColor: '#475569', borderRadius: 2 }]
-        },
-        options: { ...sharedOpts, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { display: false } } }
-    });
   </script>
 </body>
 </html>

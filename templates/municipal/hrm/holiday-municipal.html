@@ -62,10 +62,13 @@
         </div>
         <div class="flex gap-2">
             <button class="bg-white border border-gov-border text-gov-primary px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-50 transition-all flex items-center gap-2">
-                <span class="material-icons-round text-sm">calendar_month</span> View Calendar
+              <span class="material-icons-round text-sm">calendar_month</span> View Calendar
             </button>
             <button class="bg-gov-primary text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition-all flex items-center gap-2">
-                <span class="material-icons-round text-sm">add_alert</span> Add Holiday
+              <span class="material-icons-round text-sm">add_alert</span> Add Holiday
+            </button>
+            <button class="bg-orange-600 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-orange-800 transition-all flex items-center gap-2" onclick="importCalendarificHolidays()">
+              <span class="material-icons-round text-sm">cloud_download</span> Import Holidays
             </button>
         </div>
       </div>
@@ -126,63 +129,53 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 text-[12px]">
+                {% for h in holidays %}
                 <tr class="hover:bg-slate-50 transition-colors">
-                  <td class="p-2 font-mono font-bold text-orange-800 bg-orange-50/30">
-                    FEB 25, 2026
+                    <td class="p-2 font-mono font-bold text-orange-800 bg-orange-50/30">
+                      {% if h['date'] %}
+                        {{ h['date'] | datetimeformat('%b %d, %Y') }}
+                      {% else %}
+                        N/A
+                      {% endif %}
+                    </td>
+                  <td class="p-2">
+                    <p class="font-bold text-gov-primary leading-none">{{ h.name }}</p>
+                    <p class="text-[10px] text-slate-400 mt-1 uppercase">{{ h.description }}</p>
                   </td>
                   <td class="p-2">
-                    <p class="font-bold text-gov-primary leading-none">EDSA People Power Revolution Anniversary</p>
-                    <p class="text-[10px] text-slate-400 mt-1 uppercase">Proclamation No. 368</p>
+                    <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-blue-200">
+                      {% if h.type %}
+                        {{ h.type if h.type is string else h.type[0] }}
+                      {% else %}
+                        National Holiday
+                      {% endif %}
+                    </span>
                   </td>
-                  <td class="p-2">
-                    <span class="bg-orange-100 text-orange-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-orange-200">Special Non-Working</span>
-                  </td>
-                  <td class="p-2 text-center text-rose-600">
-                    <span class="material-icons-round text-sm">block</span>
-                    <p class="text-[8px] font-bold uppercase">Closed</p>
+                  <td class="p-2 text-center">
+                    <span class="material-icons-round text-sm">
+                      {% if h.office_status == 'open' %}check_circle{% else %}block{% endif %}
+                    </span>
+                    <p class="text-[8px] font-bold uppercase">
+                      {% if h.office_status == 'open' %}
+                        Open{% if h.open_time and h.close_time %} ({{ h.open_time }} - {{ h.close_time }}){% endif %}
+                      {% else %}
+                        Closed
+                      {% endif %}
+                    </p>
                   </td>
                   <td class="p-2 text-right">
-                    <button class="text-slate-400 hover:text-gov-primary"><span class="material-icons-round text-base">edit</span></button>
-                  </td>
+                      <button class="text-slate-400 hover:text-gov-primary" type="button" 
+                              data-date="{{ h['date'] if h['date'] else '' }}"
+                              data-name="{{ h.name }}"
+                              data-status="{{ h.office_status if h.office_status else '' }}"
+                              data-open="{{ h.open_time if h.open_time else '' }}"
+                              data-close="{{ h.close_time if h.close_time else '' }}"
+                              onclick="openHolidayModal(this.dataset.date, this.dataset.name, this.dataset.status, this.dataset.open, this.dataset.close)">
+                        <span class="material-icons-round text-base">edit</span>
+                      </button>
+                    </td>
                 </tr>
-                <tr class="hover:bg-slate-50 transition-colors">
-                  <td class="p-2 font-mono font-bold text-gov-primary">
-                    APR 09, 2026
-                  </td>
-                  <td class="p-2">
-                    <p class="font-bold text-gov-primary leading-none">Araw ng Kagitingan (Day of Valor)</p>
-                    <p class="text-[10px] text-slate-400 mt-1 uppercase">Regular National Holiday</p>
-                  </td>
-                  <td class="p-2">
-                    <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-blue-200">Regular Holiday</span>
-                  </td>
-                  <td class="p-2 text-center text-rose-600">
-                    <span class="material-icons-round text-sm">block</span>
-                    <p class="text-[8px] font-bold uppercase">Closed</p>
-                  </td>
-                  <td class="p-2 text-right">
-                    <button class="text-slate-400 hover:text-gov-primary"><span class="material-icons-round text-base">edit</span></button>
-                  </td>
-                </tr>
-                <tr class="hover:bg-slate-50 transition-colors">
-                  <td class="p-2 font-mono font-bold text-emerald-800 bg-emerald-50/30">
-                    JUN 24, 2026
-                  </td>
-                  <td class="p-2">
-                    <p class="font-bold text-gov-primary leading-none">Manila Foundation Day</p>
-                    <p class="text-[10px] text-slate-400 mt-1 uppercase">Local Ordinance No. 12-A</p>
-                  </td>
-                  <td class="p-2">
-                    <span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-emerald-200">Local Holiday</span>
-                  </td>
-                  <td class="p-2 text-center text-emerald-600">
-                    <span class="material-icons-round text-sm">check_circle</span>
-                    <p class="text-[8px] font-bold uppercase">Skeletal</p>
-                  </td>
-                  <td class="p-2 text-right">
-                    <button class="text-slate-400 hover:text-gov-primary"><span class="material-icons-round text-base">edit</span></button>
-                  </td>
-                </tr>
+                {% endfor %}
               </tbody>
             </table>
         </div>
@@ -198,6 +191,100 @@
 
     </main>
   </div>
+
+  <div id="holidayModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="w-full max-w-xs rounded border border-slate-400 bg-white shadow-2xl overflow-hidden">
+      <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-1">
+          <span class="material-icons-round text-[14px]">event</span> Edit Office Status
+        </h3>
+        <button onclick="closeHolidayModal()" class="text-slate-400 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
+      </div>
+      <form id="holidayStatusForm" class="p-4 bg-slate-50 space-y-3" onsubmit="return saveHolidayStatus()">
+        <input type="hidden" id="modalHolidayDate" />
+        <input type="hidden" id="modalHolidayName" />
+        <div>
+          <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Office Status</label>
+          <select id="modalOfficeStatus" class="gov-input w-full" onchange="toggleTimeFields()">
+            <option value="closed">Closed</option>
+            <option value="open">Open</option>
+          </select>
+        </div>
+        <div id="timeFields" style="display:none">
+          <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Open Time</label>
+          <input type="time" id="modalOpenTime" class="gov-input w-full" />
+          <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block mt-2">Close Time</label>
+          <input type="time" id="modalCloseTime" class="gov-input w-full" />
+        </div>
+        <div id="modalHolidayInfo" class="mb-2 text-center"></div>
+        <div class="flex justify-end gap-2 mt-4">
+          <button type="button" onclick="closeHolidayModal()" class="bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-[10px] font-bold uppercase">Cancel</button>
+          <button type="submit" class="bg-gov-primary text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function openHolidayModal(date, name, office_status, open_time, close_time) {
+      document.getElementById('holidayModal').classList.remove('hidden');
+      document.getElementById('modalHolidayDate').value = date;
+      document.getElementById('modalHolidayName').value = name;
+      document.getElementById('modalOfficeStatus').value = office_status || 'closed';
+      document.getElementById('modalOpenTime').value = open_time || '';
+      document.getElementById('modalCloseTime').value = close_time || '';
+      // Display holiday info in modal
+      let info = `<div class='font-bold text-gov-primary text-[13px]'>${name}</div>`;
+      info += `<div class='text-[10px] text-slate-400'>${date}</div>`;
+      document.getElementById('modalHolidayInfo').innerHTML = info;
+      toggleTimeFields();
+    }
+
+    function closeHolidayModal() {
+      document.getElementById('holidayModal').classList.add('hidden');
+    }
+
+    function toggleTimeFields() {
+      var status = document.getElementById('modalOfficeStatus').value;
+      document.getElementById('timeFields').style.display = (status === 'open') ? '' : 'none';
+    }
+
+    function saveHolidayStatus() {
+      var date = document.getElementById('modalHolidayDate').value;
+      var name = document.getElementById('modalHolidayName').value;
+      var office_status = document.getElementById('modalOfficeStatus').value;
+      var open_time = document.getElementById('modalOpenTime').value;
+      var close_time = document.getElementById('modalCloseTime').value;
+
+      fetch('/municipal/api/municipal/holiday/office-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, name, office_status, open_time, close_time })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if(data.success) {
+          location.reload();
+        } else {
+          alert('Failed to save: ' + (data.error || 'Unknown error'));
+        }
+      });
+      return false;
+    }
+
+    function importCalendarificHolidays() {
+      fetch('/municipal/api/municipal/holiday/import-calendarific', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          if(data.success) {
+            alert('Holidays imported!');
+            location.reload();
+          } else {
+            alert('Import failed: ' + (data.error || 'Unknown error'));
+          }
+        });
+    }
+  </script>
 
 </body>
 </html>
