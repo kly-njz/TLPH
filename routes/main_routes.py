@@ -1,3 +1,22 @@
+@bp.route('/national/accounting/accounting-dashboard')
+@role_required('national','national_admin')
+def national_accounting_dashboard():
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+        finance_data = {}
+        try:
+            docs = db.collection('finance').stream()
+            for doc in docs:
+                finance_data.update(doc.to_dict())
+        except Exception:
+            pass
+        return render_template('national/accounting/accounting-dashboard.html', finance=finance_data)
+    except Exception as e:
+        print(f"Error in national accounting dashboard: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return render_template('national/accounting/accounting-dashboard.html', finance={})
 from flask import Blueprint, render_template, redirect, url_for, session
 from firebase_auth_middleware import role_required, firebase_auth_required
 
