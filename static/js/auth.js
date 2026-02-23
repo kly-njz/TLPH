@@ -2,7 +2,7 @@
 import { app, auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, googleProvider, signInWithPopup } from './firebase-config.js';
 import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { setPersistence, browserLocalPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { philippineLocations } from './ph-locations.js';
+// philippineLocations is loaded globally via <script> in HTML
 
 // Initialize Firestore
 const db = getFirestore(app);
