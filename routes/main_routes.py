@@ -79,20 +79,26 @@ def national_accounting_dashboard_view():
         from firebase_config import get_firestore_db
         db = get_firestore_db()
         finance_data = {}
+        regional_funds = []
         try:
             doc = db.collection('finance').document('national').get()
             if doc.exists:
                 finance_data['national'] = doc.to_dict()
             else:
                 finance_data['national'] = {}
+            # Fetch regional fund distribution records
+            funds_query = db.collection('regional_fund_distribution').order_by('date', direction='DESCENDING').stream()
+            for fund_doc in funds_query:
+                fund = fund_doc.to_dict()
+                regional_funds.append(fund)
         except Exception:
             finance_data['national'] = {}
-        return render_template('national/accounting/accounting-dashboard.html', finance=finance_data)
+        return render_template('national/accounting/accounting-dashboard.html', finance=finance_data, regional_funds=regional_funds)
     except Exception as e:
         print(f"Error in national accounting dashboard: {str(e)}")
         import traceback
         traceback.print_exc()
-        return render_template('national/accounting/accounting-dashboard.html', finance={})
+        return render_template('national/accounting/accounting-dashboard.html', finance={}, regional_funds=[])
 
 @bp.route('/regional/dashboard')
 @role_required('regional','regional_admin')
