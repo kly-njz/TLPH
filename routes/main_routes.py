@@ -40,18 +40,26 @@ def create_regional_account():
 @bp.route('/national/dashboard')
 @role_required('national','national_admin')
 def national_dashboard():
-    @bp.route('/national/accounting/add-budget', methods=['POST'])
-    @role_required('national','national_admin')
-    def add_budget():
-        from flask import request, jsonify
-        from firebase_config import get_firestore_db
-        db = get_firestore_db()
-        amount = request.json.get('amount')
-        try:
-            db.collection('finance').document('national').set({'budget': amount}, merge=True)
-            return jsonify({'success': True})
-        except Exception as e:
-            return jsonify({'success': False, 'error': str(e)}), 500
+    return render_template('national/dashboard.html')
+
+# Add budget endpoint (must be top-level)
+@bp.route('/national/accounting/add-budget', methods=['POST'])
+@role_required('national','national_admin')
+def add_budget():
+    from flask import request, jsonify
+    from firebase_config import get_firestore_db
+    db = get_firestore_db()
+    amount = request.json.get('amount')
+    try:
+        db.collection('finance').document('national').set({'budget': amount}, merge=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# Accounting dashboard endpoint (must be top-level)
+@bp.route('/national/accounting/dashboard')
+@role_required('national','national_admin')
+def national_accounting_dashboard_view():
     try:
         from firebase_config import get_firestore_db
         db = get_firestore_db()
@@ -62,10 +70,9 @@ def national_dashboard():
                 finance_data.update(doc.to_dict())
         except Exception:
             pass
-        # ...existing code...
         return render_template('national/accounting/accounting-dashboard.html', finance=finance_data)
     except Exception as e:
-        print(f"Error in national dashboard: {str(e)}")
+        print(f"Error in national accounting dashboard: {str(e)}")
         import traceback
         traceback.print_exc()
         return render_template('national/accounting/accounting-dashboard.html', finance={})
