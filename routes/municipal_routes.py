@@ -117,7 +117,38 @@ def hrm_attendance():
 @bp.route('/holiday')
 @role_required('municipal','municipal_admin')
 def hrm_holiday():
-    return render_template('municipal/hrm/holiday-municipal.html')
+    # --- Calendarific integration ---
+    import calendarific
+    api_key = "IXURogg3lF44kINLW5AxDlIH0Pd33BGl"
+    c = calendarific.Client(api_key)
+    from datetime import datetime
+    year = datetime.now().year
+    # Fetch national holidays for the Philippines
+    try:
+        response = c.holidays({
+            'country': 'PH',
+            'year': year,
+            'type': 'national'
+        })
+        holidays = response['response']['holidays']
+    except Exception as e:
+        holidays = []
+    # Example local holidays (replace with DB or config as needed)
+    local_holidays = [
+        {
+            'date': f'{year}-06-24',
+            'name': 'Manila Foundation Day',
+            'description': 'Local Ordinance No. 12-A',
+            'type': 'Local Holiday',
+            'office': 'Skeletal',
+        }
+    ]
+    return render_template(
+        'municipal/hrm/holiday-municipal.html',
+        holidays=holidays,
+        local_holidays=local_holidays,
+        year=year
+    )
 
 @bp.route('/leave-request')
 @role_required('municipal','municipal_admin')
