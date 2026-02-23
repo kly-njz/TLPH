@@ -247,7 +247,22 @@ def applicants_municipal():
 @bp.route('/accounting/dashboard-municipal')
 @role_required('municipal','municipal_admin')
 def accounting_dashboard_municipal():
-    return render_template('municipal/accounting/dashboard-municipal.html')
+    db = get_firestore_db()
+    finance_data = {}
+    try:
+        docs = db.collection('finance').stream()
+        for doc in docs:
+            finance_data.update(doc.to_dict())
+    except Exception:
+        pass
+    revenue_mix = []
+    try:
+        docs = db.collection('revenue_mix').stream()
+        for doc in docs:
+            revenue_mix.append(doc.to_dict())
+    except Exception:
+        pass
+    return render_template('municipal/accounting/dashboard-municipal.html', finance=finance_data, revenue_mix=revenue_mix)
 
 @bp.route('/accounting/entities-municipal')
 @role_required('municipal','municipal_admin')

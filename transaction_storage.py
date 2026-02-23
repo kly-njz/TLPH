@@ -1,3 +1,33 @@
+def add_finance_record(department, general_fund, special_fund, total_deposit, total_expenses, net_movement, collection_rate, recent_activity):
+    """Add a finance record to Firestore under the specified department."""
+    db = firestore.client()
+    doc_id = f"{department}_{datetime.now().isoformat()}"
+    record = {
+        'general_fund': general_fund,
+        'special_fund': special_fund,
+        'total_deposit': total_deposit,
+        'total_expenses': total_expenses,
+        'net_movement': net_movement,
+        'collection_rate': collection_rate,
+        'recent_activity': recent_activity,
+        'timestamp': firestore.SERVER_TIMESTAMP
+    }
+    db.collection('finance').document(doc_id).set({department: record})
+    return doc_id
+
+def add_revenue_mix_record(user_id, transaction_id, amount, details):
+    """Add a revenue mix record for a transaction across users."""
+    db = firestore.client()
+    doc_id = f"{user_id}_{transaction_id}_{datetime.now().isoformat()}"
+    record = {
+        'user_id': user_id,
+        'transaction_id': transaction_id,
+        'amount': amount,
+        'details': details,
+        'timestamp': firestore.SERVER_TIMESTAMP
+    }
+    db.collection('revenue_mix').document(doc_id).set(record)
+    return doc_id
 def add_holiday_to_firestore(date_iso, name, description, holiday_type, office_status='closed', open_time='', close_time=''):
     """Add a holiday record to Firestore"""
     db = firestore.client()
