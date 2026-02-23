@@ -4,8 +4,9 @@
 # @role_required('municipal','municipal_admin')
 # def municipal_profile_update():
 #     return render_template('municipal/municipal-profile-update.html')
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request, jsonify
 from firebase_auth_middleware import role_required
+from firebase_config import get_firestore_db
 
 bp = Blueprint('municipal', __name__, url_prefix='/municipal')
 
@@ -131,22 +132,58 @@ def hrm_holiday():
             holidays = resp.json().get('response', {}).get('holidays', [])
     except Exception as e:
         holidays = []
-    # Example local holidays (replace with DB or config as needed)
-    local_holidays = [
-        {
-            'date': f'{year}-06-24',
-            'name': 'Manila Foundation Day',
-            'description': 'Local Ordinance No. 12-A',
-            'type': 'Local Holiday',
-            'office': 'Skeletal',
-        }
-    ]
+
+    # Fetch office status/hours from Firestore and merge
+    db = get_firestore_db()
+    office_status_map = {}
+    try:
+        docs = db.collection('holidays').stream()
+        for doc in docs:
+            data = doc.to_dict()
+            key = data.get('date') + '|' + data.get('name')
+            office_status_map[key] = data
+    except Exception:
+        pass
+    # Merge office status/hours into holidays
+    for h in holidays:
+        date_str = h['date']['iso'] if 'date' in h and 'iso' in h['date'] else h.get('date', {}).get('datetime', {}).get('iso', '')
+        key = date_str + '|' + h.get('name', '')
+        if key in office_status_map:
+            h['office_status'] = office_status_map[key].get('office_status', 'closed')
+            h['open_time'] = office_status_map[key].get('open_time', '')
+            h['close_time'] = office_status_map[key].get('close_time', '')
+        else:
+            h['office_status'] = 'closed'
+            h['open_time'] = ''
+            h['close_time'] = ''
     return render_template(
         'municipal/hrm/holiday-municipal.html',
         holidays=holidays,
-        local_holidays=local_holidays,
         year=year
     )
+
+# API endpoint to update office status/hours for a holiday
+@bp.route('/api/municipal/holiday/office-status', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def update_holiday_office_status():
+    db = get_firestore_db()
+    data = request.json
+    date = data.get('date')
+    name = data.get('name')
+    office_status = data.get('office_status')
+    open_time = data.get('open_time')
+    close_time = data.get('close_time')
+    if not date or not name:
+        return jsonify({'success': False, 'error': 'Missing date or name'}), 400
+    doc_id = f"{date}|{name}"
+    db.collection('holidays').document(doc_id).set({
+        'date': date,
+        'name': name,
+        'office_status': office_status,
+        'open_time': open_time,
+        'close_time': close_time
+    })
+    return jsonify({'success': True})
 
 @bp.route('/leave-request')
 @role_required('municipal','municipal_admin')
