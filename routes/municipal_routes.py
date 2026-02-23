@@ -113,43 +113,17 @@ def hrm_attendance():
 @role_required('municipal','municipal_admin')
 def hrm_holiday():
 
-    # --- Calendarific integration ---
-    import requests
-    api_key = "IXURogg3lF44kINLW5AxDlIH0Pd33BGl"
-    from datetime import datetime
-    year = datetime.now().year
-    holidays = []
-    try:
-        url = f"https://calendarific.com/api/v2/holidays?api_key={api_key}&country=PH&year={year}&type=national"
-        resp = requests.get(url)
-        if resp.status_code == 200:
-            holidays = resp.json().get('response', {}).get('holidays', [])
-    except Exception as e:
-        holidays = []
-
-    # Fetch office status/hours from Firestore and merge
+    # Fetch holidays directly from Firestore
     db = get_firestore_db()
-    office_status_map = {}
+    holidays = []
     try:
         docs = db.collection('holidays').stream()
         for doc in docs:
-            data = doc.to_dict()
-            key = data.get('date') + '|' + data.get('name')
-            office_status_map[key] = data
+            holidays.append(doc.to_dict())
     except Exception:
         pass
-    # Merge office status/hours into holidays
-    for h in holidays:
-        date_str = h['date']['iso'] if 'date' in h and 'iso' in h['date'] else h.get('date', {}).get('datetime', {}).get('iso', '')
-        key = date_str + '|' + h.get('name', '')
-        if key in office_status_map:
-            h['office_status'] = office_status_map[key].get('office_status', 'closed')
-            h['open_time'] = office_status_map[key].get('open_time', '')
-            h['close_time'] = office_status_map[key].get('close_time', '')
-        else:
-            h['office_status'] = 'closed'
-            h['open_time'] = ''
-            h['close_time'] = ''
+    from datetime import datetime
+    year = datetime.now().year
     return render_template(
         'municipal/hrm/holiday-municipal.html',
         holidays=holidays,
