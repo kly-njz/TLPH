@@ -242,6 +242,16 @@ def distribute_fund_to_region():
             'status': 'Released'
         }
         db.collection('regional_fund_distribution').add(record)
+        # Also record in finance_transfers collection
+        db.collection('finance_transfers').add({
+            'region': region,
+            'amount': amount,
+            'fund_type': fund_type,
+            'date': record['date'],
+            'status': 'Released',
+            'source': 'national',
+            'type': 'national_to_regional'
+        })
         # Deduct from national budget
         national_doc = db.collection('finance').document('national').get()
         if national_doc.exists:
