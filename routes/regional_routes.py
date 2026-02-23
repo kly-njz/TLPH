@@ -105,7 +105,7 @@ def accounting_dashboard_view():
     from flask import session
     db = firestore.client()
     finance_data = {}
-    user_region = session.get('region') or session.get('user_region')
+    user_region = (session.get('region') or session.get('user_region') or '').upper().replace('–', '-').replace('—', '-').replace('  ', ' ').replace(' ', '-')
     try:
         docs = db.collection('finance').stream()
         for doc in docs:

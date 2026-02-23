@@ -229,7 +229,7 @@ def distribute_fund_to_region():
     import datetime
     db = get_firestore_db()
     data = request.get_json()
-    region = data.get('region')
+    region = str(data.get('region', '')).upper().replace('–', '-').replace('—', '-').replace('  ', ' ').replace(' ', '-')
     amount = data.get('amount')
     fund_type = data.get('fundType')
     # Add record to regional_fund_distribution
