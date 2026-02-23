@@ -1,310 +1,393 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Regional Inventory Dashboard | DENR Oversight</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Regional Inventory Dashboard | DENR Oversight</title>
 
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            govbg: "#f8fafc",
-            govpanel: "#ffffff",
-            govborder: "#cbd5e1",
-            govtext: "#0f172a",
-            govmuted: "#64748b",
-            r900: "#1e3a8a", 
-            r800: "#1e40af",
-            r700: "#1d4ed8",
-            r600: "#2563eb",
-            r100: "#dbeafe",
-          },
-          fontFamily: { gov: ["Arial", "Verdana", "sans-serif"] },
+    <style>html{visibility:hidden;opacity:0}html.show{visibility:visible;opacity:1}</style>
+    <script>
+      (function() {
+        fetch('/api/check-session', {method: 'GET', credentials: 'same-origin'})
+          .then(r => r.json())
+          .then(d => {
+            if (d.authenticated && (d.role === 'regional' || d.role === 'regional_admin')) {
+              document.documentElement.classList.add('show');
+            } else {
+              window.location.replace('/login');
+            }
+          })
+          .catch(() => window.location.replace('/login'));
+      })();
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/denr-print.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/regional-style.css') }}">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <style>
+        /* Government Standard Typography & Layout (STRICT COMPACT) */
+        body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; margin: 0; color: #1e293b; }
+
+        /* Compact Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+        /* Gov UI Utilities */
+        .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+        .gov-input:focus { border-color: #1e40af; }
+        .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+
+        /* Chart Containment */
+        .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; }
+        .chart-container { position: absolute; inset: 0; }
+
+        /* Dense Table Formatting */
+        th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 6px 8px !important; }
+        td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+
+        /* Solid Print CSS */
+        @media print { 
+            .no-print { display: none !important; } 
+            .print-wrapper { margin-left: 0 !important; padding: 0 !important; width: 100% !important; display: block !important; } 
+            .gov-card { border: none !important; box-shadow: none !important; }
+            table { width: 100% !important; border-collapse: collapse !important; border: 1px solid #000 !important; }
+            th, td { border: 1px solid #000 !important; color: #000 !important; padding: 6px !important; font-size: 10px !important; }
+            .print-header { display: block !important; text-align: center; margin-bottom: 20px; }
+            tr { page-break-inside: avoid !important; }
         }
-      }
-    };
-  </script>
-
-  <style>
-    /* FIX: Arial sa lahat MALIBAN sa Material Icons */
-    *:not(.material-icons-round) { 
-        font-family: Arial, Verdana, sans-serif !important; 
-    }
-
-    /* Siguraduhin na ang icons ay may tamang font family */
-    .material-icons-round {
-        font-family: 'Material Icons Round' !important;
-    }
-
-    .main-wrapper { padding-left: 300px; transition: all 0.3s ease; }
-    @media (max-width: 1024px) { .main-wrapper { padding-left: 0; } }
-    @media print { .no-print { display: none !important; } .main-wrapper { padding: 0 !important; } }
-  </style>
+        .print-header { display: none; }
+    </style>
 </head>
 
-<body class="bg-govbg text-govtext">
-  {% include 'regional/sidenav.html' %}
+<body class="text-slate-800 bg-slate-100 h-screen overflow-hidden flex flex-col">
+    
+    <div class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]"
+      style="background-image:url('/static/images/denr.jpg'); background-position:center 30%; background-size:520px;"
+      aria-hidden="true"></div>
 
-  <div class="main-wrapper">
-    <main class="p-4 sm:p-8">
-      
-      <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-8 border-b border-govborder pb-6">
-        <div>
-          <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tight text-r900">Regional Inventory Oversight</h1>
-          <p class="text-govmuted mt-1 font-bold text-sm uppercase tracking-widest italic" id="regionHeader">Loading...</p>
+    <div class="flex flex-1 overflow-hidden">
+        
+        <div class="no-print z-20">
+            {% include 'regional/sidenav.html' %}
         </div>
 
-        <div class="no-print inline-flex items-center gap-3 rounded-0 border border-govborder bg-white px-4 py-2 text-[11px] font-black uppercase tracking-widest text-slate-700 shadow-sm">
-          <span class="material-icons-round text-r800" style="font-size:18px;">today</span>
-          <span id="todayLabel"></span>
+        <div class="flex-1 flex flex-col min-w-0 lg:ml-[260px] h-screen transition-all print-wrapper">
+            
+            <main class="flex-1 flex flex-col min-w-0 p-3 gap-2 overflow-y-auto custom-scrollbar">
+
+                <header class="gov-card p-2 px-3 flex flex-col sm:flex-row sm:justify-between sm:items-center shrink-0 border-b-4 border-b-blue-900 mb-1 no-print">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white shrink-0">
+                            <span class="material-icons-round text-[18px]">inventory_2</span>
+                        </div>
+                        <div class="leading-tight">
+                            <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Regional Inventory Oversight</h1>
+                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0 mt-0.5" id="regionHeader">Loading...</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-1.5 mt-2 sm:mt-0">
+                        <div class="inline-flex items-center gap-2 border border-slate-300 bg-white px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-700 shadow-sm rounded-[2px]">
+                            <span class="material-icons-round text-[14px] text-blue-900">today</span>
+                            <span id="todayLabel"></span>
+                        </div>
+                    </div>
+                </header>
+
+                <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0 mb-1 no-print">
+                    <div class="gov-card p-2 px-3 border-l-4 border-l-blue-900 flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Regional Products</div>
+                                <div class="text-xl font-black text-slate-900 leading-none mt-1" id="kpiTotalProducts">0</div>
+                            </div>
+                            <span class="material-icons-round text-slate-300 text-[20px]">inventory_2</span>
+                        </div>
+                    </div>
+
+                    <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="text-[9px] font-black uppercase text-emerald-800 tracking-widest">Consolidated Quantity</div>
+                                <div class="text-xl font-black text-emerald-700 leading-none mt-1" id="kpiTotalQty">0</div>
+                            </div>
+                            <span class="material-icons-round text-emerald-200 text-[20px]">analytics</span>
+                        </div>
+                    </div>
+
+                    <div class="gov-card p-2 px-3 border-l-4 border-l-blue-500 flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="text-[9px] font-black uppercase text-blue-800 tracking-widest">Regional Inputs (Today)</div>
+                                <div class="text-xl font-black text-blue-700 leading-none mt-1" id="kpiAddedToday">0</div>
+                            </div>
+                            <span class="material-icons-round text-blue-200 text-[20px]">add_business</span>
+                        </div>
+                    </div>
+
+                    <div class="gov-card p-2 px-3 border-l-4 border-l-rose-500 flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="text-[9px] font-black uppercase text-rose-800 tracking-widest">Regional Outflow (Today)</div>
+                                <div class="text-xl font-black text-rose-700 leading-none mt-1" id="kpiRemovedToday">0</div>
+                            </div>
+                            <span class="material-icons-round text-rose-200 text-[20px]">outbox</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="grid grid-cols-1 lg:grid-cols-12 gap-2 shrink-0 h-[180px]">
+                    <div class="lg:col-span-7 gov-card p-3 flex flex-col overflow-hidden">
+                        <h2 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-2 shrink-0">
+                            Consolidated Stock Trend
+                        </h2>
+                        <div class="flex-1 relative w-full min-h-0">
+                            <canvas id="chartTotal"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="lg:col-span-5 gov-card p-3 flex flex-col overflow-hidden">
+                        <h2 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-2 shrink-0">
+                            Provincial Distribution
+                        </h2>
+                        <div class="flex-1 relative w-full min-h-0">
+                            <canvas id="chartProvincial"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white mt-1 no-print">
+                    
+                    <div class="p-2 border-b border-slate-200 shrink-0 flex flex-wrap gap-1.5 items-center justify-between bg-slate-50 no-print">
+                        <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1 mr-2">
+                            <span class="material-icons-round text-[14px]">view_list</span> Regional Product Ledger
+                        </h2>
+
+                        <div class="flex items-center gap-1.5">
+                            <div class="relative min-w-[200px]">
+                                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                                <input type="text" id="searchInput" class="gov-input pl-6 w-full" placeholder="Search product, owner...">
+                            </div>
+                            
+                            <select id="filterProvince" class="gov-input cursor-pointer min-w-[120px]">
+                                <option value="All">All Provinces</option>
+                            </select>
+
+                            <select id="filterCategory" class="gov-input cursor-pointer min-w-[120px]">
+                                <option value="All">All Categories</option>
+                                <option value="Crop & Plant">Crop & Plant</option>
+                                <option value="Livestock & Poultry">Livestock & Poultry</option>
+                                <option value="Fisheries & Aquaculture">Fisheries & Aquaculture</option>
+                                <option value="Agribusiness">Agribusiness</option>
+                            </select>
+
+                            <button id="btnPrint" class="gov-btn bg-slate-800 hover:bg-slate-900 text-white shadow-sm flex items-center gap-1">
+                                <span class="material-icons-round text-[12px]">print</span> Export
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-auto custom-scrollbar relative">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
+                                <tr>
+                                    <th class="border-r border-slate-200">Province & Municipality</th>
+                                    <th class="border-r border-slate-200">Product Name</th>
+                                    <th class="border-r border-slate-200">Category</th>
+                                    <th class="text-right w-24">Current Qty</th>
+                                </tr>
+                            </thead>
+                            <tbody id="itemsTbody" class="text-[10px] divide-y divide-slate-100">
+                                </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+            </main>
         </div>
-      </header>
-      
-      <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        <div class="rounded-0 border-t-4 border-t-r900 border-x border-b border-govborder bg-govpanel p-5 shadow-sm">
-          <p class="text-govmuted font-black uppercase text-[10px] tracking-widest">Total Regional Products</p>
-          <div class="flex items-end justify-between mt-2">
-            <span class="text-3xl font-black text-r900" id="kpiTotalProducts">0</span>
-            <span class="material-icons-round text-slate-300">inventory_2</span>
-          </div>
-        </div>
+    </div>
 
-        <div class="rounded-0 border-t-4 border-t-emerald-600 border-x border-b border-govborder bg-govpanel p-5 shadow-sm">
-          <p class="text-govmuted font-black uppercase text-[10px] tracking-widest">Consolidated Quantity</p>
-          <div class="flex items-end justify-between mt-2">
-            <span class="text-3xl font-black text-emerald-600" id="kpiTotalQty">0</span>
-            <span class="material-icons-round text-slate-300">analytics</span>
-          </div>
-        </div>
+    <script type="module">
+        import { auth, db } from '/static/js/firebase-config.js';
+        import { collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-        <div class="rounded-0 border-t-4 border-t-blue-500 border-x border-b border-govborder bg-govpanel p-5 shadow-sm">
-          <p class="text-govmuted font-black uppercase text-[10px] tracking-widest">Regional Inputs (Today)</p>
-          <div class="flex items-end justify-between mt-2">
-            <span class="text-3xl font-black text-blue-600" id="kpiAddedToday">0</span>
-            <span class="material-icons-round text-slate-300">add_business</span>
-          </div>
-        </div>
+        const TODAY_ISO = new Date().toISOString().split('T')[0];
+        document.getElementById("todayLabel").textContent = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 
-        <div class="rounded-0 border-t-4 border-t-rose-500 border-x border-b border-govborder bg-govpanel p-5 shadow-sm">
-          <p class="text-govmuted font-black uppercase text-[10px] tracking-widest">Regional Outflow (Today)</p>
-          <div class="flex items-end justify-between mt-2">
-            <span class="text-3xl font-black text-rose-600" id="kpiRemovedToday">0</span>
-            <span class="material-icons-round text-slate-300">outbox</span>
-          </div>
-        </div>
-      </section>
+        let allProducts = [];
+        let chartTotal = null;
+        let chartProvincial = null;
+        let userRegion = '';
+        let userRegionName = '';
+        let userProvinces = [];
 
-      <section class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-        <div class="rounded-0 border border-govborder bg-govpanel p-6 shadow-sm">
-          <h2 class="text-sm font-black uppercase tracking-widest mb-4 text-r900 border-b pb-2">Consolidated Stock Trend</h2>
-          <div class="relative h-[280px]">
-            <canvas id="chartTotal"></canvas>
-          </div>
-        </div>
-
-        <div class="rounded-0 border border-govborder bg-govpanel p-6 shadow-sm">
-          <h2 class="text-sm font-black uppercase tracking-widest mb-4 text-r900 border-b pb-2">Provincial Distribution</h2>
-          <div class="relative h-[280px]">
-            <canvas id="chartProvincial"></canvas>
-          </div>
-        </div>
-      </section>
-
-      <section class="no-print rounded-0 border border-govborder bg-white p-5 mb-8 shadow-sm">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div>
-            <label class="block text-[10px] font-black uppercase tracking-widest text-govmuted mb-2">Filter by Province</label>
-            <select id="filterProvince" class="w-full rounded-0 border border-govborder bg-slate-50 px-3 py-2.5 font-bold text-xs uppercase tracking-widest outline-none focus:border-r900">
-              <option value="All">All Provinces</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-[10px] font-black uppercase tracking-widest text-govmuted mb-2">Resource Category</label>
-            <select id="filterCategory" class="w-full rounded-0 border border-govborder bg-slate-50 px-3 py-2.5 font-bold text-xs uppercase tracking-widest outline-none focus:border-r900">
-              <option value="All">All Categories</option>
-              <option value="Crop & Plant">Crop & Plant</option>
-              <option value="Livestock & Poultry">Livestock & Poultry</option>
-              <option value="Fisheries & Aquaculture">Fisheries & Aquaculture</option>
-              <option value="Agribusiness">Agribusiness</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-[10px] font-black uppercase tracking-widest text-govmuted mb-2">Search Regional Masterlist</label>
-            <div class="flex items-center gap-2 rounded-0 border border-govborder bg-slate-50 px-3 py-2 focus-within:bg-white focus-within:border-r900">
-              <span class="material-icons-round text-slate-400">search</span>
-              <input id="searchInput" type="text" placeholder="Search product, owner..." class="w-full bg-transparent outline-none text-xs font-bold uppercase tracking-widest" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="rounded-0 border border-govborder bg-govpanel shadow-sm overflow-hidden">
-        <div class="bg-slate-50 px-6 py-4 border-b border-govborder flex items-center justify-between">
-          <h2 class="text-xs font-black uppercase tracking-[0.2em] text-r900">Regional Product Ledger</h2>
-          <button id="btnPrint" class="no-print flex items-center gap-2 rounded-0 border border-r900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-r900 hover:bg-r100">
-            <span class="material-icons-round text-sm">print</span> Export Report
-          </button>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left">
-            <thead>
-              <tr class="text-[10px] font-black uppercase tracking-widest text-govmuted border-b border-govborder">
-                <th class="px-6 py-4">Province & Municipality</th>
-                <th class="px-6 py-4">Product Name</th>
-                <th class="px-6 py-4">Category</th>
-                <th class="px-6 py-4 text-right">Current Qty</th>
-              </tr>
-            </thead>
-            <tbody id="itemsTbody" class="divide-y divide-govborder"></tbody>
-          </table>
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <script type="module">
-    import { auth, db } from '/static/js/firebase-config.js';
-    import { collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-
-    const TODAY_ISO = new Date().toISOString().split('T')[0];
-    document.getElementById("todayLabel").textContent = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-
-    let allProducts = [];
-    let chartTotal = null;
-    let chartProvincial = null;
-    let userRegion = '';
-    let userRegionName = '';
-    let userProvinces = [];
-
-    async function loadUserRegion(user) {
-      try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          userRegion = userData.region || 'IV-A';
-          userRegionName = userData.regionName || 'CALABARZON';
-          userProvinces = userData.provinces || [];
-          document.getElementById('regionHeader').textContent = `Region ${userRegion} (${userRegionName}) • Consolidated Data`;
-          
-          // Populate province dropdown
-          const provinceSelect = document.getElementById('filterProvince');
-          userProvinces.forEach(province => {
-            const option = document.createElement('option');
-            option.value = province;
-            option.textContent = province;
-            provinceSelect.appendChild(option);
-          });
-          
-          console.log('User region loaded:', userRegion, userRegionName, userProvinces);
+        async function loadUserRegion(user) {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    userRegion = userData.region || 'IV-A';
+                    userRegionName = userData.regionName || 'CALABARZON';
+                    userProvinces = userData.provinces || [];
+                    document.getElementById('regionHeader').textContent = `Region ${userRegion} (${userRegionName}) • Consolidated Data`;
+                    
+                    // Populate province dropdown
+                    const provinceSelect = document.getElementById('filterProvince');
+                    userProvinces.forEach(province => {
+                        const option = document.createElement('option');
+                        option.value = province;
+                        option.textContent = province;
+                        provinceSelect.appendChild(option);
+                    });
+                    
+                    console.log('User region loaded:', userRegion, userRegionName, userProvinces);
+                }
+            } catch (error) {
+                console.error('Error loading user region:', error);
+            }
         }
-      } catch (error) {
-        console.error('Error loading user region:', error);
-      }
-    }
 
-    async function loadRegionalInventory() {
-      try {
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        const usersMap = {};
-        usersSnapshot.forEach(uDoc => {
-          const uData = uDoc.data();
-          usersMap[uDoc.id] = {
-            name: `${uData.firstName || ''} ${uData.lastName || ''}`.trim() || uData.email,
-            municipality: uData.municipality || 'N/A',
-            province: uData.province || 'UNKNOWN' 
-          };
-        });
+        async function loadRegionalInventory() {
+            try {
+                const usersSnapshot = await getDocs(collection(db, 'users'));
+                const usersMap = {};
+                usersSnapshot.forEach(uDoc => {
+                    const uData = uDoc.data();
+                    usersMap[uDoc.id] = {
+                        name: `${uData.firstName || ''} ${uData.lastName || ''}`.trim() || uData.email,
+                        municipality: uData.municipality || 'N/A',
+                        province: uData.province || 'UNKNOWN' 
+                    };
+                });
 
-        const inventorySnapshot = await getDocs(collection(db, 'userInventory'));
-        allProducts = [];
-        inventorySnapshot.forEach(docSnap => {
-          const data = docSnap.data();
-          const userInfo = usersMap[data.userId] || { name: 'Unknown', municipality: 'N/A', province: 'UNKNOWN' };
-          const itemProvince = userInfo.province.toUpperCase();
-          
-          // Only include items from user's provinces
-          if (userProvinces.length === 0 || userProvinces.includes(itemProvince)) {
-            allProducts.push({
-              name: data.productName || data.name || 'Unnamed',
-              category: data.category || 'General',
-              municipality: userInfo.municipality,
-              province: itemProvince,
-              currentQty: Number(data.currentQuantity || 0),
-              addedDate: data.createdAt ? data.createdAt.toDate().toISOString().split('T')[0] : ''
+                const inventorySnapshot = await getDocs(collection(db, 'userInventory'));
+                allProducts = [];
+                inventorySnapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const userInfo = usersMap[data.userId] || { name: 'Unknown', municipality: 'N/A', province: 'UNKNOWN' };
+                    const itemProvince = userInfo.province.toUpperCase();
+                    
+                    // Only include items from user's provinces
+                    if (userProvinces.length === 0 || userProvinces.includes(itemProvince)) {
+                        allProducts.push({
+                            name: data.productName || data.name || 'Unnamed',
+                            category: data.category || 'General',
+                            municipality: userInfo.municipality,
+                            province: itemProvince,
+                            currentQty: Number(data.currentQuantity || 0),
+                            addedDate: data.createdAt ? data.createdAt.toDate().toISOString().split('T')[0] : ''
+                        });
+                    }
+                });
+                refresh();
+            } catch (e) { console.error(e); }
+        }
+
+        function buildCharts(list) {
+            // Setup global compact chart styling
+            Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+            Chart.defaults.font.size = 9;
+            Chart.defaults.color = "#64748b";
+
+            if (chartTotal) chartTotal.destroy();
+            chartTotal = new Chart(document.getElementById("chartTotal"), {
+                type: "line",
+                data: {
+                    labels: ["Feb 06", "Feb 07", "Feb 08", "Feb 09", "Feb 10", "Feb 11", "Today"],
+                    datasets: [{ 
+                        label: "Consolidated Volume", 
+                        data: [4200, 4500, 4300, 4800, 5100, 5400, list.reduce((a, b) => a + b.currentQty, 0)], 
+                        borderColor: "#1e3a8a", 
+                        backgroundColor: "rgba(30, 58, 138, 0.1)",
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 2
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    layout: { padding: 5 },
+                    plugins: { legend: { display: false } },
+                    scales: { x: { grid: { display: false } }, y: { beginAtZero: true } }
+                }
             });
-          }
+
+            const provMap = {};
+            list.forEach(p => { provMap[p.province] = (provMap[p.province] || 0) + p.currentQty; });
+            if (chartProvincial) chartProvincial.destroy();
+            chartProvincial = new Chart(document.getElementById("chartProvincial"), {
+                type: "bar",
+                data: { 
+                    labels: Object.keys(provMap), 
+                    datasets: [{ 
+                        data: Object.values(provMap), 
+                        backgroundColor: ["#1e3a8a", "#059669", "#d97706", "#dc2626", "#7c3aed"],
+                        borderRadius: 2
+                    }] 
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    indexAxis: 'y',
+                    layout: { padding: 5 },
+                    plugins: { legend: { display: false } },
+                    scales: { x: { beginAtZero: true }, y: { grid: { display: false } } }
+                }
+            });
+        }
+
+        function refresh() {
+            const q = document.getElementById("searchInput").value.toLowerCase();
+            const prov = document.getElementById("filterProvince").value;
+            const cat = document.getElementById("filterCategory").value;
+
+            const filtered = allProducts.filter(p => {
+                const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.municipality.toLowerCase().includes(q);
+                const matchesProv = prov === "All" || p.province === prov;
+                const matchesCat = cat === "All" || p.category === cat;
+                return matchesSearch && matchesProv && matchesCat;
+            });
+
+            // Compact Table DOM Construction
+            document.getElementById("itemsTbody").innerHTML = filtered.map(p => `
+                <tr class="hover:bg-blue-50 transition-all">
+                    <td class="px-4 py-3 align-middle border-r border-slate-100">
+                        <div class="font-black text-blue-900 uppercase">${p.province}</div>
+                        <div class="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">${p.municipality}</div>
+                    </td>
+                    <td class="px-4 py-3 align-middle font-bold text-slate-900 uppercase border-r border-slate-100">${p.name}</td>
+                    <td class="px-4 py-3 align-middle font-bold text-slate-600 uppercase border-r border-slate-100">${p.category}</td>
+                    <td class="px-4 py-3 align-middle text-right font-black text-blue-800 border-r border-slate-100">${p.currentQty}</td>
+                </tr>
+            `).join("");
+
+            document.getElementById("kpiTotalProducts").textContent = filtered.length;
+            document.getElementById("kpiTotalQty").textContent = filtered.reduce((s, p) => s + p.currentQty, 0);
+            
+            buildCharts(filtered);
+        }
+
+        document.getElementById("filterProvince").addEventListener("change", refresh);
+        document.getElementById("filterCategory").addEventListener("change", refresh);
+        document.getElementById("searchInput").addEventListener("input", refresh);
+        document.getElementById("btnPrint").addEventListener("click", () => window.print());
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                await loadUserRegion(user);
+                await loadRegionalInventory();
+            } else {
+                window.location.href = '/login';
+            }
         });
-        refresh();
-      } catch (e) { console.error(e); }
-    }
-
-    function buildCharts(list) {
-      if (chartTotal) chartTotal.destroy();
-      chartTotal = new Chart(document.getElementById("chartTotal"), {
-        type: "line",
-        data: {
-          labels: ["Feb 06", "Feb 07", "Feb 08", "Feb 09", "Feb 10", "Feb 11", "Today"],
-          datasets: [{ label: "Consolidated Volume", data: [4200, 4500, 4300, 4800, 5100, 5400, list.reduce((a, b) => a + b.currentQty, 0)], borderColor: "#1e3a8a", tension: 0.4 }]
-        },
-        options: { responsive: true, maintainAspectRatio: false }
-      });
-
-      const provMap = {};
-      list.forEach(p => { provMap[p.province] = (provMap[p.province] || 0) + p.currentQty; });
-      if (chartProvincial) chartProvincial.destroy();
-      chartProvincial = new Chart(document.getElementById("chartProvincial"), {
-        type: "bar",
-        data: { labels: Object.keys(provMap), datasets: [{ data: Object.values(provMap), backgroundColor: ["#1e3a8a", "#059669", "#d97706", "#dc2626", "#7c3aed"] }] },
-        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y' }
-      });
-    }
-
-    function refresh() {
-      const q = document.getElementById("searchInput").value.toLowerCase();
-      const prov = document.getElementById("filterProvince").value;
-      const cat = document.getElementById("filterCategory").value;
-
-      const filtered = allProducts.filter(p => {
-        const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.municipality.toLowerCase().includes(q);
-        const matchesProv = prov === "All" || p.province === prov;
-        const matchesCat = cat === "All" || p.category === cat;
-        return matchesSearch && matchesProv && matchesCat;
-      });
-
-      document.getElementById("itemsTbody").innerHTML = filtered.map(p => `
-        <tr class="hover:bg-slate-50 transition-colors text-[11px] font-bold">
-          <td class="px-6 py-4"><span class="text-r900 font-black">${p.province}</span><br/><span class="text-govmuted text-[9px] uppercase">${p.municipality}</span></td>
-          <td class="px-6 py-4 uppercase">${p.name}</td>
-          <td class="px-6 py-4"><span>${p.category}</span></td>
-          <td class="px-6 py-4 text-right font-black text-r900 text-sm">${p.currentQty}</td>
-        </tr>
-      `).join("");
-
-      document.getElementById("kpiTotalProducts").textContent = filtered.length;
-      document.getElementById("kpiTotalQty").textContent = filtered.reduce((s, p) => s + p.currentQty, 0);
-      buildCharts(filtered);
-    }
-
-    document.getElementById("filterProvince").addEventListener("change", refresh);
-    document.getElementById("filterCategory").addEventListener("change", refresh);
-    document.getElementById("searchInput").addEventListener("input", refresh);
-    document.getElementById("btnPrint").addEventListener("click", () => window.print());
-
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        await loadUserRegion(user);
-        await loadRegionalInventory();
-      } else {
-        window.location.href = '/login';
-      }
-    });
-  </script>
+    </script>
 </body>
 </html>

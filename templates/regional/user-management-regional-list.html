@@ -4,131 +4,170 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DENR | Regional User Oversight</title>
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: { govblue: "#1e3a8a", govbg: "#f8fafc", govborder: "#cbd5e1" }
-        }
-      }
-    }
-  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/regional-style.css') }}">
 
   <style>
-    /* PROTECT ICONS & FORCE ARIAL */
-    *:not(.material-icons-round) { font-family: Arial, Helvetica, sans-serif !important; }
-    .material-icons-round { font-family: 'Material Icons Round' !important; }
+    /* Government Standard Typography & Layout (STRICT COMPACT) */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; margin: 0; color: #1e293b; }
 
-    .main-wrapper { 
-      margin-left: 300px; 
-      transition: all 0.3s ease; 
-      min-height: 100vh;
-      padding-bottom: 50px;
-    }
-    @media (max-width: 1024px) { .main-wrapper { margin-left: 0; padding: 15px; } }
+    /* Compact Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #1e40af; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+
+    /* Dense Table Formatting */
+    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 6px 8px !important; }
+    td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+
+    /* Action Buttons (Compact 22x22) */
+    .btn-action { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; color: #94a3b8; cursor: pointer; }
     
-    body::before {
-      content:""; position: fixed; inset: 0;
-      background-image: url('/static/images/denr.jpg'); background-repeat: no-repeat;
-      background-position: center 30%; background-size: 520px;
-      opacity: 0.03; pointer-events: none; z-index: -1;
-    }
+    /* Specific hover colors handled inline for dynamic data */
   </style>
 </head>
 
-<body class="bg-slate-100 text-slate-900">
-  <div class="no-print">
-    {% include 'regional/sidenav.html' %}
-  </div>
+<body class="text-slate-800 bg-slate-100 h-screen overflow-hidden flex flex-col">
+  
+  <div class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]"
+    style="background-image:url('/static/images/denr.jpg'); background-position:center 30%; background-size:520px;"
+    aria-hidden="true"></div>
 
-  <main class="main-wrapper px-6 py-8 md:px-10">
+  <div class="flex flex-1 overflow-hidden">
+    
+    <aside class="sidebar-container hidden lg:block z-10 w-[260px] shrink-0 bg-slate-900 border-r border-slate-800 no-print">
+      {% include 'regional/sidenav.html' %}
+    </aside>
 
-    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-6 border-b border-slate-300 pb-5">
-      <div>
-        <h1 class="text-2xl font-black uppercase tracking-tight text-govblue">Regional User Oversight</h1>
-        <p class="mt-1 text-sm font-bold text-slate-500 uppercase italic tracking-tighter" id="regionHeader">Loading...</p>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <div class="inline-flex items-center gap-2 border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-900">
-          <span class="material-icons-round text-sm">security</span> Restricted Access
-        </div>
-        <button id="btnRefresh" class="bg-govblue text-white px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition-all shadow-md">
-          Refresh Data
-        </button>
-      </div>
-    </div>
+    <div class="flex-1 flex flex-col min-w-0 lg:ml-0 h-screen transition-all">
+      
+      <main class="flex-1 flex flex-col p-3 gap-2 overflow-y-auto custom-scrollbar">
 
-    <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-6">
-      <div class="bg-white border border-slate-300 p-5 border-t-4 border-t-govblue">
-        <p class="text-[9px] font-black uppercase text-slate-400">Regional Reach</p>
-        <p class="mt-1 text-3xl font-black" id="kpiTotal">0</p>
-      </div>
-      <div class="bg-white border border-slate-300 p-5 border-t-4 border-t-emerald-600">
-        <p class="text-[9px] font-black uppercase text-slate-400">Active Items</p>
-        <p class="mt-1 text-3xl font-black text-emerald-600" id="kpiActive">0</p>
-      </div>
-      <div class="bg-white border border-slate-300 p-5 border-t-4 border-t-rose-600">
-        <p class="text-[9px] font-black uppercase text-slate-400">Disabled Items</p>
-        <p class="mt-1 text-3xl font-black text-rose-600" id="kpiDisabled">0</p>
-      </div>
-      <div class="bg-white border border-slate-300 p-5 border-t-4 border-t-amber-500">
-        <p class="text-[9px] font-black uppercase text-slate-400">Admins Count</p>
-        <p class="mt-1 text-3xl font-black text-amber-600" id="kpiAdmins">0</p>
-      </div>
-    </section>
-
-    <section class="bg-white border border-slate-300 p-5 mb-6 shadow-sm">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div>
-          <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Province</label>
-          <select id="provinceSelect" class="w-full border border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase outline-none focus:border-govblue">
-            <option value="all">All Provinces</option>
-            <option value="CAVITE">CAVITE</option>
-            <option value="LAGUNA">LAGUNA</option>
-            <option value="BATANGAS">BATANGAS</option>
-            <option value="RIZAL">RIZAL</option>
-            <option value="QUEZON">QUEZON</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Municipality</label>
-          <select id="municipalitySelect" class="w-full border border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase outline-none focus:border-govblue">
-            <option value="all">All Municipalities</option>
-          </select>
-        </div>
-        <div class="md:col-span-2">
-          <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Search Account</label>
-          <div class="flex items-center gap-2 border border-slate-300 bg-slate-50 px-3 py-2 focus-within:bg-white focus-within:border-govblue transition-all">
-            <span class="material-icons-round text-slate-400 text-sm">search</span>
-            <input id="searchInput" type="text" placeholder="Search by name or email..." class="w-full bg-transparent text-[11px] font-bold uppercase outline-none" />
+        <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900 mb-1">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white">
+              <span class="material-icons-round text-[18px]">security</span>
+            </div>
+            <div class="leading-tight">
+              <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Regional User Oversight</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0" id="regionHeader">Loading...</p>
+            </div>
           </div>
-        </div>
-      </div>
-    </section>
+          <div class="flex items-center gap-2">
+            <div class="hidden sm:inline-flex items-center gap-1 border border-blue-200 bg-blue-50 px-2 py-1 text-[8px] font-black uppercase tracking-widest text-blue-900 rounded-[2px]">
+              <span class="material-icons-round text-[12px]">admin_panel_settings</span> Restricted Access
+            </div>
+            <button id="btnRefresh" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+              <span class="material-icons-round text-[12px]">refresh</span> Refresh Data
+            </button>
+          </div>
+        </header>
 
-    <div class="overflow-x-auto border border-slate-300 bg-white shadow-sm">
-      <table class="min-w-full text-left">
-        <thead class="bg-slate-50 border-b border-slate-300">
-          <tr class="text-[10px] font-black uppercase tracking-widest text-slate-500">
-            <th class="px-5 py-4">Name & Access Level</th>
-            <th class="px-5 py-4">Email Address</th>
-            <th class="px-5 py-4">Assigned Location</th>
-            <th class="px-5 py-4 text-center">Status</th>
-            <th class="px-5 py-4 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="usersTbody" class="divide-y divide-slate-200 text-[11px] font-bold uppercase"></tbody>
-      </table>
+        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0 mb-1">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-slate-800 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Regional Reach</div>
+                <div class="text-xl font-black text-slate-900 leading-none mt-1" id="kpiTotal">0</div>
+              </div>
+              <span class="material-icons-round text-slate-300 text-[20px]">public</span>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-emerald-800 tracking-widest">Active Items</div>
+                <div class="text-xl font-black text-emerald-700 leading-none mt-1" id="kpiActive">0</div>
+              </div>
+              <span class="material-icons-round text-emerald-200 text-[20px]">check_circle</span>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-rose-800 tracking-widest">Disabled Items</div>
+                <div class="text-xl font-black text-rose-700 leading-none mt-1" id="kpiDisabled">0</div>
+              </div>
+              <span class="material-icons-round text-rose-200 text-[20px]">block</span>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[9px] font-black uppercase text-amber-800 tracking-widest">Admins Count</div>
+                <div class="text-xl font-black text-amber-700 leading-none mt-1" id="kpiAdmins">0</div>
+              </div>
+              <span class="material-icons-round text-amber-200 text-[20px]">admin_panel_settings</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white mt-1">
+          
+          <div class="p-2 border-b border-slate-200 shrink-0 flex flex-wrap gap-1.5 items-center justify-between bg-slate-50">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1 mr-2">
+              <span class="material-icons-round text-[14px]">manage_accounts</span> Account Directory
+            </h2>
+
+            <div class="flex items-center gap-1.5">
+              <div class="relative min-w-[200px]">
+                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                <input id="searchInput" type="text" placeholder="Search name or email..." class="gov-input pl-6 w-full">
+              </div>
+
+              <select id="provinceSelect" class="gov-input cursor-pointer min-w-[120px]">
+                <option value="all">All Provinces</option>
+                <option value="CAVITE">CAVITE</option>
+                <option value="LAGUNA">LAGUNA</option>
+                <option value="BATANGAS">BATANGAS</option>
+                <option value="RIZAL">RIZAL</option>
+                <option value="QUEZON">QUEZON</option>
+              </select>
+
+              <select id="municipalitySelect" class="gov-input cursor-pointer min-w-[140px]">
+                <option value="all">All Municipalities</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-auto custom-scrollbar relative">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
+                <tr>
+                  <th class="border-r border-slate-200">Name & Access Level</th>
+                  <th class="border-r border-slate-200">Email Address</th>
+                  <th class="border-r border-slate-200">Assigned Location</th>
+                  <th class="text-center border-r border-slate-200">Status</th>
+                  <th class="text-center w-24">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersTbody" class="text-[10px] divide-y divide-slate-100">
+                </tbody>
+            </table>
+
+            <div id="emptyState" class="hidden absolute inset-0 flex items-center justify-center bg-white/90 z-20">
+              <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 border border-dashed border-slate-300 px-6 py-4 bg-slate-50">
+                No matching accounts found in the Regional Scope
+              </p>
+            </div>
+          </div>
+
+        </section>
+
+      </main>
     </div>
-
-    <div id="emptyState" class="hidden py-20 text-center border border-dashed border-slate-300 bg-white">
-      <p class="text-[11px] font-black uppercase tracking-widest text-slate-400">No matching accounts found in the Regional Scope</p>
-    </div>
-
-  </main>
+  </div>
 
   <script type="module">
     import { auth, db } from '/static/js/firebase-config.js';
@@ -150,8 +189,6 @@
           userProvinces = userData.provinces || [];
           
           document.getElementById('regionHeader').textContent = `Region ${userRegion} (${userRegionName}) • Local & Regional Accounts Only`;
-          
-          console.log('User region loaded:', userRegion, userRegionName, userProvinces);
         }
       } catch (error) {
         console.error('Error loading user region:', error);
@@ -164,7 +201,7 @@
         allUsers = [];
         const munSet = new Set();
         
-        // ALLOWED ROLES ONLY - Selyadong restricted dito, boi.
+        // ALLOWED ROLES ONLY
         const allowedRoles = ['user', 'municipal_admin', 'regional_admin'];
 
         uSnap.forEach(dSnapshot => {
@@ -172,8 +209,6 @@
           const userRole = d.role || 'user';
           const userProvince = (d.province || '').toUpperCase();
 
-          // FUCK SHIT PROTECTOR: Huwag isama ang National at Superadmin
-          // Also filter by user's provinces for regional accounts
           if (allowedRoles.includes(userRole) && (userProvinces.length === 0 || userProvinces.includes(userProvince))) {
             const user = {
               id: dSnapshot.id,
@@ -215,24 +250,25 @@
       document.getElementById("kpiAdmins").textContent = filtered.filter(u => u.role.includes('admin')).length;
 
       const tbody = document.getElementById("usersTbody");
+      
       tbody.innerHTML = filtered.map(u => `
-        <tr class="hover:bg-slate-50 transition-all">
-          <td class="px-5 py-4">
-            <span class="text-govblue font-black">${u.name}</span><br/>
-            <span class="text-slate-400 text-[9px] font-normal tracking-widest">${u.role}</span>
+        <tr class="hover:bg-blue-50 transition-all">
+          <td class="px-4 py-3 align-middle border-r border-slate-100">
+            <div class="font-black text-slate-900 uppercase">${u.name}</div>
+            <div class="text-slate-500 text-[8px] font-black uppercase tracking-widest mt-0.5">${u.role}</div>
           </td>
-          <td class="px-5 py-4 lowercase font-normal text-slate-600 italic">${u.email}</td>
-          <td class="px-5 py-4">
-            <span class="text-slate-800">${u.municipality || 'N/A'}</span><br/>
-            <span class="text-slate-400 text-[9px] font-normal">${u.province || 'N/A'}</span>
+          <td class="px-4 py-3 align-middle border-r border-slate-100 font-mono text-slate-600 lowercase">${u.email}</td>
+          <td class="px-4 py-3 align-middle border-r border-slate-100">
+            <div class="font-bold text-slate-700 uppercase">${u.municipality || 'N/A'}</div>
+            <div class="text-blue-800 text-[8px] font-black uppercase tracking-widest mt-0.5">${u.province || 'N/A'}</div>
           </td>
-          <td class="px-5 py-4 text-center">
-            <span class="px-3 py-1 border text-[9px] font-black ${u.status === 'Active' ? 'bg-emerald-50 text-teal-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}">${u.status}</span>
+          <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
+            <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${u.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}">${u.status}</span>
           </td>
-          <td class="px-5 py-4 text-right">
-            <div class="flex justify-end gap-2">
-              <button onclick="handleAction('toggle', '${u.id}')" class="p-1 border border-amber-200 text-amber-600 hover:bg-amber-50" title="Disable/Enable"><span class="material-icons-round text-sm">do_not_disturb_on</span></button>
-              <button onclick="handleAction('delete', '${u.id}')" class="p-1 border border-rose-200 text-rose-600 hover:bg-rose-50" title="Remove Account"><span class="material-icons-round text-sm">delete_forever</span></button>
+          <td class="px-4 py-3 align-middle text-center">
+            <div class="flex justify-center gap-1">
+              <button onclick="handleAction('toggle', '${u.id}')" class="btn-action hover:bg-amber-500 hover:text-white border border-amber-200 text-amber-600" title="Disable/Enable"><span class="material-icons-round text-[14px]">do_not_disturb_on</span></button>
+              <button onclick="handleAction('delete', '${u.id}')" class="btn-action hover:bg-rose-600 hover:text-white border border-rose-200 text-rose-600" title="Remove Account"><span class="material-icons-round text-[14px]">delete_forever</span></button>
             </div>
           </td>
         </tr>
@@ -241,7 +277,6 @@
       document.getElementById("emptyState").classList.toggle("hidden", filtered.length > 0);
     }
 
-    // GLOBAL ACTIONS (Selyadong protected din dito)
     window.handleAction = async (type, id) => {
       const user = allUsers.find(u => u.id === id);
       if(!user) return;
@@ -276,6 +311,5 @@
       }
     });
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
 </html>
