@@ -102,8 +102,10 @@ def payroll_system_view():
 @role_required('regional','regional_admin')
 def accounting_dashboard_view():
     from firebase_admin import firestore
+    from flask import session
     db = firestore.client()
     finance_data = {}
+    user_region = session.get('region') or session.get('user_region')
     try:
         docs = db.collection('finance').stream()
         for doc in docs:
@@ -117,7 +119,16 @@ def accounting_dashboard_view():
             municipalities.append(doc.id)
     except Exception:
         pass
-    return render_template('regional/accounting/dashboard-regional.html', finance=finance_data, municipalities=municipalities)
+    # Fetch regional fund transfers for this region
+    regional_funds = []
+    try:
+        funds_query = db.collection('regional_fund_distribution').where('region', '==', user_region).order_by('date', direction=firestore.Query.DESCENDING).stream()
+        for fund_doc in funds_query:
+            fund = fund_doc.to_dict()
+            regional_funds.append(fund)
+    except Exception:
+        pass
+    return render_template('regional/accounting/dashboard-regional.html', finance=finance_data, municipalities=municipalities, regional_funds=regional_funds, user_region=user_region)
 
 @bp.route('/accounting/distribute-fund', methods=['POST'])
 @role_required('regional','regional_admin')
