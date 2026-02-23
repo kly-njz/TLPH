@@ -219,3 +219,29 @@ def national_accounting_dashboard():
         import traceback
         traceback.print_exc()
         return render_template('national/accounting/accounting-dashboard.html', finance={})
+    
+    # Fund distribution endpoint for national admin
+@bp.route('/national/accounting/distribute-fund', methods=['POST'])
+@role_required('national','national_admin')
+def distribute_fund_to_region():
+    from flask import request, jsonify
+    from firebase_config import get_firestore_db
+    import datetime
+    db = get_firestore_db()
+    data = request.get_json()
+    region = data.get('region')
+    amount = data.get('amount')
+    fund_type = data.get('fundType')
+    # Add record to regional_fund_distribution
+    try:
+        record = {
+            'region': region,
+            'amount': amount,
+            'fund_type': fund_type,
+            'date': datetime.datetime.utcnow().isoformat(),
+            'status': 'Released'
+        }
+        db.collection('regional_fund_distribution').add(record)
+        return jsonify({'success': True, 'record': record})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
