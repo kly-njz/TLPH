@@ -237,9 +237,68 @@
                 <input type="text" id="fundSearch" onkeyup="applyFilters()" placeholder="Search Region or Type..." 
                   class="pl-7 pr-2 py-1 bg-white border border-slate-300 rounded-sm text-[10px] w-48 outline-none focus:border-blue-900">
               </div>
-              <button onclick="releaseFundToRegion()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-sm text-[10px] font-black uppercase flex items-center gap-1 transition">
+              <button onclick="openFundModal()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-sm text-[10px] font-black uppercase flex items-center gap-1 transition">
                 <span class="material-icons-round text-sm">add</span> Release New Fund
               </button>
+              <!-- Fund Distribution Modal -->
+              <div id="fundModal" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 hidden">
+                <div class="bg-white rounded shadow-lg p-6 w-[350px]">
+                  <h3 class="text-lg font-black mb-2">Distribute Fund to Region</h3>
+                  <form id="fundForm">
+                    <label class="block text-xs font-bold mb-1">Region</label>
+                    <select id="regionDropdown" class="w-full mb-2 p-2 border rounded text-xs font-bold"></select>
+                    <label class="block text-xs font-bold mb-1">Fund Category</label>
+                    <input type="text" id="fundCategory" class="w-full mb-2 p-2 border rounded text-xs font-bold" required>
+                    <label class="block text-xs font-bold mb-1">Amount</label>
+                    <input type="number" id="fundAmount" class="w-full mb-2 p-2 border rounded text-xs font-bold" required>
+                    <div class="flex gap-2 mt-3">
+                      <button type="submit" class="bg-emerald-700 text-white px-3 py-1 rounded text-xs font-black">Release</button>
+                      <button type="button" onclick="closeFundModal()" class="bg-slate-300 text-slate-700 px-3 py-1 rounded text-xs font-black">Cancel</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+              <script src="/static/js/ph-locations.js"></script>
+              <script>
+              function openFundModal() {
+                document.getElementById('fundModal').style.display = 'flex';
+                // Populate region dropdown
+                const dropdown = document.getElementById('regionDropdown');
+                dropdown.innerHTML = '';
+                for (const region in philippineLocations) {
+                  const option = document.createElement('option');
+                  option.value = region;
+                  option.textContent = region;
+                  dropdown.appendChild(option);
+                }
+              }
+              function closeFundModal() {
+                document.getElementById('fundModal').style.display = 'none';
+              }
+              document.getElementById('fundForm').onsubmit = function(e) {
+                e.preventDefault();
+                const region = document.getElementById('regionDropdown').value;
+                const amount = document.getElementById('fundAmount').value;
+                const fundType = document.getElementById('fundCategory').value;
+                fetch('/national/accounting/distribute-fund', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    region,
+                    amount,
+                    fund_type: fundType,
+                    transfer_id: 'RFD-' + Date.now()
+                  })
+                }).then(r => r.json()).then(data => {
+                  if (data.success) {
+                    alert('Fund released to region!');
+                    location.reload();
+                  } else {
+                    alert('Release failed.');
+                  }
+                });
+              };
+              </script>
             </div>
           </div>
           <script>
@@ -282,33 +341,17 @@
                 </tr>
               </thead>
               <tbody class="text-[10px]" id="fundsTableBody">
-                <tr class="border-b border-slate-200 hover:bg-slate-50 transition" data-entity="NCR" data-date="2026-02-23">
-                  <td class="px-3 py-2 font-bold">NCR</td>
-                  <td class="px-3 py-2 text-slate-600">Operational Grant</td>
-                  <td class="px-3 py-2 font-mono text-slate-500 text-[9px]">RFD-26-001</td>
-                  <td class="px-3 py-2 text-right font-bold text-slate-900">₱ 500,000.00</td>
-                  <td class="px-3 py-2 text-slate-500">2026-02-23</td>
-                  <td class="px-3 py-2"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-sm font-black uppercase text-[8px]">Transferred</span></td>
+                {% for fund in regional_funds %}
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition">
+                  <td class="px-3 py-2 font-bold">{{ fund.region }}</td>
+                  <td class="px-3 py-2 text-slate-600">{{ fund.fund_type }}</td>
+                  <td class="px-3 py-2 font-mono text-slate-500 text-[9px]">{{ fund.transfer_id }}</td>
+                  <td class="px-3 py-2 text-right font-bold text-slate-900">₱ {{ fund.amount|float|round(2) }}</td>
+                  <td class="px-3 py-2 text-slate-500">{{ fund.date }}</td>
+                  <td class="px-3 py-2"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-sm font-black uppercase text-[8px]">{{ fund.status }}</span></td>
                   <td class="px-3 py-2 text-center"><button class="text-blue-900 hover:underline font-bold uppercase text-[9px]">Fund</button></td>
                 </tr>
-                <tr class="border-b border-slate-200 hover:bg-slate-50 transition" data-entity="Region IV-A" data-date="2026-02-20">
-                  <td class="px-3 py-2 font-bold">Region IV-A</td>
-                  <td class="px-3 py-2 text-slate-600">DENR-TLPH Project</td>
-                  <td class="px-3 py-2 font-mono text-slate-500 text-[9px]">RFD-26-002</td>
-                  <td class="px-3 py-2 text-right font-bold text-slate-900">₱ 1,200,000.00</td>
-                  <td class="px-3 py-2 text-slate-500">2026-02-20</td>
-                  <td class="px-3 py-2"><span class="bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-sm font-black uppercase text-[8px]">Pending Approval</span></td>
-                  <td class="px-3 py-2 text-center"><button class="text-blue-900 hover:underline font-bold uppercase text-[9px]">Fund</button></td>
-                </tr>
-                <tr class="border-b border-slate-200 hover:bg-slate-50 transition" data-entity="Region I" data-date="2026-01-15">
-                  <td class="px-3 py-2 font-bold">Region I</td>
-                  <td class="px-3 py-2 text-slate-600">Emergency Maintenance</td>
-                  <td class="px-3 py-2 font-mono text-slate-500 text-[9px]">RFD-26-003</td>
-                  <td class="px-3 py-2 text-right font-bold text-slate-900">₱ 75,000.00</td>
-                  <td class="px-3 py-2 text-slate-500">2026-01-15</td>
-                  <td class="px-3 py-2"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-sm font-black uppercase text-[8px]">Transferred</span></td>
-                  <td class="px-3 py-2 text-center"><button class="text-blue-900 hover:underline font-bold uppercase text-[9px]">Fund</button></td>
-                </tr>
+                {% endfor %}
               </tbody>
             </table>
           </div>
