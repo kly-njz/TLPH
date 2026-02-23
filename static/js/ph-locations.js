@@ -84,3 +84,8 @@ const philippineLocations = {
 };
 
 export { philippineLocations };
+// Utility to export as JSON for backend sync
+if (typeof window === 'undefined') {
+    const fs = require('fs');
+    fs.writeFileSync('municipalities.json', JSON.stringify(philippineLocations, null, 2));
+}

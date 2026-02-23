@@ -101,7 +101,60 @@ def payroll_system_view():
 @bp.route('/accounting/accounting-dashboard')
 @role_required('regional','regional_admin')
 def accounting_dashboard_view():
-    return render_template('regional/accounting/dashboard-regional.html')
+    @bp.route('/accounting/distribute-fund', methods=['POST'])
+    @role_required('regional','regional_admin')
+    def distribute_fund():
+        from flask import request, jsonify
+        from firebase_admin import firestore
+        db = firestore.client()
+        data = request.json
+        muni = data.get('municipality')
+        amount = data.get('amount')
+        fund_type = data.get('fund_type')
+        transfer_id = data.get('transfer_id')
+        region = data.get('region')
+        record = {
+            'municipality': muni,
+            'amount': amount,
+            'fund_type': fund_type,
+            'transfer_id': transfer_id,
+            'region': region,
+            'status': 'Released',
+            'timestamp': firestore.SERVER_TIMESTAMP
+        }
+        db.collection('municipal_fund_distribution').add(record)
+        return jsonify({'success': True})
+
+    @bp.route('/accounting/sync-municipalities', methods=['POST'])
+    @role_required('regional','regional_admin')
+    def sync_municipalities():
+        from firebase_admin import firestore
+        db = firestore.client()
+        import json
+        # Load municipalities from ph-locations.js (simulate import)
+        # In production, pass the mapping from frontend or keep a JSON copy
+        with open('static/js/municipalities.json', 'r') as f:
+            locations = json.load(f)
+        for region, municipalities in locations.items():
+            db.collection('municipalities').document(region).set({'municipalities': municipalities})
+        return 'Municipalities synced', 200
+    from firebase_admin import firestore
+    db = firestore.client()
+    finance_data = {}
+    try:
+        docs = db.collection('finance').stream()
+        for doc in docs:
+            finance_data.update(doc.to_dict())
+    except Exception:
+        pass
+    municipalities = []
+    try:
+        docs = db.collection('municipalities').stream()
+        for doc in docs:
+            municipalities.append(doc.id)
+    except Exception:
+        pass
+    return render_template('regional/accounting/dashboard-regional.html', finance=finance_data, municipalities=municipalities)
 
 @bp.route('/accounting/coa-templates')
 @role_required('regional','regional_admin')
