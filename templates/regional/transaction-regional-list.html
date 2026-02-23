@@ -1,401 +1,459 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DENR Regional Analytics | Oversight Master</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Regional Dashboard | DENR Oversight</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/denr-print.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/regional-style.css') }}">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: { govblue: "#1e3a8a", govteal: "#059669", govamber: "#d97706", govbg: "#f1f5f9" }
+    <style>
+        /* Government Standard Typography & Layout (STRICT COMPACT) */
+        body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; margin: 0; color: #1e293b; }
+
+        /* Compact Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+        /* Gov UI Utilities */
+        .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+        .gov-input:focus { border-color: #1e40af; }
+        .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+
+        /* Chart Containment */
+        .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; }
+        .chart-container { position: absolute; inset: 0; }
+
+        /* Dense Table Formatting */
+        th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 6px 8px !important; }
+        td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+
+        /* Action Buttons */
+        .btn-action { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; color: #94a3b8; cursor: pointer; text-decoration: none; }
+        .btn-view:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
+
+        /* FOOLPROOF LAYOUT WRAPPER TO PREVENT DOUBLE-SPACING */
+        .content-area { position: absolute; top: 0; right: 0; bottom: 0; left: 260px; overflow: hidden; display: flex; flex-direction: column; }
+        @media (max-width: 1024px) { .content-area { left: 0; } }
+
+        /* Solid Print CSS */
+        @media print { 
+            .no-print { display: none !important; } 
+            .content-area { left: 0 !important; position: static !important; display: block !important; width: 100% !important; overflow: visible !important; } 
+            .gov-card { border: none !important; box-shadow: none !important; }
+            table { width: 100% !important; border-collapse: collapse !important; border: 1px solid #000 !important; }
+            th, td { border: 1px solid #000 !important; color: #000 !important; padding: 6px !important; font-size: 10px !important; }
         }
-      }
-    }
-  </script>
-
-  <style>
-    *:not(.material-icons-round) { font-family: Arial, Helvetica, sans-serif !important; }
-    .material-icons-round { font-family: 'Material Icons Round' !important; }
-
-    .main-wrapper { 
-      margin-left: 300px; 
-      transition: all 0.3s ease; 
-      min-height: 100vh;
-      padding-bottom: 50px;
-    }
-    .gov-card { background: #ffffff; border: 1px solid #cbd5e1; border-top: 3px solid #1e3a8a; border-radius: 0; }
-    
-    @media (max-width: 1024px) { .main-wrapper { margin-left: 0; padding: 15px; } }
-    @media print { .no-print { display: none !important; } .main-wrapper { margin-left: 0 !important; padding: 0 !important; } .gov-card { border: 1px solid #000 !important; break-inside: avoid; } }
-    
-    body::before {
-      content:""; position: fixed; inset: 0;
-      background-image: url('/static/images/denr.jpg'); background-repeat: no-repeat;
-      background-position: center 30%; background-size: 520px;
-      opacity: 0.03; pointer-events: none; z-index: -1;
-    }
-  </style>
+    </style>
 </head>
 
-<body class="bg-slate-100 text-slate-900">
-  <div class="no-print">
-    {% include 'regional/sidenav.html' %}
-  </div>
+<body class="text-slate-800 bg-slate-100 h-screen overflow-hidden">
 
-  <div class="main-wrapper px-4 py-6 md:px-10">
-    
-    <header class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-6 border-b border-slate-300 pb-5">
-      <div>
-        <h1 class="text-[10px] font-black uppercase tracking-[0.2em] text-govblue">Regional Analytics Hub</h1>
-        <p class="mt-1 text-2xl font-black text-slate-900 uppercase">Consolidated Transactions Oversight</p>
-        <p class="text-[10px] font-bold text-slate-500 uppercase italic" id="regionHeader">Loading...</p>
-      </div>
+    <div class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.03]" 
+         style="background-image:url('/static/images/denr.jpg'); background-position:center 30%; background-size:500px;" 
+         aria-hidden="true"></div>
 
-      <div class="flex flex-wrap gap-2 no-print">
-        <button onclick="window.print()" class="bg-white border border-slate-300 px-4 py-2 text-[10px] font-black uppercase hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
-          <span class="material-icons-round text-sm">print</span> Print Report
-        </button>
-        <button id="exportBtn" class="bg-govteal text-white px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:brightness-110 flex items-center gap-2 shadow-sm">
-          <span class="material-icons-round text-sm">file_download</span> Export Excel
-        </button>
-      </div>
-    </header>
-
-    <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-6 text-center lg:text-left">
-      <div class="gov-card p-4 shadow-sm"><p class="text-[9px] font-black uppercase text-slate-400">Total Volume</p><p class="mt-1 text-2xl font-black text-slate-900" id="kpiTotalTx">0</p></div>
-      <div class="gov-card p-4 shadow-sm border-t-govteal"><p class="text-[9px] font-black uppercase text-slate-400">Paid Collections</p><p class="mt-1 text-2xl font-black text-govteal" id="kpiPaid">0</p></div>
-      <div class="gov-card p-4 shadow-sm border-t-govamber"><p class="text-[9px] font-black uppercase text-slate-400">Total Pending</p><p class="mt-1 text-2xl font-black text-govamber" id="kpiPending">0</p></div>
-      <div class="gov-card p-4 shadow-sm border-t-blue-700"><p class="text-[9px] font-black uppercase text-slate-400">Gross Revenue</p><p class="mt-1 text-xl font-black text-blue-900" id="kpiAmount">₱0.00</p></div>
-    </section>
-
-    <section class="grid grid-cols-1 gap-6 xl:grid-cols-2 mb-6">
-      <div class="gov-card p-5 shadow-sm border-t-blue-900">
-        <h2 class="text-[10px] font-black uppercase tracking-widest text-govblue mb-4">Volume per Permit Category</h2>
-        <div class="relative h-[250px]"><canvas id="typeBar"></canvas></div>
-      </div>
-      <div class="gov-card p-5 shadow-sm border-t-blue-900">
-        <h2 class="text-[10px] font-black uppercase tracking-widest text-govblue mb-4">Provincial Revenue Distribution</h2>
-        <div class="relative h-[250px]"><canvas id="provDonut"></canvas></div>
-      </div>
-    </section>
-
-    <section class="gov-card p-5 mb-6 shadow-sm border-t-slate-500 no-print">
-      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <div>
-          <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Province</label>
-          <select id="provinceFilter" class="w-full border border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase outline-none focus:border-govblue">
-            <option value="all">All Provinces</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Municipality</label>
-          <select id="municipalityFilter" class="w-full border border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase outline-none focus:border-govblue">
-            <option value="all">All Municipalities</option>
-          </select>
-        </div>
-        <div class="lg:col-span-2">
-          <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Global Search</label>
-          <div class="flex items-center gap-2 border border-slate-300 bg-slate-50 px-3 py-2 focus-within:bg-white focus-within:border-govblue">
-            <span class="material-icons-round text-slate-400 text-sm">search</span>
-            <input id="searchInput" type="text" placeholder="Search Payer, Permit Type, or Ref ID..." class="w-full bg-transparent text-[11px] font-bold uppercase outline-none" />
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <div class="overflow-x-auto gov-card border-t-slate-400 shadow-sm bg-white">
-      <table class="min-w-full text-left">
-        <thead class="bg-slate-50 border-b border-slate-300">
-          <tr class="text-[9px] font-black uppercase tracking-widest text-slate-500">
-            <th class="px-5 py-4">Transaction / Type</th>
-            <th class="px-5 py-4">Location Name</th>
-            <th class="px-5 py-4">Payer Name</th>
-            <th class="px-5 py-4">Date Filed</th>
-            <th class="px-5 py-4 text-center">Status</th>
-            <th class="px-5 py-4 text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody id="txBody" class="divide-y divide-slate-200 text-[11px] font-bold italic"></tbody>
-      </table>
+    <div class="no-print z-20">
+      {% include 'regional/sidenav.html' %}
     </div>
 
-    <p class="text-center text-[9px] text-slate-400 font-black uppercase tracking-[0.5em] mt-12 no-print" id="footerText">Loading...</p>
-  </div>
+    <div class="content-area bg-transparent transition-all z-10 print-wrapper">
+        <main class="flex-1 flex flex-col p-3 gap-2 overflow-y-auto custom-scrollbar">
 
-  <script type="module">
-    import { auth, db } from '/static/js/firebase-config.js';
-    import { collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+            <header class="gov-card p-2 px-3 flex flex-col sm:flex-row sm:justify-between sm:items-center shrink-0 border-b-4 border-b-blue-900 mb-1 no-print">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white shrink-0">
+                        <span class="material-icons-round text-[18px]">receipt_long</span>
+                    </div>
+                    <div class="leading-tight">
+                        <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Consolidated Transactions Oversight</h1>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0 mt-0.5" id="regionHeader">Loading...</p>
+                    </div>
+                </div>
 
-    let allTransactions = [];
-    let barChart, donutChart;
-    let userRegion = '';
-    let userRegionName = '';
-    let userProvinces = [];
-    const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
+                <div class="flex gap-1.5 mt-2 sm:mt-0">
+                    <button onclick="window.print()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+                        <span class="material-icons-round text-[14px]">print</span> Print Report
+                    </button>
+                    <button id="exportBtn" class="gov-btn bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm flex items-center gap-1">
+                        <span class="material-icons-round text-[14px]">file_download</span> Export Excel
+                    </button>
+                </div>
+            </header>
 
-    async function loadUserRegion(user) {
-      try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          userRegion = userData.region || 'IV-A';
-          userRegionName = userData.regionName || 'CALABARZON';
-          userProvinces = userData.provinces || [];
-          
-          document.getElementById('regionHeader').textContent = `Region ${userRegion} ${userRegionName} • System Demo View`;
-          document.getElementById('footerText').textContent = `DENR ${userRegionName} Regional Management Information System • 2026`;
-          
-          console.log('User region loaded:', userRegion, userRegionName, userProvinces);
+            <section class="grid gap-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 shrink-0 mb-1 no-print">
+                <div class="gov-card p-3 shadow-sm flex flex-col justify-between">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500 m-0">Total Volume</p>
+                            <p class="text-2xl font-black text-slate-900 leading-none mt-1 m-0" id="kpiTotalTx">0</p>
+                        </div>
+                        <span class="material-icons-round text-slate-300 text-[24px]">dataset</span>
+                    </div>
+                </div>
+                
+                <div class="gov-card p-3 border-t-4 border-t-emerald-600 shadow-sm flex flex-col justify-between">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-emerald-800 m-0">Paid Collections</p>
+                            <p class="text-2xl font-black text-emerald-700 leading-none mt-1 m-0" id="kpiPaid">0</p>
+                        </div>
+                        <span class="material-icons-round text-emerald-200 text-[24px]">payments</span>
+                    </div>
+                </div>
+                
+                <div class="gov-card p-3 border-t-4 border-t-amber-500 shadow-sm flex flex-col justify-between">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-amber-800 m-0">Total Pending</p>
+                            <p class="text-2xl font-black text-amber-700 leading-none mt-1 m-0" id="kpiPending">0</p>
+                        </div>
+                        <span class="material-icons-round text-amber-200 text-[24px]">schedule</span>
+                    </div>
+                </div>
+
+                <div class="gov-card p-3 border-t-4 border-t-blue-800 shadow-sm flex flex-col justify-between">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-blue-800 m-0">Gross Revenue</p>
+                            <p class="text-xl font-black text-blue-900 leading-none mt-1 m-0 font-mono tracking-tighter" id="kpiAmount">₱0.00</p>
+                        </div>
+                        <span class="material-icons-round text-blue-200 text-[24px]">account_balance</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="grid grid-cols-1 lg:grid-cols-12 gap-2 shrink-0 h-[170px] no-print">
+                <div class="lg:col-span-7 gov-card p-2 flex flex-col overflow-hidden">
+                    <h2 class="text-[9px] font-black uppercase tracking-widest text-blue-900 border-b border-slate-100 pb-1 mb-1 shrink-0">
+                        Volume per Permit Category
+                    </h2>
+                    <div class="flex-1 relative w-full min-h-0">
+                        <canvas id="typeBar"></canvas>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-5 gov-card p-2 flex flex-col overflow-hidden">
+                    <h2 class="text-[9px] font-black uppercase tracking-widest text-blue-900 border-b border-slate-100 pb-1 mb-1 shrink-0">
+                        Provincial Revenue Distribution
+                    </h2>
+                    <div class="flex-1 relative w-full min-h-0">
+                        <canvas id="provDonut"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white mt-1">
+                
+                <div class="p-2 border-b border-slate-200 shrink-0 flex flex-wrap gap-1.5 items-center justify-between bg-slate-50 no-print">
+                    <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1 mr-2 m-0">
+                        <span class="material-icons-round text-[14px]">view_list</span> Regional Masterlist
+                    </h2>
+
+                    <div class="flex items-center gap-1.5">
+                        <div class="relative min-w-[200px]">
+                            <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                            <input type="text" id="searchInput" class="gov-input pl-6 w-full" placeholder="Search Payer, Permit, or Ref...">
+                        </div>
+                        
+                        <select id="provinceFilter" class="gov-input cursor-pointer min-w-[120px]">
+                            <option value="all">All Provinces</option>
+                        </select>
+
+                        <select id="municipalityFilter" class="gov-input cursor-pointer min-w-[120px]">
+                            <option value="all">All Municipalities</option>
+                        </select>
+
+                        <button id="btnClear" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-800 font-bold uppercase text-[9px] rounded-[2px] transition hover:bg-slate-300 shadow-sm">
+                            Reset Filters
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-auto custom-scrollbar relative">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
+                            <tr>
+                                <th class="border-r border-slate-200">Transaction / Type</th>
+                                <th class="border-r border-slate-200">Location Name</th>
+                                <th class="border-r border-slate-200">Payer Name</th>
+                                <th class="border-r border-slate-200">Date Filed</th>
+                                <th class="border-r border-slate-200 text-center w-24">Status</th>
+                                <th class="text-right w-28">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody id="txBody" class="text-[10px] divide-y divide-slate-100">
+                            </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <p class="text-center text-[8px] text-slate-400 font-black uppercase tracking-[0.5em] mt-auto pt-2 no-print italic shrink-0 m-0" id="footerText">Loading...</p>
+
+        </main>
+    </div>
+
+    <script type="module">
+        import { auth, db } from '/static/js/firebase-config.js';
+        import { collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+        let allTransactions = [];
+        let barChart, donutChart;
+        let userRegion = '';
+        let userRegionName = '';
+        let userProvinces = [];
+        const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
+
+        async function loadUserRegion(user) {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    userRegion = userData.region || 'IV-A';
+                    userRegionName = userData.regionName || 'CALABARZON';
+                    userProvinces = userData.provinces || [];
+                    
+                    document.getElementById('regionHeader').textContent = `Region ${userRegion} ${userRegionName} • System Demo View`;
+                    document.getElementById('footerText').textContent = `DENR ${userRegionName} Regional Management Information System • 2026`;
+                }
+            } catch (error) {
+                console.error('Error loading user region:', error);
+            }
         }
-      } catch (error) {
-        console.error('Error loading user region:', error);
-      }
-    }
 
-    async function loadData() {
-      try {
-        const uSnap = await getDocs(collection(db, 'users'));
-        const uMap = {}; 
-        const munSet = new Set();
-        const provSet = new Set();
-        
-        uSnap.forEach(doc => {
-          const d = doc.data();
-          const userProvince = (d.province || '').toUpperCase();
-          const userMunicipality = (d.municipality || '').toUpperCase();
-          
-          uMap[doc.id] = { 
-            name: `${d.firstName || ''} ${d.lastName || ''}`.trim() || d.email || 'Unknown User', 
-            municipality: userMunicipality, 
-            province: userProvince 
-          };
-          
-          // Only add provinces and municipalities from user's region
-          if (userProvinces.length === 0 || userProvinces.includes(userProvince)) {
-            if (userMunicipality) munSet.add(userMunicipality);
-            if (userProvince) provSet.add(userProvince);
-          }
-        });
-        
-        // Populate province dropdown with user's provinces  
-        const provFilter = document.getElementById("provinceFilter");
-        provFilter.innerHTML = '<option value="all">All Provinces</option>';
-        if (userProvinces.length > 0) {
-          userProvinces.forEach(p => {
-            provFilter.innerHTML += `<option value="${p}">${p}</option>`;
-          });
-        } else {
-          Array.from(provSet).sort().forEach(p => {
-            provFilter.innerHTML += `<option value="${p}">${p}</option>`;
-          });
+        async function loadData() {
+            try {
+                const uSnap = await getDocs(collection(db, 'users'));
+                const uMap = {}; 
+                const munSet = new Set();
+                const provSet = new Set();
+                
+                uSnap.forEach(doc => {
+                    const d = doc.data();
+                    const userProvince = (d.province || '').toUpperCase();
+                    const userMunicipality = (d.municipality || '').toUpperCase();
+                    
+                    uMap[doc.id] = { 
+                        name: `${d.firstName || ''} ${d.lastName || ''}`.trim() || d.email || 'Unknown User', 
+                        municipality: userMunicipality, 
+                        province: userProvince 
+                    };
+                    
+                    if (userProvinces.length === 0 || userProvinces.includes(userProvince)) {
+                        if (userMunicipality) munSet.add(userMunicipality);
+                        if (userProvince) provSet.add(userProvince);
+                    }
+                });
+                
+                const provFilter = document.getElementById("provinceFilter");
+                provFilter.innerHTML = '<option value="all">All Provinces</option>';
+                if (userProvinces.length > 0) {
+                    userProvinces.forEach(p => { provFilter.innerHTML += `<option value="${p}">${p}</option>`; });
+                } else {
+                    Array.from(provSet).sort().forEach(p => { provFilter.innerHTML += `<option value="${p}">${p}</option>`; });
+                }
+                
+                const munFilter = document.getElementById("municipalityFilter");
+                munFilter.innerHTML = '<option value="all">All Municipalities</option>';
+                Array.from(munSet).sort().forEach(m => munFilter.innerHTML += `<option value="${m}">${m}</option>`);
+
+                const tSnap = await getDocs(collection(db, 'transactions'));
+                allTransactions = []; 
+                
+                tSnap.forEach(doc => {
+                    const d = doc.data();
+                    const user = uMap[d.userId];
+                    
+                    if (user) {
+                        const itemProvince = user.province;
+                        if (userProvinces.length === 0 || userProvinces.includes(itemProvince)) {
+                            allTransactions.push({
+                                id: doc.id, 
+                                payer: user.name, 
+                                municipality: user.municipality, 
+                                province: itemProvince,
+                                type: d.transactionType || d.type || 'Other', 
+                                status: d.status || 'Pending',
+                                amount: Number(d.amount) || 0,
+                                date: d.date || d.createdAt?.toDate().toISOString().split('T')[0] || 'N/A'
+                            });
+                        }
+                    }
+                });
+                
+                render();
+            } catch (e) { 
+                console.error('Error loading transactions:', e); 
+                allTransactions = [];
+                render();
+            }
         }
-        
-        // Populate municipality dropdown
-        const munFilter = document.getElementById("municipalityFilter");
-        munFilter.innerHTML = '<option value="all">All Municipalities</option>';
-        Array.from(munSet).sort().forEach(m => munFilter.innerHTML += `<option value="${m}">${m}</option>`);
 
-        // Fetch real transactions from Firebase only
-        const tSnap = await getDocs(collection(db, 'transactions'));
-        allTransactions = []; // Start with empty array - NO DUMMY DATA
-        
-        tSnap.forEach(doc => {
-          const d = doc.data();
-          const user = uMap[d.userId];
-          
-          if (user) {
-            const itemProvince = user.province;
+        function render() {
+            const q = document.getElementById("searchInput").value.toLowerCase();
+            const pF = document.getElementById("provinceFilter").value;
+            const mF = document.getElementById("municipalityFilter").value;
+
+            const filtered = allTransactions.filter(t => {
+                const mP = pF === 'all' || t.province === pF;
+                const mM = mF === 'all' || t.municipality === mF;
+                const mS = !q || t.payer.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || t.municipality.toLowerCase().includes(q) || t.type.toLowerCase().includes(q);
+                return mP && mM && mS;
+            });
+
+            const txBody = document.getElementById("txBody");
+            if (filtered.length === 0) {
+                txBody.innerHTML = `<tr><td colspan="6" class="py-10 text-center bg-white"><div class="flex flex-col items-center justify-center opacity-40"><span class="material-icons-round text-4xl mb-2 text-slate-400">search_off</span><p class="font-black uppercase text-[10px] tracking-widest text-slate-600 m-0">No Data Found</p></div></td></tr>`;
+            } else {
+                // Translated logic mapping for Tailwind Status Badges
+                const colors = { 
+                    'paid': 'text-emerald-700 bg-emerald-50 border-emerald-200', 
+                    'pending': 'text-amber-700 bg-amber-50 border-amber-200',
+                    'rejected': 'text-rose-700 bg-rose-50 border-rose-200'
+                };
+
+                // UPDATED ROW TEMPLATE TO USE <tr> FOR COMPACT TABLES
+                txBody.innerHTML = filtered.map(t => {
+                    const statusKey = t.status.toLowerCase();
+                    const statusColor = colors[statusKey] || 'text-slate-600 bg-slate-50 border-slate-200';
+                    return `
+                        <tr class="hover:bg-blue-50 transition-all">
+                            <td class="px-4 py-2 align-middle border-r border-slate-100">
+                                <div class="font-black text-blue-900 uppercase">#${t.id.substring(0,8)}</div>
+                                <div class="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">${t.type}</div>
+                            </td>
+                            <td class="px-4 py-2 align-middle border-r border-slate-100">
+                                <div class="font-bold text-slate-700 uppercase">${t.municipality}</div>
+                                <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">${t.province}</div>
+                            </td>
+                            <td class="px-4 py-2 align-middle font-black text-slate-900 uppercase border-r border-slate-100">${t.payer}</td>
+                            <td class="px-4 py-2 align-middle font-mono text-slate-600 border-r border-slate-100">${t.date}</td>
+                            <td class="px-4 py-2 align-middle text-center border-r border-slate-100">
+                                <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border w-full max-w-[80px] text-center ${statusColor}">${t.status}</span>
+                            </td>
+                            <td class="px-4 py-2 align-middle text-right font-black text-emerald-700 font-mono tracking-tighter">${peso.format(t.amount)}</td>
+                        </tr>
+                    `;
+                }).join("");
+            }
+
+            document.getElementById("kpiTotalTx").textContent = filtered.length;
+            document.getElementById("kpiPaid").textContent = filtered.filter(x => x.status === 'Paid').length;
+            document.getElementById("kpiPending").textContent = filtered.filter(x => x.status === 'Pending').length;
+            document.getElementById("kpiAmount").textContent = peso.format(filtered.filter(x => x.status === 'Paid').reduce((s, x) => s + x.amount, 0));
+
+            updateCharts(filtered);
+        }
+
+        function updateCharts(data) {
+            Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+            Chart.defaults.font.size = 9;
+            Chart.defaults.color = "#64748b";
+
+            // Update Volume per Permit Category chart
+            const typeMap = {}; 
+            data.forEach(t => typeMap[t.type] = (typeMap[t.type] || 0) + 1);
             
-            // Only include transactions from user's provinces
-            if (userProvinces.length === 0 || userProvinces.includes(itemProvince)) {
-              allTransactions.push({
-                id: doc.id, 
-                payer: user.name, 
-                municipality: user.municipality, 
-                province: itemProvince,
-                type: d.transactionType || d.type || 'Other', 
-                status: d.status || 'Pending',
-                amount: Number(d.amount) || 0, 
-              });
+            if (barChart) barChart.destroy();
+            const typeLabels = Object.keys(typeMap);
+            const typeData = Object.values(typeMap);
+            
+            if (typeLabels.length === 0) {
+                typeLabels.push('No Data');
+                typeData.push(0);
             }
-          }
-        });
-        
-        console.log(`Loaded ${allTransactions.length} transactions for region ${userRegion}`);
-        render();
-      } catch (e) { 
-          console.error('Error loading transactions:', e); 
-          allTransactions = []; // Empty array if error - NO DUMMY DATA
-          render();
-      }
-    }
+            
+            barChart = new Chart(document.getElementById("typeBar"), { 
+                type: 'bar', 
+                data: { 
+                    labels: typeLabels, 
+                    datasets: [{ 
+                        data: typeData, 
+                        backgroundColor: '#1e3a8a',
+                        borderRadius: 2,
+                        barPercentage: 0.5
+                    }] 
+                }, 
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    layout: { padding: 5 },
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { display: false } },
+                        x: { grid: { display: false } }
+                    }
+                } 
+            });
 
-    function render() {
-      const q = document.getElementById("searchInput").value.toLowerCase();
-      const pF = document.getElementById("provinceFilter").value;
-      const mF = document.getElementById("municipalityFilter").value;
-
-      const filtered = allTransactions.filter(t => {
-        const mP = pF === 'all' || t.province === pF;
-        const mM = mF === 'all' || t.municipality === mF;
-        const mS = !q || t.payer.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || t.municipality.toLowerCase().includes(q) || t.type.toLowerCase().includes(q);
-        return mP && mM && mS;
-      });
-
-      const txBody = document.getElementById("txBody");
-      if (filtered.length === 0) {
-        txBody.innerHTML = `<tr><td colspan="6" class="py-20 text-center opacity-30"><span class="material-icons-round text-5xl">search_off</span><p class="mt-2 text-[11px] font-black uppercase">No Data Found</p></td></tr>`;
-      } else {
-        txBody.innerHTML = filtered.map(t => `
-          <tr class="hover:bg-slate-50 transition-all">
-            <td class="px-5 py-4"><span class="text-govblue uppercase font-black">#${t.id.substring(0,8)}</span><br/><span class="text-slate-400 text-[9px] uppercase font-normal">${t.type}</span></td>
-            <td class="px-5 py-4 uppercase"><span class="text-slate-800">${t.municipality}</span><br/><span class="text-slate-400 text-[9px] uppercase font-normal">${t.province}</span></td>
-            <td class="px-5 py-4 uppercase">${t.payer}</td>
-            <td class="px-5 py-4 text-slate-500 font-normal">${t.date}</td>
-            <td class="px-5 py-4 text-center"><span class="px-3 py-1 border text-[9px] uppercase ${t.status === 'Paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}">${t.status}</span></td>
-            <td class="px-5 py-4 text-right font-black text-slate-900">${peso.format(t.amount)}</td>
-          </tr>
-        `).join("");
-      }
-
-      document.getElementById("kpiTotalTx").textContent = filtered.length;
-      document.getElementById("kpiPaid").textContent = filtered.filter(x => x.status === 'Paid').length;
-      document.getElementById("kpiPending").textContent = filtered.filter(x => x.status === 'Pending').length;
-      document.getElementById("kpiAmount").textContent = peso.format(filtered.filter(x => x.status === 'Paid').reduce((s, x) => s + x.amount, 0));
-
-      updateCharts(filtered);
-    }
-
-    function updateCharts(data) {
-      // Update Volume per Permit Category chart
-      const typeMap = {}; 
-      data.forEach(t => typeMap[t.type] = (typeMap[t.type] || 0) + 1);
-      
-      if (barChart) barChart.destroy();
-      const typeLabels = Object.keys(typeMap);
-      const typeData = Object.values(typeMap);
-      
-      if (typeLabels.length === 0) {
-        typeLabels.push('No Data');
-        typeData.push(0);
-      }
-      
-      barChart = new Chart(document.getElementById("typeBar"), { 
-        type: 'bar', 
-        data: { 
-          labels: typeLabels, 
-          datasets: [{ 
-            data: typeData, 
-            backgroundColor: '#1e3a8a',
-            label: 'Transaction Count'
-          }] 
-        }, 
-        options: { 
-          responsive: true, 
-          maintainAspectRatio: false, 
-          plugins: { 
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  return context.parsed.y + ' transactions';
+            // Update Provincial Revenue Distribution chart
+            const provMap = {}; 
+            data.forEach(t => { 
+                if(t.status === 'Paid' && t.amount > 0) {
+                    provMap[t.province] = (provMap[t.province] || 0) + t.amount; 
                 }
-              }
+            });
+            
+            if (donutChart) donutChart.destroy();
+            const provLabels = Object.keys(provMap);
+            const provData = Object.values(provMap);
+            
+            if (provLabels.length === 0) {
+                provLabels.push('No Revenue Data');
+                provData.push(0);
             }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                stepSize: 1
-              }
-            }
-          }
-        } 
-      });
-
-      // Update Provincial Revenue Distribution chart
-      const provMap = {}; 
-      data.forEach(t => { 
-        if(t.status === 'Paid' && t.amount > 0) {
-          provMap[t.province] = (provMap[t.province] || 0) + t.amount; 
+            
+            donutChart = new Chart(document.getElementById("provDonut"), { 
+                type: 'doughnut', 
+                data: { 
+                    labels: provLabels, 
+                    datasets: [{ 
+                        data: provData, 
+                        backgroundColor: ['#1e3a8a', '#059669', '#d97706', '#be123c', '#4338ca'],
+                        borderWidth: 0
+                    }] 
+                }, 
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    cutout: '65%',
+                    layout: { padding: 5 },
+                    plugins: { 
+                        legend: { position: 'right', labels: { boxWidth: 8, font: { weight: 'bold' } } }
+                    } 
+                } 
+            });
         }
-      });
-      
-      if (donutChart) donutChart.destroy();
-      const provLabels = Object.keys(provMap);
-      const provData = Object.values(provMap);
-      
-      if (provLabels.length === 0) {
-        provLabels.push('No Revenue Data');
-        provData.push(0);
-      }
-      
-      donutChart = new Chart(document.getElementById("provDonut"), { 
-        type: 'doughnut', 
-        data: { 
-          labels: provLabels, 
-          datasets: [{ 
-            data: provData, 
-            backgroundColor: ['#1e3a8a', '#059669', '#d97706', '#be123c', '#4338ca', '#7c2d12', '#0f766e']
-          }] 
-        }, 
-        options: { 
-          responsive: true, 
-          maintainAspectRatio: false, 
-          plugins: { 
-            legend: { 
-              position: 'bottom', 
-              labels: { 
-                boxWidth: 10, 
-                font: { size: 9 },
-                generateLabels: function(chart) {
-                  const data = chart.data;
-                  if (data.labels.length && data.datasets.length) {
-                    return data.labels.map((label, i) => ({
-                      text: label + ': ' + peso.format(data.datasets[0].data[i]),
-                      fillStyle: data.datasets[0].backgroundColor[i],
-                      StrokeStyle: data.datasets[0].backgroundColor[i],
-                      index: i
-                    }));
-                  }
-                  return [];
-                }
-              }
-            },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  return context.label + ': ' + peso.format(context.parsed);
-                }
-              }
+
+        document.getElementById("provinceFilter").onchange = render;
+        document.getElementById("municipalityFilter").onchange = render;
+        document.getElementById("searchInput").oninput = render;
+        
+        document.getElementById("btnClear").addEventListener("click", () => {
+            document.getElementById("searchInput").value = "";
+            document.getElementById("provinceFilter").value = "all";
+            document.getElementById("municipalityFilter").value = "all";
+            render();
+        });
+
+        // Initialize App
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                await loadUserRegion(user);
+                await loadData();
+            } else {
+                window.location.href = '/login';
             }
-          } 
-        } 
-      });
-    }
-
-    document.getElementById("provinceFilter").onchange = render;
-    document.getElementById("municipalityFilter").onchange = render;
-    document.getElementById("searchInput").oninput = render;
-
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        await loadUserRegion(user);
-        await loadData();
-      } else {
-        window.location.href = '/login';
-      }
-    });
-  </script>
+        });
+    </script>
 </body>
 </html>
