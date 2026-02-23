@@ -45,6 +45,18 @@ app.register_blueprint(regional_routes.bp)
 app.register_blueprint(superadmin_routes.bp)
 app.register_blueprint(national_routes.bp)
 
+
+# Jinja filter for date formatting
+@app.template_filter('datetimeformat')
+def datetimeformat(value, format='%b %d, %Y'):
+    from datetime import datetime
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except Exception:
+            return value
+    return value.strftime(format)
+
 # Route for disabled account page
 @app.route('/account-disabled')
 def account_disabled():

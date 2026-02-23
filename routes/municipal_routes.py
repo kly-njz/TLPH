@@ -117,20 +117,18 @@ def hrm_attendance():
 @bp.route('/holiday')
 @role_required('municipal','municipal_admin')
 def hrm_holiday():
+
     # --- Calendarific integration ---
-    import calendarific
+    import requests
     api_key = "IXURogg3lF44kINLW5AxDlIH0Pd33BGl"
-    c = calendarific.Client(api_key)
     from datetime import datetime
     year = datetime.now().year
-    # Fetch national holidays for the Philippines
+    holidays = []
     try:
-        response = c.holidays({
-            'country': 'PH',
-            'year': year,
-            'type': 'national'
-        })
-        holidays = response['response']['holidays']
+        url = f"https://calendarific.com/api/v2/holidays?api_key={api_key}&country=PH&year={year}&type=national"
+        resp = requests.get(url)
+        if resp.status_code == 200:
+            holidays = resp.json().get('response', {}).get('holidays', [])
     except Exception as e:
         holidays = []
     # Example local holidays (replace with DB or config as needed)
