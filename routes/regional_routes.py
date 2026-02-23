@@ -131,12 +131,14 @@ def accounting_dashboard_view():
     # Fetch regional fund transfers for this region
     regional_funds = []
     try:
+        print(f"[DEBUG] Fetching funds for region: {user_region}")
         funds_query = db.collection('regional_fund_distribution').where('region', '==', user_region).order_by('date', direction=firestore.Query.DESCENDING).stream()
         for fund_doc in funds_query:
             fund = fund_doc.to_dict()
             regional_funds.append(fund)
-    except Exception:
-        pass
+        print(f"[DEBUG] Fetched regional_funds: {regional_funds}")
+    except Exception as e:
+        print(f"[DEBUG] Error fetching regional funds: {e}")
     return render_template('regional/accounting/dashboard-regional.html', finance=finance_data, municipalities=municipalities, regional_funds=regional_funds, user_region=user_region)
 
 @bp.route('/accounting/distribute-fund', methods=['POST'])
