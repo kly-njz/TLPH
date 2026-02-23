@@ -52,9 +52,13 @@ def datetimeformat(value, format='%b %d, %Y'):
     from datetime import datetime
     if isinstance(value, str):
         try:
-            value = datetime.fromisoformat(value)
+            # Calendarific returns ISO as 'YYYY-MM-DD'
+            value = datetime.strptime(value, '%Y-%m-%d')
         except Exception:
-            return value
+            try:
+                value = datetime.fromisoformat(value)
+            except Exception:
+                return value
     return value.strftime(format)
 
 # Route for disabled account page

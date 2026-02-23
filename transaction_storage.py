@@ -1,3 +1,18 @@
+def add_holiday_to_firestore(date_iso, name, description, holiday_type, office_status='closed', open_time='', close_time=''):
+    """Add a holiday record to Firestore"""
+    db = firestore.client()
+    doc_id = f"{date_iso}|{name}"
+    holiday = {
+        'date': date_iso,
+        'name': name,
+        'description': description,
+        'type': holiday_type,
+        'office_status': office_status,
+        'open_time': open_time,
+        'close_time': close_time
+    }
+    db.collection('holidays').document(doc_id).set(holiday)
+    return doc_id
 from datetime import datetime
 from firebase_admin import firestore
 

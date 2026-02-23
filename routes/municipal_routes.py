@@ -1,3 +1,20 @@
+from transaction_storage import add_holiday_to_firestore
+
+@bp.route('/api/municipal/holiday/add', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def add_holiday():
+    data = request.json
+    date_iso = data.get('date')
+    name = data.get('name')
+    description = data.get('description', '')
+    holiday_type = data.get('type', 'National Holiday')
+    office_status = data.get('office_status', 'closed')
+    open_time = data.get('open_time', '')
+    close_time = data.get('close_time', '')
+    if not date_iso or not name:
+        return jsonify({'success': False, 'error': 'Missing date or name'}), 400
+    doc_id = add_holiday_to_firestore(date_iso, name, description, holiday_type, office_status, open_time, close_time)
+    return jsonify({'success': True, 'doc_id': doc_id})
 # Add this route at the end of the file:
 #
 # @bp.route('/municipal-profile-update')
