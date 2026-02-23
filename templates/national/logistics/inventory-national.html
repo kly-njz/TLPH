@@ -88,11 +88,54 @@
         </section>
 
         <section class="gov-card flex-1 min-h-[250px] flex flex-col overflow-hidden bg-white">
-          <div class="p-2 border-b border-slate-200 shrink-0 flex justify-between items-center bg-slate-50">
-            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+          
+          <div class="p-2 border-b border-slate-200 shrink-0 flex flex-col lg:flex-row lg:items-center justify-between gap-2 bg-slate-50">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1 shrink-0">
                 <span class="material-icons-round text-[14px]">view_list</span> Master List Records
             </h2>
-            <span class="text-[9px] text-slate-500 font-bold uppercase">Showing {{ inventory_records|length|default('3') }} entries</span>
+            <div class="flex flex-wrap items-center gap-1.5 w-full lg:w-auto">
+              <div class="relative flex-1 lg:flex-none">
+                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                <input type="text" id="searchInventory" oninput="applyLiveFilter()" placeholder="Search description or location..." class="gov-input pl-6 w-full lg:w-56 h-7">
+              </div>
+              <select id="filterCategory" onchange="applyLiveFilter()" class="gov-input h-7 cursor-pointer flex-1 lg:flex-none">
+                <option value="all">All Categories</option>
+                <option value="chemical inventory">Chemical Inventory</option>
+                <option value="natural resources">Natural Resources</option>
+                <option value="protected area">Protected Area</option>
+                <option value="biodiversity inventory">Biodiversity Inventory</option>
+              </select>
+              
+              <select id="filterRegion" onchange="applyLiveFilter()" class="gov-input h-7 cursor-pointer flex-1 lg:flex-none">
+                <option value="all">All Regions</option>
+                <option value="ncr">NCR - National Capital Region</option>
+                <option value="car">CAR - Cordillera Administrative Region</option>
+                <option value="region i">Region I - Ilocos Region</option>
+                <option value="region ii">Region II - Cagayan Valley</option>
+                <option value="region iii">Region III - Central Luzon</option>
+                <option value="region iv-a">Region IV-A - CALABARZON</option>
+                <option value="mimaropa">MIMAROPA Region</option>
+                <option value="region v">Region V - Bicol Region</option>
+                <option value="region vi">Region VI - Western Visayas</option>
+                <option value="region vii">Region VII - Central Visayas</option>
+                <option value="region viii">Region VIII - Eastern Visayas</option>
+                <option value="region ix">Region IX - Zamboanga Peninsula</option>
+                <option value="region x">Region X - Northern Mindanao</option>
+                <option value="region xi">Region XI - Davao Region</option>
+                <option value="region xii">Region XII - SOCCSKSARGEN</option>
+                <option value="region xiii">Region XIII - Caraga</option>
+                <option value="barmm">BARMM - Bangsamoro Autonomous Region</option>
+              </select>
+
+              <button onclick="clearInventoryFilters()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 h-7 flex items-center shadow-sm">
+                Clear
+              </button>
+            </div>
+          </div>
+          
+          <div class="bg-slate-100 px-3 py-1 border-b border-slate-200 text-[9px] text-slate-500 font-bold uppercase flex justify-between shrink-0">
+             <span>Asset Database</span>
+             <span id="visibleCountDisplay">Showing {{ inventory_records|length|default('2') }} entries</span>
           </div>
 
           <div class="flex-1 overflow-auto custom-scrollbar">
@@ -111,7 +154,7 @@
                 
                 {% if inventory_records and inventory_records|length > 0 %}
                   {% for record in inventory_records %}
-                  <tr class="hover:bg-blue-50 transition">
+                  <tr class="hover:bg-blue-50 transition data-row">
                     <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">{{ record.category }}</td>
                     <td class="text-slate-600 border-r border-slate-100">{{ record.description }}</td>
                     <td class="font-mono font-black text-slate-900 border-r border-slate-100 text-center">{{ record.quantity }}</td>
@@ -126,7 +169,7 @@
                   </tr>
                   {% endfor %}
                 {% else %}
-                  <tr class="hover:bg-blue-50 transition">
+                  <tr class="hover:bg-blue-50 transition data-row">
                     <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">Chemical Inventory</td>
                     <td class="text-slate-600 border-r border-slate-100">Ammonium Nitrate (Lab Grade)</td>
                     <td class="font-mono font-black text-slate-900 border-r border-slate-100 text-center">50</td>
@@ -139,7 +182,7 @@
                       </div>
                     </td>
                   </tr>
-                  <tr class="hover:bg-blue-50 transition">
+                  <tr class="hover:bg-blue-50 transition data-row">
                     <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">Protected Area</td>
                     <td class="text-slate-600 border-r border-slate-100">Mangrove Propagules</td>
                     <td class="font-mono font-black text-slate-900 border-r border-slate-100 text-center">1500</td>
@@ -153,6 +196,10 @@
                     </td>
                   </tr>
                 {% endif %}
+                
+                <tr id="emptyStateRow" style="display:none;">
+                  <td colspan="6" class="text-center py-8 text-slate-400 font-black uppercase tracking-widest italic text-[10px]">No records match your filters.</td>
+                </tr>
 
               </tbody>
             </table>
@@ -185,23 +232,23 @@
 
         <div>
           <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Item Description</label>
-          <input id="description" type="text" placeholder="Specific name or details" class="gov-input w-full">
+          <input id="description" type="text" placeholder="Specific name or details" class="gov-input w-full" required>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Quantity</label>
-            <input id="quantity" type="number" placeholder="0" class="gov-input w-full font-mono">
+            <input id="quantity" type="number" placeholder="0" class="gov-input w-full font-mono" required>
           </div>
           <div>
             <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Region</label>
-            <input id="region" type="text" placeholder="e.g. NCR" class="gov-input w-full uppercase">
+            <input id="region" type="text" placeholder="e.g. NCR" class="gov-input w-full uppercase" required>
           </div>
         </div>
 
         <div>
           <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Municipality</label>
-          <input id="municipality" type="text" placeholder="Location name" class="gov-input w-full uppercase">
+          <input id="municipality" type="text" placeholder="Location name" class="gov-input w-full uppercase" required>
         </div>
 
         <div class="flex justify-end gap-2 pt-3 border-t border-slate-200 mt-2">
@@ -213,7 +260,57 @@
   </div>
 
   <script>
-    // --- UI LOGIC (RESTORED EXACTLY) ---
+    // --- LIVE FILTER ENGINE ---
+    function applyLiveFilter() {
+      const searchVal = document.getElementById('searchInventory').value.toLowerCase();
+      const catVal = document.getElementById('filterCategory').value.toLowerCase();
+      const regVal = document.getElementById('filterRegion').value.toLowerCase();
+      
+      const rows = document.querySelectorAll('#inventoryBody tr.data-row');
+      let visibleCount = 0;
+
+      rows.forEach(row => {
+        const catText = row.cells[0].innerText.toLowerCase();
+        const descText = row.cells[1].innerText.toLowerCase();
+        const regText = row.cells[3].innerText.toLowerCase();
+        const muniText = row.cells[4].innerText.toLowerCase();
+
+        // Check if text matches search box (checks both description and municipality)
+        const matchSearch = searchVal === '' || descText.includes(searchVal) || muniText.includes(searchVal);
+        // Check dropdowns
+        const matchCat = catVal === 'all' || catText.includes(catVal);
+        const matchReg = regVal === 'all' || regText.includes(regVal);
+
+        if (matchSearch && matchCat && matchReg) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      // Handle Empty State Message
+      const emptyRow = document.getElementById('emptyStateRow');
+      if (emptyRow) {
+        emptyRow.style.display = visibleCount === 0 ? '' : 'none';
+      }
+
+      // Update Showing X entries text
+      const countDisplay = document.getElementById('visibleCountDisplay');
+      if (countDisplay) {
+        countDisplay.innerText = `Showing ${visibleCount} entries`;
+      }
+    }
+
+    function clearInventoryFilters() {
+      document.getElementById('searchInventory').value = '';
+      document.getElementById('filterCategory').value = 'all';
+      document.getElementById('filterRegion').value = 'all';
+      applyLiveFilter();
+    }
+
+
+    // --- MODAL & ROW LOGIC ---
     let editingRow = null;
     const inventoryBody = document.getElementById('inventoryBody');
     const inventoryForm = document.getElementById('inventoryForm');
@@ -252,8 +349,8 @@
         editingRow.cells[3].innerText = region;
         editingRow.cells[4].innerText = municipality;
       } else {
-        const row = inventoryBody.insertRow();
-        row.className = "hover:bg-blue-50 transition";
+        const row = document.createElement('tr');
+        row.className = "hover:bg-blue-50 transition data-row"; // Must include data-row for filtering
         row.innerHTML = `
           <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">${category}</td>
           <td class="text-slate-600 border-r border-slate-100">${description}</td>
@@ -267,8 +364,13 @@
             </div>
           </td>
         `;
+        // Insert before the empty state row
+        const emptyRow = document.getElementById('emptyStateRow');
+        inventoryBody.insertBefore(row, emptyRow);
       }
+      
       closeModal();
+      applyLiveFilter(); // Re-apply filters so the row count updates and new row is filtered correctly
     });
 
     function editRow(btn){
@@ -284,39 +386,44 @@
     function deleteRow(btn){
       if(confirm("Confirm removal of this inventory record?")){
         btn.closest("tr").remove();
+        applyLiveFilter(); // Re-evaluate visible count
       }
     }
 
+
     // --- CHARTS CONFIG ---
-    Chart.defaults.font.family = "Verdana, Arial, sans-serif";
-    Chart.defaults.font.size = 8;
-    Chart.defaults.color = "#64748b";
+    window.addEventListener('load', function() {
+        Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+        Chart.defaults.font.size = 8;
+        Chart.defaults.color = "#64748b";
 
-    const sharedOpts = { 
-        responsive: true, 
-        maintainAspectRatio: false, 
-        layout: { padding: 5 },
-        plugins: { legend: { position: 'right', labels: { boxWidth: 6, font: { weight: 'bold' } } } }
-    };
+        const sharedOpts = { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            layout: { padding: 5 },
+            plugins: { legend: { position: 'right', labels: { boxWidth: 6, font: { weight: 'bold' } } } }
+        };
 
-    // Category Doughnut
-    new Chart(document.getElementById('categoryChart'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Chemical', 'Nat. Res.', 'Protected', 'Bio'],
-        datasets: [{ data: [45, 82, 15, 20], backgroundColor: ['#1e40af', '#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }]
-      },
-      options: { ...sharedOpts, cutout: '70%' }
-    });
+        new Chart(document.getElementById('categoryChart'), {
+          type: 'doughnut',
+          data: {
+            labels: ['Chemical', 'Nat. Res.', 'Protected', 'Bio'],
+            datasets: [{ data: [45, 82, 15, 20], backgroundColor: ['#1e40af', '#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }]
+          },
+          options: { ...sharedOpts, cutout: '70%' }
+        });
 
-    // Region Volume Bar
-    new Chart(document.getElementById('regionChart'), {
-      type: 'bar',
-      data: {
-        labels: ['NCR', 'IV-A', 'III', 'VII', 'XI'],
-        datasets: [{ label: 'Stock Volume', data: [5000, 3200, 2100, 1800, 1500], backgroundColor: '#475569', borderRadius: 2 }]
-      },
-      options: { ...sharedOpts, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
+        new Chart(document.getElementById('regionChart'), {
+          type: 'bar',
+          data: {
+            labels: ['NCR', 'IV-A', 'III', 'VII', 'XI'],
+            datasets: [{ label: 'Stock Volume', data: [5000, 3200, 2100, 1800, 1500], backgroundColor: '#475569', borderRadius: 2 }]
+          },
+          options: { ...sharedOpts, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
+        });
+
+        // Initialize counters on load
+        applyLiveFilter();
     });
   </script>
 </body>

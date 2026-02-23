@@ -626,6 +626,11 @@ def user_inventory_national_view():
 def user_management_national_view():
     return render_template('national/system/user-national.html')
 
+@bp.route('/sales-return')
+@role_required('national', 'national_admin')
+def sales_return_national_view():
+    return render_template('national/logistics/sales-return.html')
+
 
 @bp.route('/products-national')
 @role_required('national', 'national_admin')

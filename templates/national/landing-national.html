@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TLPH | National Government Dashboard</title>
+  <title>National Dashboard | Command Center</title>
   
-  <!-- Instant auth check -->
-  <style>html{visibility:hidden;opacity:0}html.show{visibility:visible;opacity:1}</style>
+  <style>
+    html { visibility: hidden; opacity: 0; }
+    html.show { visibility: visible; opacity: 1; }
+  </style>
   <script>
     (function() {
       fetch('/api/check-session', {method: 'GET', credentials: 'same-origin'})
@@ -14,8 +16,8 @@
         .then(d => {
           if (d.authenticated && (d.role === 'national' || d.role === 'national_admin')) {
             document.documentElement.classList.add('show');
-          } else {
-            window.location.replace('/login');
+          } else { 
+            window.location.replace('/login'); 
           }
         })
         .catch(() => window.location.replace('/login'));
@@ -24,344 +26,524 @@
   
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   <style>
-    body { 
-      font-family: 'Inter', sans-serif; 
-      background-color: #f2f5f7; color: #0f172a; font-size: 13px; 
-    }
+    /* Government Standard Typography & Layout (STRICT COMPACT) */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; margin: 0; color: #1e293b; }
 
-    :root { 
-      --gov-navy: #002e5d;
-      --gov-emerald: #065f46; 
-    }
+    /* Compact Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #1e40af; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+
+    /* Dense Table Formatting */
+    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #475569; background: #f8fafc; border-bottom: 2px solid #cbd5e1; padding: 6px 8px !important; position: sticky; top: 0; z-index: 10; }
+    td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
     
-    .sidebar-container {
-       width: 260px; 
-       height: 100vh; 
-       position: fixed;
-       left: 0; 
-       top: 0; z-index: 50;
-    }
+    .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; }
+    .gov-header-ribbon { background: #002e5d; color: white; padding: 6px 12px; font-weight: 800; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; border-radius: 2px 2px 0 0; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; }
 
-    .main-wrapper {
-       margin-left: 260px; 
-       padding: 24px; 
-       min-height: 100vh; 
-    }
-    
-    .card { 
-       background: #ffffff; 
-       border: 1px solid #d1d5db; 
-       border-radius: 4px; 
-       box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    }
+    /* FIXED POSITIONING FOR DASHBOARD CONTENT */
+    .content-area { position: absolute; top: 0; right: 0; bottom: 0; left: 260px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+    @media (max-width: 1024px) { .content-area { left: 0; } }
 
-    .gov-header {
-       background: var(--gov-navy); 
-       color: white; 
-       padding: 12px 20px; 
-       font-weight: 800; 
-       text-transform: uppercase; 
-       letter-spacing: 0.1em; 
-       font-size: 11px; 
-    }
-      
-    th { 
-       background: #f8fafc; 
-       color: #475569; 
-       text-transform: uppercase; 
-       font-size: 10px; 
-       font-weight: 800; 
-       padding: 12px 16px; 
-       border-bottom: 2px solid #e2e8f0; 
-       text-align: left;
-    }
-
-    td { 
-       padding: 12px 16px; 
-       border-bottom: 1px solid #f1f5f9; 
-       vertical-align: middle; 
-    }
-    
-    .status-badge { 
-       padding: 2px 8px; 
-       font-size: 9px; 
-       font-weight: 800; 
-       text-transform: uppercase; 
-       border: 1px solid transparent; 
-       border-radius: 2px; 
-    }
-
-    .table-scroll { 
-       overflow-x: auto; 
-       width: 100%; 
-      }
-
-    @media (max-width: 1024px) { .sidebar-container { display: none; } .main-wrapper { margin-left: 0; } }
-    
-    /* Print Styles */
     @media print {
-      .sidebar-container, 
-      button, 
-      .no-print {
-        display: none !important;
-      }
-      
-      .main-wrapper {
-        margin-left: 0 !important;
-        padding: 0 !important;
-      }
-      
-      .card {
-        break-inside: avoid;
-        page-break-inside: avoid;
-      }
-      
-      body {
-        background: white !important;
-      }
+      .no-print { display: none !important; }
+      .content-area { left: 0 !important; position: static !important; display: block !important; width: 100% !important; overflow: visible !important; }
+      .gov-card { border: 1px solid #000 !important; box-shadow: none !important; break-inside: avoid; }
+      .scrollable-table-container { max-height: none !important; overflow: visible !important; }
     }
+
+    /* Fixed height containers for grid tables */
+    .scrollable-table-container { flex: 1; overflow-y: auto; min-height: 200px; max-height: 250px; }
   </style>
 </head>
-<body class="min-h-screen">
+<body class="h-screen overflow-hidden bg-slate-100">
 
-  <aside class="sidebar-container hidden lg:block">
+  <div class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.03]" style="background-image:url('/static/images/denr.jpg'); background-position:center 30%; background-size:520px;"></div>
+
+  <div class="no-print z-20">
     {% include 'national/sidenav-national.html' %}
-  </aside>
+  </div>
 
-  <div class="main-wrapper">
-    <header class="mb-6 flex flex-col lg:flex-row lg:items-center justify-between border-b border-slate-300 pb-4 mb-6 gap-4">
-      <div>
-        <h1 class="text-2xl font-black text-slate-900 uppercase tracking-tight">National Overview Dashboard</h1>
-        <div class="flex items-center gap-2 text-slate-500 mt-1">
-          <span class="text-[10px] font-black uppercase tracking-widest bg-slate-200 px-2 py-0.5 rounded text-slate-700">Official Portal</span>
-          <span class="text-xs font-medium italic">As of Feb 13, 2026</span>
+  <div class="content-area transition-all custom-scrollbar">
+    <main class="flex-1 flex flex-col p-3 gap-3">
+
+      <header class="gov-card p-2 px-3 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 border-b-4 border-b-blue-900 no-print">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white shrink-0">
+            <span class="material-icons-round text-[18px]">account_balance</span>
+          </div>
+          <div class="leading-tight">
+            <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">National Command Dashboard</h1>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0 mt-0.5">Central Government Oversight Master • Republic of the Philippines</p>
+          </div>
         </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <button onclick="printDashboard()" class="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-300 text-[11px] font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
-          <span class="material-icons-round text-sm">print</span> Print Report
-        </button>
-        <button onclick="window.location.reload()" class="flex items-center gap-1.5 px-4 py-2 bg-emerald-800 text-[11px] font-black uppercase tracking-widest text-white hover:bg-emerald-900 shadow-sm transition-all">
-          <span class="material-icons-round text-sm">sync</span> Refresh Data
-        </button>
-      </div>
-    </header>
+        <div class="flex items-center gap-1.5 mt-2 sm:mt-0">
+            <span class="text-[9px] font-black text-slate-400 italic mr-2 uppercase">As of Feb 23, 2026</span>
+            <button onclick="window.print()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-sm">
+              <span class="material-icons-round text-[14px]">print</span> Print
+            </button>
+            <button onclick="window.location.reload()" class="gov-btn bg-emerald-800 text-white hover:bg-emerald-900 flex items-center gap-1 shadow-sm">
+              <span class="material-icons-round text-[14px]">sync</span> Sync
+            </button>
+        </div>
+      </header>
 
-    <section class="card p-4 mb-6">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-        <div class="space-y-1">
-          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Jurisdiction</label>
-          <select class="w-full px-2 py-1.5 border border-slate-300 text-[11px] font-bold bg-slate-50 outline-none">
+      <section class="gov-card p-2 px-3 grid grid-cols-2 md:grid-cols-6 gap-2 shrink-0 bg-slate-50 no-print">
+        <div class="md:col-span-2">
+          <label class="text-[8px] font-black uppercase text-slate-400 block mb-0.5 ml-1">Jurisdiction Filter</label>
+          <select id="globalJurisdiction" onchange="applyLiveFilter()" class="gov-input w-full h-7 cursor-pointer">
             <option value="all" selected>All Regions (National)</option>
             <option value="ncr">NCR - National Capital Region</option>
-            <option value="car">CAR - Cordillera</option>
-            <option value="r1">Region I - Ilocos</option>
-            <option value="r2">Region II - Cagayan</option>
+            <option value="car">CAR - Cordillera Administrative Region</option>
+            <option value="r1">Region I - Ilocos Region</option>
+            <option value="r2">Region II - Cagayan Valley</option>
             <option value="r3">Region III - Central Luzon</option>
             <option value="r4a">Region IV-A - CALABARZON</option>
-            <option value="r4b">MIMAROPA</option>
-            <option value="r5">Region V - Bicol</option>
+            <option value="r4b">MIMAROPA Region</option>
+            <option value="r5">Region V - Bicol Region</option>
             <option value="r6">Region VI - Western Visayas</option>
             <option value="r7">Region VII - Central Visayas</option>
             <option value="r8">Region VIII - Eastern Visayas</option>
-            <option value="r9">Region IX - Zamboanga</option>
+            <option value="r9">Region IX - Zamboanga Peninsula</option>
             <option value="r10">Region X - Northern Mindanao</option>
-            <option value="r11">Region XI - Davao</option>
+            <option value="r11">Region XI - Davao Region</option>
             <option value="r12">Region XII - SOCCSKSARGEN</option>
             <option value="r13">Region XIII - Caraga</option>
-            <option value="barmm">BARMM</option>
+            <option value="barmm">BARMM - Bangsamoro Autonomous Region</option>
           </select>
         </div>
-        <div class="space-y-1">
-          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Status</label>
-          <select class="w-full px-2 py-1.5 border border-slate-300 text-[11px] font-bold bg-slate-50 outline-none">
-            <option selected>All Status</option><option>Approved</option><option>Pending</option><option>Reject</option>
-          </select>
+        <div>
+          <label class="text-[8px] font-black uppercase text-slate-400 block mb-0.5 ml-1">Identifier</label>
+          <input type="text" id="globalSearch" oninput="applyLiveFilter()" placeholder="Ref # / Payer / Type" class="gov-input w-full h-7">
         </div>
-        <div class="space-y-1">
-          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">From</label>
-          <input type="date" class="w-full px-2 py-1.5 border border-slate-300 text-[11px] font-bold outline-none bg-slate-50">
+        <div>
+          <label class="text-[8px] font-black uppercase text-slate-400 block mb-0.5 ml-1">From Date</label>
+          <input type="date" id="globalFromDate" onchange="applyLiveFilter()" class="gov-input w-full h-7 cursor-pointer">
         </div>
-        <div class="space-y-1">
-          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">To</label>
-          <input type="date" class="w-full px-2 py-1.5 border border-slate-300 text-[11px] font-bold outline-none bg-slate-50">
-        </div>
-        <div class="space-y-1 lg:col-span-1">
-          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Search Identifier</label>
-          <input type="text" placeholder="Ref # / Applicant / Municipality" class="w-full px-2 py-1.5 border border-slate-300 text-[11px] font-bold outline-none">
+        <div>
+          <label class="text-[8px] font-black uppercase text-slate-400 block mb-0.5 ml-1">To Date</label>
+          <input type="date" id="globalToDate" onchange="applyLiveFilter()" class="gov-input w-full h-7 cursor-pointer">
         </div>
         <div class="flex items-end">
-          <button class="w-full py-1.5 bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all">Apply Filters</button>
+          <button onclick="clearGlobalFilters()" class="gov-btn border border-slate-300 bg-white text-slate-700 w-full h-7 p-0 leading-none shadow-sm hover:bg-slate-100">Clear Filters</button>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-      <div class="card p-4 border-t-4 border-t-slate-800">
-        <p class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Applications Received</p>
-        <h3 class="text-3xl font-black text-slate-900 mt-1">{{ total_applications }}</h3>
-      </div>
-      <div class="card p-4 border-t-4 border-t-blue-800">
-        <p class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Service Requests</p>
-        <h3 class="text-3xl font-black text-slate-900 mt-1">{{ total_service_requests }}</h3>
-      </div>
-      <div class="card p-4 border-t-4 border-t-amber-700">
-        <p class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Compliance Registry</p>
-        <h3 class="text-3xl font-black text-slate-900 mt-1">{{ total_count }}</h3>
-      </div>
-      <div class="card p-4 border-t-4 border-t-emerald-800 bg-emerald-950 text-white shadow-lg">
-        <p class="text-[9px] font-black uppercase text-emerald-400 tracking-widest">National Collections</p>
-        <h3 class="text-3xl font-black text-white mt-1">₱ {{ "%.2f"|format(total_collections / 1000000) }}M</h3>
-      </div>
-    </section>
-
-    <section class="grid grid-cols-1 xl:grid-cols-4 gap-4 mb-8">
-      <div class="card p-4 xl:col-span-3">
-        <h3 class="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4 border-b border-slate-100 pb-2">National Throughput Analysis (180 Days)</h3>
-        <div class="h-[220px]"><canvas id="trendChart"></canvas></div>
-      </div>
-      <div class="card p-4">
-        <h3 class="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4 border-b border-slate-100 pb-2">Operational Health</h3>
-        <div class="relative h-[120px] w-full mx-auto">
-          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none translate-y-1">
-            <span class="text-lg font-black text-slate-900">{{ total_count }}</span>
-            <span class="text-[7px] font-bold text-slate-400 uppercase tracking-tighter">Total Items</span>
+      <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 shrink-0">
+        <div class="gov-card p-3 border-t-4 border-t-slate-700 justify-center transition-all">
+          <div class="flex justify-between items-center">
+            <p class="text-[9px] font-black uppercase text-slate-500 m-0">App Registry</p>
+            <span class="material-icons-round text-slate-300 text-[18px]">description</span>
           </div>
-          <canvas id="statusChart"></canvas>
+          <h3 id="kpi-apps" class="text-2xl font-black text-slate-900 mt-1 leading-none">{{ applications|length }}</h3>
         </div>
-        <div class="space-y-1 mt-4">
-          <div class="flex items-center justify-between p-2 bg-slate-50 border border-slate-200"><span class="text-[8px] font-black text-slate-500 uppercase">Approved</span><span class="text-[10px] font-black text-emerald-700">{{ approved_count }}</span></div>
-          <div class="flex items-center justify-between p-2 bg-slate-50 border border-slate-200"><span class="text-[8px] font-black text-slate-500 uppercase">Pending</span><span class="text-[10px] font-black text-amber-700">{{ pending_count }}</span></div>
+        <div class="gov-card p-3 border-t-4 border-t-blue-800 justify-center transition-all">
+          <div class="flex justify-between items-center">
+            <p class="text-[9px] font-black uppercase text-slate-500 m-0">Service Req</p>
+            <span class="material-icons-round text-blue-200 text-[18px]">room_service</span>
+          </div>
+          <h3 id="kpi-services" class="text-2xl font-black text-slate-900 mt-1 leading-none">{{ service_requests|length }}</h3>
         </div>
-      </div>
-    </section>
-
-    <div class="space-y-8">
-      
-      <section class="card overflow-hidden">
-        <div class="gov-header">1. Application Registry</div>
-        <div class="table-scroll"><table class="w-full">
-          <thead><tr><th>Date</th><th>Reference & Applicant</th><th>Category</th><th>Region</th><th>Municipality</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody>
-            {% if applications and applications|length > 0 %}
-              {% for app in applications %}
-              <tr>
-                <td>{{ app.created_at if app.created_at else 'N/A' }}</td>
-                <td><span class="font-black font-mono">APP-{{ app.reference_id }}</span><br><span class="text-[10px] text-slate-500 uppercase tracking-tighter italic">{{ app.applicant_name }}</span></td>
-                <td>{{ app.category }}</td>
-                <td>{{ app.region }}</td>
-                <td>{{ app.municipality }}</td>
-                <td>
-                  {% if app.status == 'approved' %}
-                    <span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200">Approved</span>
-                  {% elif app.status == 'rejected' %}
-                    <span class="status-badge bg-rose-50 text-rose-800 border-rose-200">Rejected</span>
-                  {% else %}
-                    <span class="status-badge bg-amber-50 text-amber-800 border-amber-200">Pending</span>
-                  {% endif %}
-                </td>
-                <td><button class="bg-slate-800 text-white px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest">Review</button></td>
-              </tr>
-              {% endfor %}
-            {% else %}
-              <tr>
-                <td colspan="7" class="text-center text-slate-400 py-4">No applications found</td>
-              </tr>
-            {% endif %}
-          </tbody>
-        </table></div>
+        <div class="gov-card p-3 border-t-4 border-t-amber-700 justify-center transition-all">
+          <div class="flex justify-between items-center">
+            <p class="text-[9px] font-black uppercase text-slate-500 m-0">Compliance</p>
+            <span class="material-icons-round text-amber-200 text-[18px]">verified</span>
+          </div>
+          <h3 id="kpi-compliance" class="text-2xl font-black text-slate-900 mt-1 leading-none">{{ total_count }}</h3>
+        </div>
+        <div class="gov-card p-3 border-t-4 border-t-emerald-600 bg-emerald-950 text-white shadow-md justify-center transition-all">
+          <div class="flex justify-between items-center">
+            <p class="text-[9px] font-black uppercase text-emerald-400 m-0">Nat'l Collections</p>
+            <span class="material-icons-round text-emerald-700 text-[18px]">payments</span>
+          </div>
+          <h3 id="kpi-collections" class="text-2xl font-black text-white mt-1 leading-none font-mono tracking-tighter">₱ {{ "%.2f"|format(total_collections / 1000000) }}M</h3>
+        </div>
       </section>
 
-      <section class="card overflow-hidden">
-        <div class="gov-header">2. Service Requests Masterlist</div>
-        <div class="table-scroll"><table class="w-full">
-          <thead><tr><th>Date</th><th>Request ID</th><th>Applicant Category</th><th>Region</th><th>Municipality</th><th>Current Status</th><th>Actions</th></tr></thead>
-          <tbody>
-            {% if service_requests and service_requests|length > 0 %}
-              {% for req in service_requests %}
-              <tr>
-                <td>N/A</td>
-                <td class="font-black">SR-{{ req.reference_id }}</td>
-                <td>{{ req.service_type }}</td>
-                <td>{{ req.region }}</td>
-                <td>{{ req.municipality }}</td>
-                <td>
-                  {% if req.status == 'approved' %}
-                    <span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200">Approved</span>
-                  {% elif req.status == 'rejected' %}
-                    <span class="status-badge bg-rose-50 text-rose-800 border-rose-200">Rejected</span>
-                  {% else %}
-                    <span class="status-badge bg-blue-50 text-blue-800 border-blue-200">Processing</span>
-                  {% endif %}
-                </td>
-                <td><button class="border border-slate-300 px-3 py-1 rounded text-[9px] font-black">EXPORT</button></td>
-              </tr>
-              {% endfor %}
-            {% else %}
-              <tr>
-                <td colspan="7" class="text-center text-slate-400 py-4">No service requests found</td>
-              </tr>
-            {% endif %}
-          </tbody>
-        </table></div>
+      <section class="grid grid-cols-1 lg:grid-cols-12 gap-3 shrink-0 h-auto lg:h-[240px] no-print">
+        <div class="gov-card lg:col-span-5 flex flex-col overflow-hidden p-2 transition-all">
+          <h3 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-2 shrink-0">Throughput Analysis (Filtered Trend)</h3>
+          <div class="flex-1 relative w-full min-h-[150px]"><canvas id="trendChart"></canvas></div>
+        </div>
+        
+        <div class="gov-card lg:col-span-3 flex flex-col overflow-hidden p-2 transition-all">
+          <h3 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-2 shrink-0 text-center">Operational Health</h3>
+          <div class="flex-1 relative min-h-[150px]">
+            <canvas id="statusChart"></canvas>
+            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none translate-y-1">
+              <span id="kpi-chart-total" class="text-sm font-black text-slate-800 leading-none">{{ total_count }}</span>
+              <span class="text-[7px] font-bold text-slate-400 uppercase">Items</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="gov-card lg:col-span-4 flex flex-col overflow-hidden">
+          <div class="gov-header-ribbon bg-emerald-900">
+            <span>Financial Audit</span>
+            <span class="material-icons-round text-[14px] text-emerald-400">receipt_long</span>
+          </div>
+          <div class="scrollable-table-container custom-scrollbar">
+            <table class="w-full text-left border-collapse filterable-table" id="table-finance">
+              <thead><tr><th>Ref & Date</th><th>Payor</th><th class="text-right">Amount</th></tr></thead>
+              <tbody class="text-[10px] uppercase font-bold">
+                <tr class="hover:bg-slate-50 transition data-row" data-region="all">
+                    <td class="leading-tight border-r border-slate-100">
+                      <span class="font-mono text-blue-900 font-black italic block">TXN-004182</span>
+                      <span class="text-[8px] text-slate-500 date-cell">Feb 12, 2026</span>
+                    </td>
+                    <td class="border-r border-slate-100 truncate max-w-[80px]">Dela Cruz, Juan<br><span class="text-[8px] font-normal text-slate-400">Application Fee</span></td>
+                    <td class="text-right font-mono text-emerald-700 amount-cell">1250.00</td>
+                </tr>
+                <tr class="empty-state-row" style="display:none;"><td colspan="3" class="text-center py-6 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
-      <section class="card overflow-hidden">
-        <div class="gov-header">3. National Asset Inventory (Government Stock)</div>
-        <div class="table-scroll"><table class="w-full">
-          <thead><tr><th>Asset Category</th><th>Technical Description</th><th>Unit Quantity</th><th>Region Hub</th><th>Municipality</th><th>Actions</th></tr></thead>
-          <tbody><tr><td class="font-black uppercase tracking-tighter">Chemicals</td><td>Pesticide Stock (Official)</td><td class="font-bold">120 Units</td><td>Region IV-A</td><td>Calamba</td><td><button class="text-slate-400 font-bold text-[10px] tracking-widest uppercase">Logs</button></td></tr></tbody>
-        </table></div>
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-3 shrink-0">
+        <div class="gov-card flex flex-col overflow-hidden">
+          <div class="gov-header-ribbon">
+            <span>1. Application Registry</span>
+            <span id="badge-apps" class="bg-blue-800 px-2 py-0.5 rounded-[2px] text-[8px]">{{ applications|length }} Total</span>
+          </div>
+          <div class="scrollable-table-container custom-scrollbar">
+            <table class="w-full text-left border-collapse filterable-table" id="table-apps">
+              <thead><tr><th>Date</th><th>Ref & Applicant</th><th>Region / Status</th><th class="text-center">Action</th></tr></thead>
+              <tbody class="text-[10px]">
+                {% if applications and applications|length > 0 %}
+                  {% for app in applications %}
+                  <tr class="hover:bg-blue-50 transition data-row" data-region="{{ app.region|lower }}">
+                    <td class="font-mono text-slate-500 uppercase border-r border-slate-100 date-cell">{{ app.created_at if app.created_at else 'N/A' }}</td>
+                    <td class="leading-tight border-r border-slate-100">
+                        <span class="font-black text-blue-900 uppercase font-mono">APP-{{ app.reference_id }}</span><br>
+                        <span class="text-[9px] text-slate-500 font-bold uppercase truncate max-w-[120px] inline-block">{{ app.applicant_name }}</span>
+                    </td>
+                    <td class="border-r border-slate-100">
+                      <span class="font-bold text-slate-700 uppercase text-[9px] block mb-1">{{ app.region }}</span>
+                      <span class="status-badge 
+                        {% if app.status == 'approved' %} bg-emerald-50 text-emerald-800 border-emerald-200
+                        {% elif app.status == 'rejected' %} bg-rose-50 text-rose-800 border-rose-200
+                        {% else %} bg-amber-50 text-amber-800 border-amber-200 {% endif %}">
+                        {{ app.status[:3]|upper }}
+                      </span>
+                    </td>
+                    <td class="text-center"><button class="text-blue-700 hover:text-blue-900 font-black text-[9px] uppercase tracking-wider">Review</button></td>
+                  </tr>
+                  {% endfor %}
+                {% endif %}
+                <tr class="empty-state-row" {% if applications|length > 0 %}style="display:none;"{% endif %}>
+                  <td colspan="4" class="text-center py-8 text-slate-400 font-black uppercase tracking-widest italic text-[9px]">No pending applications match filters</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="gov-card flex flex-col overflow-hidden">
+          <div class="gov-header-ribbon">
+            <span>2. Service Requests</span>
+            <span id="badge-services" class="bg-blue-800 px-2 py-0.5 rounded-[2px] text-[8px]">{{ service_requests|length }} Total</span>
+          </div>
+          <div class="scrollable-table-container custom-scrollbar">
+            <table class="w-full text-left border-collapse filterable-table" id="table-services">
+              <thead><tr><th>Date</th><th>Request ID & Type</th><th>Region / Status</th><th class="text-center">Action</th></tr></thead>
+              <tbody class="text-[10px]">
+                {% if service_requests and service_requests|length > 0 %}
+                  {% for req in service_requests %}
+                  <tr class="hover:bg-blue-50 transition data-row" data-region="{{ req.region|lower }}">
+                    <td class="font-mono text-slate-500 uppercase border-r border-slate-100 date-cell">N/A</td>
+                    <td class="leading-tight border-r border-slate-100">
+                        <span class="font-black text-blue-900 font-mono uppercase block">SR-{{ req.reference_id }}</span>
+                        <span class="text-[9px] text-slate-500 font-bold uppercase truncate max-w-[120px] inline-block">{{ req.service_type }}</span>
+                    </td>
+                    <td class="border-r border-slate-100">
+                      <span class="font-bold text-slate-700 uppercase text-[9px] block mb-1">{{ req.region }}</span>
+                      <span class="status-badge {% if req.status == 'approved' %} bg-emerald-50 text-emerald-800 border-emerald-200 {% else %} bg-blue-50 text-blue-800 border-blue-200 {% endif %}">
+                        {{ req.status[:3]|upper }}
+                      </span>
+                    </td>
+                    <td class="text-center"><button class="text-blue-700 hover:text-blue-900 font-black text-[9px] uppercase tracking-wider">Verify</button></td>
+                  </tr>
+                  {% endfor %}
+                {% endif %}
+                <tr class="empty-state-row" {% if service_requests|length > 0 %}style="display:none;"{% endif %}>
+                  <td colspan="4" class="text-center py-8 text-slate-400 font-black uppercase tracking-widest italic text-[9px]">No service requests match filters</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
-      <section class="card overflow-hidden">
-        <div class="gov-header">4. User Inventory (On-Hand Accountable Resources)</div>
-        <div class="table-scroll"><table class="w-full">
-          <thead><tr><th>Resource Name</th><th>Category</th><th>Owner/Admin</th><th>Initial Qty</th><th>Current Stock</th><th>Jurisdiction</th><th>Actions</th></tr></thead>
-          <tbody><tr><td class="font-black">Pesticide Alpha</td><td>Chemicals</td><td>Santos, Maria</td><td>50</td><td class="text-rose-700 font-black">18</td><td>NCR Office</td><td><button class="border px-3 py-1 rounded text-[9px] font-black">HISTORY</button></td></tr></tbody>
-        </table></div>
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-3 shrink-0 pb-6">
+        <div class="gov-card flex flex-col overflow-hidden">
+            <div class="gov-header-ribbon bg-slate-800">3. Nat'l Asset Inventory</div>
+            <div class="scrollable-table-container custom-scrollbar max-h-[180px]">
+                <table class="w-full text-left border-collapse filterable-table" id="table-assets">
+                    <thead><tr><th>Category</th><th class="text-center">Qty</th><th>Hub</th></tr></thead>
+                    <tbody class="text-[10px] uppercase font-bold">
+                        <tr class="hover:bg-slate-50 data-row" data-region="r4a"><td class="text-slate-700">Chemicals</td><td class="text-center font-mono">120</td><td class="text-[8px]">Reg IV-A</td></tr>
+                        <tr class="empty-state-row" style="display:none;"><td colspan="3" class="text-center py-4 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="gov-card flex flex-col overflow-hidden">
+            <div class="gov-header-ribbon bg-slate-800">4. Accountable Stock</div>
+            <div class="scrollable-table-container custom-scrollbar max-h-[180px]">
+                <table class="w-full text-left border-collapse filterable-table" id="table-stock">
+                    <thead><tr><th>Resource</th><th class="text-center">On-Hand</th><th>Admin</th></tr></thead>
+                    <tbody class="text-[10px] uppercase font-bold">
+                        <tr class="hover:bg-slate-50 data-row" data-region="ncr"><td class="text-slate-700 truncate max-w-[80px]">Pesticide Alpha</td><td class="text-rose-700 text-center font-mono font-black">18</td><td class="text-[8px]">Santos, M.</td></tr>
+                        <tr class="empty-state-row" style="display:none;"><td colspan="3" class="text-center py-4 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="gov-card flex flex-col overflow-hidden">
+            <div class="gov-header-ribbon bg-slate-800">5. Permit Registry</div>
+            <div class="scrollable-table-container custom-scrollbar max-h-[180px]">
+                <table class="w-full text-left border-collapse filterable-table" id="table-permits">
+                    <thead><tr><th>License Ref</th><th>Region</th><th class="text-center">Status</th></tr></thead>
+                    <tbody class="text-[10px] uppercase font-bold">
+                        <tr class="hover:bg-slate-50 data-row" data-region="r4a">
+                          <td class="font-mono text-blue-900 truncate max-w-[80px]">LIC-2026-0118</td>
+                          <td class="text-[8px]">Reg IV-A</td>
+                          <td class="text-center"><span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200">Valid</span></td>
+                        </tr>
+                        <tr class="empty-state-row" style="display:none;"><td colspan="3" class="text-center py-4 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
       </section>
 
-      <section class="card overflow-hidden">
-        <div class="gov-header">5. Licensing & Permits Registry</div>
-        <div class="table-scroll"><table class="w-full">
-          <thead><tr><th>License Reference</th><th>Permit Type</th><th>Region</th><th>Municipality</th><th>Status</th><th>Verification</th></tr></thead>
-          <tbody><tr><td class="font-black font-mono tracking-tighter">LIC-2026-000118</td><td>Environmental ECC</td><td>Region IV-A</td><td>Calamba</td><td><span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200">Compliant</span></td><td><button class="bg-slate-100 px-2 py-1 rounded text-[9px] font-black uppercase">Check</button></td></tr></tbody>
-        </table></div>
-      </section>
+      <footer class="mt-auto py-4 border-t border-slate-300 text-center no-print">
+        <p class="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] m-0">
+          Official National Oversight Registry • TLPH Portal • FY 2026
+        </p>
+      </footer>
 
-      <section class="card overflow-hidden">
-        <div class="gov-header">6. National Financial Audit Registry</div>
-        <div class="table-scroll"><table class="w-full">
-          <thead><tr><th>Audit Ref #</th><th>Payor</th><th>Classification</th><th>Date</th><th>Amount (PHP)</th><th>Status</th></tr></thead>
-          <tbody><tr><td class="font-black font-mono italic">TXN-004182</td><td>Dela Cruz, J.</td><td>Application Fee</td><td>Feb 12</td><td class="font-bold">1,250.00</td><td><span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200 font-black">Verified</span></td></tr></tbody>
-        </table></div>
-      </section>
-
-      <section class="card overflow-hidden border-2 border-slate-300">
-        <div class="gov-header">7. Administrative User Access Management</div>
-        <div class="table-scroll"><table class="w-full">
-          <thead><tr><th>Authorized Official</th><th>Email</th><th>Role</th><th>Jurisdiction</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody><tr><td class="font-black italic">National Admin</td><td>admin@denr.gov.ph</td><td>Super Admin</td><td>National</td><td><span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200">Active</span></td><td><button class="text-slate-400 font-bold text-[9px]">MANAGE</button></td></tr></tbody>
-        </table></div>
-      </section>
-
-    </div>
-
-    <footer class="mt-12 py-8 border-t border-slate-300 text-center text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">
-      Republic of the Philippines • DENR Systems 2026
-    </footer>
+    </main>
   </div>
 
+  <script>
+    // --- Global Chart Instances & Base Data ---
+    let myTrendChart = null;
+    let myStatusChart = null;
+    let totalInitialRows = 0;
+    const baseTrendData = [120, 190, 150, 210, 180, 240];
 
-    // Print Dashboard Function
-    function printDashboard() {
-      window.print();
+    // --- Chart Initialization ---
+    window.addEventListener('load', function() {
+        Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+        Chart.defaults.font.size = 9;
+
+        totalInitialRows = document.querySelectorAll('.data-row').length;
+
+        const trendCtx = document.getElementById('trendChart');
+        if (trendCtx) {
+            myTrendChart = new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'],
+                    datasets: [{
+                        label: 'National Activity',
+                        data: [...baseTrendData],
+                        borderColor: '#002e5d',
+                        backgroundColor: 'rgba(0, 46, 93, 0.05)',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 2
+                    }]
+                },
+                options: { 
+                  responsive: true, maintainAspectRatio: false, 
+                  plugins: { legend: { display: false } },
+                  scales: { x: { display: false }, y: { beginAtZero: true } },
+                  animation: { duration: 400 }
+                }
+            });
+        }
+
+        const approvedCount = parseInt("{{ approved_count|default(75) }}", 10) || 75;
+        const pendingCount = parseInt("{{ pending_count|default(20) }}", 10) || 20;
+
+        const statusCtx = document.getElementById('statusChart');
+        if (statusCtx) {
+            myStatusChart = new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Approved', 'Pending', 'Rejected'],
+                    datasets: [{
+                        data: [approvedCount, pendingCount, 5],
+                        backgroundColor: ['#047857', '#b45309', '#be123c'],
+                        borderWidth: 0,
+                        cutout: '80%'
+                    }]
+                },
+                options: { 
+                  responsive: true, maintainAspectRatio: false, 
+                  layout: { padding: 10 },
+                  plugins: { legend: { display: false } },
+                  animation: { duration: 400 }
+                }
+            });
+        }
+        
+        // Initial run to sync DOM numbers to any existing filters
+        applyLiveFilter();
+    });
+
+    // --- LIVE FILTER ENGINE ---
+    function applyLiveFilter() {
+        const searchVal = document.getElementById('globalSearch').value.toLowerCase();
+        const jurisSelect = document.getElementById('globalJurisdiction');
+        const jurisVal = jurisSelect.value;
+        const jurisText = jurisVal === 'all' ? '' : jurisSelect.options[jurisSelect.selectedIndex].text.toLowerCase();
+        const fromDateVal = document.getElementById('globalFromDate').value;
+        const toDateVal = document.getElementById('globalToDate').value;
+
+        const fromDate = fromDateVal ? new Date(fromDateVal) : null;
+        const toDate = toDateVal ? new Date(toDateVal) : null;
+        if(toDate) toDate.setHours(23, 59, 59, 999);
+
+        // Trackers for KPIs
+        let appCount = 0;
+        let serviceCount = 0;
+        let totalFinance = 0.0;
+        let statusCounts = { approved: 0, pending: 0, rejected: 0 };
+        let totalVisibleRows = 0;
+
+        const tables = document.querySelectorAll('.filterable-table');
+
+        tables.forEach(table => {
+            const tableId = table.id;
+            const rows = table.querySelectorAll('tbody tr.data-row');
+            let tableVisibleCount = 0;
+
+            rows.forEach(row => {
+                const rowText = row.innerText.toLowerCase();
+                const rowRegion = (row.getAttribute('data-region') || '').toLowerCase();
+                const dateCell = row.querySelector('.date-cell');
+                const dateText = dateCell ? dateCell.innerText.trim() : 'N/A';
+
+                // 1. Check Match
+                const matchSearch = searchVal === '' || rowText.includes(searchVal);
+                const regionKeywords = jurisText.split(' - ').map(s => s.trim());
+                const matchJurisdiction = jurisVal === 'all' || 
+                                          rowRegion.includes(jurisVal) || 
+                                          regionKeywords.some(keyword => rowText.includes(keyword));
+
+                let matchDate = true;
+                if (fromDate || toDate) {
+                    if (dateText === 'N/A' || dateText === '') {
+                        matchDate = false; 
+                    } else {
+                        let parseDateStr = dateText;
+                        if (!/\d{4}/.test(parseDateStr)) parseDateStr += " " + new Date().getFullYear();
+                        const rowDate = new Date(parseDateStr);
+                        if (!isNaN(rowDate)) {
+                            if (fromDate && rowDate < fromDate) matchDate = false;
+                            if (toDate && rowDate > toDate) matchDate = false;
+                        } else { matchDate = false; }
+                    }
+                }
+
+                // 2. Apply Visibility and Aggregate Data
+                if (matchSearch && matchJurisdiction && matchDate) {
+                    row.style.display = '';
+                    tableVisibleCount++;
+                    totalVisibleRows++;
+
+                    // Aggregate specific tables
+                    if (tableId === 'table-apps') {
+                        appCount++;
+                        updateStatus(row, statusCounts);
+                    } else if (tableId === 'table-services') {
+                        serviceCount++;
+                        updateStatus(row, statusCounts);
+                    } else if (tableId === 'table-finance') {
+                        let amtCell = row.querySelector('.amount-cell');
+                        if (amtCell) {
+                            let val = parseFloat(amtCell.innerText.replace(/,/g, ''));
+                            if(!isNaN(val)) totalFinance += val;
+                        }
+                    } else if (tableId === 'table-permits') {
+                         updateStatus(row, statusCounts); // Count permit status too
+                    }
+
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Toggle Empty State Message
+            const emptyRow = table.querySelector('.empty-state-row');
+            if (emptyRow) {
+                emptyRow.style.display = (tableVisibleCount === 0) ? '' : 'none';
+            }
+        });
+
+        // 3. Update DOM KPI Cards
+        document.getElementById('kpi-apps').innerText = appCount;
+        document.getElementById('badge-apps').innerText = appCount + " Total";
+        document.getElementById('kpi-services').innerText = serviceCount;
+        document.getElementById('badge-services').innerText = serviceCount + " Total";
+        
+        const complianceTotal = appCount + serviceCount; // Or define compliance metric
+        document.getElementById('kpi-compliance').innerText = complianceTotal;
+        document.getElementById('kpi-chart-total').innerText = complianceTotal;
+
+        const financeMillions = (totalFinance / 1000000).toFixed(2);
+        document.getElementById('kpi-collections').innerText = `₱ ${financeMillions}M`;
+
+        // 4. Update Charts
+        if (myStatusChart) {
+            myStatusChart.data.datasets[0].data = [statusCounts.approved, statusCounts.pending, statusCounts.rejected];
+            myStatusChart.update();
+        }
+
+        if (myTrendChart && totalInitialRows > 0) {
+            // Mock trend scaling based on visibility ratio to visually reflect filtering
+            let ratio = totalVisibleRows / totalInitialRows;
+            if (isNaN(ratio)) ratio = 0;
+            let newData = baseTrendData.map(v => Math.round(v * ratio));
+            myTrendChart.data.datasets[0].data = newData;
+            myTrendChart.update();
+        }
+    }
+
+    function updateStatus(row, counts) {
+        let badge = row.querySelector('.status-badge');
+        if (badge) {
+            let t = badge.innerText.toLowerCase();
+            if (t.includes('app') || t.includes('val')) counts.approved++;
+            else if (t.includes('rej')) counts.rejected++;
+            else counts.pending++;
+        }
+    }
+
+    function clearGlobalFilters() {
+        document.getElementById('globalSearch').value = '';
+        document.getElementById('globalJurisdiction').value = 'all';
+        document.getElementById('globalFromDate').value = '';
+        document.getElementById('globalToDate').value = '';
+        applyLiveFilter();
     }
   </script>
 </body> 
-</html>   
+</html>
