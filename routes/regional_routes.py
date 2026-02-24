@@ -128,17 +128,17 @@ def accounting_dashboard_view():
             municipalities.append(doc.id)
     except Exception:
         pass
-    # Fetch regional fund transfers for this region
+    # Fetch only municipal fund distributions for this region
     regional_funds = []
     try:
-        print(f"[DEBUG] Fetching funds for region: {user_region}")
-        funds_query = db.collection('regional_fund_distribution').where('region', '==', user_region).order_by('date', direction=firestore.Query.DESCENDING).stream()
-        for fund_doc in funds_query:
+        print(f"[DEBUG] Fetching municipal fund distributions for region: {user_region}")
+        muni_funds_query = db.collection('municipal_fund_distribution').where('region', '==', user_region).order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+        for fund_doc in muni_funds_query:
             fund = fund_doc.to_dict()
             regional_funds.append(fund)
-        print(f"[DEBUG] Fetched regional_funds: {regional_funds}")
+        print(f"[DEBUG] Fetched municipal_fund_distributions: {regional_funds}")
     except Exception as e:
-        print(f"[DEBUG] Error fetching regional funds: {e}")
+        print(f"[DEBUG] Error fetching municipal fund distributions: {e}")
     return render_template('regional/accounting/dashboard-regional.html', finance=finance_data, municipalities=municipalities, regional_funds=regional_funds, user_region=user_region)
 
 @bp.route('/accounting/distribute-fund', methods=['POST'])
