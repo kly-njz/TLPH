@@ -184,18 +184,21 @@ def distribute_fund():
     db = firestore.client()
     data = request.json
     muni = data.get('municipality')
+    province = data.get('province')
     amount = float(data.get('amount'))
     fund_type = data.get('fund_type')
     transfer_id = data.get('transfer_id')
     region = data.get('region')
+    print(f"[DEBUG] Incoming fund distribution request: region={region}, municipality={muni}, province={province}, amount={amount}, fund_type={fund_type}, transfer_id={transfer_id}")
     # Validate municipality belongs to region
     allowed_munis = []
     try:
         doc = db.collection('municipalities').document(region).get()
         if doc.exists:
             allowed_munis = doc.to_dict().get('municipalities', [])
-    except Exception:
-        pass
+        print(f"[DEBUG] Allowed municipalities for region {region}: {allowed_munis}")
+    except Exception as e:
+        print(f"[DEBUG] Error fetching allowed municipalities: {e}")
     # Deduct from regional fund (available_fund in finance collection)
     region_finance_ref = db.collection('finance').document(region)
     region_finance_doc = region_finance_ref.get()
@@ -210,8 +213,11 @@ def distribute_fund():
         if available_fund < total_amount:
             return jsonify({'success': False, 'error': 'Insufficient regional fund'}), 400
         for m in allowed_munis:
+            # You must know the province for each m; here, assume province is provided or can be mapped
+            # For simplicity, require frontend to send province for each municipality in bulk mode
             record = {
                 'municipality': m,
+                'province': province,
                 'amount': amount,
                 'fund_type': fund_type,
                 'transfer_id': transfer_id + '-' + m,
@@ -221,7 +227,8 @@ def distribute_fund():
             }
             db.collection('municipal_fund_distribution').add(record)
             # Update general fund for municipality
-            muni_finance_ref = db.collection('finance').document(m)
+            doc_id = f"{m.upper().replace(' ', '_')}_{province.upper().replace(' ', '_')}"
+            muni_finance_ref = db.collection('finance').document(doc_id)
             muni_finance_doc = muni_finance_ref.get()
             current_general = 0
             if muni_finance_doc.exists:
@@ -237,6 +244,7 @@ def distribute_fund():
             return jsonify({'success': False, 'error': 'Insufficient regional fund'}), 400
         record = {
             'municipality': muni,
+            'province': province,
             'amount': amount,
             'fund_type': fund_type,
             'transfer_id': transfer_id,
@@ -246,7 +254,8 @@ def distribute_fund():
         }
         db.collection('municipal_fund_distribution').add(record)
         # Update general fund for municipality
-        muni_finance_ref = db.collection('finance').document(muni)
+        doc_id = f"{muni.upper().replace(' ', '_')}_{province.upper().replace(' ', '_')}"
+        muni_finance_ref = db.collection('finance').document(doc_id)
         muni_finance_doc = muni_finance_ref.get()
         current_general = 0
         if muni_finance_doc.exists:
