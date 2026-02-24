@@ -220,6 +220,13 @@ def distribute_fund():
                 'timestamp': firestore.SERVER_TIMESTAMP
             }
             db.collection('municipal_fund_distribution').add(record)
+            # Update general fund for municipality
+            muni_finance_ref = db.collection('finance').document(m)
+            muni_finance_doc = muni_finance_ref.get()
+            current_general = 0
+            if muni_finance_doc.exists:
+                current_general = float(muni_finance_doc.to_dict().get('general_fund', 0))
+            muni_finance_ref.set({'general_fund': current_general + amount}, merge=True)
         # Deduct total from regional fund
         region_finance_ref.update({'available_fund': available_fund - total_amount})
         return jsonify({'success': True, 'distributed': allowed_munis})
@@ -238,6 +245,13 @@ def distribute_fund():
             'timestamp': firestore.SERVER_TIMESTAMP
         }
         db.collection('municipal_fund_distribution').add(record)
+        # Update general fund for municipality
+        muni_finance_ref = db.collection('finance').document(muni)
+        muni_finance_doc = muni_finance_ref.get()
+        current_general = 0
+        if muni_finance_doc.exists:
+            current_general = float(muni_finance_doc.to_dict().get('general_fund', 0))
+        muni_finance_ref.set({'general_fund': current_general + amount}, merge=True)
         # Deduct from regional fund
         region_finance_ref.update({'available_fund': available_fund - amount})
         return jsonify({'success': True, 'distributed': [muni]})

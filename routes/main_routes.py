@@ -91,6 +91,17 @@ def national_accounting_dashboard_view():
             for fund_doc in funds_query:
                 fund = fund_doc.to_dict()
                 regional_funds.append(fund)
+            # Sum all municipalities' general funds
+            muni_docs = db.collection('finance').stream()
+            total_general_fund = 0
+            for mdoc in muni_docs:
+                mdata = mdoc.to_dict()
+                if mdoc.id not in ['national']:
+                    try:
+                        total_general_fund += float(mdata.get('general_fund', 0))
+                    except Exception:
+                        pass
+            finance_data['national']['municipal_general_fund_total'] = total_general_fund
         except Exception:
             finance_data['national'] = {}
         return render_template('national/accounting/accounting-dashboard.html', finance=finance_data, regional_funds=regional_funds)
