@@ -142,9 +142,9 @@ def accounting_dashboard_view():
         print(f"[DEBUG] Error calculating received_from_national: {e}")
     municipalities = []
     try:
-        docs = db.collection('municipalities').stream()
-        for doc in docs:
-            municipalities.append(doc.id)
+        doc = db.collection('municipalities').document(user_region).get()
+        if doc.exists:
+            municipalities = doc.to_dict().get('municipalities', [])
     except Exception:
         pass
     # Fetch only municipal fund distributions for this region
@@ -181,7 +181,7 @@ def distribute_fund():
     db = firestore.client()
     data = request.json
     muni = data.get('municipality')
-    amount = data.get('amount')
+    amount = float(data.get('amount'))
     fund_type = data.get('fund_type')
     transfer_id = data.get('transfer_id')
     region = data.get('region')
@@ -193,8 +193,19 @@ def distribute_fund():
             allowed_munis = doc.to_dict().get('municipalities', [])
     except Exception:
         pass
+    # Deduct from regional fund (available_fund in finance collection)
+    region_finance_ref = db.collection('finance').document(region)
+    region_finance_doc = region_finance_ref.get()
+    if not region_finance_doc.exists:
+        return jsonify({'success': False, 'error': 'Regional fund not found'}), 404
+    region_finance = region_finance_doc.to_dict()
+    available_fund = float(region_finance.get('available_fund', 0))
+
     if muni == 'ALL':
         # Distribute to all municipalities under this region
+        total_amount = amount * len(allowed_munis)
+        if available_fund < total_amount:
+            return jsonify({'success': False, 'error': 'Insufficient regional fund'}), 400
         for m in allowed_munis:
             record = {
                 'municipality': m,
@@ -206,10 +217,14 @@ def distribute_fund():
                 'timestamp': firestore.SERVER_TIMESTAMP
             }
             db.collection('municipal_fund_distribution').add(record)
+        # Deduct total from regional fund
+        region_finance_ref.update({'available_fund': available_fund - total_amount})
         return jsonify({'success': True, 'distributed': allowed_munis})
     else:
         if muni not in allowed_munis:
             return jsonify({'success': False, 'error': 'Municipality not under your region'}), 403
+        if available_fund < amount:
+            return jsonify({'success': False, 'error': 'Insufficient regional fund'}), 400
         record = {
             'municipality': muni,
             'amount': amount,
@@ -220,6 +235,8 @@ def distribute_fund():
             'timestamp': firestore.SERVER_TIMESTAMP
         }
         db.collection('municipal_fund_distribution').add(record)
+        # Deduct from regional fund
+        region_finance_ref.update({'available_fund': available_fund - amount})
         return jsonify({'success': True, 'distributed': [muni]})
 
 @bp.route('/accounting/sync-municipalities', methods=['POST'])
