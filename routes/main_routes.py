@@ -259,6 +259,19 @@ def distribute_fund_to_region():
             current_budget = float(national_data.get('budget', 0))
             new_budget = current_budget - float(amount)
             db.collection('finance').document('national').set({'budget': new_budget}, merge=True)
+
+        # Record funds received by region in finance collection
+        regional_finance_doc = db.collection('finance').document(region).get()
+        if regional_finance_doc.exists:
+            regional_data = regional_finance_doc.to_dict()
+            prev_received = float(regional_data.get('received_from_national', 0))
+            db.collection('finance').document(region).set({
+                'received_from_national': prev_received + float(amount)
+            }, merge=True)
+        else:
+            db.collection('finance').document(region).set({
+                'received_from_national': float(amount)
+            })
         return jsonify({'success': True, 'record': record})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
