@@ -118,7 +118,7 @@ def accounting_dashboard_view():
     try:
         docs = db.collection('finance').stream()
         for doc in docs:
-            finance_data.update(doc.to_dict())
+            finance_data[doc.id] = doc.to_dict()
     except Exception:
         pass
     municipalities = []
