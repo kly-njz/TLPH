@@ -219,8 +219,14 @@
                 <input type="text" id="muniFundSearch" onkeyup="applyFilters()" placeholder="Search Municipality or Fund..." 
                   class="pl-7 pr-2 py-1 bg-white border border-slate-300 rounded-sm text-[10px] w-48 outline-none focus:border-blue-900">
               </div>
-              <button onclick="distributeToAllMunicipalities()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-sm text-[10px] font-black uppercase flex items-center gap-1 transition">
-                <span class="material-icons-round text-sm">send</span> Distribute Fund to All
+              <select id="municipalityDropdown" title="Filter by municipality" class="pl-2 pr-2 py-1 bg-white border border-slate-300 rounded-sm text-[10px] w-48 outline-none focus:border-blue-900">
+                <option value="ALL">All Municipalities</option>
+                {% for muni in municipalities %}
+                  <option value="{{ muni }}">{{ muni }}</option>
+                {% endfor %}
+              </select>
+              <button onclick="distributeFundToSelected()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-sm text-[10px] font-black uppercase flex items-center gap-1 transition">
+                <span class="material-icons-round text-sm">send</span> Distribute Fund
               </button>
             </div>
           </div>
@@ -231,8 +237,10 @@
             <span class="font-black">₱ {{ finance[user_region]['received_from_national'] if finance[user_region] and finance[user_region]['received_from_national'] else '0.00' }}</span>
           </div>
           <script>
-          function distributeToAllMunicipalities() {
-            if (!confirm('Distribute available national fund to all municipalities?')) return;
+          function distributeFundToSelected() {
+            const muni = document.getElementById('municipalityDropdown').value;
+            let confirmMsg = muni === 'ALL' ? 'Distribute available national fund to all municipalities?' : `Distribute available national fund to ${muni}?`;
+            if (!confirm(confirmMsg)) return;
             fetch('/regional/accounting/distribute-fund', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -241,11 +249,11 @@
                 amount: "{{ finance['national']['available_fund'] if finance['national'] else 0 }}",
                 fund_type: 'national',
                 transfer_id: 'NAT-TRF-' + Date.now(),
-                municipality: 'ALL'
+                municipality: muni
               })
             }).then(r => r.json()).then(data => {
               if (data.success) {
-                alert('Fund distributed to all municipalities!');
+                alert('Fund distributed!');
                 location.reload();
               } else {
                 alert('Distribution failed.');
