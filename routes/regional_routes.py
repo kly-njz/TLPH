@@ -214,13 +214,14 @@ def distribute_fund():
     if not region_finance_doc.exists:
         return jsonify({'success': False, 'error': 'Regional fund not found'}), 404
     region_finance = region_finance_doc.to_dict()
-    available_fund = float(region_finance.get('available_fund', 0))
+    available_fund = float(region_finance.get('received_from_national', 0))
 
     if muni == 'ALL':
         # Distribute to all municipalities under this region
         total_amount = amount * len(allowed_munis)
         if available_fund < total_amount:
-            return jsonify({'success': False, 'error': 'Insufficient regional fund'}), 400
+            print(f"[ERROR] Insufficient regional fund: available={available_fund}, required={total_amount}")
+            return jsonify({'success': False, 'error': f'Insufficient regional fund: available={available_fund}, required={total_amount}'}), 400
         for m in allowed_munis:
             # Province must be provided for each m
             if (m, province) not in allowed_pairs:
@@ -245,13 +246,14 @@ def distribute_fund():
                 current_general = float(muni_finance_doc.to_dict().get('general_fund', 0))
             muni_finance_ref.set({'general_fund': current_general + amount}, merge=True)
         # Deduct total from regional fund
-        region_finance_ref.update({'available_fund': available_fund - total_amount})
+        region_finance_ref.update({'received_from_national': available_fund - total_amount})
         return jsonify({'success': True, 'distributed': allowed_munis})
     else:
         if (muni, province) not in allowed_pairs:
             return jsonify({'success': False, 'error': f'Municipality {muni} with province {province} not under your region'}), 403
         if available_fund < amount:
-            return jsonify({'success': False, 'error': 'Insufficient regional fund'}), 400
+            print(f"[ERROR] Insufficient regional fund: available={available_fund}, required={amount}")
+            return jsonify({'success': False, 'error': f'Insufficient regional fund: available={available_fund}, required={amount}'}), 400
         record = {
             'municipality': muni,
             'province': province,
@@ -272,7 +274,7 @@ def distribute_fund():
             current_general = float(muni_finance_doc.to_dict().get('general_fund', 0))
         muni_finance_ref.set({'general_fund': current_general + amount}, merge=True)
         # Deduct from regional fund
-        region_finance_ref.update({'available_fund': available_fund - amount})
+        region_finance_ref.update({'received_from_national': available_fund - amount})
         return jsonify({'success': True, 'distributed': [muni]})
 
 @bp.route('/accounting/sync-municipalities', methods=['POST'])
@@ -307,3 +309,22 @@ def accounting_deposits_view():
 @role_required('regional','regional_admin')
 def accounting_expenses_view():
     return render_template('regional/accounting/expense-category-regional.html')
+
+@bp.route('/accounting/topup-fund', methods=['POST'])
+@role_required('regional','regional_admin','superadmin')
+def topup_fund():
+    from flask import request, jsonify
+    from firebase_admin import firestore
+    db = firestore.client()
+    data = request.json
+    region = data.get('region')
+    amount = float(data.get('amount', 0))
+    if not region or amount <= 0:
+        return jsonify({'success': False, 'error': 'Region and positive amount required'}), 400
+    region_finance_ref = db.collection('finance').document(region)
+    region_finance_doc = region_finance_ref.get()
+    if not region_finance_doc.exists:
+        return jsonify({'success': False, 'error': 'Regional fund not found'}), 404
+    current = float(region_finance_doc.to_dict().get('available_fund', 0))
+    region_finance_ref.update({'available_fund': current + amount})
+    return jsonify({'success': True, 'region': region, 'new_available_fund': current + amount})
