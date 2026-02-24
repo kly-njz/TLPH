@@ -247,22 +247,59 @@ def applicants_municipal():
 @bp.route('/accounting/dashboard-municipal')
 @role_required('municipal','municipal_admin')
 def accounting_dashboard_municipal():
+    from flask import session
     db = get_firestore_db()
     finance_data = {}
+    municipality_name = None
+    region_name = None
+    province_name = None
+    # Try to get municipality from session
+    municipality_name = session.get('municipality') or session.get('user_municipality')
+    region_name = session.get('region') or session.get('user_region')
+    province_name = session.get('province') or session.get('user_province')
+    # If not in session, try to get from user document
+    if not municipality_name:
+        user_id = session.get('user_id')
+        if user_id:
+            user_doc = db.collection('users').document(user_id).get()
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+                municipality_name = user_data.get('municipality') or user_data.get('municipality_name')
+                region_name = user_data.get('region') or user_data.get('region_name')
+                province_name = user_data.get('province') or user_data.get('province_name')
+    # Fetch finance data for this municipality only
     try:
-        docs = db.collection('finance').stream()
-        for doc in docs:
-            finance_data.update(doc.to_dict())
+        if municipality_name:
+            doc = db.collection('finance').document(municipality_name).get()
+            if doc.exists:
+                finance_data = doc.to_dict()
+        else:
+            # fallback: fetch all (should not happen)
+            docs = db.collection('finance').stream()
+            for doc in docs:
+                finance_data.update(doc.to_dict())
     except Exception:
         pass
     revenue_mix = []
     try:
-        docs = db.collection('revenue_mix').stream()
-        for doc in docs:
-            revenue_mix.append(doc.to_dict())
+        if municipality_name:
+            docs = db.collection('revenue_mix').where('municipality', '==', municipality_name).stream()
+            for doc in docs:
+                revenue_mix.append(doc.to_dict())
+        else:
+            docs = db.collection('revenue_mix').stream()
+            for doc in docs:
+                revenue_mix.append(doc.to_dict())
     except Exception:
         pass
-    return render_template('municipal/accounting/dashboard-municipal.html', finance=finance_data, revenue_mix=revenue_mix)
+    return render_template(
+        'municipal/accounting/dashboard-municipal.html',
+        finance=finance_data,
+        revenue_mix=revenue_mix,
+        municipality_name=municipality_name,
+        region_name=region_name,
+        province_name=province_name
+    )
 
 @bp.route('/accounting/entities-municipal')
 @role_required('municipal','municipal_admin')
