@@ -4,7 +4,7 @@ Welcome to the TLPH project! A comprehensive web application for managing touris
 
 ## 📋 Project Overview
 
-TLPH is a full-stack web application designed for the Department of Environment and Natural Resources (DENR) to streamline the management of environmental permits, licenses, services, and inventory tracking. The system supports multiple user roles including super admins, national admins, regional admins, municipal admins, and regular users.
+TLPH is a full-stack web application designed for the Department of Environment and Natural Resources (DENR), management of environmental permits, licenses, services, and inventory tracking. The system supports multiple user roles including super admins, national admins, regional admins, municipal admins, and regular users.
 
 ![Icarus Rising Above Clouds](static/images/icarus-rising-above-clouds-gn478apwhyrg5im0.jpg)
 
