@@ -192,11 +192,20 @@ def distribute_fund():
     print(f"[DEBUG] Incoming fund distribution request: region={region}, municipality={muni}, province={province}, amount={amount}, fund_type={fund_type}, transfer_id={transfer_id}")
     # Validate municipality belongs to region
     allowed_munis = []
+    allowed_pairs = set()
     try:
         doc = db.collection('municipalities').document(region).get()
         if doc.exists:
             allowed_munis = doc.to_dict().get('municipalities', [])
+            # allowed_munis is a list of municipality names, but we need province info
+            # Try to get province-municipality pairs from frontend or static mapping
+            # For now, build pairs from the region definition in dashboard-regional.html
+            from models.ph_locations import philippineLocations
+            for prov, munis in philippineLocations.items():
+                for m in munis:
+                    allowed_pairs.add((m, prov))
         print(f"[DEBUG] Allowed municipalities for region {region}: {allowed_munis}")
+        print(f"[DEBUG] Allowed muni-province pairs: {allowed_pairs}")
     except Exception as e:
         print(f"[DEBUG] Error fetching allowed municipalities: {e}")
     # Deduct from regional fund (available_fund in finance collection)
@@ -213,8 +222,9 @@ def distribute_fund():
         if available_fund < total_amount:
             return jsonify({'success': False, 'error': 'Insufficient regional fund'}), 400
         for m in allowed_munis:
-            # You must know the province for each m; here, assume province is provided or can be mapped
-            # For simplicity, require frontend to send province for each municipality in bulk mode
+            # Province must be provided for each m
+            if (m, province) not in allowed_pairs:
+                return jsonify({'success': False, 'error': f'Municipality {m} with province {province} not under your region'}), 403
             record = {
                 'municipality': m,
                 'province': province,
@@ -238,8 +248,8 @@ def distribute_fund():
         region_finance_ref.update({'available_fund': available_fund - total_amount})
         return jsonify({'success': True, 'distributed': allowed_munis})
     else:
-        if muni not in allowed_munis:
-            return jsonify({'success': False, 'error': 'Municipality not under your region'}), 403
+        if (muni, province) not in allowed_pairs:
+            return jsonify({'success': False, 'error': f'Municipality {muni} with province {province} not under your region'}), 403
         if available_fund < amount:
             return jsonify({'success': False, 'error': 'Insufficient regional fund'}), 400
         record = {

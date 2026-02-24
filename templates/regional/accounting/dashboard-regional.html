@@ -307,22 +307,28 @@
             const form = document.getElementById('distributeForm');
             const data = new FormData(form);
             const payload = [];
-            // Build payload with both municipality and province
-            {% for province, munis in regions[region].items() %}
-              {% for muni in munis %}
-                const amt_{{ muni|replace(' ', '_') }}_{{ province|replace(' ', '_') }} = parseFloat(data.get('amount_{{ muni }}_{{ province }}'));
-                if (!isNaN(amt_{{ muni|replace(' ', '_') }}_{{ province|replace(' ', '_') }}) && amt_{{ muni|replace(' ', '_') }}_{{ province|replace(' ', '_') }} > 0) {
+            // Loop through all form elements to build payload
+            for (let [key, value] of data.entries()) {
+              if (key.startsWith('amount_')) {
+                const amount = parseFloat(value);
+                if (!isNaN(amount) && amount > 0) {
+                  // Extract municipality and province from the input name
+                  // Format: amount_MUNICIPALITY_PROVINCE
+                  const parts = key.replace('amount_', '').split('_');
+                  // Province may have underscores, so join all after the first as province
+                  const muni = parts[0].replace(/_/g, ' ');
+                  const province = parts.slice(1).join('_').replace(/_/g, ' ');
                   payload.push({
                     region: "{{ user_region }}",
-                    amount: amt_{{ muni|replace(' ', '_') }}_{{ province|replace(' ', '_') }},
+                    amount: amount,
                     fund_type: 'national',
-                    transfer_id: 'NAT-TRF-' + Date.now() + '-{{ muni }}-{{ province }}',
-                    municipality: "{{ muni }}",
-                    province: "{{ province }}"
+                    transfer_id: 'NAT-TRF-' + Date.now() + '-' + muni + '-' + province,
+                    municipality: muni,
+                    province: province
                   });
                 }
-              {% endfor %}
-            {% endfor %}
+              }
+            }
             if (payload.length === 0) {
               alert('Enter at least one amount.');
               return;
