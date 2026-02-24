@@ -143,10 +143,13 @@ def accounting_dashboard_view():
     municipalities = []
     try:
         doc = db.collection('municipalities').document(user_region).get()
+        print("user_region:", user_region)
+        print("Firestore doc:", doc.to_dict())
         if doc.exists:
             municipalities = doc.to_dict().get('municipalities', [])
-    except Exception:
-        pass
+        print("municipalities:", municipalities)
+    except Exception as e:
+        print("[DEBUG] Error fetching municipalities:", e)
     # Fetch only municipal fund distributions for this region
     municipal_funds = []
     try:
