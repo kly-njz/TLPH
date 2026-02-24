@@ -219,15 +219,34 @@
                 <input type="text" id="muniFundSearch" onkeyup="applyFilters()" placeholder="Search Municipality or Fund..." 
                   class="pl-7 pr-2 py-1 bg-white border border-slate-300 rounded-sm text-[10px] w-48 outline-none focus:border-blue-900">
               </div>
-              <select id="municipalityDropdown" title="Filter by municipality" class="pl-2 pr-2 py-1 bg-white border border-slate-300 rounded-sm text-[10px] w-48 outline-none focus:border-blue-900">
-                <option value="ALL">All Municipalities</option>
-                {% for muni in municipalities %}
-                  <option value="{{ muni }}">{{ muni }}</option>
-                {% endfor %}
-              </select>
-              <button onclick="distributeFundToSelected()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-sm text-[10px] font-black uppercase flex items-center gap-1 transition">
+              <button onclick="openDistributeModal()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-sm text-[10px] font-black uppercase flex items-center gap-1 transition">
                 <span class="material-icons-round text-sm">send</span> Distribute Fund
               </button>
+              <!-- Distribute Fund Modal -->
+              <div id="distributeModal" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 hidden">
+                <div class="bg-white rounded shadow-lg p-6 w-[400px] max-h-[90vh] overflow-y-auto">
+                  <h3 class="text-lg font-black mb-2">Distribute Fund to Municipalities</h3>
+                  <form id="distributeForm" onsubmit="submitDistribution(event)">
+                    <table class="w-full mb-3">
+                      <thead><tr><th class="text-left text-xs">Municipality</th><th class="text-right text-xs">Amount</th></tr></thead>
+                      <tbody>
+                        {% for muni in municipalities %}
+                        <tr>
+                          <td class="py-1">{{ muni }}</td>
+                          <td class="py-1 text-right">
+                            <input type="number" min="0" step="any" name="amount_{{ muni }}" placeholder="0.00" class="border rounded px-2 py-1 text-xs w-24 text-right" />
+                          </td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                    <div class="flex justify-end gap-2">
+                      <button type="button" onclick="closeDistributeModal()" class="px-3 py-1 rounded bg-slate-200 text-slate-700 font-bold">Cancel</button>
+                      <button type="submit" class="px-3 py-1 rounded bg-emerald-700 text-white font-bold">Distribute</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
           <div class="px-3 py-2 bg-blue-50 border-b border-blue-200 text-blue-900 text-[10px] font-bold flex items-center gap-2">
@@ -237,27 +256,45 @@
             <span class="font-black">₱ {{ finance[user_region]['received_from_national'] if finance[user_region] and finance[user_region]['received_from_national'] else '0.00' }}</span>
           </div>
           <script>
-          function distributeFundToSelected() {
-            const muni = document.getElementById('municipalityDropdown').value;
-            let confirmMsg = muni === 'ALL' ? 'Distribute available national fund to all municipalities?' : `Distribute available national fund to ${muni}?`;
-            if (!confirm(confirmMsg)) return;
-            fetch('/regional/accounting/distribute-fund', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                region: "{{ user_region|default('') }}",
-                amount: "{{ finance['national']['available_fund'] if finance['national'] else 0 }}",
-                fund_type: 'national',
-                transfer_id: 'NAT-TRF-' + Date.now(),
-                municipality: muni
-              })
-            }).then(r => r.json()).then(data => {
-              if (data.success) {
-                alert('Fund distributed!');
-                location.reload();
-              } else {
-                alert('Distribution failed.');
+          function openDistributeModal() {
+            document.getElementById('distributeModal').classList.remove('hidden');
+          }
+          function closeDistributeModal() {
+            document.getElementById('distributeModal').classList.add('hidden');
+          }
+          function submitDistribution(event) {
+            event.preventDefault();
+            const form = document.getElementById('distributeForm');
+            const data = new FormData(form);
+            const payload = [];
+            {% for muni in municipalities %}
+              const amt = parseFloat(data.get('amount_{{ muni }}'));
+              if (!isNaN(amt) && amt > 0) {
+                payload.push({
+                  region: "{{ user_region|default('') }}",
+                  amount: amt,
+                  fund_type: 'national',
+                  transfer_id: 'NAT-TRF-' + Date.now() + '-{{ muni }}',
+                  municipality: "{{ muni }}"
+                });
               }
+            {% endfor %}
+            if (payload.length === 0) {
+              alert('Enter at least one amount.');
+              return;
+            }
+            Promise.all(payload.map(item =>
+              fetch('/regional/accounting/distribute-fund', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(item)
+              })
+            )).then(() => {
+              alert('Fund distribution complete!');
+              closeDistributeModal();
+              location.reload();
+            }).catch(() => {
+              alert('Distribution failed.');
             });
           }
           </script>
