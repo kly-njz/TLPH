@@ -121,6 +121,25 @@ def accounting_dashboard_view():
             finance_data[doc.id] = doc.to_dict()
     except Exception:
         pass
+
+    # Calculate and update received_from_national for the region
+    try:
+        reg_funds_query = db.collection('regional_fund_distribution').where('region', '==', user_region).stream()
+        total_received = 0
+        for fund_doc in reg_funds_query:
+            fund = fund_doc.to_dict()
+            try:
+                total_received += float(fund.get('amount', 0))
+            except Exception:
+                pass
+        # Update the finance document for the region
+        db.collection('finance').document(user_region).set({'received_from_national': total_received}, merge=True)
+        # Also update in finance_data for template rendering
+        if user_region not in finance_data:
+            finance_data[user_region] = {}
+        finance_data[user_region]['received_from_national'] = total_received
+    except Exception as e:
+        print(f"[DEBUG] Error calculating received_from_national: {e}")
     municipalities = []
     try:
         docs = db.collection('municipalities').stream()
