@@ -269,7 +269,13 @@ def accounting_dashboard_municipal():
                 province_name = user_data.get('province') or user_data.get('province_name')
     # Fetch finance data for this municipality only
     try:
-        if municipality_name:
+        if municipality_name and province_name:
+            doc_id = f"{municipality_name.upper().replace(' ', '_')}_{province_name.upper().replace(' ', '_')}"
+            doc = db.collection('finance').document(doc_id).get()
+            if doc.exists:
+                finance_data = doc.to_dict()
+        elif municipality_name:
+            # fallback: try old style (just municipality name)
             doc = db.collection('finance').document(municipality_name).get()
             if doc.exists:
                 finance_data = doc.to_dict()
