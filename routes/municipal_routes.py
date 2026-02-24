@@ -298,13 +298,28 @@ def accounting_dashboard_municipal():
                 revenue_mix.append(doc.to_dict())
     except Exception:
         pass
+    # Fetch regional-to-municipal fund transfer activity for this municipality
+    fund_activity = []
+    try:
+        if municipality_name and province_name:
+            docs = db.collection('municipal_fund_distribution') \
+                .where('municipality', '==', municipality_name) \
+                .where('province', '==', province_name) \
+                .order_by('timestamp', direction=firestore.Query.DESCENDING) \
+                .stream()
+            for doc in docs:
+                fund_activity.append(doc.to_dict())
+    except Exception as e:
+        print(f"[DEBUG] Error fetching fund_activity: {e}")
+
     return render_template(
         'municipal/accounting/dashboard-municipal.html',
         finance=finance_data,
         revenue_mix=revenue_mix,
         municipality_name=municipality_name,
         region_name=region_name,
-        province_name=province_name
+        province_name=province_name,
+        fund_activity=fund_activity
     )
 
 @bp.route('/accounting/entities-municipal')
