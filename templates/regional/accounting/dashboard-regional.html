@@ -267,18 +267,22 @@
             const form = document.getElementById('distributeForm');
             const data = new FormData(form);
             const payload = [];
-            {% for muni in municipalities %}
-              const amt = parseFloat(data.get('amount_{{ muni }}'));
+            // Use a JS array for municipalities to avoid Jinja2-in-JS issues
+            const municipalities = [
+              {% for muni in municipalities %}'{{ muni }}'{% if not loop.last %}, {% endif %}{% endfor %}
+            ];
+            municipalities.forEach(function(muniName) {
+              const amt = parseFloat(data.get('amount_' + muniName));
               if (!isNaN(amt) && amt > 0) {
                 payload.push({
                   region: "{{ user_region|default('') }}",
                   amount: amt,
                   fund_type: 'national',
-                  transfer_id: 'NAT-TRF-' + Date.now() + '-{{ muni }}',
-                  municipality: "{{ muni }}"
+                  transfer_id: 'NAT-TRF-' + Date.now() + '-' + muniName,
+                  municipality: muniName
                 });
               }
-            {% endfor %}
+            });
             if (payload.length === 0) {
               alert('Enter at least one amount.');
               return;
