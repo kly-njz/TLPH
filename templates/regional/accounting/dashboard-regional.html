@@ -266,7 +266,8 @@
                                   <tr>
                                     <td class="py-1 pr-2 text-slate-700 font-medium">{{ muni }}</td>
                                     <td class="py-1 text-right">
-                                      <input type="number" min="0" step="any" name="amount_{{ muni }}" placeholder="0.00" class="border border-slate-300 rounded px-2 py-1 text-xs w-24 text-right focus:border-blue-500" />
+                                      <input type="number" min="0" step="any" name="amount_{{ muni }}_{{ province }}" placeholder="0.00" class="border border-slate-300 rounded px-2 py-1 text-xs w-24 text-right focus:border-blue-500" />
+                                      <input type="hidden" name="province_{{ muni }}_{{ province }}" value="{{ province }}" />
                                     </td>
                                   </tr>
                                   {% endfor %}
@@ -306,21 +307,22 @@
             const form = document.getElementById('distributeForm');
             const data = new FormData(form);
             const payload = [];
-            // Use a JS array for municipalities to avoid Jinja2-in-JS issues
-            var municipalities = {{ municipalities | default([]) | tojson | safe }};
-
-            municipalities.forEach(function(muniName) {
-              const amt = parseFloat(data.get('amount_' + muniName));
-              if (!isNaN(amt) && amt > 0) {
-                payload.push({
-                  region: "{{ user_region }}",
-                  amount: amt,
-                  fund_type: 'national',
-                  transfer_id: 'NAT-TRF-' + Date.now() + '-' + muniName,
-                  municipality: muniName
-                });
-              }
-            });
+            // Build payload with both municipality and province
+            {% for province, munis in regions[region].items() %}
+              {% for muni in munis %}
+                const amt_{{ muni|replace(' ', '_') }}_{{ province|replace(' ', '_') }} = parseFloat(data.get('amount_{{ muni }}_{{ province }}'));
+                if (!isNaN(amt_{{ muni|replace(' ', '_') }}_{{ province|replace(' ', '_') }}) && amt_{{ muni|replace(' ', '_') }}_{{ province|replace(' ', '_') }} > 0) {
+                  payload.push({
+                    region: "{{ user_region }}",
+                    amount: amt_{{ muni|replace(' ', '_') }}_{{ province|replace(' ', '_') }},
+                    fund_type: 'national',
+                    transfer_id: 'NAT-TRF-' + Date.now() + '-{{ muni }}-{{ province }}',
+                    municipality: "{{ muni }}",
+                    province: "{{ province }}"
+                  });
+                }
+              {% endfor %}
+            {% endfor %}
             if (payload.length === 0) {
               alert('Enter at least one amount.');
               return;
