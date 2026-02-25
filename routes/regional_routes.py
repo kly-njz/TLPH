@@ -18,10 +18,11 @@ def application_list_view():
 def service_list_view():
     return render_template('regional/service-regional-list.html')
 
-@bp.route('/service-view')
+@bp.route('/service-view', defaults={'doc_id': None})
+@bp.route('/service-view/<doc_id>')
 @role_required('regional','regional_admin')
-def service_info_view():
-    return render_template('regional/service-regional-view.html')
+def service_info_view(doc_id=None):
+    return render_template('regional/service-regional-view.html', doc_id=doc_id)
 
 @bp.route('/inventory-view')
 @role_required('regional','regional_admin')

@@ -141,6 +141,9 @@
                                     
                                     <p class="info-label">Municipality</p>
                                     <p class="info-value" id="municipality">—</p>
+
+                                    <p class="info-label">Barangay</p>
+                                    <p class="info-value" id="barangay">—</p>
                                 </div>
                                 <div class="col-md-6">
                                     <p class="info-label">Payment Status</p>
@@ -164,6 +167,12 @@
                                     <p class="info-value text-xs normal-case" id="requestDetails">—</p>
                                 </div>
                             </div>
+
+                            <div id="specificFieldsSection" style="display:none;">
+                                <hr class="my-4 opacity-10">
+                                <h3 class="text-xs font-black uppercase border-b pb-2 mb-4 text-indigo-800"><i class="fa-solid fa-clipboard-list me-2"></i> Form-Specific Details</h3>
+                                <div id="specificFieldsGrid" class="row"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -184,20 +193,47 @@
                             <h3 class="text-xs font-black uppercase border-b pb-2 mb-4 text-blue-900 text-center">Admin Actions</h3>
                             
                             <div class="d-grid gap-2">
-                                <button onclick="updateServiceStatus('approved')" class="btn btn-success bg-green-700 border-0 btn-action shadow-sm">
+                                <button id="btnApprove" onclick="updateServiceStatus('approved')" class="btn btn-success bg-green-700 border-0 btn-action shadow-sm">
                                     <i class="fa-solid fa-circle-check me-2"></i> Approve Service Request
                                 </button>
                                 
-                                <button onclick="updateServiceStatus('submitted')" class="btn btn-warning bg-blue-600 border-0 btn-action text-white shadow-sm">
-                                    <i class="fa-solid fa-arrow-up-right-from-square me-2"></i> Mark as Submitted
+                                <button id="btnForward" onclick="forwardToRegional()" class="btn btn-warning bg-indigo-600 border-0 btn-action text-white shadow-sm">
+                                    <i class="fa-solid fa-share-from-square me-2"></i> Forward to Regional
                                 </button>
                                 
-                                <button onclick="updateServiceStatus('rejected')" class="btn btn-danger bg-red-600 border-0 btn-action shadow-sm">
-                                    <i class="fa-solid fa-circle-xmark me-2"></i> Reject Request
+                                <button id="btnReject" onclick="updateServiceStatus('rejected')" class="btn btn-danger bg-red-600 border-0 btn-action shadow-sm">
+                                    <i class="fa-solid fa-circle-xmark me-2"></i> Reject Service Request
                                 </button>
                             </div>
 
+                            <div id="actionNote" class="mt-3 p-2 rounded text-[9px] font-bold uppercase tracking-wide text-center" style="display:none;"></div>
+
                             <p class="text-[9px] text-slate-400 mt-4 text-center italic uppercase font-bold">Decisions are final and logged in Audit Logs</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Forwarding Info Panel (shown when status is to-review) -->
+                <div id="forwardedPanel" class="row g-4 mt-1" style="display:none;">
+                    <div class="col-12">
+                        <div class="gov-card p-4 border-t-indigo-600 bg-indigo-50">
+                            <h3 class="text-xs font-black uppercase border-b pb-2 mb-3 text-indigo-800"><i class="fa-solid fa-share-from-square me-2"></i> Forwarded to Regional</h3>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <p class="info-label">Forwarded By</p>
+                                    <p class="info-value text-indigo-700" id="forwardedBy">—</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p class="info-label">Forwarded At</p>
+                                    <p class="info-value" id="forwardedAt">—</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p class="info-label">View in Regional</p>
+                                    <a href="/regional/service-list" target="_blank" class="btn btn-sm bg-indigo-600 text-white border-0 btn-action shadow-sm mt-1" style="font-size:10px;padding:6px 12px;">
+                                        <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Open Regional List
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -318,11 +354,18 @@
                 console.log('Payment status:', paymentStatus);
                 
                 if (status === 'approved' || paymentStatus === 'completed' || paymentStatus === 'paid') {
+                    const level = serviceData.approvedByLevel || 'Municipal';
                     statusBadge.className = 'bg-green-100 text-green-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-green-200';
-                    statusBadge.textContent = 'Status: Approved';
+                    statusBadge.textContent = `Status: Approved by ${level}`;
                 } else if (status === 'rejected') {
                     statusBadge.className = 'bg-red-100 text-red-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-red-200';
                     statusBadge.textContent = 'Status: Rejected';
+                } else if (status === 'forwarded-national') {
+                    statusBadge.className = 'bg-violet-100 text-violet-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-violet-200';
+                    statusBadge.textContent = 'Status: Forwarded to National';
+                } else if (status === 'to-review') {
+                    statusBadge.className = 'bg-indigo-100 text-indigo-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-indigo-200';
+                    statusBadge.textContent = 'Status: Forwarded to Regional';
                 } else {
                     statusBadge.className = 'bg-amber-100 text-amber-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-amber-200';
                     statusBadge.textContent = 'Status: Pending Review';
@@ -332,8 +375,9 @@
                 console.log('Setting service details...');
                 document.getElementById('serviceType').textContent = serviceData.serviceType || 'N/A';
                 document.getElementById('description').textContent = serviceData.description || 'N/A';
-                document.getElementById('municipality').textContent = serviceData.municipality || 'N/A';
-                document.getElementById('province').textContent = serviceData.province || 'N/A';
+                document.getElementById('municipality').textContent = serviceData.municipality || userData?.municipality || 'N/A';
+                document.getElementById('province').textContent = serviceData.province || userData?.province || 'N/A';
+                document.getElementById('barangay').textContent = serviceData.barangay || 'N/A';
                 
                 // Payment status with nice formatting
                 const paymentStatusText = paymentStatus === 'completed' || paymentStatus === 'paid' 
@@ -350,9 +394,54 @@
                     document.getElementById('dateFiled').textContent = 'N/A';
                 }
                 
-                // Request details
-                const details = serviceData.details || serviceData.notes || serviceData.comments || 'No additional details provided';
+                // Request details (narrative for typhoon, fallback chain)
+                const details = serviceData.narrative || serviceData.details || serviceData.notes || serviceData.comments || 'No additional details provided';
                 document.getElementById('requestDetails').textContent = details;
+
+                // Show form-specific fields for typhoon / pest
+                const svcType = (serviceData.serviceType || '').toLowerCase();
+                const specificSection = document.getElementById('specificFieldsSection');
+                const specificGrid = document.getElementById('specificFieldsGrid');
+
+                if (svcType.includes('typhoon')) {
+                    specificSection.style.display = '';
+                    specificGrid.innerHTML = `
+                        <div class="col-md-6">
+                            <p class="info-label">Typhoon Name</p>
+                            <p class="info-value">${serviceData.typhoonName || 'N/A'}</p>
+                            <p class="info-label">Occurrence Time</p>
+                            <p class="info-value">${serviceData.occurrenceTime ? new Date(serviceData.occurrenceTime).toLocaleString('en-US') : 'N/A'}</p>
+                            <p class="info-label">Crop / Species</p>
+                            <p class="info-value">${serviceData.cropSpecies || 'N/A'}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="info-label">Area Affected (ha)</p>
+                            <p class="info-value">${serviceData.areaAffected || 'N/A'}</p>
+                            <p class="info-label">Type of Damage</p>
+                            <p class="info-value">${serviceData.damageType || 'N/A'}</p>
+                        </div>
+                    `;
+                } else if (svcType.includes('pest')) {
+                    specificSection.style.display = '';
+                    specificGrid.innerHTML = `
+                        <div class="col-md-6">
+                            <p class="info-label">Crop / Species</p>
+                            <p class="info-value">${serviceData.cropSpecies || 'N/A'}</p>
+                            <p class="info-label">Pest Type</p>
+                            <p class="info-value">${serviceData.pestType || 'N/A'}</p>
+                            <p class="info-label">Date Observed</p>
+                            <p class="info-value">${serviceData.dateObserved || 'N/A'}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="info-label">Area Damaged (ha)</p>
+                            <p class="info-value">${serviceData.areaDamaged || 'N/A'}</p>
+                            <p class="info-label">Estimated Loss</p>
+                            <p class="info-value">${serviceData.lossValue ? '\u20b1' + Number(serviceData.lossValue).toLocaleString() : 'N/A'}</p>
+                            <p class="info-label">Last Spray Date</p>
+                            <p class="info-value">${serviceData.lastSpray || 'N/A'}</p>
+                        </div>
+                    `;
+                }
                 
                 console.log('Service details set successfully');
 
@@ -369,6 +458,45 @@
                 document.getElementById('userId').textContent = serviceData.userId || 'N/A';
                 console.log('Requester details set successfully');
 
+                // ── Button state management ──────────────────────────────────────
+                const btnApprove = document.getElementById('btnApprove');
+                const btnForward = document.getElementById('btnForward');
+                const btnReject  = document.getElementById('btnReject');
+                const actionNote = document.getElementById('actionNote');
+                const forwardedPanel = document.getElementById('forwardedPanel');
+
+                const lockBtns = (noteText, noteClass) => {
+                    [btnApprove, btnForward, btnReject].forEach(b => {
+                        b.disabled = true;
+                        b.classList.add('opacity-50', 'cursor-not-allowed');
+                    });
+                    actionNote.style.display = '';
+                    actionNote.textContent = noteText;
+                    actionNote.className = `mt-3 p-2 rounded text-[9px] font-bold uppercase tracking-wide text-center ${noteClass}`;
+                };
+
+                if (status === 'approved') {
+                    const lvl = serviceData.approvedByLevel || 'Municipal';
+                    lockBtns(`This request has already been approved by ${lvl}.`, 'bg-green-100 text-green-700');
+                } else if (status === 'rejected') {
+                    lockBtns('This request has been rejected.', 'bg-red-100 text-red-700');
+                } else if (status === 'forwarded-national') {
+                    lockBtns('Already forwarded to National. Awaiting national action.', 'bg-violet-100 text-violet-700');
+                } else if (status === 'to-review') {
+                    lockBtns('Already forwarded to regional. Awaiting regional action.', 'bg-indigo-100 text-indigo-700');
+                    // Show forwarded panel
+                    forwardedPanel.style.display = '';
+                    document.getElementById('forwardedBy').textContent = serviceData.forwardedByEmail || serviceData.forwardedBy || 'N/A';
+                    if (serviceData.forwardedAt) {
+                        let fDate = null;
+                        if (typeof serviceData.forwardedAt.toDate === 'function') { fDate = serviceData.forwardedAt.toDate(); }
+                        else if (serviceData.forwardedAt.seconds) { fDate = new Date(serviceData.forwardedAt.seconds * 1000); }
+                        document.getElementById('forwardedAt').textContent = fDate ? fDate.toLocaleString('en-US') : 'N/A';
+                    } else {
+                        document.getElementById('forwardedAt').textContent = 'N/A';
+                    }
+                }
+
                 console.log('All data populated, showing content');
                 // Show content, hide loading
                 document.getElementById('loadingContainer').style.display = 'none';
@@ -384,24 +512,50 @@
         window.updateServiceStatus = async function(newStatus) {
             const statusText = newStatus === 'approved' ? 'approve' : 
                              newStatus === 'rejected' ? 'reject' : 
-                             newStatus === 'submitted' ? 'mark as submitted' :
                              'update';
             const confirmed = confirm(`Are you sure you want to ${statusText} this service request?\n\nRef: ${document.getElementById('refNumber').textContent}\nRequester: ${document.getElementById('applicantName').textContent}`);
             
             if (!confirmed) return;
 
             try {
-                // Update service status
-                await updateDoc(doc(db, 'service_requests', currentServiceId), {
+                const updateFields = {
                     status: newStatus,
                     updatedAt: serverTimestamp()
-                });
+                };
+                if (newStatus === 'approved') {
+                    updateFields.approvedByLevel = 'Municipal';
+                    updateFields.approvedByEmail = auth.currentUser ? auth.currentUser.email : null;
+                    updateFields.approvedAt = serverTimestamp();
+                }
+                await updateDoc(doc(db, 'service_requests', currentServiceId), updateFields);
                 
-                alert(`Service request ${statusText} successfully!`);
-                await loadServiceDetails(); // Reload to show updated status
+                alert(`Service request ${newStatus} successfully!`);
+                await loadServiceDetails();
             } catch (error) {
                 console.error('Error updating status:', error);
                 alert('Failed to update service request status: ' + error.message);
+            }
+        };
+
+        window.forwardToRegional = async function() {
+            const confirmed = confirm(`Forward this service request to the Regional Office?\n\nRef: ${document.getElementById('refNumber').textContent}\nRequester: ${document.getElementById('applicantName').textContent}\n\nOnce forwarded, you can no longer approve or reject it here.`);
+            if (!confirmed) return;
+
+            try {
+                const currentUser = auth.currentUser;
+                await updateDoc(doc(db, 'service_requests', currentServiceId), {
+                    status: 'to-review',
+                    forwardedAt: serverTimestamp(),
+                    forwardedBy: currentUser ? currentUser.uid : null,
+                    forwardedByEmail: currentUser ? currentUser.email : null,
+                    updatedAt: serverTimestamp()
+                });
+
+                alert('Service request successfully forwarded to the Regional Office!');
+                await loadServiceDetails();
+            } catch (error) {
+                console.error('Error forwarding to regional:', error);
+                alert('Failed to forward service request: ' + error.message);
             }
         };
 

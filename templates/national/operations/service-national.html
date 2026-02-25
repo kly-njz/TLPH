@@ -211,7 +211,7 @@
               <tbody>
                 {% if service_requests and service_requests|length > 0 %}
                   {% for request in service_requests %}
-                  <tr>
+                  <tr id="row-{{ request.id }}">
                     <td>{{ request.date_filed }}</td>
                     <td class="fw-bold text-primary">SR-{{ request.reference_id }}</td>
                     <td>{{ request.applicant_name }}</td>
@@ -219,18 +219,21 @@
                     <td>{{ request.location }}</td>
                     <td>
                       {% if request.status == 'approved' %}
-                        <span class="status-pill border-success bg-success bg-opacity-10 text-success">Approved</span>
+                        <span id="badge-{{ request.id }}" class="status-pill border-success bg-success bg-opacity-10 text-success">Approved by National</span>
                       {% elif request.status == 'rejected' %}
-                        <span class="status-pill border-danger bg-danger bg-opacity-10 text-danger">Rejected</span>
+                        <span id="badge-{{ request.id }}" class="status-pill border-danger bg-danger bg-opacity-10 text-danger">Rejected</span>
                       {% else %}
-                        <span class="status-pill border-warning bg-warning bg-opacity-10 text-warning">Pending Action</span>
+                        <span id="badge-{{ request.id }}" class="status-pill border-warning bg-warning bg-opacity-10 text-warning">Pending Action</span>
+                      {% endif %}
+                      {% if request.forwarded_by and request.forwarded_by != 'N/A' %}
+                        <div style="font-size:0.55rem;color:#64748b;margin-top:2px;">by {{ request.forwarded_by }}</div>
                       {% endif %}
                     </td>
                     <td class="text-center">
                       <div class="btn-group shadow-sm border rounded">
                         <button class="btn btn-sm btn-light p-1" title="View" data-id="{{ request.id }}"><span class="material-icons-round fs-6 text-secondary">visibility</span></button>
-                        <button class="btn btn-sm btn-light p-1" title="Approve" data-id="{{ request.id }}"><span class="material-icons-round fs-6 text-success">check_circle</span></button>
-                        <button class="btn btn-sm btn-light p-1" title="Reject" data-id="{{ request.id }}"><span class="material-icons-round fs-6 text-danger">cancel</span></button>
+                        <button class="btn btn-sm btn-light p-1" title="Approve" data-id="{{ request.id }}" onclick="handleNationalAction('{{ request.id }}', 'approved', this)"><span class="material-icons-round fs-6 text-success">check_circle</span></button>
+                        <button class="btn btn-sm btn-light p-1" title="Reject" data-id="{{ request.id }}" onclick="handleNationalAction('{{ request.id }}', 'rejected', this)"><span class="material-icons-round fs-6 text-danger">cancel</span></button>
                       </div>
                     </td>
                   </tr>
@@ -310,6 +313,55 @@
   searchInput.addEventListener('input', filterTable);
   typeFilter.addEventListener('change', filterTable);
   statusFilter.addEventListener('change', filterTable);
+</script>
+
+<script type="module">
+  import { auth, db } from '/static/js/firebase-config.js';
+  import { doc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+  window.handleNationalAction = async function(reqId, action, btn) {
+    const label = action === 'approved' ? 'approve' : 'reject';
+    if (!confirm(`Confirm: ${label} this service request?`)) return;
+
+    const row = document.getElementById('row-' + reqId);
+    const badge = document.getElementById('badge-' + reqId);
+    const btns = row ? row.querySelectorAll('button[title="Approve"], button[title="Reject"]') : [];
+
+    btns.forEach(b => { b.disabled = true; b.classList.add('opacity-50'); });
+
+    try {
+      const updateFields = {
+        status: action,
+        approvedByLevel: 'National',
+        reviewedBy: auth.currentUser ? auth.currentUser.uid : '',
+        reviewedByEmail: auth.currentUser ? auth.currentUser.email : '',
+        reviewedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      if (action === 'approved') {
+        updateFields.approvedByEmail = auth.currentUser ? auth.currentUser.email : '';
+        updateFields.approvedAt = serverTimestamp();
+      }
+
+      await updateDoc(doc(db, 'service_requests', reqId), updateFields);
+
+      if (badge) {
+        if (action === 'approved') {
+          badge.className = 'status-pill border-success bg-success bg-opacity-10 text-success';
+          badge.textContent = 'Approved by National';
+        } else {
+          badge.className = 'status-pill border-danger bg-danger bg-opacity-10 text-danger';
+          badge.textContent = 'Rejected';
+        }
+      }
+
+      alert(`Service request ${action} by National successfully.`);
+    } catch (err) {
+      console.error('Error updating national status:', err);
+      alert('Error: ' + err.message);
+      btns.forEach(b => { b.disabled = false; b.classList.remove('opacity-50'); });
+    }
+  };
 </script>
 
 </body>

@@ -26,7 +26,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/denr-print.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/regional-style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
@@ -113,7 +112,7 @@
                 </div>
             </header>
 
-            <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0 mb-1 no-print">
+            <section class="grid grid-cols-1 sm:grid-cols-5 gap-2 shrink-0 mb-1 no-print">
                 <div class="gov-card p-2 px-3 border-l-4 border-l-blue-900 flex flex-col justify-between">
                     <div class="flex justify-between items-start">
                         <div>
@@ -153,6 +152,16 @@
                         <span class="material-icons-round text-rose-200 text-[20px]">block</span>
                     </div>
                 </div>
+
+                <div class="gov-card p-2 px-3 border-l-4 border-l-indigo-600 flex flex-col justify-between">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="text-[9px] font-black uppercase text-indigo-800 tracking-widest">Forwarded</div>
+                            <div class="text-xl font-black text-indigo-700 leading-none mt-1" x-text="apps.filter(a => a.status === 'TO-REVIEW').length">0</div>
+                        </div>
+                        <span class="material-icons-round text-indigo-200 text-[20px]">forward_to_inbox</span>
+                    </div>
+                </div>
             </section>
 
             <section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white mt-1 no-print">
@@ -177,10 +186,11 @@
 
                         <select x-model="filterStatus" class="gov-input cursor-pointer min-w-[120px]">
                             <option value="ALL">All Status</option>
-                            <option value="to-review">TO REVIEW</option>
-                            <option value="pending">PENDING</option>
-                            <option value="approved">APPROVED</option>
-                            <option value="rejected">REJECTED</option>
+                            <option value="to-review">Forwarded from Municipal</option>
+                            <option value="pending">Pending</option>
+                            <option value="under-review">Under Review</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
                         </select>
 
                         <button @click="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-800 font-bold uppercase text-[9px] rounded-[2px] transition hover:bg-slate-300 shadow-sm">
@@ -205,7 +215,7 @@
                         <tbody class="text-[10px] divide-y divide-slate-100">
                             
                             <template x-for="app in filteredApps" :key="app.ref">
-                                <tr class="hover:bg-blue-50 transition-all">
+                                <tr class="transition-all" :class="app.status === 'TO-REVIEW' ? 'bg-indigo-50 hover:bg-indigo-100 border-l-2 border-l-indigo-400' : 'hover:bg-blue-50 bg-white'">
                                     <td class="px-4 py-3 align-middle font-bold text-blue-900 uppercase border-r border-slate-100" x-text="app.ref"></td>
                                     <td class="px-4 py-3 align-middle font-black text-[9px] uppercase text-slate-500 border-r border-slate-100" x-text="app.province"></td>
                                     <td class="px-4 py-3 align-middle font-bold uppercase text-slate-700 border-r border-slate-100" x-text="app.municipality"></td>
@@ -214,9 +224,13 @@
                                     <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
                                         <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border w-full text-center" 
                                               :class="app.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                                                      app.status === 'REJECTED' ? 'bg-rose-50 text-rose-700 border-rose-200' : 
+                                                      app.status === 'REJECTED' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                                                      app.status === 'TO-REVIEW' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                                      app.status === 'UNDER-REVIEW' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                      app.status === 'FORWARDED-NATIONAL' ? 'bg-violet-50 text-violet-700 border-violet-200' :
                                                       'bg-amber-50 text-amber-700 border-amber-200'" 
-                                              x-text="app.status"></span>
+                                              x-text="app.status === 'TO-REVIEW' ? 'FORWARDED' : app.status === 'FORWARDED-NATIONAL' ? 'FWD TO NATIONAL' : app.status === 'APPROVED' ? (app.approvedByLevel ? 'APPROVED BY ' + app.approvedByLevel.toUpperCase() : 'APPROVED') : app.status"></span>
+                                        <div x-show="app.status === 'TO-REVIEW' && app.forwardedOn" class="text-[7px] text-indigo-500 font-bold mt-0.5 truncate" x-text="app.forwardedOn"></div>
                                     </td>
                                     <td class="px-4 py-3 align-middle text-center no-print">
                                         <a :href="'/regional/service-view/' + (app.id || app.ref)" class="btn-action btn-view mx-auto" title="View Service">
@@ -327,7 +341,7 @@
                         // UPDATED: Query from 'service_requests' instead of 'applications'
                         const q = query(
                             collection(db, 'service_requests'), 
-                            where('status', 'in', ['to-review', 'pending', 'under-review', 'approved', 'rejected'])
+                            where('status', 'in', ['to-review', 'pending', 'under-review', 'approved', 'rejected', 'forwarded-national'])
                         );
                         
                         onSnapshot(q, (snapshot) => {
@@ -341,6 +355,13 @@
                                 const applicantName = (userInfo?.name || data.userName || 'Unknown').toUpperCase();
                                 
                                 if (this.userProvinces.includes(appProvince) || this.userProvinces.length === 0) {
+                                    let forwardedOnText = '';
+                                    if (data.forwardedAt) {
+                                        let fDate = null;
+                                        if (typeof data.forwardedAt.toDate === 'function') { fDate = data.forwardedAt.toDate(); }
+                                        else if (data.forwardedAt.seconds) { fDate = new Date(data.forwardedAt.seconds * 1000); }
+                                        if (fDate) forwardedOnText = fDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+                                    }
                                     this.apps.push({
                                         id: docSnap.id,
                                         ref: docSnap.id.substring(0, 12).toUpperCase(),
@@ -348,7 +369,10 @@
                                         municipality: appMunicipality,
                                         applicant: applicantName,
                                         category: (data.category || data.serviceType || 'N/A').toUpperCase(),
-                                        status: (data.status || 'pending').toUpperCase()
+                                        status: (data.status || 'pending').toUpperCase(),
+                                        forwardedOn: forwardedOnText,
+                                        forwardedByEmail: data.forwardedByEmail || '',
+                                        approvedByLevel: data.approvedByLevel || ''
                                     });
                                 }
                             });
@@ -395,5 +419,6 @@
             }));
         });
     </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
 </html>

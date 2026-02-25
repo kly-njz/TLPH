@@ -73,7 +73,7 @@
         </div>
       </div>
 
-      <section class="shrink-0 grid gap-2 md:grid-cols-3 mb-3">
+      <section class="shrink-0 grid gap-2 md:grid-cols-4 mb-3">
         <button class="group w-full rounded-[4px] border border-gov-border bg-gov-panel px-3 py-1.5 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all print:border" type="button">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
@@ -112,6 +112,19 @@
             <span class="material-icons-round text-[16px] text-slate-400 group-hover:text-amber-700">chevron_right</span>
           </div>
         </button>
+
+        <button class="group w-full rounded-[4px] border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all print:border" type="button">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="material-icons-round text-[18px] text-indigo-700">forward_to_inbox</span>
+              <div>
+                <p class="text-[9px] font-bold uppercase tracking-gov text-indigo-700 leading-none">Forwarded</p>
+                <p class="mt-1 text-base font-bold text-indigo-900 leading-none" id="statForwarded">0</p>
+              </div>
+            </div>
+            <span class="material-icons-round text-[16px] text-indigo-300 group-hover:text-indigo-700">chevron_right</span>
+          </div>
+        </button>
       </section>
 
       <section class="shrink-0 mb-3 rounded-[4px] border border-gov-border bg-gov-panel p-2 shadow-sm print:border">
@@ -147,6 +160,7 @@
               <option value="Crop_Insurance_Support">Crop Insurance Support</option>
               <option value="Startup_Expansion_Support">Startup/Expansion Support</option>
               <option value="Typhoon_Damage_Compensation">Typhoon Damage Compensation</option>
+              <option value="Pest_Damage_Compensation">Pest Damage Compensation</option>
             </select>
             <span class="material-icons-round pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[14px] text-slate-500">expand_more</span>
           </div>
@@ -253,6 +267,7 @@
         let acceptedCount = 0;
         let rejectedCount = 0;
         let pendingCount = 0;
+        let forwardedCount = 0;
         
         serviceRequestsSnapshot.forEach(docSnapshot => {
           const data = docSnapshot.data();
@@ -292,6 +307,8 @@
             paymentStatus === 'free' ||
             status === 'approved' ||
             status === 'submitted' ||
+            status === 'to-review' ||
+            status === 'forwarded-national' ||
             status === 'pending';
           
           if (!shouldInclude) return;
@@ -301,15 +318,26 @@
             statusKey = 'accepted';
           } else if (status === 'rejected') {
             statusKey = 'rejected';
+          } else if (status === 'to-review') {
+            statusKey = 'forwarded';
+          } else if (status === 'forwarded-national') {
+            statusKey = 'forwarded-national';
           }
           
           let statusText = 'Pending Review';
           if (statusKey === 'accepted') {
-            statusText = 'Accepted';
+            const lvl = data.approvedByLevel || 'Municipal';
+            statusText = `Approved by ${lvl}`;
             acceptedCount++;
           } else if (statusKey === 'rejected') {
             statusText = 'Rejected';
             rejectedCount++;
+          } else if (statusKey === 'forwarded') {
+            statusText = 'Forwarded to Regional';
+            forwardedCount++;
+          } else if (statusKey === 'forwarded-national') {
+            statusText = 'Forwarded to National';
+            forwardedCount++;
           } else {
             pendingCount++;
           }
@@ -322,13 +350,16 @@
             categoryValue: data.serviceType || '',
             filedDate: filedDate,
             status: statusText,
-            statusKey: statusKey
+            statusKey: statusKey,
+            approvedByLevel: data.approvedByLevel || ''
           });
         });
         
         statAccepted.textContent = acceptedCount;
         statRejected.textContent = rejectedCount;
         statPending.textContent = pendingCount;
+        const statFwd = document.getElementById('statForwarded');
+        if (statFwd) statFwd.textContent = forwardedCount;
         
         applyFilters();
         
@@ -347,6 +378,12 @@
       }
       if (statusKey === "rejected") {
         return `<span class="inline-block rounded-[2px] border border-rose-300 bg-rose-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-rose-800">${statusText}</span>`;
+      }
+      if (statusKey === "forwarded") {
+        return `<span class="inline-block rounded-[2px] border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-indigo-700">${statusText}</span>`;
+      }
+      if (statusKey === "forwarded-national") {
+        return `<span class="inline-block rounded-[2px] border border-violet-300 bg-violet-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-violet-700">${statusText}</span>`;
       }
       return `<span class="inline-block rounded-[2px] border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-amber-800">${statusText}</span>`;
     }

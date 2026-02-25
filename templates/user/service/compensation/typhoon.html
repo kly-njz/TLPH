@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script type="module" src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ph-locations.js') }}"></script>
 </head>
 
 <body class="bg-gray-50 min-h-screen text-slate-900 text-sm font-sans">
@@ -48,8 +49,22 @@
                             </div>
 
                             <div>
-                                <label class="block text-[9px] font-black text-gray-700 uppercase mb-0.5">Farm Location <span class="text-red-500">*</span></label>
-                                <input type="text" name="farmLocation" id="farmLocation" required placeholder="Barangay, Municipality, Province" 
+                                <label class="block text-[9px] font-black text-gray-700 uppercase mb-0.5">Province <span class="text-red-500">*</span></label>
+                                <select name="province" id="province" required
+                                    class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-600 outline-none text-xs font-medium bg-gray-50">
+                                    <option value="" disabled selected>Select Province...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-black text-gray-700 uppercase mb-0.5">Municipality / City <span class="text-red-500">*</span></label>
+                                <select name="municipality" id="municipality" required disabled
+                                    class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-600 outline-none text-xs font-medium bg-gray-50">
+                                    <option value="" disabled selected>Select Province first...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-black text-gray-700 uppercase mb-0.5">Barangay <span class="text-red-500">*</span></label>
+                                <input type="text" name="barangay" id="barangay" required placeholder="e.g. Barangay Poblacion"
                                     class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-600 outline-none text-xs font-medium bg-gray-50">
                             </div>
 
@@ -130,8 +145,10 @@
             const submitBtn = document.getElementById('submitBtn');
             const permitFile = document.getElementById('permitFile');
             const fileNameDisplay = document.getElementById('fileName');
-            
-            const requiredFields = ['typhoonName', 'areaAffected', 'farmLocation', 'occurrenceTime', 'cropSpecies', 'damageType', 'narrative'];
+            const provinceSelect = document.getElementById('province');
+            const municipalitySelect = document.getElementById('municipality');
+
+            const requiredFields = ['typhoonName', 'areaAffected', 'province', 'municipality', 'barangay', 'occurrenceTime', 'cropSpecies', 'damageType', 'narrative'];
 
             function checkValidation() {
                 const allFieldsFilled = requiredFields.every(id => document.getElementById(id).value.trim() !== "");
@@ -146,6 +163,29 @@
                 }
             }
 
+            // Populate province dropdown from ph-locations.js
+            Object.keys(philippineLocations).sort().forEach(province => {
+                const opt = document.createElement('option');
+                opt.value = province;
+                opt.textContent = province;
+                provinceSelect.appendChild(opt);
+            });
+
+            // Cascade: update municipalities when province changes
+            provinceSelect.addEventListener('change', () => {
+                const municipalities = philippineLocations[provinceSelect.value] || [];
+                municipalitySelect.innerHTML = '<option value="" disabled selected>Select Municipality...</option>';
+                municipalities.forEach(city => {
+                    const opt = document.createElement('option');
+                    opt.value = city;
+                    opt.textContent = city;
+                    municipalitySelect.appendChild(opt);
+                });
+                municipalitySelect.disabled = false;
+                municipalitySelect.value = '';
+                checkValidation();
+            });
+
             // Setup free service submission (no payment required)
             submitFreeServiceRequest({
                 formId: 'typhoonDamageForm',
@@ -154,7 +194,9 @@
                 formData: {
                     'typhoonName': 'typhoonName',
                     'areaAffected': 'areaAffected',
-                    'farmLocation': 'farmLocation',
+                    'province': 'province',
+                    'municipality': 'municipality',
+                    'barangay': 'barangay',
                     'occurrenceTime': 'occurrenceTime',
                     'cropSpecies': 'cropSpecies',
                     'damageType': 'damageType',
@@ -164,8 +206,14 @@
                 redirectUrl: '/user/dashboard'
             });
 
-            requiredFields.forEach(id => {
+            // Text input validation listeners
+            ['typhoonName', 'areaAffected', 'barangay', 'occurrenceTime', 'cropSpecies', 'damageType', 'narrative'].forEach(id => {
                 document.getElementById(id).addEventListener('input', checkValidation);
+            });
+
+            // Select validation listeners
+            ['province', 'municipality'].forEach(id => {
+                document.getElementById(id).addEventListener('change', checkValidation);
             });
 
             permitFile.addEventListener('change', (e) => {
@@ -175,6 +223,8 @@
 
             form.addEventListener('reset', () => {
                 setTimeout(() => {
+                    municipalitySelect.innerHTML = '<option value="" disabled selected>Select Province first...</option>';
+                    municipalitySelect.disabled = true;
                     fileNameDisplay.textContent = "";
                     checkValidation();
                 }, 10);

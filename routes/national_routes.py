@@ -802,7 +802,73 @@ def permissions_national_view():
 @bp.route('/service-requests')
 @role_required('national', 'national_admin')
 def service_requests_national_view():
-    return render_template('national/operations/service-national.html')
+    try:
+        db = get_firestore_db()
+        docs = list(db.collection('service_requests')
+                     .where('status', '==', 'forwarded-national')
+                     .stream())
+
+        # Batch-fetch all unique user docs
+        user_ids = list({d.to_dict().get('userId') for d in docs if d.to_dict().get('userId')})
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u = db.collection('users').document(uid).get()
+                if u.exists:
+                    users_map[uid] = u.to_dict()
+            except Exception:
+                pass
+
+        service_requests = []
+        for doc in docs:
+            data = doc.to_dict()
+
+            # Date
+            created_at = data.get('createdAt') or data.get('submittedAt')
+            date_filed = 'N/A'
+            if created_at:
+                try:
+                    if isinstance(created_at, str):
+                        date_filed = datetime.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%b %d, %Y')
+                    elif hasattr(created_at, 'strftime'):
+                        date_filed = created_at.strftime('%b %d, %Y')
+                    else:
+                        date_filed = str(created_at)
+                except Exception:
+                    date_filed = str(created_at)
+
+            # Applicant name — from users collection via userId
+            uid = data.get('userId', '')
+            user_data = users_map.get(uid, {})
+            first = user_data.get('firstName', '')
+            last  = user_data.get('lastName', '')
+            full_name = f"{first} {last}".strip() or user_data.get('email', data.get('userEmail', 'N/A'))
+
+            # Location — from service doc fields, fallback to user profile
+            province     = data.get('province')     or user_data.get('province', '')
+            municipality = data.get('municipality') or user_data.get('municipality', '')
+            barangay     = data.get('barangay')     or user_data.get('barangay', '')
+            location_parts = [p for p in [barangay, municipality, province] if p]
+            location = ', '.join(location_parts) if location_parts else 'N/A'
+
+            service_requests.append({
+                'id': doc.id,
+                'date_filed': date_filed,
+                'reference_id': doc.id[:10].upper(),
+                'applicant_name': full_name.upper(),
+                'service_type': data.get('serviceType', 'N/A'),
+                'location': location,
+                'status': 'pending',
+                'forwarded_by': data.get('forwardedToNationalBy', 'N/A'),
+            })
+
+        service_requests.sort(key=lambda x: x['date_filed'], reverse=True)
+    except Exception as e:
+        print(f'Error loading national service requests: {e}')
+        service_requests = []
+
+    return render_template('national/operations/service-national.html',
+                           service_requests=service_requests)
 
 @bp.route('/user-inventory')
 @role_required('national', 'national_admin')
