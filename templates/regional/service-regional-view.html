@@ -46,6 +46,7 @@
         .data-text { font-size: 11px; font-weight: 700; color: #0f172a; line-height: 1.2; }
 
         @media (max-width: 1024px) { .main-wrapper { margin-left: 0; } }
+        [x-cloak] { display: none !important; }
     </style>
 </head>
 
@@ -67,6 +68,19 @@
                 <a href="/regional/service-list" class="inline-flex items-center gap-1 border border-slate-300 bg-white px-3 py-1 text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all text-decoration-none text-slate-600">
                     <span class="material-icons-round text-[14px]">arrow_back</span> Back to list
                 </a>
+            </div>
+
+            <!-- Forwarded from Municipal Banner -->
+            <div x-show="isForwarded" x-cloak class="mb-3 border border-indigo-200 bg-indigo-50 p-3 flex items-start gap-3">
+                <span class="material-icons-round text-indigo-600 mt-0.5">forward_to_inbox</span>
+                <div class="flex-1 min-w-0">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-indigo-700 m-0">Forwarded from Municipal Office</p>
+                    <p class="text-[9px] text-indigo-500 font-bold m-0 mt-0.5">
+                        Forwarded by: <span x-text="forwardedByEmail" class="text-indigo-700"></span>
+                        <template x-if="forwardedAtText">&nbsp;&bull;&nbsp;<span x-text="forwardedAtText"></span></template>
+                    </p>
+                </div>
+                <span class="flex-none bg-indigo-600 text-white font-black text-[8px] uppercase tracking-widest px-2 py-1">Awaiting Regional Review</span>
             </div>
 
             <div class="grid gap-3 lg:grid-cols-12">
@@ -195,10 +209,38 @@
                 userRegion: 'IV-A',
                 userRegionName: 'CALABARZON',
                 loading: true,
-                
+                serviceId: null,
+                serviceData: null,
+                isForwarded: false,
+                forwardedByEmail: '',
+                forwardedAtText: '',
+
                 async init() {
+                    this.serviceId = location.pathname.split('/').pop();
                     await this.loadUserRegion();
+                    if (this.serviceId) await this.loadServiceData();
                     this.loading = false;
+                },
+
+                async loadServiceData() {
+                    try {
+                        const snap = await getDoc(doc(db, 'service_requests', this.serviceId));
+                        if (snap.exists()) {
+                            this.serviceData = snap.data();
+                            if (this.serviceData.status === 'to-review') {
+                                this.isForwarded = true;
+                                this.forwardedByEmail = this.serviceData.forwardedByEmail || '';
+                                if (this.serviceData.forwardedAt) {
+                                    const ts = this.serviceData.forwardedAt;
+                                    const d = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
+                                    this.forwardedAtText = d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+                                        + ' ' + d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Error loading service data:', err);
+                    }
                 },
                 
                 async loadUserRegion() {
