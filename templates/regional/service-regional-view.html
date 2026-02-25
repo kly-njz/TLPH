@@ -27,25 +27,22 @@
         .material-icons-round { font-family: 'Material Icons Round' !important; font-size: 18px; }
         
         .main-wrapper { 
-            margin-left: 300px; /* Sidenav Offset */
+            margin-left: 300px;
             min-height: 100vh;
             background-color: #f1f5f9;
-            display: flex;
-            align-items: center; /* Vertical Center */
-            justify-content: center; /* Horizontal Center */
-            padding: 15px;
+            padding: 24px 20px;
         }
 
         .content-container {
             width: 100%;
-            max-width: 1150px; /* Eksaktong lapad para sa desktop oversight */
+            max-width: 1400px;
         }
 
         .gov-card { background: #ffffff; border: 1px solid #cbd5e1; border-top: 3px solid #1e3a8a; border-radius: 0; }
         .label-text { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em; }
         .data-text { font-size: 11px; font-weight: 700; color: #0f172a; line-height: 1.2; }
 
-        @media (max-width: 1024px) { .main-wrapper { margin-left: 0; } }
+        @media (max-width: 1024px) { .main-wrapper { margin-left: 0; padding: 16px; } }
         [x-cloak] { display: none !important; }
     </style>
 </head>
@@ -188,7 +185,7 @@
                         </div>
                         <div class="grid gap-2 grid-cols-3">
                             <button @click="updateStatus('rejected')" :disabled="actionBusy || statusAction" class="bg-white border border-rose-200 text-rose-700 font-black text-[9px] py-2 uppercase hover:bg-rose-600 hover:text-white transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">Reject</button>
-                            <button @click="updateStatus('under-review')" :disabled="actionBusy || statusAction" class="bg-white border border-amber-300 text-amber-700 font-black text-[9px] py-2 uppercase hover:bg-amber-500 hover:text-white transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">Return</button>
+                            <button @click="updateStatus('forwarded-national')" :disabled="actionBusy || statusAction" class="bg-white border border-violet-300 text-violet-700 font-black text-[9px] py-2 uppercase hover:bg-violet-600 hover:text-white transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">Forward to National</button>
                             <button @click="updateStatus('approved')" :disabled="actionBusy || statusAction" class="bg-gov-primary text-white font-black text-[9px] py-2 uppercase hover:brightness-110 shadow-md disabled:opacity-40 disabled:cursor-not-allowed">Approve Permit</button>
                         </div>
                     </section>
@@ -227,17 +224,22 @@
 
                 async updateStatus(newStatus) {
                     if (!this.serviceId || this.actionBusy) return;
-                    const labels = { 'approved': 'Approve Permit', 'rejected': 'Reject', 'under-review': 'Return for Review' };
+                    const labels = { 'approved': 'Approve Permit', 'rejected': 'Reject', 'forwarded-national': 'Forward to National' };
                     if (!confirm(`Confirm: ${labels[newStatus] || newStatus} this service request?`)) return;
                     this.actionBusy = true;
                     try {
-                        await updateDoc(doc(db, 'service_requests', this.serviceId), {
+                        const updateFields = {
                             status: newStatus,
                             reviewedBy: this.currentUser ? this.currentUser.uid : '',
                             reviewedByEmail: this.currentUser ? this.currentUser.email : '',
                             reviewedAt: serverTimestamp(),
                             updatedAt: serverTimestamp()
-                        });
+                        };
+                        if (newStatus === 'forwarded-national') {
+                            updateFields.forwardedToNationalBy = this.currentUser ? this.currentUser.email : '';
+                            updateFields.forwardedToNationalAt = serverTimestamp();
+                        }
+                        await updateDoc(doc(db, 'service_requests', this.serviceId), updateFields);
                         this.statusAction = newStatus;
                         if (newStatus !== 'to-review') this.isForwarded = false;
                         alert(`Status updated to: ${newStatus}. Redirecting back to list.`);
