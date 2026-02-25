@@ -187,9 +187,9 @@
                             <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">National Audit Enabled</p>
                         </div>
                         <div class="grid gap-2 grid-cols-3">
-                            <button class="bg-white border border-rose-200 text-rose-700 font-black text-[9px] py-2 uppercase hover:bg-rose-600 hover:text-white transition-all shadow-sm">Reject</button>
-                            <button class="bg-white border border-amber-300 text-amber-700 font-black text-[9px] py-2 uppercase hover:bg-amber-500 hover:text-white transition-all shadow-sm">Return</button>
-                            <button class="bg-gov-primary text-white font-black text-[9px] py-2 uppercase hover:brightness-110 shadow-md">Approve Permit</button>
+                            <button @click="updateStatus('rejected')" :disabled="actionBusy || statusAction" class="bg-white border border-rose-200 text-rose-700 font-black text-[9px] py-2 uppercase hover:bg-rose-600 hover:text-white transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">Reject</button>
+                            <button @click="updateStatus('under-review')" :disabled="actionBusy || statusAction" class="bg-white border border-amber-300 text-amber-700 font-black text-[9px] py-2 uppercase hover:bg-amber-500 hover:text-white transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">Return</button>
+                            <button @click="updateStatus('approved')" :disabled="actionBusy || statusAction" class="bg-gov-primary text-white font-black text-[9px] py-2 uppercase hover:brightness-110 shadow-md disabled:opacity-40 disabled:cursor-not-allowed">Approve Permit</button>
                         </div>
                     </section>
                 </section>
@@ -202,7 +202,7 @@
     <script type="module">
         import { auth, db } from '/static/js/firebase-config.js';
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-        import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+        import { doc, getDoc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
         document.addEventListener('alpine:init', () => {
             Alpine.data('regionalView', () => ({
@@ -214,12 +214,40 @@
                 isForwarded: false,
                 forwardedByEmail: '',
                 forwardedAtText: '',
+                currentUser: null,
+                actionBusy: false,
+                statusAction: null,
 
                 async init() {
                     this.serviceId = location.pathname.split('/').pop();
                     await this.loadUserRegion();
                     if (this.serviceId) await this.loadServiceData();
                     this.loading = false;
+                },
+
+                async updateStatus(newStatus) {
+                    if (!this.serviceId || this.actionBusy) return;
+                    const labels = { 'approved': 'Approve Permit', 'rejected': 'Reject', 'under-review': 'Return for Review' };
+                    if (!confirm(`Confirm: ${labels[newStatus] || newStatus} this service request?`)) return;
+                    this.actionBusy = true;
+                    try {
+                        await updateDoc(doc(db, 'service_requests', this.serviceId), {
+                            status: newStatus,
+                            reviewedBy: this.currentUser ? this.currentUser.uid : '',
+                            reviewedByEmail: this.currentUser ? this.currentUser.email : '',
+                            reviewedAt: serverTimestamp(),
+                            updatedAt: serverTimestamp()
+                        });
+                        this.statusAction = newStatus;
+                        if (newStatus !== 'to-review') this.isForwarded = false;
+                        alert(`Status updated to: ${newStatus}. Redirecting back to list.`);
+                        window.location.href = '/regional/service-list';
+                    } catch (err) {
+                        console.error('Error updating status:', err);
+                        alert('Error updating status. Please try again.');
+                    } finally {
+                        this.actionBusy = false;
+                    }
                 },
 
                 async loadServiceData() {
@@ -247,6 +275,7 @@
                     return new Promise((resolve) => {
                         onAuthStateChanged(auth, async (user) => {
                             if (user) {
+                                this.currentUser = user;
                                 try {
                                     const userDoc = await getDoc(doc(db, 'users', user.uid));
                                     if (userDoc.exists()) {
