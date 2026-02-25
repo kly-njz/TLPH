@@ -354,11 +354,15 @@
                 console.log('Payment status:', paymentStatus);
                 
                 if (status === 'approved' || paymentStatus === 'completed' || paymentStatus === 'paid') {
+                    const level = serviceData.approvedByLevel || 'Municipal';
                     statusBadge.className = 'bg-green-100 text-green-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-green-200';
-                    statusBadge.textContent = 'Status: Approved';
+                    statusBadge.textContent = `Status: Approved by ${level}`;
                 } else if (status === 'rejected') {
                     statusBadge.className = 'bg-red-100 text-red-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-red-200';
                     statusBadge.textContent = 'Status: Rejected';
+                } else if (status === 'forwarded-national') {
+                    statusBadge.className = 'bg-violet-100 text-violet-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-violet-200';
+                    statusBadge.textContent = 'Status: Forwarded to National';
                 } else if (status === 'to-review') {
                     statusBadge.className = 'bg-indigo-100 text-indigo-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-indigo-200';
                     statusBadge.textContent = 'Status: Forwarded to Regional';
@@ -472,9 +476,12 @@
                 };
 
                 if (status === 'approved') {
-                    lockBtns('This request has already been approved.', 'bg-green-100 text-green-700');
+                    const lvl = serviceData.approvedByLevel || 'Municipal';
+                    lockBtns(`This request has already been approved by ${lvl}.`, 'bg-green-100 text-green-700');
                 } else if (status === 'rejected') {
                     lockBtns('This request has been rejected.', 'bg-red-100 text-red-700');
+                } else if (status === 'forwarded-national') {
+                    lockBtns('Already forwarded to National. Awaiting national action.', 'bg-violet-100 text-violet-700');
                 } else if (status === 'to-review') {
                     lockBtns('Already forwarded to regional. Awaiting regional action.', 'bg-indigo-100 text-indigo-700');
                     // Show forwarded panel
@@ -511,10 +518,16 @@
             if (!confirmed) return;
 
             try {
-                await updateDoc(doc(db, 'service_requests', currentServiceId), {
+                const updateFields = {
                     status: newStatus,
                     updatedAt: serverTimestamp()
-                });
+                };
+                if (newStatus === 'approved') {
+                    updateFields.approvedByLevel = 'Municipal';
+                    updateFields.approvedByEmail = auth.currentUser ? auth.currentUser.email : null;
+                    updateFields.approvedAt = serverTimestamp();
+                }
+                await updateDoc(doc(db, 'service_requests', currentServiceId), updateFields);
                 
                 alert(`Service request ${newStatus} successfully!`);
                 await loadServiceDetails();
