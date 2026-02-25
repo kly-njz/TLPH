@@ -141,6 +141,9 @@
                                     
                                     <p class="info-label">Municipality</p>
                                     <p class="info-value" id="municipality">—</p>
+
+                                    <p class="info-label">Barangay</p>
+                                    <p class="info-value" id="barangay">—</p>
                                 </div>
                                 <div class="col-md-6">
                                     <p class="info-label">Payment Status</p>
@@ -163,6 +166,12 @@
                                     <p class="info-label">Request Details</p>
                                     <p class="info-value text-xs normal-case" id="requestDetails">—</p>
                                 </div>
+                            </div>
+
+                            <div id="specificFieldsSection" style="display:none;">
+                                <hr class="my-4 opacity-10">
+                                <h3 class="text-xs font-black uppercase border-b pb-2 mb-4 text-indigo-800"><i class="fa-solid fa-clipboard-list me-2"></i> Form-Specific Details</h3>
+                                <div id="specificFieldsGrid" class="row"></div>
                             </div>
                         </div>
                     </div>
@@ -332,8 +341,9 @@
                 console.log('Setting service details...');
                 document.getElementById('serviceType').textContent = serviceData.serviceType || 'N/A';
                 document.getElementById('description').textContent = serviceData.description || 'N/A';
-                document.getElementById('municipality').textContent = serviceData.municipality || 'N/A';
-                document.getElementById('province').textContent = serviceData.province || 'N/A';
+                document.getElementById('municipality').textContent = serviceData.municipality || userData?.municipality || 'N/A';
+                document.getElementById('province').textContent = serviceData.province || userData?.province || 'N/A';
+                document.getElementById('barangay').textContent = serviceData.barangay || 'N/A';
                 
                 // Payment status with nice formatting
                 const paymentStatusText = paymentStatus === 'completed' || paymentStatus === 'paid' 
@@ -350,9 +360,54 @@
                     document.getElementById('dateFiled').textContent = 'N/A';
                 }
                 
-                // Request details
-                const details = serviceData.details || serviceData.notes || serviceData.comments || 'No additional details provided';
+                // Request details (narrative for typhoon, fallback chain)
+                const details = serviceData.narrative || serviceData.details || serviceData.notes || serviceData.comments || 'No additional details provided';
                 document.getElementById('requestDetails').textContent = details;
+
+                // Show form-specific fields for typhoon / pest
+                const svcType = (serviceData.serviceType || '').toLowerCase();
+                const specificSection = document.getElementById('specificFieldsSection');
+                const specificGrid = document.getElementById('specificFieldsGrid');
+
+                if (svcType.includes('typhoon')) {
+                    specificSection.style.display = '';
+                    specificGrid.innerHTML = `
+                        <div class="col-md-6">
+                            <p class="info-label">Typhoon Name</p>
+                            <p class="info-value">${serviceData.typhoonName || 'N/A'}</p>
+                            <p class="info-label">Occurrence Time</p>
+                            <p class="info-value">${serviceData.occurrenceTime ? new Date(serviceData.occurrenceTime).toLocaleString('en-US') : 'N/A'}</p>
+                            <p class="info-label">Crop / Species</p>
+                            <p class="info-value">${serviceData.cropSpecies || 'N/A'}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="info-label">Area Affected (ha)</p>
+                            <p class="info-value">${serviceData.areaAffected || 'N/A'}</p>
+                            <p class="info-label">Type of Damage</p>
+                            <p class="info-value">${serviceData.damageType || 'N/A'}</p>
+                        </div>
+                    `;
+                } else if (svcType.includes('pest')) {
+                    specificSection.style.display = '';
+                    specificGrid.innerHTML = `
+                        <div class="col-md-6">
+                            <p class="info-label">Crop / Species</p>
+                            <p class="info-value">${serviceData.cropSpecies || 'N/A'}</p>
+                            <p class="info-label">Pest Type</p>
+                            <p class="info-value">${serviceData.pestType || 'N/A'}</p>
+                            <p class="info-label">Date Observed</p>
+                            <p class="info-value">${serviceData.dateObserved || 'N/A'}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="info-label">Area Damaged (ha)</p>
+                            <p class="info-value">${serviceData.areaDamaged || 'N/A'}</p>
+                            <p class="info-label">Estimated Loss</p>
+                            <p class="info-value">${serviceData.lossValue ? '\u20b1' + Number(serviceData.lossValue).toLocaleString() : 'N/A'}</p>
+                            <p class="info-label">Last Spray Date</p>
+                            <p class="info-value">${serviceData.lastSpray || 'N/A'}</p>
+                        </div>
+                    `;
+                }
                 
                 console.log('Service details set successfully');
 
