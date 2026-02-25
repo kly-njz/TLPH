@@ -802,7 +802,45 @@ def permissions_national_view():
 @bp.route('/service-requests')
 @role_required('national', 'national_admin')
 def service_requests_national_view():
-    return render_template('national/operations/service-national.html')
+    try:
+        db = get_firestore_db()
+        docs = db.collection('service_requests') \
+                 .where('status', '==', 'forwarded-national') \
+                 .stream()
+
+        service_requests = []
+        for doc in docs:
+            data = doc.to_dict()
+            created_at = data.get('createdAt') or data.get('submittedAt')
+            date_filed = 'N/A'
+            if created_at:
+                try:
+                    if isinstance(created_at, str):
+                        date_filed = datetime.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%b %d, %Y')
+                    elif hasattr(created_at, 'strftime'):
+                        date_filed = created_at.strftime('%b %d, %Y')
+                except Exception:
+                    date_filed = str(created_at)
+            full_name = data.get('fullName', data.get('applicantName', 'N/A'))
+            region = data.get('region', 'N/A')
+            municipality = data.get('municipality', data.get('location', 'N/A'))
+            service_requests.append({
+                'id': doc.id,
+                'date_filed': date_filed,
+                'reference_id': doc.id[:10].upper(),
+                'applicant_name': full_name,
+                'service_type': data.get('serviceType', 'N/A'),
+                'location': f"{region} / {municipality}",
+                'status': 'pending',
+                'forwarded_by': data.get('forwardedToNationalBy', 'N/A'),
+            })
+        service_requests.sort(key=lambda x: x['date_filed'], reverse=True)
+    except Exception as e:
+        print(f'Error loading national service requests: {e}')
+        service_requests = []
+
+    return render_template('national/operations/service-national.html',
+                           service_requests=service_requests)
 
 @bp.route('/user-inventory')
 @role_required('national', 'national_admin')
