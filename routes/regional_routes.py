@@ -113,7 +113,12 @@ def accounting_dashboard_view():
             user_docs = db.collection('users').where('email', '==', user_email).stream()
             for user_doc in user_docs:
                 user_data = user_doc.to_dict()
-                user_region = user_data.get('region', '').upper().replace('–', '-').replace('—', '-').replace('  ', ' ').replace(' ', '-')
+                region_field = user_data.get('region', '')
+                if isinstance(region_field, list):
+                    region_str = region_field[0] if region_field else ''
+                else:
+                    region_str = region_field
+                user_region = region_str.upper().replace('–', '-').replace('—', '-').replace('  ', ' ').replace(' ', '-')
                 break
     try:
         docs = db.collection('finance').stream()
