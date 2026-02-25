@@ -193,20 +193,47 @@
                             <h3 class="text-xs font-black uppercase border-b pb-2 mb-4 text-blue-900 text-center">Admin Actions</h3>
                             
                             <div class="d-grid gap-2">
-                                <button onclick="updateServiceStatus('approved')" class="btn btn-success bg-green-700 border-0 btn-action shadow-sm">
+                                <button id="btnApprove" onclick="updateServiceStatus('approved')" class="btn btn-success bg-green-700 border-0 btn-action shadow-sm">
                                     <i class="fa-solid fa-circle-check me-2"></i> Approve Service Request
                                 </button>
                                 
-                                <button onclick="updateServiceStatus('submitted')" class="btn btn-warning bg-blue-600 border-0 btn-action text-white shadow-sm">
-                                    <i class="fa-solid fa-arrow-up-right-from-square me-2"></i> Mark as Submitted
+                                <button id="btnForward" onclick="forwardToRegional()" class="btn btn-warning bg-indigo-600 border-0 btn-action text-white shadow-sm">
+                                    <i class="fa-solid fa-share-from-square me-2"></i> Forward to Regional
                                 </button>
                                 
-                                <button onclick="updateServiceStatus('rejected')" class="btn btn-danger bg-red-600 border-0 btn-action shadow-sm">
-                                    <i class="fa-solid fa-circle-xmark me-2"></i> Reject Request
+                                <button id="btnReject" onclick="updateServiceStatus('rejected')" class="btn btn-danger bg-red-600 border-0 btn-action shadow-sm">
+                                    <i class="fa-solid fa-circle-xmark me-2"></i> Reject Service Request
                                 </button>
                             </div>
 
+                            <div id="actionNote" class="mt-3 p-2 rounded text-[9px] font-bold uppercase tracking-wide text-center" style="display:none;"></div>
+
                             <p class="text-[9px] text-slate-400 mt-4 text-center italic uppercase font-bold">Decisions are final and logged in Audit Logs</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Forwarding Info Panel (shown when status is to-review) -->
+                <div id="forwardedPanel" class="row g-4 mt-1" style="display:none;">
+                    <div class="col-12">
+                        <div class="gov-card p-4 border-t-indigo-600 bg-indigo-50">
+                            <h3 class="text-xs font-black uppercase border-b pb-2 mb-3 text-indigo-800"><i class="fa-solid fa-share-from-square me-2"></i> Forwarded to Regional</h3>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <p class="info-label">Forwarded By</p>
+                                    <p class="info-value text-indigo-700" id="forwardedBy">—</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p class="info-label">Forwarded At</p>
+                                    <p class="info-value" id="forwardedAt">—</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p class="info-label">View in Regional</p>
+                                    <a href="/regional/service-list" target="_blank" class="btn btn-sm bg-indigo-600 text-white border-0 btn-action shadow-sm mt-1" style="font-size:10px;padding:6px 12px;">
+                                        <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Open Regional List
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -332,6 +359,9 @@
                 } else if (status === 'rejected') {
                     statusBadge.className = 'bg-red-100 text-red-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-red-200';
                     statusBadge.textContent = 'Status: Rejected';
+                } else if (status === 'to-review') {
+                    statusBadge.className = 'bg-indigo-100 text-indigo-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-indigo-200';
+                    statusBadge.textContent = 'Status: Forwarded to Regional';
                 } else {
                     statusBadge.className = 'bg-amber-100 text-amber-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-amber-200';
                     statusBadge.textContent = 'Status: Pending Review';
@@ -424,6 +454,42 @@
                 document.getElementById('userId').textContent = serviceData.userId || 'N/A';
                 console.log('Requester details set successfully');
 
+                // ── Button state management ──────────────────────────────────────
+                const btnApprove = document.getElementById('btnApprove');
+                const btnForward = document.getElementById('btnForward');
+                const btnReject  = document.getElementById('btnReject');
+                const actionNote = document.getElementById('actionNote');
+                const forwardedPanel = document.getElementById('forwardedPanel');
+
+                const lockBtns = (noteText, noteClass) => {
+                    [btnApprove, btnForward, btnReject].forEach(b => {
+                        b.disabled = true;
+                        b.classList.add('opacity-50', 'cursor-not-allowed');
+                    });
+                    actionNote.style.display = '';
+                    actionNote.textContent = noteText;
+                    actionNote.className = `mt-3 p-2 rounded text-[9px] font-bold uppercase tracking-wide text-center ${noteClass}`;
+                };
+
+                if (status === 'approved') {
+                    lockBtns('This request has already been approved.', 'bg-green-100 text-green-700');
+                } else if (status === 'rejected') {
+                    lockBtns('This request has been rejected.', 'bg-red-100 text-red-700');
+                } else if (status === 'to-review') {
+                    lockBtns('Already forwarded to regional. Awaiting regional action.', 'bg-indigo-100 text-indigo-700');
+                    // Show forwarded panel
+                    forwardedPanel.style.display = '';
+                    document.getElementById('forwardedBy').textContent = serviceData.forwardedByEmail || serviceData.forwardedBy || 'N/A';
+                    if (serviceData.forwardedAt) {
+                        let fDate = null;
+                        if (typeof serviceData.forwardedAt.toDate === 'function') { fDate = serviceData.forwardedAt.toDate(); }
+                        else if (serviceData.forwardedAt.seconds) { fDate = new Date(serviceData.forwardedAt.seconds * 1000); }
+                        document.getElementById('forwardedAt').textContent = fDate ? fDate.toLocaleString('en-US') : 'N/A';
+                    } else {
+                        document.getElementById('forwardedAt').textContent = 'N/A';
+                    }
+                }
+
                 console.log('All data populated, showing content');
                 // Show content, hide loading
                 document.getElementById('loadingContainer').style.display = 'none';
@@ -439,24 +505,44 @@
         window.updateServiceStatus = async function(newStatus) {
             const statusText = newStatus === 'approved' ? 'approve' : 
                              newStatus === 'rejected' ? 'reject' : 
-                             newStatus === 'submitted' ? 'mark as submitted' :
                              'update';
             const confirmed = confirm(`Are you sure you want to ${statusText} this service request?\n\nRef: ${document.getElementById('refNumber').textContent}\nRequester: ${document.getElementById('applicantName').textContent}`);
             
             if (!confirmed) return;
 
             try {
-                // Update service status
                 await updateDoc(doc(db, 'service_requests', currentServiceId), {
                     status: newStatus,
                     updatedAt: serverTimestamp()
                 });
                 
-                alert(`Service request ${statusText} successfully!`);
-                await loadServiceDetails(); // Reload to show updated status
+                alert(`Service request ${newStatus} successfully!`);
+                await loadServiceDetails();
             } catch (error) {
                 console.error('Error updating status:', error);
                 alert('Failed to update service request status: ' + error.message);
+            }
+        };
+
+        window.forwardToRegional = async function() {
+            const confirmed = confirm(`Forward this service request to the Regional Office?\n\nRef: ${document.getElementById('refNumber').textContent}\nRequester: ${document.getElementById('applicantName').textContent}\n\nOnce forwarded, you can no longer approve or reject it here.`);
+            if (!confirmed) return;
+
+            try {
+                const currentUser = auth.currentUser;
+                await updateDoc(doc(db, 'service_requests', currentServiceId), {
+                    status: 'to-review',
+                    forwardedAt: serverTimestamp(),
+                    forwardedBy: currentUser ? currentUser.uid : null,
+                    forwardedByEmail: currentUser ? currentUser.email : null,
+                    updatedAt: serverTimestamp()
+                });
+
+                alert('Service request successfully forwarded to the Regional Office!');
+                await loadServiceDetails();
+            } catch (error) {
+                console.error('Error forwarding to regional:', error);
+                alert('Failed to forward service request: ' + error.message);
             }
         };
 
