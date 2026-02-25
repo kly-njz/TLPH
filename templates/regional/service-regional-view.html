@@ -161,13 +161,13 @@
                         <template x-if="docFiles.length > 0">
                             <div class="grid gap-2 md:grid-cols-2">
                                 <template x-for="(file, i) in docFiles" :key="i">
-                                    <a :href="file.url || file" target="_blank" class="flex items-center justify-between border border-slate-100 bg-slate-50 p-2 hover:bg-white transition-all text-decoration-none">
-                                        <div class="flex items-center gap-2">
-                                            <span class="material-icons-round text-blue-900 text-[16px]">attach_file</span>
-                                            <span class="text-[9px] font-black uppercase text-slate-700" x-text="file.name || file.fileName || ('Document ' + (i+1))"></span>
+                                    <div class="flex items-center gap-2 border border-slate-100 bg-slate-50 p-2">
+                                        <span class="material-icons-round text-blue-900 text-[16px]" x-text="file.name.match(/\.(jpg|jpeg|png|gif)$/i) ? 'image' : file.name.match(/\.pdf$/i) ? 'picture_as_pdf' : 'attach_file'"></span>
+                                        <div class="min-w-0 flex-1">
+                                            <p class="text-[9px] font-black uppercase text-slate-700 truncate" x-text="file.name"></p>
+                                            <p class="text-[8px] text-slate-400 capitalize" x-text="file.fieldKey.replace(/File$|Files$/i,'').replace(/([A-Z])/g,' $1').trim()"></p>
                                         </div>
-                                        <span class="material-icons-round text-slate-300 text-xs">open_in_new</span>
-                                    </a>
+                                    </div>
                                 </template>
                             </div>
                         </template>
@@ -292,8 +292,20 @@
                             this.statusText = sm.text;
                             this.statusClass = sm.cls;
 
-                            // documents
-                            this.docFiles = d.documents || d.attachments || d.files || [];
+                            // documents — scan all array-valued fields (file inputs stored as filenames)
+                            const FILE_EXT = /\.(pdf|jpg|jpeg|png|doc|docx|xlsx|xls|csv|txt|zip)$/i;
+                            this.docFiles = [];
+                            for (const [key, val] of Object.entries(d)) {
+                                if (key.endsWith('Count')) continue;
+                                if (Array.isArray(val) && val.length > 0 && val.every(v => typeof v === 'string' && FILE_EXT.test(v))) {
+                                    val.forEach(filename => {
+                                        this.docFiles.push({ name: filename, fieldKey: key });
+                                    });
+                                } else if (typeof val === 'string' && FILE_EXT.test(val)) {
+                                    // single file stored as string
+                                    this.docFiles.push({ name: val, fieldKey: key });
+                                }
+                            }
 
                             // forwarded banner
                             if (d.status === 'to-review') {
