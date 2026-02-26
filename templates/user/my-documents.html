@@ -519,48 +519,50 @@
             if (paymentStatus === 'completed' || paymentStatus === 'paid' || paymentStatus === 'free' || status === 'approved' || status === 'submitted' || status === 'pending') {
               const serviceLabel = svc.serviceType || svc.description || 'Service Request';
                 // 1.5 Load from Firebase license_applications collection
-                try {
-                  console.log('Querying license_applications for user:', user.uid);
-                  const licenseQuery = query(
-                    collection(db, 'license_applications'),
-                    where('formData.userId', '==', user.uid)
-                  );
-                  const licenseSnapshot = await getDocs(licenseQuery);
-                  console.log('License applications found:', licenseSnapshot.size);
+                (async () => {
+                  try {
+                    console.log('Querying license_applications for user:', user.uid);
+                    const licenseQuery = query(
+                      collection(db, 'license_applications'),
+                      where('formData.userId', '==', user.uid)
+                    );
+                    const licenseSnapshot = await getDocs(licenseQuery);
+                    console.log('License applications found:', licenseSnapshot.size);
 
-                  licenseSnapshot.forEach((doc) => {
-                    // Try to support both root and nested formData fields
-                    const data = doc.data();
-                    const status = (data.status || data.formData?.status || '').toLowerCase();
-                    if (status === 'approved') {
-                      const appType = data.applicationType || data.formData?.applicationType || 'License/Permit';
-                      const amount = data.amount || data.formData?.amount || 0;
-                      const submittedAt = data.createdAt || data.formFields?.submittedAt || data.formData?.submittedAt;
-                      const approvedAt = data.updatedAt || submittedAt;
-                      documents.push({
-                        id: doc.id,
-                        type: 'license',
-                        title: appType,
-                        category: appType.toLowerCase().includes('permit') ? 'permit' : appType.toLowerCase().includes('license') ? 'license' : 'other',
-                        documentType: appType.toLowerCase().includes('permit') ? 'permit' : appType.toLowerCase().includes('license') ? 'license' : 'other',
-                        date: submittedAt ? (submittedAt.toDate ? submittedAt.toDate() : new Date(submittedAt)) : new Date(),
-                        approvedDate: approvedAt ? (approvedAt.toDate ? approvedAt.toDate() : new Date(approvedAt)) : new Date(),
-                        amount: amount,
-                        status: 'approved',
-                        reference: data.externalId || doc.id.substring(0, 12),
-                        metadata: {
-                          ...data.formFields,
-                          ...data.formData,
-                          fullId: doc.id
-                        },
-                        files: data.uploadedFiles || {}
-                      });
-                    }
-                  });
-                  console.log('Loaded license applications, total documents now:', documents.length);
-                } catch (licenseError) {
-                  console.error('Error loading license_applications:', licenseError);
-                }
+                    licenseSnapshot.forEach((doc) => {
+                      // Try to support both root and nested formData fields
+                      const data = doc.data();
+                      const status = (data.status || data.formData?.status || '').toLowerCase();
+                      if (status === 'approved') {
+                        const appType = data.applicationType || data.formData?.applicationType || 'License/Permit';
+                        const amount = data.amount || data.formData?.amount || 0;
+                        const submittedAt = data.createdAt || data.formFields?.submittedAt || data.formData?.submittedAt;
+                        const approvedAt = data.updatedAt || submittedAt;
+                        documents.push({
+                          id: doc.id,
+                          type: 'license',
+                          title: appType,
+                          category: appType.toLowerCase().includes('permit') ? 'permit' : appType.toLowerCase().includes('license') ? 'license' : 'other',
+                          documentType: appType.toLowerCase().includes('permit') ? 'permit' : appType.toLowerCase().includes('license') ? 'license' : 'other',
+                          date: submittedAt ? (submittedAt.toDate ? submittedAt.toDate() : new Date(submittedAt)) : new Date(),
+                          approvedDate: approvedAt ? (approvedAt.toDate ? approvedAt.toDate() : new Date(approvedAt)) : new Date(),
+                          amount: amount,
+                          status: 'approved',
+                          reference: data.externalId || doc.id.substring(0, 12),
+                          metadata: {
+                            ...data.formFields,
+                            ...data.formData,
+                            fullId: doc.id
+                          },
+                          files: data.uploadedFiles || {}
+                        });
+                      }
+                    });
+                    console.log('Loaded license applications, total documents now:', documents.length);
+                  } catch (licenseError) {
+                    console.error('Error loading license_applications:', licenseError);
+                  }
+                })();
               // Handle Firestore Timestamp or string/Date
               let createdAt = svc.createdAt;
               if (createdAt && typeof createdAt.toDate === 'function') {
@@ -739,9 +741,9 @@
       documents.forEach(doc => {
         const category = categorizeDocument(doc);
         const docType = getDocumentType(doc);
-        const date = doc.date instanceof Date ? 
-          doc.date.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) :
-          new Date(doc.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+        const date = (doc.date instanceof Date)
+          ? doc.date.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+          : new Date(doc.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
         const reference = doc.reference || 'N/A';
         const title = doc.title || 'Document';
         const amount = typeof doc.amount === 'number' ? peso.format(doc.amount) : 'N/A';
