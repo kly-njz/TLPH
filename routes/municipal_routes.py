@@ -248,6 +248,7 @@ def applicants_municipal():
 @role_required('municipal','municipal_admin')
 def accounting_dashboard_municipal():
     from flask import session
+    from firebase_admin import firestore
     db = get_firestore_db()
     finance_data = {}
     municipality_name = None
