@@ -804,9 +804,28 @@ def permissions_national_view():
 def service_requests_national_view():
     try:
         db = get_firestore_db()
-        docs = list(db.collection('service_requests')
-                     .where('status', '==', 'forwarded-national')
-                     .stream())
+
+        # Pull forwarded-national (pending), AND approved/rejected that were handled at national level
+        raw_docs = []
+        raw_docs += list(db.collection('service_requests')
+                           .where('status', '==', 'forwarded-national')
+                           .stream())
+        raw_docs += list(db.collection('service_requests')
+                           .where('status', '==', 'approved')
+                           .where('approvedByLevel', '==', 'National')
+                           .stream())
+        raw_docs += list(db.collection('service_requests')
+                           .where('status', '==', 'rejected')
+                           .where('approvedByLevel', '==', 'National')
+                           .stream())
+
+        # Deduplicate by doc id
+        seen = set()
+        docs = []
+        for d in raw_docs:
+            if d.id not in seen:
+                seen.add(d.id)
+                docs.append(d)
 
         # Batch-fetch all unique user docs
         user_ids = list({d.to_dict().get('userId') for d in docs if d.to_dict().get('userId')})
@@ -851,6 +870,9 @@ def service_requests_national_view():
             location_parts = [p for p in [barangay, municipality, province] if p]
             location = ', '.join(location_parts) if location_parts else 'N/A'
 
+            doc_status = (data.get('status') or 'forwarded-national').lower()
+            approved_by_level = data.get('approvedByLevel', '')
+
             service_requests.append({
                 'id': doc.id,
                 'date_filed': date_filed,
@@ -858,17 +880,29 @@ def service_requests_national_view():
                 'applicant_name': full_name.upper(),
                 'service_type': data.get('serviceType', 'N/A'),
                 'location': location,
-                'status': 'pending',
+                'status': doc_status,
+                'approved_by_level': approved_by_level,
                 'forwarded_by': data.get('forwardedToNationalBy', 'N/A'),
             })
 
         service_requests.sort(key=lambda x: x['date_filed'], reverse=True)
+
+        total_count    = len(service_requests)
+        completed_count = sum(1 for r in service_requests if r['status'] == 'approved')
+        rejected_count  = sum(1 for r in service_requests if r['status'] == 'rejected')
+        pending_count   = sum(1 for r in service_requests if r['status'] not in ('approved', 'rejected'))
+
     except Exception as e:
         print(f'Error loading national service requests: {e}')
         service_requests = []
+        total_count = completed_count = rejected_count = pending_count = 0
 
     return render_template('national/operations/service-national.html',
-                           service_requests=service_requests)
+                           service_requests=service_requests,
+                           total_count=total_count,
+                           completed_count=completed_count,
+                           pending_count=pending_count,
+                           rejected_count=rejected_count)
 
 @bp.route('/user-inventory')
 @role_required('national', 'national_admin')
