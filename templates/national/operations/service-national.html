@@ -465,20 +465,28 @@
       }
 
       // Applicant info (fallback to users collection)
-      let firstName = d.firstName || d.applicantFirstName || '';
-      let lastName  = d.lastName  || d.applicantLastName  || '';
-      let email     = d.userEmail || d.email || d.applicantEmail || '';
-      let contact   = d.contactNumber || d.contact || d.phone || 'N/A';
+      let firstName    = d.firstName || d.applicantFirstName || '';
+      let lastName     = d.lastName  || d.applicantLastName  || '';
+      let email        = d.userEmail || d.email || d.applicantEmail || '';
+      let contact      = d.contactNumber || d.contact || d.phone || 'N/A';
+      let municipality = d.municipality || '';
+      let province     = d.province     || '';
+      let barangay     = d.barangay     || '';
 
-      if ((!firstName && !lastName) && d.userId) {
+      if (d.userId) {
         try {
           const uSnap = await getDoc(doc(db, 'users', d.userId));
           if (uSnap.exists()) {
             const u = uSnap.data();
-            firstName = u.firstName || '';
-            lastName  = u.lastName  || '';
-            email     = email || u.email || '';
-            contact   = contact === 'N/A' ? (u.contactNumber || u.phone || 'N/A') : contact;
+            if (!firstName && !lastName) {
+              firstName = u.firstName || '';
+              lastName  = u.lastName  || '';
+            }
+            email        = email        || u.email        || '';
+            contact      = contact !== 'N/A' ? contact : (u.contactNumber || u.phone || 'N/A');
+            municipality = municipality || u.municipality || '';
+            province     = province     || u.province     || '';
+            barangay     = barangay     || u.barangay     || '';
           }
         } catch(_) {}
       }
@@ -492,15 +500,17 @@
 
       // Service details
       document.getElementById('mServiceType').textContent  = d.serviceType || 'N/A';
-      document.getElementById('mMunicipality').textContent = d.municipality || 'N/A';
-      document.getElementById('mProvince').textContent     = d.province || 'N/A';
-      document.getElementById('mBarangay').textContent     = d.barangay || 'N/A';
+      document.getElementById('mMunicipality').textContent = municipality || 'N/A';
+      document.getElementById('mProvince').textContent     = province     || 'N/A';
+      document.getElementById('mBarangay').textContent     = barangay     || 'N/A';
 
       const created = d.createdAt || d.submittedAt;
       let dateFiled = 'N/A';
       if (created) {
-        const dt = created.toDate ? created.toDate() : new Date(created.seconds * 1000);
-        dateFiled = dt.toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' });
+        const dt = created.toDate ? created.toDate()
+                 : created.seconds ? new Date(created.seconds * 1000)
+                 : new Date(created);
+        if (!isNaN(dt)) dateFiled = dt.toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' });
       }
       document.getElementById('mDateFiled').textContent = dateFiled;
 
@@ -544,8 +554,8 @@
       const auditLines = [];
       if (d.createdAt || d.submittedAt) {
         const dt = (d.createdAt || d.submittedAt);
-        const t  = dt.toDate ? dt.toDate() : new Date(dt.seconds * 1000);
-        auditLines.push(`<div><span class="badge bg-secondary" style="font-size:0.5rem;">SUBMITTED</span> ${t.toLocaleString('en-PH')} ${d.userEmail ? '• ' + d.userEmail : ''}</div>`);
+        const t  = dt.toDate ? dt.toDate() : dt.seconds ? new Date(dt.seconds * 1000) : new Date(dt);
+        if (!isNaN(t)) auditLines.push(`<div><span class="badge bg-secondary" style="font-size:0.5rem;">SUBMITTED</span> ${t.toLocaleString('en-PH')} ${d.userEmail ? '• ' + d.userEmail : ''}</div>`);
       }
       if (d.forwardedAt) {
         const t = d.forwardedAt.toDate ? d.forwardedAt.toDate() : new Date(d.forwardedAt.seconds*1000);
