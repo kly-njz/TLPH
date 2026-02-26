@@ -792,8 +792,8 @@
       }
     };
 
-    window.downloadDocument = function(docId, title, category, docType) {
 
+    window.downloadDocument = function(docId, title, category, docType) {
       // Find the document
       const doc = allDocuments.find(d => d.id === docId);
       if (!doc) {
@@ -801,10 +801,10 @@
         return;
       }
 
-      // Use passed-in userName and userEmail if available, else fallback
-      const args = Array.from(arguments);
-      const userName = args[4] || 'User';
-      const userEmail = args[5] || 'N/A';
+      // Always fetch the current logged-in user's name and email
+      const currentUser = window.currentUser || {};
+      const userName = currentUser.displayName || currentUser.name || 'User';
+      const userEmail = currentUser.email || 'N/A';
       const date = doc.date instanceof Date ? doc.date : new Date(doc.date);
       const approvedDate = doc.approvedDate instanceof Date ? doc.approvedDate : new Date(doc.approvedDate);
       const reference = doc.reference;
@@ -915,9 +915,38 @@
     };
 
     // Initialize
-    onAuthStateChanged(auth, (user) => {
+    import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    onAuthStateChanged(auth, async (user) => {
       console.log('Auth state changed, user:', user?.email);
-      window.currentUser = user;
+      if (user) {
+        // Try to fetch user's full name from Firestore
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            // Prefer full name if available, else fallback
+            const displayName = (userData.firstName && userData.lastName)
+              ? `${userData.firstName} ${userData.lastName}`
+              : user.displayName || user.email || 'User';
+            window.currentUser = {
+              ...user,
+              displayName,
+              email: user.email,
+              firstName: userData.firstName,
+              lastName: userData.lastName
+            };
+          } else {
+            window.currentUser = user;
+          }
+        } catch (e) {
+          console.error('Error fetching user Firestore profile:', e);
+          window.currentUser = user;
+        }
+      } else {
+        window.currentUser = null;
+      }
       loadDocuments();
       setupFilters();
     });
