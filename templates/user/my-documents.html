@@ -390,7 +390,6 @@
     async function loadDocuments() {
       try {
         let documents = [];
-        const userEmail = localStorage.getItem('denr_user_email') || 'N/A';
         // Wait for auth to be ready
         const user = await new Promise((resolve) => {
           const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -516,18 +515,36 @@
             const status = (svc.status || '').toLowerCase();
             const paymentStatus = (svc.paymentStatus || '').toLowerCase();
             console.log('Service request:', svc.serviceType, 'Status:', status, 'PaymentStatus:', paymentStatus);
-            
             // Show all service requests including free ones
             if (paymentStatus === 'completed' || paymentStatus === 'paid' || paymentStatus === 'free' || status === 'approved' || status === 'submitted' || status === 'pending') {
               const serviceLabel = svc.serviceType || svc.description || 'Service Request';
+              // Handle Firestore Timestamp or string/Date
+              let createdAt = svc.createdAt;
+              if (createdAt && typeof createdAt.toDate === 'function') {
+                createdAt = createdAt.toDate();
+              } else if (createdAt) {
+                createdAt = new Date(createdAt);
+              } else {
+                createdAt = new Date();
+              }
+              let approvedAt = svc.approvedAt;
+              if (approvedAt && typeof approvedAt.toDate === 'function') {
+                approvedAt = approvedAt.toDate();
+              } else if (approvedAt) {
+                approvedAt = new Date(approvedAt);
+              } else if (createdAt) {
+                approvedAt = createdAt;
+              } else {
+                approvedAt = new Date();
+              }
               documents.push({
                 id: doc.id,
                 type: 'service',
                 title: 'Service: ' + serviceLabel,
                 category: svc.serviceType ? svc.serviceType.toLowerCase() : 'service',
                 documentType: 'certificate',
-                date: svc.createdAt ? svc.createdAt.toDate() : new Date(),
-                approvedDate: svc.approvedAt ? svc.approvedAt.toDate() : svc.createdAt ? svc.createdAt.toDate() : new Date(),
+                date: createdAt,
+                approvedDate: approvedAt,
                 amount: svc.amount || svc.fee || 0,
                 status: 'approved',
                 reference: doc.id.substring(0, 12),
@@ -547,9 +564,9 @@
 
         // 3. Load from payment transactions API
         try {
-          console.log('Loading transactions for email:', userEmail);
-          if (userEmail) {
-            const response = await fetch(`/api/payments/transactions?email=${encodeURIComponent(userEmail)}`);
+          console.log('Loading transactions for email:', user && user.email);
+          if (user && user.email) {
+            const response = await fetch(`/api/payments/transactions?email=${encodeURIComponent(user.email)}`);
             const result = await response.json();
             console.log('Transactions API result:', result);
 
@@ -675,6 +692,7 @@
       }
 
       let html = '';
+      const user = window.currentUser || {};
       documents.forEach(doc => {
         const category = categorizeDocument(doc);
         const docType = getDocumentType(doc);
@@ -703,7 +721,7 @@
               <button class="btn-action btn-view" onclick="viewDocument('${doc.id}')">
                 <i class="fa-solid fa-eye"></i> View
               </button>
-              <button class="btn-action btn-download" onclick="downloadDocument('${doc.id}', '${title.replace(/'/g, "\\'")}', '${category}', '${docType}')">
+              <button class="btn-action btn-download" onclick="downloadDocument('${doc.id}', '${title.replace(/'/g, "\\'")}', '${category}', '${docType}', '${user.displayName || ''}', '${user.email || ''}')">
                 <span class="me-1"><i class="fa fa-download"></i></span> <span>Download</span>
               </button>
             </div>
@@ -783,8 +801,10 @@
         return;
       }
 
-      const userEmail = localStorage.getItem('denr_user_email') || 'N/A';
-      const userName = localStorage.getItem('denr_user_name') || 'User';
+      // Use passed-in userName and userEmail if available, else fallback
+      const args = Array.from(arguments);
+      const userName = args[4] || 'User';
+      const userEmail = args[5] || 'N/A';
       const date = doc.date instanceof Date ? doc.date : new Date(doc.date);
       const approvedDate = doc.approvedDate instanceof Date ? doc.approvedDate : new Date(doc.approvedDate);
       const reference = doc.reference;
@@ -897,6 +917,7 @@
     // Initialize
     onAuthStateChanged(auth, (user) => {
       console.log('Auth state changed, user:', user?.email);
+      window.currentUser = user;
       loadDocuments();
       setupFilters();
     });
