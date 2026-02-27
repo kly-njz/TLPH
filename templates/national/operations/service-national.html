@@ -9,6 +9,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
   <style>
     :root {
@@ -231,9 +232,14 @@
                     </td>
                     <td class="text-center">
                       <div class="btn-group shadow-sm border rounded">
-                        <button class="btn btn-sm btn-light p-1" title="View" data-id="{{ request.id }}"><span class="material-icons-round fs-6 text-secondary">visibility</span></button>
-                        <button class="btn btn-sm btn-light p-1" title="Approve" data-id="{{ request.id }}" onclick="handleNationalAction('{{ request.id }}', 'approved', this)"><span class="material-icons-round fs-6 text-success">check_circle</span></button>
-                        <button class="btn btn-sm btn-light p-1" title="Reject" data-id="{{ request.id }}" onclick="handleNationalAction('{{ request.id }}', 'rejected', this)"><span class="material-icons-round fs-6 text-danger">cancel</span></button>
+        <button class="btn btn-sm btn-light p-1" title="View" data-id="{{ request.id }}" onclick="viewServiceRequest('{{ request.id }}')"><span class="material-icons-round fs-6 text-secondary">visibility</span></button>
+                        {% if request.status in ('approved', 'rejected') %}
+                          <button class="btn btn-sm btn-light p-1" title="Approve" disabled style="opacity:0.35;"><span class="material-icons-round fs-6 text-success">check_circle</span></button>
+                          <button class="btn btn-sm btn-light p-1" title="Reject" disabled style="opacity:0.35;"><span class="material-icons-round fs-6 text-danger">cancel</span></button>
+                        {% else %}
+                          <button class="btn btn-sm btn-light p-1" title="Approve" data-id="{{ request.id }}" onclick="handleNationalAction('{{ request.id }}', 'approved', this)"><span class="material-icons-round fs-6 text-success">check_circle</span></button>
+                          <button class="btn btn-sm btn-light p-1" title="Reject" data-id="{{ request.id }}" onclick="handleNationalAction('{{ request.id }}', 'rejected', this)"><span class="material-icons-round fs-6 text-danger">cancel</span></button>
+                        {% endif %}
                       </div>
                     </td>
                   </tr>
@@ -265,6 +271,113 @@
       REPUBLIC OF THE PHILIPPINES • NATIONAL SERVICE REGISTRY • CONFIDENTIAL DATA
     </footer>
   </main>
+</div>
+
+<!-- ===== SERVICE DETAIL MODAL ===== -->
+<div class="modal fade" id="serviceDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content" style="border-radius:2px; font-size:0.72rem;">
+      <div class="modal-header py-2 px-3" style="background:#002e5f; border-radius:0;">
+        <div>
+          <h6 class="modal-title text-white fw-bold m-0 text-uppercase" style="letter-spacing:0.5px;">Service Request Details</h6>
+          <div id="modalRefId" class="text-white" style="font-size:0.55rem; opacity:0.75;"></div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+
+        <!-- Loading state -->
+        <div id="modalLoading" class="text-center py-5">
+          <div class="spinner-border text-primary" style="width:1.5rem;height:1.5rem;"></div>
+          <div class="text-muted mt-2" style="font-size:0.65rem;">Loading details...</div>
+        </div>
+
+        <!-- Content -->
+        <div id="modalContent" style="display:none;">
+
+          <!-- Status banner -->
+          <div id="modalStatusBanner" class="px-3 py-2 fw-bold text-uppercase" style="font-size:0.6rem; letter-spacing:1px;"></div>
+
+          <div class="p-3">
+            <!-- Row 1: Applicant + Service -->
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <div class="border p-2" style="border-radius:2px;">
+                  <div class="text-muted fw-bold text-uppercase mb-2" style="font-size:0.55rem; letter-spacing:1px;">Applicant Information</div>
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <div class="text-muted" style="font-size:0.55rem;">Full Name</div>
+                      <div id="mApplicantName" class="fw-bold" style="font-size:0.7rem;"></div>
+                    </div>
+                    <div class="col-6">
+                      <div class="text-muted" style="font-size:0.55rem;">Email</div>
+                      <div id="mApplicantEmail" class="fw-bold text-primary" style="font-size:0.65rem; word-break:break-all;"></div>
+                    </div>
+                    <div class="col-6">
+                      <div class="text-muted" style="font-size:0.55rem;">Contact</div>
+                      <div id="mApplicantContact" class="fw-bold" style="font-size:0.7rem;"></div>
+                    </div>
+                    <div class="col-6">
+                      <div class="text-muted" style="font-size:0.55rem;">User ID</div>
+                      <div id="mUserId" class="fw-bold text-muted" style="font-size:0.6rem; word-break:break-all;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="border p-2" style="border-radius:2px;">
+                  <div class="text-muted fw-bold text-uppercase mb-2" style="font-size:0.55rem; letter-spacing:1px;">Service Details</div>
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <div class="text-muted" style="font-size:0.55rem;">Service Type</div>
+                      <div id="mServiceType" class="fw-bold text-uppercase" style="font-size:0.7rem;"></div>
+                    </div>
+                    <div class="col-6">
+                      <div class="text-muted" style="font-size:0.55rem;">Date Filed</div>
+                      <div id="mDateFiled" class="fw-bold" style="font-size:0.7rem;"></div>
+                    </div>
+                    <div class="col-6">
+                      <div class="text-muted" style="font-size:0.55rem;">Municipality</div>
+                      <div id="mMunicipality" class="fw-bold text-uppercase" style="font-size:0.7rem;"></div>
+                    </div>
+                    <div class="col-6">
+                      <div class="text-muted" style="font-size:0.55rem;">Province</div>
+                      <div id="mProvince" class="fw-bold text-uppercase" style="font-size:0.7rem;"></div>
+                    </div>
+                    <div class="col-12">
+                      <div class="text-muted" style="font-size:0.55rem;">Barangay / Address</div>
+                      <div id="mBarangay" class="fw-bold text-uppercase" style="font-size:0.7rem;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Description -->
+            <div class="border p-2 mb-3" id="mDescBlock" style="display:none; border-radius:2px;">
+              <div class="text-muted fw-bold text-uppercase mb-1" style="font-size:0.55rem; letter-spacing:1px;">Description / Notes</div>
+              <div id="mDescription" style="font-size:0.7rem; color:#334155; line-height:1.5;"></div>
+            </div>
+
+            <!-- Documents -->
+            <div class="border p-2 mb-3" style="border-radius:2px;">
+              <div class="text-muted fw-bold text-uppercase mb-2" style="font-size:0.55rem; letter-spacing:1px;">Attached Documents</div>
+              <div id="mDocs" class="row g-2"></div>
+            </div>
+
+            <!-- Audit Trail -->
+            <div class="border p-2" id="mAuditBlock" style="border-radius:2px; background:#f8fafc;">
+              <div class="text-muted fw-bold text-uppercase mb-2" style="font-size:0.55rem; letter-spacing:1px;">Audit Trail</div>
+              <div id="mAudit" style="font-size:0.65rem;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal" style="font-size:0.65rem; border-radius:2px;">Close</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 
@@ -317,7 +430,159 @@
 
 <script type="module">
   import { auth, db } from '/static/js/firebase-config.js';
-  import { doc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+  import { doc, getDoc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+  window.viewServiceRequest = async function(reqId) {
+    const modal = new bootstrap.Modal(document.getElementById('serviceDetailModal'));
+    modal.show();
+
+    document.getElementById('modalLoading').style.display = '';
+    document.getElementById('modalContent').style.display = 'none';
+    document.getElementById('modalRefId').textContent = 'SR-' + reqId.substring(0, 10).toUpperCase();
+
+    try {
+      const snap = await getDoc(doc(db, 'service_requests', reqId));
+      if (!snap.exists()) { document.getElementById('modalLoading').textContent = 'Record not found.'; return; }
+
+      const d = snap.data();
+
+      // Status banner
+      const status = (d.status || 'pending').toLowerCase();
+      const level = d.approvedByLevel || '';
+      const banner = document.getElementById('modalStatusBanner');
+      if (status === 'approved') {
+        banner.className = 'px-3 py-2 fw-bold text-uppercase bg-success bg-opacity-10 text-success';
+        banner.textContent = level ? `✓ Approved by ${level}` : '✓ Approved';
+      } else if (status === 'rejected') {
+        banner.className = 'px-3 py-2 fw-bold text-uppercase bg-danger bg-opacity-10 text-danger';
+        banner.textContent = '✗ Rejected';
+      } else if (status === 'forwarded-national') {
+        banner.className = 'px-3 py-2 fw-bold text-uppercase bg-warning bg-opacity-10 text-warning';
+        banner.textContent = '⏳ Pending National Action';
+      } else {
+        banner.className = 'px-3 py-2 fw-bold text-uppercase bg-secondary bg-opacity-10 text-secondary';
+        banner.textContent = status.toUpperCase();
+      }
+
+      // Applicant info (fallback to users collection)
+      let firstName    = d.firstName || d.applicantFirstName || '';
+      let lastName     = d.lastName  || d.applicantLastName  || '';
+      let email        = d.userEmail || d.email || d.applicantEmail || '';
+      let contact      = d.contactNumber || d.contact || d.phone || 'N/A';
+      let municipality = d.municipality || '';
+      let province     = d.province     || '';
+      let barangay     = d.barangay     || '';
+
+      if (d.userId) {
+        try {
+          const uSnap = await getDoc(doc(db, 'users', d.userId));
+          if (uSnap.exists()) {
+            const u = uSnap.data();
+            if (!firstName && !lastName) {
+              firstName = u.firstName || '';
+              lastName  = u.lastName  || '';
+            }
+            email        = email        || u.email        || '';
+            contact      = contact !== 'N/A' ? contact : (u.contactNumber || u.phone || 'N/A');
+            municipality = municipality || u.municipality || '';
+            province     = province     || u.province     || '';
+            barangay     = barangay     || u.barangay     || u.address || '';
+          }
+        } catch(_) {}
+      }
+
+      const fullName = `${firstName} ${lastName}`.trim() || d.fullName || d.userName || 'N/A';
+
+      document.getElementById('mApplicantName').textContent    = fullName.toUpperCase();
+      document.getElementById('mApplicantEmail').textContent   = email || 'N/A';
+      document.getElementById('mApplicantContact').textContent = contact;
+      document.getElementById('mUserId').textContent           = d.userId || 'N/A';
+
+      // Service details
+      document.getElementById('mServiceType').textContent  = d.serviceType || 'N/A';
+      document.getElementById('mMunicipality').textContent = municipality || 'N/A';
+      document.getElementById('mProvince').textContent     = province     || 'N/A';
+      document.getElementById('mBarangay').textContent     = barangay     || 'N/A';
+
+      const created = d.createdAt || d.submittedAt;
+      let dateFiled = 'N/A';
+      if (created) {
+        const dt = created.toDate ? created.toDate()
+                 : created.seconds ? new Date(created.seconds * 1000)
+                 : new Date(created);
+        if (!isNaN(dt)) dateFiled = dt.toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' });
+      }
+      document.getElementById('mDateFiled').textContent = dateFiled;
+
+      // Description
+      const descBlock = document.getElementById('mDescBlock');
+      if (d.description) {
+        document.getElementById('mDescription').textContent = d.description;
+        descBlock.style.display = '';
+      } else {
+        descBlock.style.display = 'none';
+      }
+
+      // Documents — scan all array/string fields with file extensions
+      const fileExts = /\.(pdf|jpg|jpeg|png|gif|doc|docx)$/i;
+      const docsEl = document.getElementById('mDocs');
+      docsEl.innerHTML = '';
+      let fileCount = 0;
+      for (const [key, val] of Object.entries(d)) {
+        const items = Array.isArray(val) ? val : [val];
+        items.forEach(item => {
+          if (typeof item === 'string' && fileExts.test(item)) {
+            fileCount++;
+            const label = key.replace(/File$|Files$/i,'').replace(/([A-Z])/g,' $1').trim();
+            const icon  = /\.(jpg|jpeg|png|gif)$/i.test(item) ? 'image' : /\.pdf$/i.test(item) ? 'picture_as_pdf' : 'attach_file';
+            docsEl.innerHTML += `
+              <div class="col-md-6">
+                <div class="d-flex align-items-center gap-2 border p-2" style="border-radius:2px; background:#f8fafc;">
+                  <span class="material-icons-round text-primary" style="font-size:18px;">${icon}</span>
+                  <div class="min-w-0 flex-fill">
+                    <div class="fw-bold text-uppercase" style="font-size:0.6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item}</div>
+                    <div class="text-muted" style="font-size:0.55rem;">${label}</div>
+                  </div>
+                </div>
+              </div>`;
+          }
+        });
+      }
+      if (fileCount === 0) docsEl.innerHTML = '<div class="col-12 text-muted text-center py-2" style="font-size:0.65rem;">No documents attached.</div>';
+
+      // Audit trail
+      const auditLines = [];
+      if (d.createdAt || d.submittedAt) {
+        const dt = (d.createdAt || d.submittedAt);
+        const t  = dt.toDate ? dt.toDate() : dt.seconds ? new Date(dt.seconds * 1000) : new Date(dt);
+        if (!isNaN(t)) auditLines.push(`<div><span class="badge bg-secondary" style="font-size:0.5rem;">SUBMITTED</span> ${t.toLocaleString('en-PH')} ${d.userEmail ? '• ' + d.userEmail : ''}</div>`);
+      }
+      if (d.forwardedAt) {
+        const t = d.forwardedAt.toDate ? d.forwardedAt.toDate() : new Date(d.forwardedAt.seconds*1000);
+        auditLines.push(`<div><span class="badge bg-indigo" style="font-size:0.5rem; background:#4f46e5;">FWD→REGIONAL</span> ${t.toLocaleString('en-PH')} ${d.forwardedByEmail ? '• ' + d.forwardedByEmail : ''}</div>`);
+      }
+      if (d.forwardedToNationalAt) {
+        const t = d.forwardedToNationalAt.toDate ? d.forwardedToNationalAt.toDate() : new Date(d.forwardedToNationalAt.seconds*1000);
+        auditLines.push(`<div><span class="badge" style="font-size:0.5rem; background:#7c3aed; color:#fff;">FWD→NATIONAL</span> ${t.toLocaleString('en-PH')} ${d.forwardedToNationalBy ? '• ' + d.forwardedToNationalBy : ''}</div>`);
+      }
+      if (d.reviewedAt) {
+        const t = d.reviewedAt.toDate ? d.reviewedAt.toDate() : new Date(d.reviewedAt.seconds*1000);
+        const lvl = d.approvedByLevel || 'National';
+        const cls = status === 'approved' ? 'bg-success' : 'bg-danger';
+        auditLines.push(`<div><span class="badge ${cls}" style="font-size:0.5rem;">${status.toUpperCase()} BY ${lvl.toUpperCase()}</span> ${t.toLocaleString('en-PH')} ${d.reviewedByEmail ? '• ' + d.reviewedByEmail : ''}</div>`);
+      }
+      document.getElementById('mAudit').innerHTML = auditLines.length
+        ? auditLines.join('<div style="height:4px;"></div>')
+        : '<div class="text-muted" style="font-size:0.65rem;">No audit log entries.</div>';
+
+      document.getElementById('modalLoading').style.display = 'none';
+      document.getElementById('modalContent').style.display = '';
+
+    } catch(err) {
+      console.error('Error loading service detail:', err);
+      document.getElementById('modalLoading').textContent = 'Error loading details: ' + err.message;
+    }
+  };
 
   window.handleNationalAction = async function(reqId, action, btn) {
     const label = action === 'approved' ? 'approve' : 'reject';
