@@ -513,13 +513,13 @@
         }
 
         window.updateServiceStatus = async function(newStatus) {
-            const statusText = newStatus === 'approved' ? 'approve' : 
-                             newStatus === 'rejected' ? 'reject' : 
-                             'update';
+            if (newStatus === 'rejected') {
+                document.getElementById('rejectNoteModal').style.display = 'flex';
+                return;
+            }
+            const statusText = newStatus === 'approved' ? 'approve' : 'update';
             const confirmed = confirm(`Are you sure you want to ${statusText} this service request?\n\nRef: ${document.getElementById('refNumber').textContent}\nRequester: ${document.getElementById('applicantName').textContent}`);
-            
             if (!confirmed) return;
-
             try {
                 const updateFields = {
                     status: newStatus,
@@ -530,19 +530,39 @@
                     updateFields.approvedByEmail = auth.currentUser ? auth.currentUser.email : null;
                     updateFields.approvedAt = serverTimestamp();
                 }
-                if (newStatus === 'rejected') {
-                    updateFields.rejectedByLevel = 'Municipal';
-                    updateFields.rejectedByEmail = auth.currentUser ? auth.currentUser.email : null;
-                    updateFields.rejectedAt = serverTimestamp();
-                }
                 await updateDoc(doc(db, 'service_requests', currentServiceId), updateFields);
-                
                 alert(`Service request ${newStatus} successfully!`);
                 await loadServiceDetails();
             } catch (error) {
                 console.error('Error updating status:', error);
                 alert('Failed to update service request status: ' + error.message);
             }
+        };
+
+        window.confirmRejection = async function() {
+            const note = document.getElementById('rejectNoteInput').value.trim();
+            document.getElementById('rejectNoteModal').style.display = 'none';
+            document.getElementById('rejectNoteInput').value = '';
+            try {
+                await updateDoc(doc(db, 'service_requests', currentServiceId), {
+                    status: 'rejected',
+                    updatedAt: serverTimestamp(),
+                    rejectedByLevel: 'Municipal',
+                    rejectedByEmail: auth.currentUser ? auth.currentUser.email : null,
+                    rejectedAt: serverTimestamp(),
+                    rejectionNote: note
+                });
+                alert('Service request rejected successfully!');
+                await loadServiceDetails();
+            } catch (error) {
+                console.error('Error rejecting:', error);
+                alert('Failed to reject service request: ' + error.message);
+            }
+        };
+
+        window.cancelRejection = function() {
+            document.getElementById('rejectNoteModal').style.display = 'none';
+            document.getElementById('rejectNoteInput').value = '';
         };
 
         window.forwardToRegional = async function() {
