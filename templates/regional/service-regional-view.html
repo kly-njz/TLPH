@@ -212,6 +212,8 @@
                 currentUser: null,
                 actionBusy: false,
                 statusAction: null,
+                showRejectModal: false,
+                rejectNoteText: '',
                 // applicant fields
                 applicantName: '—',
                 applicantEmail: '—',
@@ -234,8 +236,16 @@
 
                 async updateStatus(newStatus) {
                     if (!this.serviceId || this.actionBusy) return;
-                    const labels = { 'approved': 'Approve Permit', 'rejected': 'Reject', 'forwarded-national': 'Forward to National' };
+                    if (newStatus === 'rejected') {
+                        this.showRejectModal = true;
+                        return;
+                    }
+                    const labels = { 'approved': 'Approve Permit', 'forwarded-national': 'Forward to National' };
                     if (!confirm(`Confirm: ${labels[newStatus] || newStatus} this service request?`)) return;
+                    await this.doUpdateStatus(newStatus, '');
+                },
+
+                async doUpdateStatus(newStatus, rejectionNote) {
                     this.actionBusy = true;
                     try {
                         const updateFields = {
@@ -254,6 +264,7 @@
                         }
                         if (newStatus === 'rejected') {
                             updateFields.rejectedByLevel = 'Regional';
+                            updateFields.rejectionNote = rejectionNote;
                         }
                         await updateDoc(doc(db, 'service_requests', this.serviceId), updateFields);
                         this.statusAction = newStatus;
@@ -266,6 +277,13 @@
                     } finally {
                         this.actionBusy = false;
                     }
+                },
+
+                async submitRejection() {
+                    const note = this.rejectNoteText.trim();
+                    this.rejectNoteText = '';
+                    this.showRejectModal = false;
+                    await this.doUpdateStatus('rejected', note);
                 },
 
                 async loadServiceData() {
