@@ -545,59 +545,45 @@
         },
 
         get filteredAll(){
-          // filter by range + advanced date window + fields
-          const now = new Date();
-          const start = this.getRangeStart(now, this.range);
-          const from = this.fromDate ? new Date(this.fromDate + 'T00:00:00') : null;
-          const to = this.toDate ? new Date(this.toDate + 'T23:59:59') : null;
-
+          // Remove all date filtering for debug: show all logs
           const q = (this.q || '').toLowerCase().trim();
           const mod = (this.module || 'ALL').toUpperCase();
           const act = (this.action || 'ALL').toUpperCase();
           const out = (this.outcome || 'ALL').toUpperCase();
-
           const userQ = (this.userFilter || '').toLowerCase().trim();
           const ipQ = (this.ipFilter || '').toLowerCase().trim();
           const recQ = (this.recordIdFilter || '').toLowerCase().trim();
           const min = (this.minSeverity || 'ALL').toUpperCase();
-
           const severityRank = { SUCCESS: 1, WARN: 2, FAIL: 3 };
           const minRank = min === 'ALL' ? 0 : severityRank[min] || 0;
-
           return this.logs
-            .map(r => ({ ...r, _dt: new Date(r.ts) }))
+            .map(r => {
+              let _dt;
+              try {
+                _dt = r.ts ? new Date(r.ts) : new Date();
+                if (isNaN(_dt.getTime())) _dt = new Date();
+              } catch (e) {
+                _dt = new Date();
+              }
+              return { ...r, _dt };
+            })
             .filter(r => {
-              // base range
-              if (start && r._dt < start) return false;
-
-              // advanced dates
-              if (from && r._dt < from) return false;
-              if (to && r._dt > to) return false;
-
-              // module/action/outcome
+              // Only filter by module/action/outcome/text
               if (mod !== 'ALL' && (r.module || '').toUpperCase() !== mod) return false;
               if (act !== 'ALL' && (r.action || '').toUpperCase() !== act) return false;
               if (out !== 'ALL' && (r.outcome || '').toUpperCase() !== out) return false;
-
-              // min severity (SUCCESS+ / WARN+ / FAIL only)
               if (minRank > 0) {
                 const rnk = severityRank[(r.outcome || 'SUCCESS').toUpperCase()] || 1;
                 if (min === 'FAIL') return (r.outcome || '').toUpperCase() === 'FAIL';
                 if (rnk < minRank) return false;
               }
-
-              // text search
-              const hay = `${r.id} ${r.user} ${r.role} ${r.module} ${r.action} ${r.target} ${r.targetId} ${r.ip} ${r.message}`
-                .toLowerCase();
-
+              const hay = `${r.id} ${r.user} ${r.role} ${r.module} ${r.action} ${r.target} ${r.targetId} ${r.ip} ${r.message}`.toLowerCase();
               if (q && !hay.includes(q)) return false;
               if (userQ && !(r.user || '').toLowerCase().includes(userQ)) return false;
               if (ipQ && !(r.ip || '').toLowerCase().includes(ipQ)) return false;
               if (recQ && !(`${r.targetId || ''} ${r.id || ''}`.toLowerCase().includes(recQ))) return false;
-
               return true;
-            })
-            .sort((a,b) => b._dt - a._dt);
+            });
         },
 
         get filteredLogs(){
@@ -613,7 +599,13 @@
 
         // helpers
         decorate(r){
-          const dt = new Date(r.ts);
+          let dt;
+          try {
+            dt = r.ts ? new Date(r.ts) : new Date();
+            if (isNaN(dt.getTime())) dt = new Date();
+          } catch (e) {
+            dt = new Date();
+          }
           const date = dt.toISOString().slice(0,10);
           const time = dt.toTimeString().slice(0,8);
           return { ...r, date, time };
@@ -691,6 +683,8 @@
             else counts.fail++;
           });
           this.stats = counts;
+          // Debug print for filteredLogs
+          console.log('[AUDIT LOGS] filteredLogs:', this.filteredLogs);
         },
 
         resetFilters(){
