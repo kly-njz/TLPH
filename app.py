@@ -1,7 +1,8 @@
 from flask import Flask, render_template
 from flask_mail import Mail
 from config import Config
-from firebase_config import initialize_firebase_admin
+import firebase_admin
+from firebase_admin import credentials
 from datetime import timedelta
 
 app = Flask(__name__)
@@ -18,7 +19,9 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 mail = Mail(app)
 
 # Initialize Firebase
-initialize_firebase_admin()
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase-credentials.json")
+    firebase_admin.initialize_app(cred)
 
 
 # Import routes

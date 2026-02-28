@@ -1,9 +1,9 @@
 import firebase_admin
 from firebase_admin import credentials
 
-# Use your existing credentials file path
-cred = credentials.Certificate("firebase-credentials.json")
-firebase_admin.initialize_app(cred)
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase-credentials.json")
+    firebase_admin.initialize_app(cred)
 
 def add_finance_record(department, general_fund, special_fund, total_deposit, total_expenses, net_movement, collection_rate, recent_activity):
     """Add a finance record to Firestore under the specified department."""
@@ -306,11 +306,12 @@ def record_all_user_financial_transactions():
             docs = db.collection(col).stream()
             for doc in docs:
                 data = doc.to_dict()
-                # Only record if there is an amount/fee/payment required
+                # Only record if there is an amount/fee/payment required AND user_email exists
                 amount = data.get('amount') or data.get('fee') or data.get('investmentQty')
-                if amount and float(amount) > 0:
+                user_email = data.get('user_email') or data.get('email')
+                if amount and float(amount) > 0 and user_email:
                     log = {
-                        'user_email': data.get('user_email') or data.get('email'),
+                        'user_email': user_email,
                         'userId': data.get('userId'),
                         'external_id': data.get('external_id') or data.get('externalId'),
                         'invoice_id': data.get('invoice_id'),
@@ -329,8 +330,52 @@ def record_all_user_financial_transactions():
         except Exception as e:
             print(f"[ERROR] Scanning {col}: {e}")
 
+def clear_financial_logs_collection():
+    """Delete all documents in the financial_logs collection."""
+    from firebase_admin import firestore
+    db = firestore.client()
+    batch = db.batch()
+    docs = db.collection('financial_logs').stream()
+    count = 0
+    for doc in docs:
+        batch.delete(doc.reference)
+        count += 1
+        # Commit every 400 deletes (Firestore batch limit)
+        if count % 400 == 0:
+            batch.commit()
+            batch = db.batch()
+    if count % 400 != 0:
+        batch.commit()
+    print(f"Cleared {count} documents from financial_logs collection.")
+
+def remove_financial_logs_without_email():
+    """Delete all documents in the financial_logs collection that have no user_email field or an empty email."""
+    from firebase_admin import firestore
+    db = firestore.client()
+    batch = db.batch()
+    docs = db.collection('financial_logs').stream()
+    count = 0
+    removed = 0
+    for doc in docs:
+        data = doc.to_dict()
+        user_email = data.get('user_email') or data.get('email')
+        if not user_email:
+            batch.delete(doc.reference)
+            removed += 1
+        count += 1
+        if count % 400 == 0:
+            batch.commit()
+            batch = db.batch()
+    if count % 400 != 0:
+        batch.commit()
+    print(f"Removed {removed} documents without email from financial_logs collection.")
+
 # At the bottom of the file, add a CLI entry point for manual backfill
 if __name__ == "__main__":
-    print("Backfilling all user financial transactions to financial_logs...")
-    record_all_user_financial_transactions()
-    print("Done. Check your Firestore financial_logs collection.")
+    print("Removing financial_logs without email...")
+    remove_financial_logs_without_email()
+    print("Done. Now your collection only contains records with user emails.")
+# To backfill again, comment out the above and uncomment the below:
+# print("Backfilling all user financial transactions to financial_logs...")
+# record_all_user_financial_transactions()
+# print("Done. Check your Firestore financial_logs collection.")
