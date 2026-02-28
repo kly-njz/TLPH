@@ -1,3 +1,10 @@
+import firebase_admin
+from firebase_admin import credentials
+
+# Use your existing credentials file path
+cred = credentials.Certificate("firebase-credentials.json")
+firebase_admin.initialize_app(cred)
+
 def add_finance_record(department, general_fund, special_fund, total_deposit, total_expenses, net_movement, collection_rate, recent_activity):
     """Add a finance record to Firestore under the specified department."""
     db = firestore.client()
