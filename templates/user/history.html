@@ -585,18 +585,26 @@
         return;
       }
 
-      tbody.innerHTML = allServices.map((service, idx) => `
+      tbody.innerHTML = allServices.map((service, idx) => {
+        const st = (service.status || '').toLowerCase();
+        const statusDisplay =
+          st === 'approved' && service.approvedByLevel ? `APPROVED BY ${service.approvedByLevel.toUpperCase()}` :
+          st === 'rejected' && service.rejectedByLevel ? `REJECTED BY ${service.rejectedByLevel.toUpperCase()}` :
+          (st === 'forwarded' || st.includes('forward')) && service.forwardedTo ? `FORWARDED TO ${service.forwardedTo.toUpperCase()}` :
+          getStatusLabel(service.status);
+        const statusClass = getStatusClass(service.status);
+        return `
         <tr>
           <td>${service.type}</td>
           <td>${service.description.substring(0, 40)}${service.description.length > 40 ? '...' : ''}</td>
-          <td><span class="status-label ${getStatusClass(service.status)}">${getStatusLabel(service.status)}</span></td>
+          <td><span class="status-label ${statusClass}">${statusDisplay}</span></td>
           <td>${service.date}</td>
           <td><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${service.id.substring(0, 8)}</code></td>
           <td style="text-align: center;">
             <button class="action-btn" onclick="openServiceDetail('${service.id}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</button>
           </td>
         </tr>
-      `).join('');
+      `; }).join('');
     }
 
     function populateInventoryTable() {
@@ -766,6 +774,9 @@
               type: item.serviceType || 'Service Request',
               description: item.description || 'No description provided',
               status: item.status || 'Unknown',
+              approvedByLevel: item.approvedByLevel || '',
+              rejectedByLevel: item.rejectedByLevel || '',
+              forwardedTo: item.forwardedTo || item.forwardedByLevel || '',
               date: date
             });
           }
