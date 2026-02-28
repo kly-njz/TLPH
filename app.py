@@ -22,7 +22,7 @@ initialize_firebase_admin()
 
 
 # Import routes
-from routes import main_routes, api_routes, municipal_routes, seminar_routes, service_routes, fisheries_routes, environment_routes, forest_routes, livestock_routes, permits_routes, wildlife_routes, farm_routes, payments_routes,regional_routes,superadmin_routes, national_routes
+from routes import main_routes, api_routes, municipal_routes, seminar_routes, service_routes, fisheries_routes, environment_routes, forest_routes, livestock_routes, permits_routes, wildlife_routes, farm_routes, payments_routes,regional_routes,superadmin_routes, national_routes, municipal_api_logs
 
 # Initialize mail in api_routes
 api_routes.init_mail(mail)
@@ -44,6 +44,7 @@ app.register_blueprint(payments_routes.bp)
 app.register_blueprint(regional_routes.bp)
 app.register_blueprint(superadmin_routes.bp)
 app.register_blueprint(national_routes.bp)
+app.register_blueprint(municipal_api_logs.bp)
 
 
 # Jinja filter for date formatting

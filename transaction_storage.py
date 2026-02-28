@@ -84,7 +84,14 @@ def add_transaction(user_email, external_id, invoice_id, amount, item_name, desc
         created_doc = transactions_ref.document(doc_id).get()
         result = created_doc.to_dict()
         result['id'] = doc_id
-        
+
+        # Record to financial_logs if payment is required
+        if status and status.lower() in ['pending', 'unpaid', 'for payment']:
+            try:
+                record_transaction_to_financial_logs(transaction)
+            except Exception as e:
+                print(f"[WARN] Could not record to financial_logs: {e}")
+
         return result
     except Exception as e:
         print(f"Error adding transaction: {e}")
@@ -253,3 +260,25 @@ def cancel_transaction_by_reference(reference, user_email=None, user_id=None):
     except Exception as e:
         print(f"Error canceling transaction: {e}")
         return {'success': False, 'message': str(e)}
+
+def record_transaction_to_financial_logs(transaction):
+    """Record a user transaction that requires payment to the financial_logs collection."""
+    from firebase_admin import firestore
+    db = firestore.client()
+    log = {
+        'user_email': transaction.get('user_email'),
+        'userId': transaction.get('userId'),
+        'external_id': transaction.get('external_id'),
+        'invoice_id': transaction.get('invoice_id'),
+        'transaction_name': transaction.get('transaction_name'),
+        'description': transaction.get('description'),
+        'amount': transaction.get('amount'),
+        'status': transaction.get('status'),
+        'payment_method': transaction.get('payment_method', 'Online Payment'),
+        'reference': transaction.get('reference'),
+        'created_at': firestore.SERVER_TIMESTAMP,
+        'updated_at': firestore.SERVER_TIMESTAMP,
+        'paid_at': transaction.get('paid_at'),
+        'source': 'transactions',
+    }
+    db.collection('financial_logs').add(log)
