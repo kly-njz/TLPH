@@ -1,356 +1,323 @@
-{% include 'account_status_monitor.html' %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DENR | System Audit Logs</title>
 
-<aside id="sidebar"
-  class="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-slate-200 bg-white pt-[80px] transition-all duration-300 ease-in-out">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 
-  <!-- Brand / Header -->
-  <div onclick="toggleSidebar()"
-    class="flex cursor-pointer items-center gap-3 border-b border-slate-100 p-5 overflow-hidden shrink-0">
-    <img src="{{ url_for('static', filename='images/denr.jpg') }}"
-      class="h-10 w-10 flex-shrink-0 shadow-sm" alt="DENR">
-    <div class="nav-text">
-      <h1 class="text-base font-black leading-none text-slate-800 tracking-tight">DENR</h1>
-      <p class="mt-1 text-[9px] font-bold tracking-widest text-green-700 uppercase">Super Admin</p>
-    </div>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            denr: '#006400',
+            'audit-crimson': '#991b1b',
+            'audit-slate': '#0f172a',
+            'gov-blue': '#0038a8',
+            'gov-red': '#ce1126',
+          },
+          fontFamily: { serif: ['Georgia','serif'], sans: ['Inter','sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <style>
+    .gov-strip{background:linear-gradient(to right,#0038a8 50%,#ce1126 50%);height:4px;width:100%;position:fixed;top:0;left:0;z-index:5000}
+    ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#991b1b;border-radius:10px}
+    html,body{height:100vh;overflow:hidden}
+    .main-wrapper{transition:all .3s ease-in-out}
+    td,th{padding:.4rem .75rem!important}
+  </style>
+</head>
+
+<body class="min-h-screen bg-[#f4f7f6] font-sans text-slate-900 overflow-x-hidden flex flex-col">
+  <div class="gov-strip"></div>
+
+  <div class="fixed top-1 w-full z-[4000] no-print">
+    {% include 'super-admin/header-superadmin.html' %}
   </div>
 
-  <!-- ✅ ONLY ONE SCROLL CONTAINER: EVERYTHING MENU-RELATED MUST BE INSIDE THIS NAV -->
-  <nav id="sidebarNav" class="flex-1 overflow-y-auto overflow-x-hidden py-4 sidebar-scroll">
+  <div class="fixed left-0 h-full z-[3000] no-print">
+    {% include 'super-admin/sidenav-superadmin.html' %}
+  </div>
 
-    <a href="/super-admin/dashboard"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">grid_view</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Home</span>
-    </a>
+  <main class="lg:ml-64 pt-24 h-screen flex flex-col transition-all duration-300 main-wrapper">
+    <div class="max-w-[1750px] mx-auto w-full px-4 flex flex-col flex-1 min-h-0 space-y-2">
 
-    <a href="/superadmin/user-application"
-      class="nav-item relative flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">description</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Applications</span>
-      <span class="badge-count absolute right-4 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">12</span>
-    </a>
+      <!-- Header -->
+      <header class="bg-white border border-slate-300 border-t-4 border-t-audit-crimson p-3 flex items-center gap-4 shadow-sm shrink-0">
+        <div class="bg-slate-900 p-2 rounded-lg border border-slate-700">
+          <span class="material-icons-round text-white text-2xl">history_edu</span>
+        </div>
+        <div class="flex-1 border-l-2 border-slate-200 pl-4">
+          <h1 class="font-serif text-lg font-black uppercase tracking-tight text-slate-800 leading-none">System Logs</h1>
+          <p class="text-[9px] font-bold text-audit-crimson uppercase tracking-widest mt-1">National • Regional • Municipal Activity Trail</p>
+        </div>
+        <div class="flex gap-2 no-print">
+          <button id="btnCsv" class="bg-white border border-slate-400 px-3 py-1 text-[9px] font-black uppercase hover:bg-slate-50 transition">
+            Export
+          </button>
+          <button class="bg-audit-crimson text-white px-4 py-1 text-[9px] font-black uppercase shadow-md hover:bg-red-900 transition flex items-center gap-1">
+            <span class="material-icons-round text-sm">verified</span> Archive
+          </button>
+        </div>
+      </header>
 
-    <a href="/superadmin/user-service-request"
-      class="nav-item relative flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">settings_suggest</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Service Requests</span>
-      <span class="badge-count absolute right-4 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">5</span>
-    </a>
+      <!-- KPI -->
+      <div class="grid grid-cols-5 gap-2 shrink-0">
+        <div class="bg-white border-t-2 border-t-slate-800 p-2 shadow-sm text-center">
+          <p class="text-[8px] font-black text-slate-400 uppercase">Events (Shown)</p>
+          <h3 id="kTotal" class="text-xl font-black text-slate-800 leading-none">0</h3>
+        </div>
+        <div class="bg-white border-t-2 border-t-gov-blue p-2 shadow-sm text-center">
+          <p class="text-[8px] font-black text-slate-400 uppercase">National</p>
+          <h3 id="kNat" class="text-xl font-black text-gov-blue leading-none">0</h3>
+        </div>
+        <div class="bg-white border-t-2 border-t-amber-500 p-2 shadow-sm text-center">
+          <p class="text-[8px] font-black text-slate-400 uppercase">Regional</p>
+          <h3 id="kReg" class="text-xl font-black text-amber-600 leading-none">0</h3>
+        </div>
+        <div class="bg-white border-t-2 border-t-denr p-2 shadow-sm text-center">
+          <p class="text-[8px] font-black text-slate-400 uppercase">Municipal</p>
+          <h3 id="kMun" class="text-xl font-black text-denr leading-none">0</h3>
+        </div>
+        <div class="bg-white border-t-2 border-t-audit-crimson p-2 shadow-sm text-center">
+          <p class="text-[8px] font-black text-slate-400 uppercase">Flags</p>
+          <h3 id="kFlags" class="text-xl font-black text-audit-crimson leading-none">0</h3>
+        </div>
+      </div>
 
-    <a href="/superadmin/inventory"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">inventory_2</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Inventory</span>
-    </a>
+      <!-- Charts -->
+      <div class="grid grid-cols-12 gap-2 h-40 shrink-0">
+        <div class="col-span-8 bg-white border border-slate-200 p-3 shadow-sm">
+          <h4 class="text-[9px] font-black text-slate-500 uppercase border-l-2 border-audit-crimson pl-2 mb-2">Activity Frequency (Daily)</h4>
+          <div class="h-28"><canvas id="trend"></canvas></div>
+        </div>
+        <div class="col-span-4 bg-white border border-slate-200 p-3 shadow-sm text-center">
+          <h4 class="text-[9px] font-black text-slate-500 uppercase border-l-2 border-audit-slate pl-2 mb-2 text-left">Level Mix</h4>
+          <div class="h-28"><canvas id="mix"></canvas></div>
+        </div>
+      </div>
 
-    <a href="/superadmin/user-inventory"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">devices</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">User Inventory</span>
-    </a>
+      <!-- Table -->
+      <div class="bg-white border border-slate-200 shadow-md flex flex-col flex-1 min-h-0 overflow-hidden">
+        <!-- Filters -->
+        <div class="p-3 bg-slate-50 border-b grid grid-cols-1 md:grid-cols-5 gap-2 shrink-0 no-print">
+          <div class="md:col-span-2 space-y-0.5">
+            <label class="text-[8px] font-black text-slate-400 uppercase ml-1">Search</label>
+            <input id="q" oninput="applyFilters()"
+              class="w-full px-2 py-1 text-[11px] border border-slate-300 rounded outline-none focus:ring-1 focus:ring-audit-crimson"
+              placeholder="User, Office, Action, Module, IP..." />
+          </div>
 
-    <a href="/superadmin/permits"
-      class="nav-item relative flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">verified_user</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Licensing/Permits</span>
-      <span class="badge-count absolute right-4 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">8</span>
-    </a>
+          <div class="space-y-0.5">
+            <label class="text-[8px] font-black text-slate-400 uppercase ml-1">Category</label>
+            <select id="lvl" onchange="applyFilters()"
+              class="w-full px-2 py-1 text-[11px] border border-slate-300 bg-white font-bold outline-none rounded">
+              <option value="all">-- ALL --</option>
+              <option value="National">NATIONAL</option>
+              <option value="Regional">REGIONAL</option>
+              <option value="Municipal">MUNICIPAL</option>
+            </select>
+          </div>
 
-    <a href="/superadmin/transaction"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">payments</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Transactions</span>
-    </a>
+          <div class="space-y-0.5">
+            <label class="text-[8px] font-black text-slate-400 uppercase ml-1">Module</label>
+            <select id="mod" onchange="applyFilters()"
+              class="w-full px-2 py-1 text-[11px] border border-slate-300 bg-white outline-none rounded">
+              <option value="all">-- ALL MODULES --</option>
+              <option value="Auth">Auth</option>
+              <option value="User Management">User Management</option>
+              <option value="Applications">Applications</option>
+              <option value="Permit Processing">Permit Processing</option>
+              <option value="Transactions">Transactions</option>
+              <option value="Inventory">Inventory</option>
+              <option value="Security">Security</option>
+              <option value="Services">Services</option>
+              <option value="Settings">Settings</option>
+              <option value="Audit">Audit</option>
+            </select>
+          </div>
 
-    <a href="/superadmin/account"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">manage_accounts</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Manage Accounts</span>
-    </a>
+          <div class="flex items-end gap-2">
+            <button onclick="location.reload()"
+              class="w-full bg-slate-800 text-white py-1.5 text-[10px] font-black uppercase hover:bg-black transition tracking-widest rounded">
+              Refresh
+            </button>
+          </div>
+        </div>
 
-    <div class="px-5 py-2 mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-4">
-      Administration
-    </div>
+        <div class="overflow-y-auto flex-1">
+          <table class="w-full text-left border-collapse" id="masterTable">
+            <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+              <tr class="text-[9px] uppercase font-black text-slate-600">
+                <th>Timestamp</th>
+                <th>Category</th>
+                <th>Office</th>
+                <th>User</th>
+                <th>Action Registry</th>
+                <th>Module</th>
+                <th class="text-right">Info</th>
+              </tr>
+            </thead>
+            <tbody id="body" class="divide-y divide-slate-100 text-[11px] text-slate-700"></tbody>
+          </table>
+        </div>
 
-    <a href="/superadmin/regions"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">public</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Regions</span>
-    </a>
-
-    <a href="/superadmin/user-groups"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">groups</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">User Groups</span>
-    </a>
-
-    <div class="px-5 py-2 mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-4">
-      Products & Inventory
-    </div>
-
-    <a href="/superadmin/products-national"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">inventory</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Products (National)</span>
-    </a>
-
-    <a href="/superadmin/purchases"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">shopping_cart</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Purchases</span>
-    </a>
-
-    <a href="/superadmin/sales"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">sell</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Sales</span>
-    </a>
-
-    <a href="/superadmin/sales-return"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">undo</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Sales Return</span>
-    </a>
-
-    <a href="/superadmin/distributed-products"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">transfer_within_a_station</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Distributed Products</span>
-    </a>
-
-    <a href="/superadmin/damage-products"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">report_problem</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Damaged Products</span>
-    </a>
-
-    <a href="/superadmin/transfer-products"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">swap_horiz</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Transfer Products</span>
-    </a>
-
-    <div class="px-5 py-2 mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-4">
-      Operations
-    </div>
-
-    <a href="/superadmin/quotation"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">attach_money</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Quotation</span>
-    </a>
-
-    <a href="/superadmin/projects"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">folder_special</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Projects</span>
-    </a>
-
-    <a href="/superadmin/tasks"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">task</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Tasks</span>
-    </a>
-
-    <a href="/superadmin/applicants"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">badge</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Applicants</span>
-    </a>
-
-    <div class="px-5 py-2 mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-4">
-      Accounting
-    </div>
-
-    <a href="/superadmin/accounting/dashboard"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">account_balance</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Dashboard</span>
-    </a>
-
-    <a href="/superadmin/accounting/entities"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">corporate_fare</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Entities</span>
-    </a>
-
-    <a href="/superadmin/accounting/coa-templates"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">account_tree</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">COA Templates</span>
-    </a>
-
-    <a href="/superadmin/accounting/expense-categories"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">category</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Expense Categories</span>
-    </a>
-
-    <a href="/superadmin/accounting/deposit-categories"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">savings</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Deposit Categories</span>
-    </a>
-
-    <a href="/superadmin/accounting/permissions"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">admin_panel_settings</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Permissions</span>
-    </a>
-
-    <a href="/superadmin/accounting/audit"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">history</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Audit Logs</span>
-    </a>
-
-
-    <!-- ✅ THESE WERE OUTSIDE BEFORE — NOW THEY'RE INSIDE, SO THEY SCROLL -->
-    <div class="px-5 py-2 mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-4">
-      System
-    </div>
-
-    <div class="px-5 py-2 mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-4">
-      Human Resources
-    </div>
-
-    <a href="/superadmin/human-resource-superadmin/company-superadmin"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">business</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Company</span>
-    </a>
-
-    <a href="/superadmin/human-resource-superadmin/department-superadmin"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">domain</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Department</span>
-    </a>
-
-    <a href="/superadmin/human-resource-superadmin/designation-superadmin"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">badge</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Designation</span>
-    </a>
-
-    <a href="/superadmin/human-resource-superadmin/shift-superadmin"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">schedule</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Office Shift Time</span>
-    </a>
-
-    <a href="/superadmin/human-resource-superadmin/employee-superadmin"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">people</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Employees</span>
-    </a>
-
-    <a href="/superadmin/human-resource-superadmin/attendance-superadmin"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">check_circle</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Attendance</span>
-    </a>
-
-    <a href="/superadmin/human-resource-superadmin/holiday-superadmin"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">event</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Holiday</span>
-    </a>
-
-    <a href="/superadmin/human-resource-superadmin/leave-request-superadmin"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">request_quote</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Leave Request</span>
-    </a>
-
-    <a href="/superadmin/human-resource-superadmin/payroll-superadmin"
-      class="nav-item flex items-center px-5 py-3 text-slate-600 transition-all hover:bg-green-50 hover:text-green-800">
-      <span class="material-icons-round mr-4 text-[22px] flex-shrink-0">paid</span>
-      <span class="nav-text text-sm font-semibold whitespace-nowrap">Payroll</span>
-    </a>
-
-  </nav>
-
-  <!-- ✅ Footer stays OUTSIDE nav so it pins to the bottom -->
-  <div class="border-t border-slate-100 bg-slate-50 p-4 shrink-0">
-    <div class="flex items-center gap-3 overflow-hidden">
-      <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-green-800 font-bold text-white text-xs">AD</div>
-      <div class="nav-text text-left">
-        <p class="text-xs font-black text-slate-800">Alqz Dave</p>
-        <button onclick="handleLogout()" class="text-[10px] font-bold text-red-600 uppercase hover:underline">Sign Out</button>
+        <div class="px-3 py-1.5 bg-slate-800 text-white flex justify-between items-center text-[8px] font-black uppercase shrink-0">
+          <div>Matches: <span id="count" class="text-amber-400">0</span> Entries</div>
+          <div class="flex items-center gap-2 text-red-400">
+            <span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+            SECURE AUDIT SESSION v2.0
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-</aside>
+  </main>
 
-<style>
-  .sidebar-scroll::-webkit-scrollbar { width: 6px; }
-  .sidebar-scroll::-webkit-scrollbar-track { background: #f8fafc; border-left: 1px solid #e2e8f0; }
-  .sidebar-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 100px; border: 2px solid #f8fafc; }
-  .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: #166534; }
+  <script>
+    // ---- Mock System Logs (National/Regional/Municipal) ----
+    const LOGS = [
+      { t:"2026-02-28 09:12:11", lvl:"National",  office:"DENR Central Office",        user:"superadmin@tlph.gov.ph", mod:"User Management",     act:"Created User",   ip:"203.177.12.44",  sev:"Info",     msg:"Created Regional Admin account (Region IV-A)." },
+      { t:"2026-02-28 10:03:57", lvl:"Regional",  office:"Region IV-A (CALABARZON)",   user:"regional.admin@tlph.gov.ph", mod:"Permit Processing", act:"Approved",      ip:"112.201.55.19",  sev:"Info",     msg:"Approved Environmental Permit #ENV-2026-0142." },
+      { t:"2026-02-28 10:41:23", lvl:"Municipal", office:"Tagaytay City",              user:"municipal.admin@tlph.gov.ph", mod:"Services",         act:"Forwarded",     ip:"49.146.88.2",    sev:"Warning",  msg:"Forwarded seminar request to Regional for validation." },
+      { t:"2026-02-27 14:20:03", lvl:"Municipal", office:"Silang, Cavite",             user:"silang.muni@tlph.gov.ph", mod:"Inventory",           act:"Updated Stock",  ip:"49.147.12.88",   sev:"Info",     msg:"Updated inventory item: Tree Seedlings (+120)." },
+      { t:"2026-02-27 15:15:44", lvl:"Regional",  office:"Region IV-A (CALABARZON)",   user:"regional.staff@tlph.gov.ph", mod:"Applications",      act:"Reviewed",      ip:"112.201.55.21",  sev:"Info",     msg:"Reviewed Fisheries License application #FIS-2026-0029." },
+      { t:"2026-02-26 08:02:35", lvl:"National",  office:"DENR Central Office",        user:"national.auditor@tlph.gov.ph", mod:"Audit",           act:"Exported Report", ip:"203.177.12.18", sev:"Info",     msg:"Exported system audit report for February 2026." },
+      { t:"2026-02-26 11:09:09", lvl:"Municipal", office:"Alfonso, Cavite",            user:"alfonso.muni@tlph.gov.ph", mod:"Permit Processing",  act:"Submitted",     ip:"49.146.77.55",   sev:"Info",     msg:"Submitted Forestry Permit application #FOR-2026-0107." },
+      { t:"2026-02-25 13:55:40", lvl:"Regional",  office:"Region IV-A (CALABARZON)",   user:"regional.admin@tlph.gov.ph", mod:"User Management",  act:"Disabled User", ip:"112.201.55.19",  sev:"Warning",  msg:"Disabled account due to inactive status (temp.staff)." },
+      { t:"2026-02-25 16:10:12", lvl:"National",  office:"DENR Central Office",        user:"superadmin@tlph.gov.ph", mod:"Settings",            act:"Updated Policy", ip:"203.177.12.44", sev:"Info",     msg:"Updated approval workflow thresholds for permits." },
+      { t:"2026-02-24 09:33:00", lvl:"Municipal", office:"Mendez, Cavite",             user:"mendez.muni@tlph.gov.ph", mod:"Services",            act:"Completed",     ip:"49.146.99.10",   sev:"Info",     msg:"Marked service request #SRV-2026-0041 as completed." },
+      { t:"2026-02-23 22:18:51", lvl:"Regional",  office:"Region III (Central Luzon)", user:"r3.security@tlph.gov.ph", mod:"Security",            act:"Login Failed",  ip:"45.12.88.19",    sev:"Critical", msg:"Brute force attempt detected; account locked for 15 minutes." }
+    ];
 
-  .nav-item.active {
-    background-color: #f0fdf4 !important;
-    color: #166534 !important;
-    border-right: 4px solid #166534;
-    font-weight: 800;
-  }
+    // ---- Charts ----
+    const OPT_LINE = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ ticks:{font:{size:9}} }, y:{ ticks:{font:{size:9}, precision:0}, beginAtZero:true } } };
 
-  /* Optional: collapse behavior so toggleSidebar actually does something */
-  #sidebar.collapsed { width: 88px; }
-  #sidebar.collapsed .nav-text { display: none; }
-  #sidebar.collapsed .badge-count { display: none; }
-  #sidebar.collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
-  #sidebar.collapsed .nav-item .material-icons-round { margin-right: 0 !important; }
-</style>
+    let trendChart, mixChart;
 
-<script>
-  function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('collapsed');
-  }
+    const day = (t)=>t.slice(0,10);
+    const dt = (t)=>new Date(t.replace(" ","T"));
 
-  document.addEventListener('DOMContentLoaded', function() {
-    const currentPath = window.location.pathname.replace(/\/$/, "");
-    const navLinks = document.querySelectorAll('.nav-item');
-    const sidebarNav = document.getElementById('sidebarNav');
-
-    // Highlight active page
-    navLinks.forEach(link => {
-      const linkHref = (link.getAttribute('href') || "").replace(/\/$/, "");
-      link.classList.remove('active');
-
-      if (!linkHref) return;
-
-      if (currentPath === linkHref || (currentPath.startsWith(linkHref) && linkHref !== "/superadmin/dashboard")) {
-        link.classList.add('active');
-      }
-    });
-
-    // Persist scroll position
-    const savedScrollPos = localStorage.getItem('sidebarScrollPos');
-    if (savedScrollPos) sidebarNav.scrollTop = Number(savedScrollPos);
-
-    sidebarNav.addEventListener('scroll', function() {
-      localStorage.setItem('sidebarScrollPos', String(sidebarNav.scrollTop));
-    });
-  });
-</script>
-
-<script type="module">
-  import { auth } from '/static/js/firebase-config.js';
-  import { signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-  window.handleLogout = async function() {
-    try {
-      await fetch('/api/logout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+    function countsByDay(data){
+      const m={}; data.forEach(x=>m[day(x.t)]=(m[day(x.t)]||0)+1);
+      const labels=Object.keys(m).sort();
+      return { labels, values: labels.map(k=>m[k]) };
+    }
+    function countsByLevel(data){
+      const c={National:0,Regional:0,Municipal:0};
+      data.forEach(x=>c[x.lvl]=(c[x.lvl]||0)+1);
+      return c;
+    }
+    function initCharts(data){
+      const d=countsByDay(data), c=countsByLevel(data);
+      trendChart = new Chart(document.getElementById('trend'), {
+        type:'line',
+        data:{ labels:d.labels, datasets:[{ data:d.values, borderColor:'#991b1b', backgroundColor:'rgba(153,27,27,.06)', fill:true, tension:.3, borderWidth:2, pointRadius:2 }]},
+        options: OPT_LINE
       });
 
-      await signOut(auth);
-      window.location.href = '/login';
-    } catch (error) {
-      console.error('Logout error:', error);
-      alert('Logout failed: ' + error.message);
+      mixChart = new Chart(document.getElementById('mix'), {
+        type:'doughnut',
+        data:{ labels:['National','Regional','Municipal'], datasets:[{ data:[c.National,c.Regional,c.Municipal], backgroundColor:['#0038a8','#d97706','#006400'], borderWidth:0 }]},
+        options:{ responsive:true, maintainAspectRatio:false, cutout:'70%',
+          plugins:{ legend:{ position:'right', labels:{ boxWidth:8, font:{ size:8 } } } } }
+      });
     }
-  };
-</script>
+    function updateCharts(data){
+      const d=countsByDay(data), c=countsByLevel(data);
+      trendChart.data.labels = d.labels;
+      trendChart.data.datasets[0].data = d.values;
+      trendChart.update();
+
+      mixChart.data.datasets[0].data = [c.National,c.Regional,c.Municipal];
+      mixChart.update();
+    }
+
+    // ---- Table + Filters ----
+    const sevPill = (s)=>{
+      const cls = s==='Critical' ? 'bg-red-100 text-red-700 border-red-300' :
+                  s==='Warning'  ? 'bg-amber-100 text-amber-700 border-amber-300' :
+                                  'bg-blue-100 text-blue-700 border-blue-300';
+      return `<span class="px-1.5 py-0.5 rounded border text-[8px] font-black uppercase ${cls}">${s}</span>`;
+    };
+    const lvlPill = (l)=>{
+      const cls = l==='National' ? 'bg-blue-100 text-gov-blue border-blue-300' :
+                  l==='Regional' ? 'bg-amber-100 text-amber-700 border-amber-300' :
+                                   'bg-green-100 text-denr border-green-300';
+      return `<span class="px-1.5 py-0.5 rounded border text-[8px] font-black uppercase ${cls}">${l}</span>`;
+    };
+
+    function render(data){
+      const body=document.getElementById('body');
+      body.innerHTML='';
+      document.getElementById('count').textContent=data.length;
+
+      // KPIs
+      const c=countsByLevel(data);
+      document.getElementById('kTotal').textContent=data.length;
+      document.getElementById('kNat').textContent=c.National||0;
+      document.getElementById('kReg').textContent=c.Regional||0;
+      document.getElementById('kMun').textContent=c.Municipal||0;
+      document.getElementById('kFlags').textContent=data.filter(x=>x.sev!=='Info').length;
+
+      data.forEach(r=>{
+        const tr=document.createElement('tr');
+        tr.className="hover:bg-red-50/30 transition-colors border-b";
+        tr.innerHTML=`
+          <td class="font-bold text-slate-400 font-mono text-[10px]">${r.t}</td>
+          <td class="font-black">${lvlPill(r.lvl)}</td>
+          <td class="font-bold text-slate-700">${r.office}</td>
+          <td class="font-black text-slate-800 tracking-tighter">${r.user}</td>
+          <td class="font-bold text-slate-600">${r.act}</td>
+          <td class="font-black uppercase text-[9px] text-slate-500">${r.mod}</td>
+          <td class="text-right">
+            <button onclick="alert('${(r.msg||'').replace(/'/g,"\\'")}\\n\\nIP: ${r.ip}\\nSeverity: ${r.sev}')" class="text-slate-400 hover:text-audit-crimson" title="View details">
+              <span class="material-icons-round text-sm">info</span>
+            </button>
+          </td>`;
+        body.appendChild(tr);
+      });
+    }
+
+    function applyFilters(){
+      const s=(document.getElementById('q').value||'').toLowerCase();
+      const L=document.getElementById('lvl').value;
+      const M=document.getElementById('mod').value;
+
+      let data = LOGS.slice()
+        .filter(x => (L==='all'||x.lvl===L) && (M==='all'||x.mod===M))
+        .filter(x => !s || (x.t+' '+x.lvl+' '+x.office+' '+x.user+' '+x.mod+' '+x.act+' '+x.ip+' '+x.msg).toLowerCase().includes(s))
+        .sort((a,b)=>dt(b.t)-dt(a.t));
+
+      render(data);
+      updateCharts(data);
+    }
+
+    // Export CSV (uses current filtered view)
+    document.getElementById('btnCsv').onclick = ()=>{
+      const rows = [...document.querySelectorAll('#body tr')].map(tr=>[...tr.children].map(td=>td.innerText.replace(/\s+/g,' ').trim()));
+      const headers = ["Timestamp","Category","Office","User","Action","Module","Info"];
+      const csv = [headers.join(","), ...rows.map(r=>r.map(x=>`"${x.replace(/"/g,'""')}"`).join(","))].join("\n");
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));
+      a.download="system_logs_export.csv";
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 500);
+    };
+
+    // Init
+    window.onload = ()=>{
+      const init = LOGS.slice().sort((a,b)=>dt(b.t)-dt(a.t));
+      initCharts(init);
+      render(init);
+      applyFilters(); // ensures charts + kpis in sync if defaults change
+    };
+  </script>
+</body>
+</html>

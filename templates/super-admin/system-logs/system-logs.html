@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DENR | System Audit Logs</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            denr: '#006400',
+            'audit-crimson': '#991b1b',
+            'audit-slate': '#0f172a',
+            'gov-blue': '#0038a8',
+            'gov-red': '#ce1126',
+          },
+          fontFamily: {
+            'serif': ['Georgia', 'serif'],
+            'sans': ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .gov-strip {
+        background: linear-gradient(to right, #0038a8 50%, #ce1126 50%);
+        height: 4px; width: 100%; position: fixed; top: 0; left: 0; z-index: 5000;
+    }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #991b1b; border-radius: 10px; }
+    
+    html, body { height: 100vh; overflow: hidden; }
+    .main-wrapper { transition: all 0.3s ease-in-out; }
+    td, th { padding: 0.4rem 0.75rem !important; }
+  </style>
+</head>
+
+<body class="min-h-screen bg-[#f4f7f6] font-sans text-slate-900 overflow-x-hidden flex flex-col">
+    
+    <div class="gov-strip"></div>
+
+    <div class="fixed top-1 w-full z-[4000] no-print">
+        {% include 'super-admin/header-superadmin.html' %}
+    </div>
+    
+    <div class="fixed left-0 h-full z-[3000] no-print">
+        {% include 'super-admin/sidenav-superadmin.html' %}
+    </div>
+
+    <main class="lg:ml-64 pt-24 h-screen flex flex-col transition-all duration-300 main-wrapper">
+        <div class="max-w-[1750px] mx-auto w-full px-4 flex flex-col flex-1 min-h-0 space-y-2"> 
+            
+            <header class="bg-white border border-slate-300 border-t-4 border-t-audit-crimson p-3 flex items-center gap-4 shadow-sm shrink-0">
+                <div class="bg-slate-900 p-2 rounded-lg border border-slate-700">
+                    <span class="material-icons-round text-white text-2xl">history_edu</span>
+                </div>
+                <div class="flex-1 border-l-2 border-slate-200 pl-4">
+                    <h1 class="font-serif text-lg font-black uppercase tracking-tight text-slate-800 leading-none">System Forensic Audit Logs</h1>
+                    <p class="text-[9px] font-bold text-audit-crimson uppercase tracking-widest mt-1">Immutable Trail of Security Events</p>
+                </div>
+                <div class="flex gap-2 no-print">
+                    <button class="bg-white border border-slate-400 px-3 py-1 text-[9px] font-black uppercase hover:bg-slate-50 transition">Export</button>
+                    <button class="bg-audit-crimson text-white px-4 py-1 text-[9px] font-black uppercase shadow-md hover:bg-red-900 transition flex items-center gap-1">
+                        <span class="material-icons-round text-sm">verified</span> Archive
+                    </button>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-5 gap-2 shrink-0">
+                <div class="bg-white border-t-2 border-t-slate-800 p-2 shadow-sm text-center">
+                    <p class="text-[8px] font-black text-slate-400 uppercase">Events (24h)</p>
+                    <h3 class="text-xl font-black text-slate-800 leading-none">4,210</h3>
+                </div>
+                <div class="bg-white border-t-2 border-t-audit-crimson p-2 shadow-sm text-center animate-pulse">
+                    <p class="text-[8px] font-black text-slate-400 uppercase">Alerts</p>
+                    <h3 class="text-xl font-black text-audit-crimson leading-none">03</h3>
+                </div>
+                <div class="bg-white border-t-2 border-t-blue-600 p-2 shadow-sm text-center">
+                    <p class="text-[8px] font-black text-slate-400 uppercase">Privileges</p>
+                    <h3 class="text-xl font-black text-blue-600 leading-none">12</h3>
+                </div>
+                <div class="bg-white border-t-2 border-t-denr p-2 shadow-sm text-center">
+                    <p class="text-[8px] font-black text-slate-400 uppercase">Admin Logins</p>
+                    <h3 class="text-xl font-black text-denr leading-none">48</h3>
+                </div>
+                <div class="bg-white border-t-2 border-t-amber-500 p-2 shadow-sm text-center">
+                    <p class="text-[8px] font-black text-slate-400 uppercase">Syncs</p>
+                    <h3 class="text-xl font-black text-amber-600 leading-none">15</h3>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-12 gap-2 h-40 shrink-0">
+                <div class="col-span-8 bg-white border border-slate-200 p-3 shadow-sm">
+                    <h4 class="text-[9px] font-black text-slate-500 uppercase border-l-2 border-audit-crimson pl-2 mb-2">Hourly Activity Frequency</h4>
+                    <div class="h-28"><canvas id="auditTrendChart"></canvas></div>
+                </div>
+                <div class="col-span-4 bg-white border border-slate-200 p-3 shadow-sm text-center">
+                    <h4 class="text-[9px] font-black text-slate-500 uppercase border-l-2 border-audit-slate pl-2 mb-2 text-left">Severity Mix</h4>
+                    <div class="h-28"><canvas id="severityChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="bg-white border border-slate-200 shadow-md flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div class="p-3 bg-slate-50 border-b grid grid-cols-1 md:grid-cols-4 gap-2 shrink-0 no-print">
+                    <div class="md:col-span-1 space-y-0.5">
+                        <label class="text-[8px] font-black text-slate-400 uppercase ml-1">Search</label>
+                        <input id="tableSearch" oninput="applyFilters()" class="w-full px-2 py-1 text-[11px] border border-slate-300 rounded outline-none focus:ring-1 focus:ring-audit-crimson" placeholder="IP, Admin, Action...">
+                    </div>
+                    <div class="space-y-0.5">
+                        <label class="text-[8px] font-black text-slate-400 uppercase ml-1">Severity</label>
+                        <select id="severityFilter" onchange="applyFilters()" class="w-full px-2 py-1 text-[11px] border border-slate-300 bg-white font-bold outline-none rounded">
+                            <option value="all">-- ALL --</option>
+                            <option value="Info">INFO</option>
+                            <option value="Warning">WARNING</option>
+                            <option value="Critical">CRITICAL</option>
+                        </select>
+                    </div>
+                    <div class="space-y-0.5">
+                        <label class="text-[8px] font-black text-slate-400 uppercase ml-1">Module</label>
+                        <select id="moduleFilter" onchange="applyFilters()" class="w-full px-2 py-1 text-[11px] border border-slate-300 bg-white outline-none rounded">
+                            <option value="all">-- ALL MODULES --</option>
+                            <option value="Privileges">Privileges</option>
+                            <option value="Inventory">Inventory</option>
+                            <option value="Auth">Auth</option>
+                            <option value="Applications">Applications</option>
+                            <option value="Transactions">Transactions</option>
+                            <option value="Security">Security</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="location.reload()" class="w-full bg-slate-800 text-white py-1.5 text-[10px] font-black uppercase hover:bg-black transition tracking-widest rounded">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="overflow-y-auto flex-1">
+                    <table class="w-full text-left border-collapse" id="masterTable">
+                        <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+                            <tr class="text-[9px] uppercase font-black text-slate-600">
+                                <th>Timestamp</th>
+                                <th>Administrator</th>
+                                <th>Action Registry</th>
+                                <th>Module</th>
+                                <th class="text-center">Severity</th>
+                                <th class="text-right">Info</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTableBody" class="divide-y divide-slate-100 text-[11px] text-slate-700"></tbody>
+                    </table>
+                </div>
+                
+                <div class="px-3 py-1.5 bg-slate-800 text-white flex justify-between items-center text-[8px] font-black uppercase shrink-0">
+                    <div>Matches: <span id="resCount" class="text-amber-400">0</span> Entries</div>
+                    <div class="flex items-center gap-2 text-red-400">
+                        <span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                        SECURE AUDIT SESSION v2.0
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const AUDIT_DATA = [
+          { time: "2026-02-13 14:04:22", admin: "Dave Alqz", action: "Privilege Delegation", mod: "Privileges", ip: "192.168.1.42", sev: "Warning", msg: "Cross-Jurisdiction Access Granted" },
+          { time: "2026-02-13 11:20:00", admin: "Elena Cruz", action: "Record Deleted", mod: "Inventory", ip: "122.53.11.204", sev: "Critical", msg: "Permanently removed Asset #402" },
+          { time: "2026-02-12 23:55:12", admin: "Unauthorized", action: "Login Failed", mod: "Auth", ip: "45.12.88.19", sev: "Critical", msg: "Brute force attempt detected" },
+          { time: "2026-02-12 09:30:15", admin: "System", action: "Database Backup", mod: "Security", ip: "127.0.0.1", sev: "Info", msg: "Daily automated backup successful" }
+        ];
+
+        // FILTER LOGIC
+        function applyFilters() {
+            const searchTerm = document.getElementById('tableSearch').value.toLowerCase();
+            const severityTerm = document.getElementById('severityFilter').value;
+            const moduleTerm = document.getElementById('moduleFilter').value;
+
+            const filteredData = AUDIT_DATA.filter(row => {
+                const matchesSearch = row.admin.toLowerCase().includes(searchTerm) || 
+                                     row.action.toLowerCase().includes(searchTerm) || 
+                                     row.ip.toLowerCase().includes(searchTerm);
+                
+                const matchesSeverity = severityTerm === 'all' || row.sev === severityTerm;
+                const matchesModule = moduleTerm === 'all' || row.mod === moduleTerm;
+
+                return matchesSearch && matchesSeverity && matchesModule;
+            });
+
+            renderAuditTable(filteredData);
+        }
+
+        function renderAuditTable(data) {
+            const body = document.getElementById('auditTableBody');
+            body.innerHTML = '';
+            document.getElementById('resCount').textContent = data.length;
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-red-50/30 transition-colors border-b";
+                let sevClass = row.sev === 'Warning' ? 'bg-amber-100 text-amber-700 border-amber-300' : 
+                               row.sev === 'Critical' ? 'bg-red-100 text-red-700 border-red-300' : 
+                               'bg-blue-100 text-blue-700 border-blue-300';
+                
+                tr.innerHTML = `
+                    <td class="font-bold text-slate-400 font-mono text-[10px]">${row.time}</td>
+                    <td class="font-black text-slate-800 uppercase tracking-tighter">${row.admin}</td>
+                    <td class="font-bold text-slate-600">${row.action}</td>
+                    <td class="font-black uppercase text-[9px] text-slate-500">${row.mod}</td>
+                    <td class="text-center">
+                        <span class="px-1.5 py-0.5 rounded border text-[8px] font-black uppercase ${sevClass}">${row.sev}</span>
+                    </td>
+                    <td class="text-right">
+                        <button onclick="alert('${row.msg}')" class="text-slate-400 hover:text-audit-crimson"><span class="material-icons-round text-sm">info</span></button>
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
+        function initAuditCharts() {
+            const opt = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 9 } } }, y: { ticks: { font: { size: 9 } } } } };
+            new Chart(document.getElementById('auditTrendChart'), {
+                type: 'line',
+                data: {
+                    labels: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00'],
+                    datasets: [{ data: [450, 620, 840, 310, 420, 980], borderColor: '#991b1b', backgroundColor: 'rgba(153, 27, 27, 0.05)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }]
+                },
+                options: opt
+            });
+
+            new Chart(document.getElementById('severityChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Info', 'Warning', 'Critical'],
+                    datasets: [{ data: [80, 15, 5], backgroundColor: ['#0038a8', '#d97706', '#991b1b'], borderWidth: 0 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8 } } } } }
+            });
+        }
+
+        window.onload = () => { 
+            initAuditCharts(); 
+            renderAuditTable(AUDIT_DATA); 
+        };
+    </script>
+</body>
+</html>
