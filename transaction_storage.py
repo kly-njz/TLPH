@@ -282,3 +282,48 @@ def record_transaction_to_financial_logs(transaction):
         'source': 'transactions',
     }
     db.collection('financial_logs').add(log)
+
+def record_all_user_financial_transactions():
+    """Scan all user-related collections for financial transactions and record them to financial_logs."""
+    from firebase_admin import firestore
+    db = firestore.client()
+    collections = [
+        ('transactions', 'transaction_name'),
+        ('applications', 'applicationType'),
+        ('license_applications', 'licenseType'),
+        ('service_requests', 'serviceType'),
+        ('inventory_registrations', 'inventoryType'),
+    ]
+    for col, type_field in collections:
+        try:
+            docs = db.collection(col).stream()
+            for doc in docs:
+                data = doc.to_dict()
+                # Only record if there is an amount/fee/payment required
+                amount = data.get('amount') or data.get('fee') or data.get('investmentQty')
+                if amount and float(amount) > 0:
+                    log = {
+                        'user_email': data.get('user_email') or data.get('email'),
+                        'userId': data.get('userId'),
+                        'external_id': data.get('external_id') or data.get('externalId'),
+                        'invoice_id': data.get('invoice_id'),
+                        'transaction_name': data.get(type_field) or data.get('transaction_name'),
+                        'description': data.get('description'),
+                        'amount': amount,
+                        'status': data.get('status'),
+                        'payment_method': data.get('payment_method', 'Online Payment'),
+                        'reference': data.get('reference') or data.get('external_id'),
+                        'created_at': data.get('created_at'),
+                        'updated_at': data.get('updated_at'),
+                        'paid_at': data.get('paid_at'),
+                        'source': col,
+                    }
+                    db.collection('financial_logs').add(log)
+        except Exception as e:
+            print(f"[ERROR] Scanning {col}: {e}")
+
+# At the bottom of the file, add a CLI entry point for manual backfill
+if __name__ == "__main__":
+    print("Backfilling all user financial transactions to financial_logs...")
+    record_all_user_financial_transactions()
+    print("Done. Check your Firestore financial_logs collection.")
