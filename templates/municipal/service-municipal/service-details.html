@@ -513,13 +513,13 @@
         }
 
         window.updateServiceStatus = async function(newStatus) {
-            const statusText = newStatus === 'approved' ? 'approve' : 
-                             newStatus === 'rejected' ? 'reject' : 
-                             'update';
+            if (newStatus === 'rejected') {
+                document.getElementById('rejectNoteModal').style.display = 'flex';
+                return;
+            }
+            const statusText = newStatus === 'approved' ? 'approve' : 'update';
             const confirmed = confirm(`Are you sure you want to ${statusText} this service request?\n\nRef: ${document.getElementById('refNumber').textContent}\nRequester: ${document.getElementById('applicantName').textContent}`);
-            
             if (!confirmed) return;
-
             try {
                 const updateFields = {
                     status: newStatus,
@@ -530,19 +530,39 @@
                     updateFields.approvedByEmail = auth.currentUser ? auth.currentUser.email : null;
                     updateFields.approvedAt = serverTimestamp();
                 }
-                if (newStatus === 'rejected') {
-                    updateFields.rejectedByLevel = 'Municipal';
-                    updateFields.rejectedByEmail = auth.currentUser ? auth.currentUser.email : null;
-                    updateFields.rejectedAt = serverTimestamp();
-                }
                 await updateDoc(doc(db, 'service_requests', currentServiceId), updateFields);
-                
                 alert(`Service request ${newStatus} successfully!`);
                 await loadServiceDetails();
             } catch (error) {
                 console.error('Error updating status:', error);
                 alert('Failed to update service request status: ' + error.message);
             }
+        };
+
+        window.confirmRejection = async function() {
+            const note = document.getElementById('rejectNoteInput').value.trim();
+            document.getElementById('rejectNoteModal').style.display = 'none';
+            document.getElementById('rejectNoteInput').value = '';
+            try {
+                await updateDoc(doc(db, 'service_requests', currentServiceId), {
+                    status: 'rejected',
+                    updatedAt: serverTimestamp(),
+                    rejectedByLevel: 'Municipal',
+                    rejectedByEmail: auth.currentUser ? auth.currentUser.email : null,
+                    rejectedAt: serverTimestamp(),
+                    rejectionNote: note
+                });
+                alert('Service request rejected successfully!');
+                await loadServiceDetails();
+            } catch (error) {
+                console.error('Error rejecting:', error);
+                alert('Failed to reject service request: ' + error.message);
+            }
+        };
+
+        window.cancelRejection = function() {
+            document.getElementById('rejectNoteModal').style.display = 'none';
+            document.getElementById('rejectNoteInput').value = '';
         };
 
         window.forwardToRegional = async function() {
@@ -581,6 +601,24 @@
             }
         });
     </script>
+
+
+<!-- Rejection Note Modal -->
+<div id="rejectNoteModal" style="display:none;" class="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4">
+  <div class="bg-white w-full max-w-md rounded shadow-xl">
+    <div class="border-b border-gray-200 px-5 py-4">
+      <h3 class="text-sm font-black uppercase text-red-700"><i class="fa-solid fa-circle-xmark me-2"></i> Rejection Reason</h3>
+      <p class="text-[10px] text-gray-500 mt-1 font-semibold uppercase tracking-wide">This reason will be visible to the applicant.</p>
+    </div>
+    <div class="p-5">
+      <textarea id="rejectNoteInput" class="w-full border border-gray-300 rounded p-2 text-xs font-semibold text-gray-800 h-28 resize-none focus:outline-none focus:border-red-400" placeholder="e.g. Incomplete requirements, invalid location, non-compliance with DENR regulations..."></textarea>
+    </div>
+    <div class="border-t border-gray-200 p-4 flex gap-2">
+      <button onclick="cancelRejection()" class="flex-1 border border-gray-300 text-gray-700 font-black text-xs py-2 uppercase rounded hover:bg-gray-100 transition-all">Cancel</button>
+      <button onclick="confirmRejection()" class="flex-1 bg-red-600 text-white font-black text-xs py-2 uppercase rounded hover:bg-red-700 transition-all"><i class="fa-solid fa-circle-xmark me-1"></i> Confirm Rejection</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

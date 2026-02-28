@@ -586,8 +586,13 @@
   };
 
   window.handleNationalAction = async function(reqId, action, btn) {
-    const label = action === 'approved' ? 'approve' : 'reject';
-    if (!confirm(`Confirm: ${label} this service request?`)) return;
+    if (action === 'rejected') {
+      const modal = document.getElementById('natRejectModal');
+      modal.style.display = 'flex';
+      modal.dataset.reqId = reqId;
+      return;
+    }
+    if (!confirm(`Confirm: approve this service request?`)) return;
 
     const row = document.getElementById('row-' + reqId);
     const badge = document.getElementById('badge-' + reqId);
@@ -633,7 +638,66 @@
       btns.forEach(b => { b.disabled = false; b.classList.remove('opacity-50'); });
     }
   };
+
+  window.confirmNatRejection = async function() {
+    const modal = document.getElementById('natRejectModal');
+    const reqId = modal.dataset.reqId;
+    const note = document.getElementById('natRejectNoteInput').value.trim();
+    modal.style.display = 'none';
+    document.getElementById('natRejectNoteInput').value = '';
+    const row = document.getElementById('row-' + reqId);
+    const badge = document.getElementById('badge-' + reqId);
+    const btns = row ? row.querySelectorAll('button[title="Approve"], button[title="Reject"]') : [];
+    btns.forEach(b => { b.disabled = true; b.classList.add('opacity-50'); });
+    try {
+      await updateDoc(doc(db, 'service_requests', reqId), {
+        status: 'rejected',
+        approvedByLevel: 'National',
+        rejectedByLevel: 'National',
+        rejectedByEmail: auth.currentUser ? auth.currentUser.email : '',
+        rejectedAt: serverTimestamp(),
+        reviewedBy: auth.currentUser ? auth.currentUser.uid : '',
+        reviewedByEmail: auth.currentUser ? auth.currentUser.email : '',
+        reviewedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        rejectionNote: note
+      });
+      if (badge) {
+        badge.className = 'status-pill border-danger bg-danger bg-opacity-10 text-danger';
+        badge.textContent = 'Rejected by National';
+      }
+      alert('Service request rejected by National successfully.');
+    } catch (err) {
+      console.error('Error rejecting:', err);
+      alert('Error: ' + err.message);
+      btns.forEach(b => { b.disabled = false; b.classList.remove('opacity-50'); });
+    }
+  };
+
+  window.cancelNatRejection = function() {
+    document.getElementById('natRejectModal').style.display = 'none';
+    document.getElementById('natRejectNoteInput').value = '';
+  };
 </script>
+
+<!-- National Rejection Note Modal -->
+<div id="natRejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;padding:1rem;">
+  <div class="modal-dialog" style="max-width:480px;width:100%;">
+    <div class="modal-content shadow-lg">
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title fw-black text-uppercase text-danger" style="font-size:12px;"><i class="bi bi-x-circle-fill me-2"></i> Rejection Reason</h5>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted fw-semibold text-uppercase mb-2" style="font-size:10px;">This reason will be visible to the applicant.</p>
+        <textarea id="natRejectNoteInput" class="form-control" rows="4" style="font-size:11px;font-weight:600;" placeholder="e.g. Incomplete requirements, invalid location, non-compliance with DENR regulations..."></textarea>
+      </div>
+      <div class="modal-footer border-top d-flex gap-2">
+        <button onclick="cancelNatRejection()" class="btn btn-outline-secondary btn-sm fw-bold text-uppercase flex-fill" style="font-size:10px;">Cancel</button>
+        <button onclick="confirmNatRejection()" class="btn btn-danger btn-sm fw-bold text-uppercase flex-fill" style="font-size:10px;"><i class="bi bi-x-circle-fill me-1"></i> Confirm Rejection</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
