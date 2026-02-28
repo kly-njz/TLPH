@@ -349,6 +349,9 @@ def accounting_deposit_category_municipal():
 def logs_audit_logs_municipal():
     return render_template('municipal/logs/audit-logs-municipal.html')
 
+# API endpoint for audit logs (real payment/fund transfer logs)
+from routes.municipal_api_logs import bp as municipal_api_logs_bp
+
 @bp.route('/api/municipal/holiday/import-calendarific', methods=['POST'])
 @role_required('municipal','municipal_admin')
 def import_calendarific_holidays():

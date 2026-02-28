@@ -1,3 +1,10 @@
+import firebase_admin
+from firebase_admin import credentials
+
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase-credentials.json")
+    firebase_admin.initialize_app(cred)
+
 def add_finance_record(department, general_fund, special_fund, total_deposit, total_expenses, net_movement, collection_rate, recent_activity):
     """Add a finance record to Firestore under the specified department."""
     db = firestore.client()
@@ -84,7 +91,14 @@ def add_transaction(user_email, external_id, invoice_id, amount, item_name, desc
         created_doc = transactions_ref.document(doc_id).get()
         result = created_doc.to_dict()
         result['id'] = doc_id
-        
+
+        # Record to financial_logs if payment is required
+        if status and status.lower() in ['pending', 'unpaid', 'for payment']:
+            try:
+                record_transaction_to_financial_logs(transaction)
+            except Exception as e:
+                print(f"[WARN] Could not record to financial_logs: {e}")
+
         return result
     except Exception as e:
         print(f"Error adding transaction: {e}")
@@ -253,3 +267,115 @@ def cancel_transaction_by_reference(reference, user_email=None, user_id=None):
     except Exception as e:
         print(f"Error canceling transaction: {e}")
         return {'success': False, 'message': str(e)}
+
+def record_transaction_to_financial_logs(transaction):
+    """Record a user transaction that requires payment to the financial_logs collection."""
+    from firebase_admin import firestore
+    db = firestore.client()
+    log = {
+        'user_email': transaction.get('user_email'),
+        'userId': transaction.get('userId'),
+        'external_id': transaction.get('external_id'),
+        'invoice_id': transaction.get('invoice_id'),
+        'transaction_name': transaction.get('transaction_name'),
+        'description': transaction.get('description'),
+        'amount': transaction.get('amount'),
+        'status': transaction.get('status'),
+        'payment_method': transaction.get('payment_method', 'Online Payment'),
+        'reference': transaction.get('reference'),
+        'created_at': firestore.SERVER_TIMESTAMP,
+        'updated_at': firestore.SERVER_TIMESTAMP,
+        'paid_at': transaction.get('paid_at'),
+        'source': 'transactions',
+    }
+    db.collection('financial_logs').add(log)
+
+def record_all_user_financial_transactions():
+    """Scan all user-related collections for financial transactions and record them to financial_logs."""
+    from firebase_admin import firestore
+    db = firestore.client()
+    collections = [
+        ('transactions', 'transaction_name'),
+        ('applications', 'applicationType'),
+        ('license_applications', 'licenseType'),
+        ('service_requests', 'serviceType'),
+        ('inventory_registrations', 'inventoryType'),
+    ]
+    for col, type_field in collections:
+        try:
+            docs = db.collection(col).stream()
+            for doc in docs:
+                data = doc.to_dict()
+                # Only record if there is an amount/fee/payment required AND user_email exists
+                amount = data.get('amount') or data.get('fee') or data.get('investmentQty')
+                user_email = data.get('user_email') or data.get('email')
+                if amount and float(amount) > 0 and user_email:
+                    log = {
+                        'user_email': user_email,
+                        'userId': data.get('userId'),
+                        'external_id': data.get('external_id') or data.get('externalId'),
+                        'invoice_id': data.get('invoice_id'),
+                        'transaction_name': data.get(type_field) or data.get('transaction_name'),
+                        'description': data.get('description'),
+                        'amount': amount,
+                        'status': data.get('status'),
+                        'payment_method': data.get('payment_method', 'Online Payment'),
+                        'reference': data.get('reference') or data.get('external_id'),
+                        'created_at': data.get('created_at'),
+                        'updated_at': data.get('updated_at'),
+                        'paid_at': data.get('paid_at'),
+                        'source': col,
+                    }
+                    db.collection('financial_logs').add(log)
+        except Exception as e:
+            print(f"[ERROR] Scanning {col}: {e}")
+
+def clear_financial_logs_collection():
+    """Delete all documents in the financial_logs collection."""
+    from firebase_admin import firestore
+    db = firestore.client()
+    batch = db.batch()
+    docs = db.collection('financial_logs').stream()
+    count = 0
+    for doc in docs:
+        batch.delete(doc.reference)
+        count += 1
+        # Commit every 400 deletes (Firestore batch limit)
+        if count % 400 == 0:
+            batch.commit()
+            batch = db.batch()
+    if count % 400 != 0:
+        batch.commit()
+    print(f"Cleared {count} documents from financial_logs collection.")
+
+def remove_financial_logs_without_email():
+    """Delete all documents in the financial_logs collection that have no user_email field or an empty email."""
+    from firebase_admin import firestore
+    db = firestore.client()
+    batch = db.batch()
+    docs = db.collection('financial_logs').stream()
+    count = 0
+    removed = 0
+    for doc in docs:
+        data = doc.to_dict()
+        user_email = data.get('user_email') or data.get('email')
+        if not user_email:
+            batch.delete(doc.reference)
+            removed += 1
+        count += 1
+        if count % 400 == 0:
+            batch.commit()
+            batch = db.batch()
+    if count % 400 != 0:
+        batch.commit()
+    print(f"Removed {removed} documents without email from financial_logs collection.")
+
+# At the bottom of the file, add a CLI entry point for manual backfill
+if __name__ == "__main__":
+    print("Removing financial_logs without email...")
+    remove_financial_logs_without_email()
+    print("Done. Now your collection only contains records with user emails.")
+# To backfill again, comment out the above and uncomment the below:
+# print("Backfilling all user financial transactions to financial_logs...")
+# record_all_user_financial_transactions()
+# print("Done. Check your Firestore financial_logs collection.")

@@ -1,7 +1,8 @@
 from flask import Flask, render_template
 from flask_mail import Mail
 from config import Config
-from firebase_config import initialize_firebase_admin
+import firebase_admin
+from firebase_admin import credentials
 from datetime import timedelta
 
 app = Flask(__name__)
@@ -18,11 +19,13 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 mail = Mail(app)
 
 # Initialize Firebase
-initialize_firebase_admin()
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase-credentials.json")
+    firebase_admin.initialize_app(cred)
 
 
 # Import routes
-from routes import main_routes, api_routes, municipal_routes, seminar_routes, service_routes, fisheries_routes, environment_routes, forest_routes, livestock_routes, permits_routes, wildlife_routes, farm_routes, payments_routes,regional_routes,superadmin_routes, national_routes
+from routes import main_routes, api_routes, municipal_routes, seminar_routes, service_routes, fisheries_routes, environment_routes, forest_routes, livestock_routes, permits_routes, wildlife_routes, farm_routes, payments_routes,regional_routes,superadmin_routes, national_routes, municipal_api_logs
 
 # Initialize mail in api_routes
 api_routes.init_mail(mail)
@@ -44,6 +47,7 @@ app.register_blueprint(payments_routes.bp)
 app.register_blueprint(regional_routes.bp)
 app.register_blueprint(superadmin_routes.bp)
 app.register_blueprint(national_routes.bp)
+app.register_blueprint(municipal_api_logs.bp)
 
 
 # Jinja filter for date formatting
