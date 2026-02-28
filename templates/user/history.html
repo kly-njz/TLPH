@@ -426,6 +426,20 @@
 
   </div>
 
+  <!-- Service Detail Modal -->
+  <div id="serviceDetailModal" style="display:none;" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="border-b border-gray-200 p-4 sm:p-5 flex items-center justify-between">
+        <h2 class="text-base font-black uppercase text-green-800"><span class="material-icons-round" style="font-size:16px;vertical-align:middle;margin-right:6px;">description</span> Service Request Details</h2>
+        <button onclick="closeServiceDetail()" class="text-gray-400 hover:text-gray-700 text-xl font-bold leading-none">&times;</button>
+      </div>
+      <div id="sdmBody" class="p-4 sm:p-5"></div>
+      <div class="border-t border-gray-200 p-4">
+        <button onclick="closeServiceDetail()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg text-xs transition-all">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Receipt Modal -->
   <div class="receipt-modal fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="receiptModal">
     <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -469,7 +483,7 @@
 
   <script type="module">
     import { auth, db, onAuthStateChanged } from "{{ url_for('static', filename='js/firebase-config.js') }}";
-    import { query, where, getDocs, onSnapshot, collection, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { query, where, getDocs, onSnapshot, collection, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     let historyReloadTimeout = null;
     const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
@@ -644,18 +658,26 @@
         return;
       }
 
-      tbody.innerHTML = allServices.map((service, idx) => `
+      tbody.innerHTML = allServices.map((service, idx) => {
+        const st = (service.status || '').toLowerCase();
+        const statusDisplay =
+          st === 'approved' && service.approvedByLevel ? `APPROVED BY ${service.approvedByLevel.toUpperCase()}` :
+          st === 'rejected' && service.rejectedByLevel ? `REJECTED BY ${service.rejectedByLevel.toUpperCase()}` :
+          (st === 'forwarded' || st.includes('forward')) && service.forwardedTo ? `FORWARDED TO ${service.forwardedTo.toUpperCase()}` :
+          getStatusLabel(service.status);
+        const statusClass = getStatusClass(service.status);
+        return `
         <tr>
           <td>${service.type}</td>
           <td>${service.description.substring(0, 40)}${service.description.length > 40 ? '...' : ''}</td>
-          <td><span class="status-label ${getStatusClass(service.status)}">${getStatusLabel(service.status)}</span></td>
+          <td><span class="status-label ${statusClass}">${statusDisplay}</span></td>
           <td>${service.date}</td>
           <td><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${service.id.substring(0, 8)}</code></td>
           <td style="text-align: center;">
-            <button class="action-btn" onclick="alert('Service Details ID: ${service.id}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</button>
+            <button class="action-btn" onclick="openServiceDetail('${service.id}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</button>
           </td>
         </tr>
-      `).join('');
+      `; }).join('');
     }
 
     function populateInventoryTable() {
@@ -825,6 +847,9 @@
               type: item.serviceType || 'Service Request',
               description: item.description || 'No description provided',
               status: item.status || 'Unknown',
+              approvedByLevel: item.approvedByLevel || '',
+              rejectedByLevel: item.rejectedByLevel || '',
+              forwardedTo: item.forwardedTo || item.forwardedByLevel || '',
               date: date
             });
           }
@@ -927,6 +952,62 @@
     document.getElementById('receiptModal').addEventListener('click', function(e) {
       if (e.target === this) closeReceipt();
     });
+
+    window.openServiceDetail = async function(serviceId) {
+      const modal = document.getElementById('serviceDetailModal');
+      modal.style.display = 'flex';
+      document.getElementById('sdmBody').innerHTML = '<div class="text-center py-8"><span class="material-icons-round text-green-700" style="font-size:36px;display:block;margin-bottom:8px;">hourglass_empty</span></div>';
+      try {
+        const snap = await getDoc(doc(db, 'service_requests', serviceId));
+        if (!snap.exists()) {
+          document.getElementById('sdmBody').innerHTML = '<p class="text-xs text-red-500 font-bold">Record not found.</p>';
+          return;
+        }
+        const d = snap.data();
+        const status = (d.status || 'unknown').toLowerCase();
+        const isRejected = status === 'rejected';
+        const rejLevel = d.rejectedByLevel || 'DENR';
+        const rejNote = d.rejectionNote || '';
+        const rejEmail = d.rejectedByEmail || '';
+        const fmtDate = (ts) => {
+          if (!ts) return 'N/A';
+          const dt = ts.toDate ? ts.toDate() : new Date(ts);
+          return dt.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+        };
+        let html = '';
+        if (isRejected) {
+          html += `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+              <p class="text-[10px] font-black uppercase text-red-700 mb-1">&#x2717; Rejected by ${rejLevel}</p>
+              ${rejEmail ? `<p class="text-[10px] text-red-500 font-semibold mb-2">By: ${rejEmail}</p>` : ''}
+              <div class="border-t border-red-100 pt-2 mt-1">
+                <p class="text-[10px] font-bold uppercase text-red-600 mb-0.5">Reason</p>
+                <p class="text-xs text-red-800 font-semibold">${rejNote || 'No reason provided.'}</p>
+              </div>
+            </div>
+          `;
+        }
+        html += `
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Service Type</p><p class="font-semibold text-gray-800">${d.serviceType || 'N/A'}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Status</p><p class="font-bold ${isRejected ? 'text-red-600' : 'text-green-700'}">${(d.status || 'N/A').toUpperCase()}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Date Filed</p><p class="font-semibold text-gray-700">${fmtDate(d.createdAt)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Municipality</p><p class="font-semibold text-gray-700">${d.municipality || 'N/A'}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Province</p><p class="font-semibold text-gray-700">${d.province || 'N/A'}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Barangay</p><p class="font-semibold text-gray-700">${d.barangay || 'N/A'}</p></div>
+          </div>
+          ${d.description ? `<div class="mt-3 pt-3 border-t border-gray-100"><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-1">Description</p><p class="text-xs text-gray-700 font-semibold">${d.description}</p></div>` : ''}
+        `;
+        document.getElementById('sdmBody').innerHTML = html;
+      } catch (err) {
+        console.error('Error loading service detail:', err);
+        document.getElementById('sdmBody').innerHTML = '<p class="text-xs text-red-500 font-bold">Error loading details.</p>';
+      }
+    };
+
+    window.closeServiceDetail = function() {
+      document.getElementById('serviceDetailModal').style.display = 'none';
+    };
 
     // Initialize on auth state change
     let appStatusUnsubscribe = null;
