@@ -72,14 +72,21 @@ def api_logs_financial_logs():
         for doc in docs:
             log = doc.to_dict()
             log['id'] = doc.id
-            for k in ['created_at', 'updated_at', 'paid_at']:
-                if k in log and log[k]:
-                    try:
-                        log[k] = log[k].isoformat()
-                    except Exception:
-                        log[k] = str(log[k])
-            log['ts'] = log.get('created_at', '')
-            logs.append(log)
+            # Map Firestore fields to frontend audit log fields
+            logs.append({
+                'id': log.get('id'),
+                'ts': log.get('created_at'),
+                'user': log.get('user_email', '—'),
+                'role': 'User',
+                'module': 'PAYMENTS',
+                'action': (log.get('status') or '').upper(),
+                'target': log.get('transaction_name', log.get('description', 'Payment')),
+                'targetId': log.get('invoice_id', log.get('external_id', '')),
+                'ip': '',
+                'outcome': 'SUCCESS' if (log.get('status', '').upper() == 'PAID') else ('FAIL' if log.get('status', '').upper() == 'FAILED' else 'WARN'),
+                'message': log.get('description', ''),
+                'diff': log
+            })
     except Exception as e:
         print(f"[ERROR] Fetching financial logs: {e}")
     return jsonify({'logs': logs})
