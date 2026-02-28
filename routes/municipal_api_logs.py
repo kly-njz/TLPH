@@ -82,6 +82,7 @@ def api_logs_financial_logs():
                 'action': (log.get('status') or '').upper(),
                 'target': log.get('transaction_name', log.get('description', 'Payment')),
                 'targetId': log.get('invoice_id', log.get('external_id', '')),
+                'device_type': log.get('device_type', ''),
                 'ip': '',
                 'outcome': 'SUCCESS' if (log.get('status', '').upper() == 'PAID') else ('FAIL' if log.get('status', '').upper() == 'FAILED' else 'WARN'),
                 'message': log.get('description', ''),

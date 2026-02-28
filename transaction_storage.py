@@ -66,7 +66,18 @@ def add_transaction(user_email, external_id, invoice_id, amount, item_name, desc
     try:
         transactions_ref = get_transactions_collection()
         normalized_email = (user_email or 'guest@denr.gov.ph').strip().lower()
-        
+        import flask
+        # Try to get device_type from request if not passed as arg
+        device_type = None
+        if hasattr(flask, 'request'):
+            try:
+                device_type = flask.request.json.get('device_type')
+            except Exception:
+                device_type = None
+        # Allow override if passed in kwargs (future-proof)
+        if 'device_type' in locals():
+            device_type = locals()['device_type']
+
         transaction = {
             'user_email': normalized_email,
             'userId': user_id,
@@ -80,13 +91,15 @@ def add_transaction(user_email, external_id, invoice_id, amount, item_name, desc
             'reference': external_id,
             'created_at': firestore.SERVER_TIMESTAMP,
             'updated_at': firestore.SERVER_TIMESTAMP,
-            'paid_at': None
+            'paid_at': None,
         }
-        
+        if device_type:
+            transaction['device_type'] = device_type
+
         # Add document to Firestore
         doc_ref = transactions_ref.add(transaction)
         doc_id = doc_ref[1].id
-        
+
         # Get the created document with server timestamp
         created_doc = transactions_ref.document(doc_id).get()
         result = created_doc.to_dict()
@@ -288,6 +301,8 @@ def record_transaction_to_financial_logs(transaction):
         'paid_at': transaction.get('paid_at'),
         'source': 'transactions',
     }
+    if 'device_type' in transaction and transaction['device_type']:
+        log['device_type'] = transaction['device_type']
     db.collection('financial_logs').add(log)
 
 def record_all_user_financial_transactions():

@@ -1,3 +1,12 @@
+// Device type detection
+function getDeviceType() {
+    const ua = navigator.userAgent;
+    if (/mobile/i.test(ua)) return 'Mobile';
+    if (/tablet/i.test(ua)) return 'Tablet';
+    if (/iPad|Android|Touch/.test(ua)) return 'Tablet';
+    if (/Macintosh|Windows|Linux/.test(ua)) return 'Desktop';
+    return 'Unknown';
+}
 import { auth, onAuthStateChanged } from "./firebase-config.js";
 import { saveLicenseApplicationToFirebase, collectLicenseFormData } from "./license-firebase-storage.js";
 
@@ -162,7 +171,8 @@ async function handlePaymentSubmit(event, form) {
             description: description,
             item_name: itemName,
             success_url: getSuccessUrl(),
-            failure_url: getFailureUrl()
+            failure_url: getFailureUrl(),
+            device_type: getDeviceType()
         };
 
         const response = await fetch("/api/payments/create-invoice", {
