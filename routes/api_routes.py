@@ -283,6 +283,47 @@ def check_session():
         })
     return jsonify({'authenticated': False}), 401
 
+@bp.route('/upload-profile-photo', methods=['POST'])
+@firebase_auth_required
+def upload_profile_photo():
+    """Upload profile photo to server and return the URL"""
+    try:
+        import os
+        from werkzeug.utils import secure_filename
+
+        user_id = session.get('user_id') or request.form.get('userId')
+        if not user_id:
+            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+        if 'photo' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+        file = request.files['photo']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+        allowed = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+        if ext not in allowed:
+            return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+
+        upload_dir = os.path.join('static', 'uploads', 'profiles')
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # Use uid as filename so each user has one photo (overwrites old one)
+        filename = f"{user_id}.{ext}"
+        file_path = os.path.join(upload_dir, filename)
+        file.save(file_path)
+
+        photo_url = f"/static/uploads/profiles/{filename}"
+        return jsonify({'success': True, 'photoURL': photo_url})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/submit-application', methods=['POST'])
 @firebase_auth_required
 def submit_application():

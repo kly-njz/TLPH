@@ -309,10 +309,9 @@
     </main>
 
     <script type="module">
-        import { auth, db, storage } from "{{ url_for('static', filename='js/firebase-config.js') }}";
+        import { auth, db } from "{{ url_for('static', filename='js/firebase-config.js') }}";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
         import { philippineLocations } from "{{ url_for('static', filename='js/ph-locations.js') }}";
 
         let currentUser = null;
@@ -496,17 +495,29 @@
             cameraLabel.innerHTML = '<i class="fas fa-spinner fa-spin text-[10px]"></i>';
 
             try {
-                // Upload to Firebase Storage at profile_photos/{uid}
-                const storageRef = ref(storage, `profile_photos/${currentUser.uid}`);
-                await uploadBytes(storageRef, file);
-                const downloadURL = await getDownloadURL(storageRef);
+                // Upload to Flask server (avoids Firebase Storage billing)
+                const formData = new FormData();
+                formData.append('photo', file);
+                formData.append('userId', currentUser.uid);
+
+                const response = await fetch('/api/upload-profile-photo', {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Upload failed');
+                }
 
                 // Save photoURL to Firestore
-                await updateDoc(doc(db, 'users', currentUser.uid), { photoURL: downloadURL });
+                await updateDoc(doc(db, 'users', currentUser.uid), { photoURL: result.photoURL });
 
                 // Update local data and display
-                currentUserData.photoURL = downloadURL;
-                profilePic.src = downloadURL;
+                currentUserData.photoURL = result.photoURL;
+                // Add cache-busting so browser doesn't show old photo
+                profilePic.src = result.photoURL + '?t=' + Date.now();
 
             } catch (error) {
                 console.error('Error uploading photo:', error);
