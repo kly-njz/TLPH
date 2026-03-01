@@ -379,21 +379,29 @@
 
         // Display user data in view mode
         function displayUserData() {
-            document.getElementById('userName').innerText = `${currentUserData.firstName} ${currentUserData.lastName}`;
-            document.getElementById('headerEmail').innerText = currentUserData.email;
+            const fullName = `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`.trim();
+            document.getElementById('userName').innerText = fullName || currentUser.displayName || currentUser.email;
+            document.getElementById('headerEmail').innerText = currentUserData.email || currentUser.email;
             document.getElementById('firstName').innerText = currentUserData.firstName || '---';
             document.getElementById('lastName').innerText = currentUserData.lastName || '---';
-            document.getElementById('contactNumber').innerText = currentUserData.contactNumber || '---';
+            // Support both 'contactNumber' (updated) and 'phone' (legacy from registration)
+            document.getElementById('contactNumber').innerText = currentUserData.contactNumber || currentUserData.phone || '---';
             document.getElementById('municipality').innerText = currentUserData.municipality || '---';
             document.getElementById('province').innerText = currentUserData.province || '---';
-            document.getElementById('farmSize').innerText = currentUserData.farmSize || 'N/A';
+            document.getElementById('farmSize').innerText = currentUserData.farmSize != null && currentUserData.farmSize !== '' ? currentUserData.farmSize : 'N/A';
+            // Load profile photo from Firestore or Firebase Auth
+            const photoURL = currentUserData.photoURL || currentUser.photoURL;
+            if (photoURL) {
+                document.getElementById('profilePic').src = photoURL;
+            }
         }
 
         // Populate edit form with current data
         function populateEditForm() {
             document.getElementById('editFirstName').value = currentUserData.firstName || '';
             document.getElementById('editLastName').value = currentUserData.lastName || '';
-            document.getElementById('editPhone').value = currentUserData.contactNumber || '';
+            // Support both 'contactNumber' (updated) and 'phone' (legacy from registration)
+            document.getElementById('editPhone').value = currentUserData.contactNumber || currentUserData.phone || '';
             document.getElementById('editFarmSize').value = currentUserData.farmSize || '';
             
             populateProvinces();
@@ -439,9 +447,10 @@
                     firstName: document.getElementById('editFirstName').value,
                     lastName: document.getElementById('editLastName').value,
                     contactNumber: document.getElementById('editPhone').value,
+                    phone: document.getElementById('editPhone').value, // keep legacy field in sync
                     province: document.getElementById('editProvince').value,
                     municipality: document.getElementById('editMunicipality').value,
-                    farmSize: parseFloat(document.getElementById('editFarmSize').value) || 0
+                    farmSize: parseFloat(document.getElementById('editFarmSize').value) || null
                 };
 
                 await updateDoc(doc(db, "users", currentUser.uid), updatedData);
@@ -462,6 +471,64 @@
                 saveBtn.innerText = '<i class="fas fa-save me-1"></i> Save Changes';
             }
         }
+
+        // Profile photo upload handler
+        document.getElementById('picInput').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file || !currentUser) return;
+
+            // Validate file type and size (max 3MB)
+            if (!file.type.startsWith('image/')) {
+                alert('Please select a valid image file.');
+                return;
+            }
+            if (file.size > 3 * 1024 * 1024) {
+                alert('Image must be less than 3MB.');
+                return;
+            }
+
+            const profilePic = document.getElementById('profilePic');
+            const cameraLabel = document.querySelector('label[for="picInput"]');
+
+            // Show loading state
+            profilePic.style.opacity = '0.5';
+            cameraLabel.innerHTML = '<i class="fas fa-spinner fa-spin text-[10px]"></i>';
+
+            try {
+                // Upload to Flask server (avoids Firebase Storage billing)
+                const formData = new FormData();
+                formData.append('photo', file);
+                formData.append('userId', currentUser.uid);
+
+                const response = await fetch('/api/upload-profile-photo', {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Upload failed');
+                }
+
+                // Save photoURL to Firestore
+                await updateDoc(doc(db, 'users', currentUser.uid), { photoURL: result.photoURL });
+
+                // Update local data and display
+                currentUserData.photoURL = result.photoURL;
+                // Add cache-busting so browser doesn't show old photo
+                profilePic.src = result.photoURL + '?t=' + Date.now();
+
+            } catch (error) {
+                console.error('Error uploading photo:', error);
+                alert('Failed to upload photo: ' + error.message);
+            } finally {
+                profilePic.style.opacity = '1';
+                cameraLabel.innerHTML = '<i class="fas fa-camera text-[10px]"></i>';
+                // Reset input so same file can be re-selected if needed
+                e.target.value = '';
+            }
+        });
 
         // Event listeners
         document.getElementById('editBtn').addEventListener('click', () => toggleEditMode(true));
