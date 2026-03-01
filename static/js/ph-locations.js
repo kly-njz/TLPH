@@ -82,8 +82,11 @@ const philippineLocations = {
     "Zamboanga del Sur": ["Aurora", "Bayog", "Dimataling", "Dinas", "Dumalinao", "Dumingag", "Guipos", "Josefina", "Kumalarang", "Labangan", "Lakewood", "Lapuyan", "Mahayag", "Margosatubig", "Midsalip", "Molave", "Pagadian City", "Pitogo", "Ramon Magsaysay", "San Miguel", "San Pablo", "Sominot", "Tabina", "Tambulig", "Tigbao", "Tukuran", "Vincenzo A. Sagun", "Zamboanga City"],
     "Zamboanga Sibugay": ["Alicia", "Buug", "Diplahan", "Imelda", "Ipil", "Kabasalan", "Mabuhay", "Malangas", "Naga", "Olutanga", "Payao", "Roseller Lim", "Siay", "Talusan", "Titay", "Tungawan"]
 };
-// Utility to export as JSON for backend sync
-if (typeof window === 'undefined') {
-    const fs = require('fs');
-    fs.writeFileSync('municipalities.json', JSON.stringify(philippineLocations, null, 2));
+
+// Export for ES module imports (e.g. profile.html)
+export { philippineLocations };
+
+// Also expose as global for legacy scripts that access window.philippineLocations
+if (typeof window !== 'undefined') {
+    window.philippineLocations = philippineLocations;
 }
