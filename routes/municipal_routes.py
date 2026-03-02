@@ -87,12 +87,70 @@ def hrm_company():
 @bp.route('/department')
 @role_required('municipal','municipal_admin')
 def hrm_department():
-    return render_template('municipal/hrm/department-municipal.html')
+    db = get_firestore_db()
+    departments = []
+    employees = []
+    designations = []
+
+    try:
+        for doc in db.collection('departments').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            departments.append(item)
+    except Exception:
+        pass
+
+    try:
+        for doc in db.collection('employees').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            employees.append(item)
+    except Exception:
+        pass
+
+    try:
+        for doc in db.collection('designations').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            designations.append(item)
+    except Exception:
+        pass
+
+    return render_template(
+        'municipal/hrm/department-municipal.html',
+        departments_data=departments,
+        employees_data=employees,
+        designations_data=designations
+    )
 
 @bp.route('/designation')
 @role_required('municipal','municipal_admin')
 def hrm_designation():
-    return render_template('municipal/hrm/designation-municipal.html')
+    db = get_firestore_db()
+    designations = []
+    employees = []
+
+    try:
+        for doc in db.collection('designations').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            designations.append(item)
+    except Exception:
+        pass
+
+    try:
+        for doc in db.collection('employees').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            employees.append(item)
+    except Exception:
+        pass
+
+    return render_template(
+        'municipal/hrm/designation-municipal.html',
+        designations_data=designations,
+        employees_data=employees
+    )
 
 @bp.route('/office-shift')
 @role_required('municipal','municipal_admin')
