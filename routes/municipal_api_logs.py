@@ -4,6 +4,7 @@ from transaction_storage import get_all_transactions
 from firebase_config import get_firestore_db
 from firebase_admin import firestore
 import deposit_storage
+import expense_storage
 
 bp = Blueprint('municipal_api', __name__, url_prefix='/api/municipal')
 
@@ -153,4 +154,65 @@ def api_delete_deposit(category_id):
             return jsonify({'status': 'error', 'message': 'Failed to delete'}), 500
     except Exception as e:
         print(f"[ERROR] Deleting deposit: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@bp.route('/expenses', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_expenses():
+    """Get all expense categories for the municipal admin"""
+    try:
+        # You can filter by municipality if needed
+        municipality = request.args.get('municipality')
+        categories = expense_storage.get_all_expense_categories(municipality)
+        
+        # Calculate stats
+        total_categories = len(categories)
+        active_categories = len([c for c in categories if c.get('status') == 'ACTIVE'])
+        
+        return jsonify({
+            'categories': categories,
+            'stats': {
+                'total': total_categories,
+                'active': active_categories
+            }
+        })
+    except Exception as e:
+        print(f"[ERROR] Fetching expenses: {e}")
+        return jsonify({'categories': [], 'stats': {'total': 0, 'active': 0}}), 500
+
+@bp.route('/expenses', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_add_expense():
+    """Add a new expense category"""
+    try:
+        data = request.get_json()
+        result = expense_storage.add_expense_category(
+            name=data.get('name'),
+            coa_code=data.get('coa_code'),
+            coa_name=data.get('coa_name'),
+            expense_type=data.get('expense_type'),
+            office=data.get('office'),
+            budget_code=data.get('budget_code'),
+            fund_type=data.get('fund_type'),
+            status=data.get('status'),
+            description=data.get('description'),
+            municipality=data.get('municipality')
+        )
+        return jsonify({'status': 'success', 'category': result}), 201
+    except Exception as e:
+        print(f"[ERROR] Adding expense: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@bp.route('/expenses/<category_id>', methods=['DELETE'])
+@role_required('municipal','municipal_admin')
+def api_delete_expense(category_id):
+    """Delete an expense category"""
+    try:
+        result = expense_storage.delete_expense_category(category_id)
+        if result:
+            return jsonify({'status': 'success'}), 200
+        else:
+            return jsonify({'status': 'error', 'message': 'Failed to delete'}), 500
+    except Exception as e:
+        print(f"[ERROR] Deleting expense: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500

@@ -17,6 +17,7 @@
   .chart-container { position:relative; height:100%; width:100%; overflow:hidden; }
 
   html, body { height:100%; }
+  [x-cloak] { display: none !important; }
 </style>
 </head>
 
@@ -35,7 +36,7 @@
   <div class="flex flex-1 overflow-hidden">
     {% include 'municipal/sidenav.html' %}
 
-    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden">
+    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden" x-data="expensePage()">
 
     <header class="bg-white border mb-1 border-slate-300 rounded-[2px] p-3 shadow-sm flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 shrink-0">
       <div class="flex items-center gap-3">
@@ -58,14 +59,14 @@
       </div>
 
       <div class="flex items-center gap-1.5">
-        <select id="fundScope" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-slate-50 uppercase text-slate-700">
+        <select x-model="fundScope" @change="applyFilters()" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-slate-50 uppercase text-slate-700" title="Fund Type">
           <option value="ALL">All Funds</option>
           <option value="GENERAL">General Fund</option>
           <option value="TRUST">Trust Fund</option>
           <option value="SPECIAL">Special Fund</option>
         </select>
 
-        <select id="officeScope" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-slate-50 uppercase text-slate-700">
+        <select x-model="officeScope" @change="applyFilters()" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-slate-50 uppercase text-slate-700" title="Office">
           <option value="ALL">All Offices</option>
           <option value="TREASURY">Treasury</option>
           <option value="ACCOUNTING">Accounting</option>
@@ -73,7 +74,7 @@
           <option value="ENGINEERING">Engineering</option>
         </select>
 
-        <button @click="modalOpen = true"
+        <button @click="openCategoryModal()"
           class="bg-rose-700 hover:bg-rose-800 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
           <span class="material-icons-round text-[14px]">add</span> Add Category
         </button>
@@ -82,19 +83,19 @@
 
     <section class="grid grid-cols-1 mb-1 sm:grid-cols-3 gap-2 shrink-0">
       <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-rose-700">
-        <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Expenses (YTD)</p>
-        <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">₱ 198,000</div>
-        <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Municipal spending</p>
+        <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Categories</p>
+        <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.total">0</div>
+        <p class="text-[9px] text-slate-500 mt-0.5 font-medium">All expense categories</p>
       </div>
       <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-700">
         <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Categories</p>
-        <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">10</div>
-        <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Mapped to COA</p>
+        <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.active">0</div>
+        <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Currently mapped</p>
       </div>
       <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm bg-slate-800 text-white">
-        <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">MoM Growth</p>
-        <div class="text-lg font-black text-rose-400 mt-0.5 leading-none">+4%</div>
-        <p class="text-[9px] text-slate-400 mt-0.5 font-medium">vs previous month</p>
+        <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Treasury Office</p>
+        <div class="text-lg font-black text-rose-400 mt-0.5 leading-none" x-text="treasuryCount">0</div>
+        <p class="text-[9px] text-slate-400 mt-0.5 font-medium">categories</p>
       </div>
     </section>
 
@@ -124,18 +125,18 @@
         <div class="flex flex-wrap items-center gap-1.5">
           <div class="relative">
             <span class="material-icons-round text-slate-400 absolute left-1.5 top-1/2 -translate-y-1/2 text-[12px]">search</span>
-            <input type="text" id="searchInput" placeholder="Search category..."
+            <input type="text" x-model="searchQuery" @input="applyFilters()" placeholder="Search category..."
               class="pl-6 pr-2 py-0.5 text-[10px] font-bold border border-slate-300 rounded-[2px] w-52 bg-white outline-none focus:border-rose-700">
           </div>
 
-          <select id="taxFilter" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white uppercase text-slate-700">
-            <option value="ALL">All Tax Types</option>
+          <select x-model="taxFilter" @change="applyFilters()" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white uppercase text-slate-700" title="Tax Type">
+            <option value="">All Tax Types</option>
             <option value="VAT">VAT</option>
-            <option value="EWT">EWT</option>
-            <option value="NONE">None</option>
+            <option value="Withholding">Withholding</option>
+            <option value="None">None</option>
           </select>
 
-          <button onclick="resetFilters()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] transition">
+          <button @click="resetFilters()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] transition">
             Reset
           </button>
         </div>
@@ -154,62 +155,26 @@
           </thead>
 
           <tbody id="categoryTable" class="text-[10px] divide-y divide-slate-100">
-
-            <tr class="hover:bg-slate-50 transition" data-tax="VAT" data-fund="GENERAL" data-office="ACCOUNTING">
-              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Office Supplies</td>
-              <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">5-02-03-010</td>
-              <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                <span class="px-1 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-[2px] font-black text-[8px] uppercase">
-                  VAT Registered
-                </span>
-              </td>
-              <td class="px-3 py-1.5 text-right font-bold text-slate-700 border-r border-slate-100">12%</td>
-              <td class="px-3 py-1.5 text-center">
-                <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-2">Edit</button>
-                <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
-              </td>
-            </tr>
-
-            <tr class="hover:bg-slate-50 transition" data-tax="EWT" data-fund="GENERAL" data-office="TREASURY">
-              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Professional Services</td>
-              <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">5-02-11-990</td>
-              <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                <span class="px-1 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-[2px] font-black text-[8px] uppercase">
-                  Withholding Tax
-                </span>
-              </td>
-              <td class="px-3 py-1.5 text-right font-bold text-slate-700 border-r border-slate-100">2%</td>
-              <td class="px-3 py-1.5 text-center">
-                <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-2">Edit</button>
-                <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+            <template x-for="category in filteredCategories" :key="category.id">
+              <tr class="hover:bg-slate-50 transition">
+                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100" x-text="category.name"></td>
+                <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100" x-text="category.coa_code"></td>
+                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                  <span class="px-1 py-0.5 rounded-[2px] font-black text-[8px] uppercase border"
+                        :class="getTaxBadgeClass(category.expense_type)"
+                        x-text="category.expense_type"></span>
+                </td>
+                <td class="px-3 py-1.5 text-right font-bold text-slate-700 border-r border-slate-100" x-text="category.office || '—'"></td>
+                <td class="px-3 py-1.5 text-center">
+                  <button @click="deleteCategory(category.id)" class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="filteredCategories.length === 0">
+              <td colspan="5" class="px-3 py-8 text-center text-slate-500 text-[10px]">
+                No expense categories found. Click "Add Category" to create one.
               </td>
             </tr>
-
-            {% for c in expense_categories %}
-            <tr class="hover:bg-slate-50 transition"
-                data-tax="{{ (c.tax_type or 'NONE')|upper }}"
-                data-fund="{{ (c.fund_type or 'GENERAL')|upper }}"
-                data-office="{{ (c.office or 'ALL')|upper }}">
-              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">{{ c.name }}</td>
-              <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">{{ c.coa_code }}</td>
-              <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                <span class="px-1 py-0.5 rounded-[2px] font-black text-[8px] uppercase border
-                  {% if (c.tax_type or '') == 'VAT' %} bg-blue-50 text-blue-700 border-blue-200
-                  {% elif (c.tax_type or '') in ['EWT','WITHHOLDING','Withholding Tax'] %} bg-amber-50 text-amber-700 border-amber-200
-                  {% else %} bg-slate-100 text-slate-700 border-slate-300 {% endif %}">
-                  {{ c.tax_type or 'None' }}
-                </span>
-              </td>
-              <td class="px-3 py-1.5 text-right font-bold text-slate-700 border-r border-slate-100">
-                {{ (c.tax_rate ~ '%') if c.tax_rate else '—' }}
-              </td>
-              <td class="px-3 py-1.5 text-center">
-                <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-2">Edit</button>
-                <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
-              </td>
-            </tr>
-            {% endfor %}
-
           </tbody>
         </table>
       </div>
