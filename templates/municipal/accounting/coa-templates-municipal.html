@@ -226,6 +226,17 @@
     </main>
   </div>
 
+  <div x-cloak x-show="toast.show" x-transition class="fixed top-4 right-4 z-[200] max-w-sm w-[92vw] sm:w-auto">
+    <div class="border rounded-[2px] shadow-lg px-3 py-2 flex items-start gap-2"
+      :class="toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'">
+      <span class="material-icons-round text-[14px] mt-0.5" x-text="toast.type === 'success' ? 'check_circle' : 'error'"></span>
+      <div class="text-[10px] font-bold leading-tight" x-text="toast.message"></div>
+      <button type="button" class="ml-2 text-slate-400 hover:text-slate-700" @click="hideToast()">
+        <span class="material-icons-round text-[13px]">close</span>
+      </button>
+    </div>
+  </div>
+
   <div x-show="templateModalOpen" x-cloak class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
     <div @click.away="templateModalOpen = false" class="bg-white rounded-[2px] shadow-xl w-full max-w-md border border-slate-300">
       <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
@@ -319,6 +330,12 @@
         accountModalOpen: false,
         isSavingTemplate: false,
         isSavingAccount: false,
+        toastTimer: null,
+        toast: {
+          show: false,
+          type: 'success',
+          message: ''
+        },
         
         newTemplate: { name: '', description: '' },
         newAccount: { code: '', name: '', account_type: 'asset', locked: false },
@@ -343,6 +360,7 @@
             const res = await fetch('/api/municipal/coa/templates');
             if(!res.ok) {
               console.error('Failed to load templates:', res.status);
+              this.showToast('error', 'Failed to load templates');
               return;
             }
             const data = await res.json();
@@ -351,6 +369,7 @@
             this.updateStats();
           } catch(e){
             console.error('Error loading templates:', e);
+            this.showToast('error', 'Error loading templates');
           }
         },
 
@@ -359,6 +378,7 @@
             const res = await fetch(`/api/municipal/coa/accounts/${templateId}`);
             if(!res.ok) {
               console.error('Failed to load accounts:', res.status);
+              this.showToast('error', 'Failed to load accounts');
               return;
             }
             const data = await res.json();
@@ -367,6 +387,27 @@
             this.updateStats();
           } catch(e){
             console.error('Error loading accounts:', e);
+            this.showToast('error', 'Error loading accounts');
+          }
+        },
+
+        showToast(type, message){
+          if(this.toastTimer){
+            clearTimeout(this.toastTimer);
+          }
+          this.toast = {
+            show: true,
+            type: type || 'success',
+            message: message || ''
+          };
+          this.toastTimer = setTimeout(() => this.hideToast(), 2800);
+        },
+
+        hideToast(){
+          this.toast.show = false;
+          if(this.toastTimer){
+            clearTimeout(this.toastTimer);
+            this.toastTimer = null;
           }
         },
 
@@ -415,7 +456,7 @@
 
         async saveTemplate(){
           if(!this.newTemplate.name) {
-            alert('Please enter template name');
+            this.showToast('error', 'Please enter template name');
             return;
           }
           this.isSavingTemplate = true;
@@ -434,12 +475,13 @@
               } else if (!this.selectedTemplateId && this.filteredTemplates.length > 0) {
                 await this.selectTemplate(this.filteredTemplates[0].id);
               }
+              this.showToast('success', 'Template created successfully');
             } else {
-              alert(payload?.message || 'Failed to create template');
+              this.showToast('error', payload?.message || 'Failed to create template');
             }
           } catch(e){
             console.error('Error saving template:', e);
-            alert('Error creating template');
+            this.showToast('error', 'Error creating template');
           } finally {
             this.isSavingTemplate = false;
           }
@@ -447,7 +489,7 @@
 
         openAccountModal(){
           if(this.templates.length === 0) {
-            alert('Create a template first');
+            this.showToast('error', 'Create a template first');
             this.openTemplateModal();
             return;
           }
@@ -455,7 +497,7 @@
             this.selectTemplate(this.filteredTemplates[0].id);
           }
           if(!this.selectedTemplateId) {
-            alert('Please select a template first');
+            this.showToast('error', 'Please select a template first');
             return;
           }
           this.newAccount = { code: '', name: '', account_type: 'asset', locked: false };
@@ -464,7 +506,7 @@
 
         async saveAccount(){
           if(!this.newAccount.code || !this.newAccount.name) {
-            alert('Please fill in all required fields');
+            this.showToast('error', 'Please fill in all required fields');
             return;
           }
           this.isSavingAccount = true;
@@ -479,12 +521,13 @@
               this.accountModalOpen = false;
               await this.loadAccounts(this.selectedTemplateId);
               await this.loadTemplates();
+              this.showToast('success', 'Account added successfully');
             } else {
-              alert(payload?.message || 'Failed to add account');
+              this.showToast('error', payload?.message || 'Failed to add account');
             }
           } catch(e){
             console.error('Error saving account:', e);
-            alert('Error adding account');
+            this.showToast('error', 'Error adding account');
           } finally {
             this.isSavingAccount = false;
           }
@@ -496,9 +539,14 @@
             const res = await fetch(`/api/municipal/coa/accounts/${accountId}`, { method: 'DELETE' });
             if(res.ok){
               await this.loadAccounts(this.selectedTemplateId);
+              await this.loadTemplates();
+              this.showToast('success', 'Account deleted successfully');
+            } else {
+              this.showToast('error', 'Failed to delete account');
             }
           } catch(e){
             console.error('Error deleting account:', e);
+            this.showToast('error', 'Error deleting account');
           }
         },
 
