@@ -7,6 +7,7 @@ import deposit_storage
 import expense_storage
 import coa_storage
 import entities_storage
+import system_logs_storage
 
 bp = Blueprint('municipal_api', __name__, url_prefix='/api/municipal')
 
@@ -455,4 +456,75 @@ def api_delete_entity(entity_id):
             return jsonify({'status': 'error', 'message': 'Failed to delete'}), 500
     except Exception as e:
         print(f"[ERROR] Deleting entity: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# ==================== SYSTEM LOGS API ====================
+
+@bp.route('/system-logs', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_system_logs():
+    """Get system logs for the municipality"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        logs = system_logs_storage.list_system_logs(municipality_scope, limit=500)
+        stats = system_logs_storage.get_system_log_stats(municipality_scope)
+        return jsonify({
+            'status': 'success',
+            'logs': logs,
+            'stats': stats
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Getting system logs: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@bp.route('/system-logs', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_create_system_log():
+    """Create a system log entry"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        data = request.get_json()
+        user_agent = request.headers.get('User-Agent', '')
+        device_type = system_logs_storage.detect_device_type(user_agent)
+        
+        result = system_logs_storage.add_system_log(
+            municipality=municipality_scope,
+            user=data.get('user', 'Unknown'),
+            action=data.get('action', 'UNKNOWN'),
+            target=data.get('target', ''),
+            target_id=data.get('target_id', ''),
+            module=data.get('module', 'SYSTEM'),
+            outcome=data.get('outcome', 'SUCCESS'),
+            message=data.get('message', ''),
+            device_type=device_type,
+            user_agent=user_agent,
+            metadata=data.get('metadata', {})
+        )
+        return jsonify({'status': 'success', 'log': result}), 201
+    except Exception as e:
+        print(f"[ERROR] Creating system log: {e}")
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
+@bp.route('/system-logs/<action>', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_system_logs_by_action(action):
+    """Get system logs filtered by action (e.g., LOGIN, APPROVE)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        logs = system_logs_storage.list_system_logs_by_action(
+            municipality_scope,
+            action,
+            limit=100
+        )
+        return jsonify({
+            'status': 'success',
+            'action': action,
+            'logs': logs,
+            'count': len(logs)
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Getting system logs by action: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
