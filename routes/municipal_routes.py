@@ -326,12 +326,28 @@ def accounting_dashboard_municipal():
 @bp.route('/accounting/entities-municipal')
 @role_required('municipal','municipal_admin')
 def accounting_entities_municipal():
-    return render_template('municipal/accounting/entities-municipal.html')
+    from flask import session
+    municipality_name = session.get('municipality') or session.get('user_municipality')
+    region_name = session.get('region') or session.get('user_region')
+    province_name = session.get('province') or session.get('user_province')
+    return render_template('municipal/accounting/entities-municipal.html',
+        municipality_name=municipality_name,
+        region_name=region_name,
+        province_name=province_name
+    )
 
 @bp.route('/accounting/coa-templates-municipal')
 @role_required('municipal','municipal_admin')
 def accounting_coa_templates_municipal():
-    return render_template('municipal/accounting/coa-templates-municipal.html')
+    from flask import session
+    municipality_name = session.get('municipality') or session.get('user_municipality')
+    region_name = session.get('region') or session.get('user_region')
+    province_name = session.get('province') or session.get('user_province')
+    return render_template('municipal/accounting/coa-templates-municipal.html',
+        municipality_name=municipality_name,
+        region_name=region_name,
+        province_name=province_name
+    )
 
 @bp.route('/accounting/expense-category-municipal')
 @role_required('municipal','municipal_admin')
@@ -348,6 +364,11 @@ def accounting_deposit_category_municipal():
 @role_required('municipal','municipal_admin')
 def logs_audit_logs_municipal():
     return render_template('municipal/logs/audit-logs-municipal.html')
+
+@bp.route('/logs/system-logs-municipal')
+@role_required('municipal','municipal_admin')
+def logs_system_logs_municipal():
+    return render_template('municipal/logs/system-logs-municipal.html')
 
 # API endpoint for audit logs (real payment/fund transfer logs)
 from routes.municipal_api_logs import bp as municipal_api_logs_bp
