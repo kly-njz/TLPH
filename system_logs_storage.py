@@ -24,6 +24,18 @@ def _where(query, field: str, op: str, value):
     return query.where(filter=FieldFilter(field, op, value))
 
 
+def _to_sort_key(value: Any) -> datetime:
+    """Best-effort datetime conversion for stable Python-side sorting."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except Exception:
+            return datetime.min
+    return datetime.min
+
+
 # ==================== SYSTEM LOGS ====================
 
 def add_system_log(
@@ -69,20 +81,40 @@ def get_system_log(log_id: str) -> Optional[Dict[str, Any]]:
 
 def list_system_logs(municipality: Optional[str] = None, limit: int = 500) -> List[Dict[str, Any]]:
     """List system logs, optionally filtered by municipality"""
+    result: List[Dict[str, Any]] = []
+
+    # Preferred path: indexed query with server-side order/limit.
+    try:
+        query = db.collection("system_logs")
+        if municipality:
+            query = _where(query, "municipality", "==", municipality)
+
+        query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
+        query = query.limit(limit)
+
+        for doc in query.stream():
+            log_entry = doc.to_dict()
+            if log_entry:
+                result.append(log_entry)
+        return result
+    except Exception as e:
+        print(f"[WARN] Indexed system_logs query failed, falling back: {e}")
+
+    # Fallback path: avoid order_by to prevent composite-index requirement.
     query = db.collection("system_logs")
     if municipality:
         query = _where(query, "municipality", "==", municipality)
-    
-    query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
-    query = query.limit(limit)
-    
-    docs = query.stream()
-    result = []
-    for doc in docs:
+
+    for doc in query.stream():
         log_entry = doc.to_dict()
         if log_entry:
             result.append(log_entry)
-    return result
+
+    result.sort(
+        key=lambda row: _to_sort_key(row.get("created_at") or row.get("timestamp")),
+        reverse=True
+    )
+    return result[:limit]
 
 
 def list_system_logs_by_action(
@@ -111,21 +143,41 @@ def get_login_logs(municipality: str, hours: int = 24) -> List[Dict[str, Any]]:
     """Get login logs for a municipality in the last X hours"""
     from datetime import timedelta
     cutoff = datetime.utcnow() - timedelta(hours=hours)
-    
+    result: List[Dict[str, Any]] = []
+
+    try:
+        query = db.collection("system_logs")
+        query = _where(query, "municipality", "==", municipality)
+        query = _where(query, "action", "==", "LOGIN")
+        query = _where(query, "created_at", ">=", cutoff)
+        query = query.order_by(
+            "created_at", direction=firestore.Query.DESCENDING
+        )
+
+        for doc in query.stream():
+            log_entry = doc.to_dict()
+            if log_entry:
+                result.append(log_entry)
+        return result
+    except Exception as e:
+        print(f"[WARN] Indexed login logs query failed, falling back: {e}")
+
     query = db.collection("system_logs")
     query = _where(query, "municipality", "==", municipality)
     query = _where(query, "action", "==", "LOGIN")
-    query = _where(query, "created_at", ">=", cutoff)
-    query = query.order_by(
-        "created_at", direction=firestore.Query.DESCENDING
-    )
-    
-    docs = query.stream()
-    result = []
-    for doc in docs:
+
+    for doc in query.stream():
         log_entry = doc.to_dict()
-        if log_entry:
+        if not log_entry:
+            continue
+        current_dt = _to_sort_key(log_entry.get("created_at") or log_entry.get("timestamp"))
+        if current_dt >= cutoff:
             result.append(log_entry)
+
+    result.sort(
+        key=lambda row: _to_sort_key(row.get("created_at") or row.get("timestamp")),
+        reverse=True
+    )
     return result
 
 
@@ -133,21 +185,41 @@ def get_approval_logs(municipality: str, hours: int = 72) -> List[Dict[str, Any]
     """Get approval logs for a municipality in the last X hours"""
     from datetime import timedelta
     cutoff = datetime.utcnow() - timedelta(hours=hours)
-    
+    result: List[Dict[str, Any]] = []
+
+    try:
+        query = db.collection("system_logs")
+        query = _where(query, "municipality", "==", municipality)
+        query = _where(query, "action", "==", "APPROVE")
+        query = _where(query, "created_at", ">=", cutoff)
+        query = query.order_by(
+            "created_at", direction=firestore.Query.DESCENDING
+        )
+
+        for doc in query.stream():
+            log_entry = doc.to_dict()
+            if log_entry:
+                result.append(log_entry)
+        return result
+    except Exception as e:
+        print(f"[WARN] Indexed approval logs query failed, falling back: {e}")
+
     query = db.collection("system_logs")
     query = _where(query, "municipality", "==", municipality)
     query = _where(query, "action", "==", "APPROVE")
-    query = _where(query, "created_at", ">=", cutoff)
-    query = query.order_by(
-        "created_at", direction=firestore.Query.DESCENDING
-    )
-    
-    docs = query.stream()
-    result = []
-    for doc in docs:
+
+    for doc in query.stream():
         log_entry = doc.to_dict()
-        if log_entry:
+        if not log_entry:
+            continue
+        current_dt = _to_sort_key(log_entry.get("created_at") or log_entry.get("timestamp"))
+        if current_dt >= cutoff:
             result.append(log_entry)
+
+    result.sort(
+        key=lambda row: _to_sort_key(row.get("created_at") or row.get("timestamp")),
+        reverse=True
+    )
     return result
 
 

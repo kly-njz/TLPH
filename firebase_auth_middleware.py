@@ -95,9 +95,9 @@ def role_required(*allowed_roles):
                     if not should_log:
                         print(f'ℹ️ PAGE_ACCESS throttled for {request.path}')
                     else:
-                    municipality = session.get('municipality') or session.get('user_municipality') or 'unknown'
-                    user_email = session.get('user_email', 'unknown')
-                    user_agent = request.headers.get('User-Agent', '')
+                        municipality = session.get('municipality') or session.get('user_municipality') or 'unknown'
+                        user_email = session.get('user_email', 'unknown')
+                        user_agent = request.headers.get('User-Agent', '')
 
                         system_logs_storage.add_system_log(
                             municipality=municipality,
