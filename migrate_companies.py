@@ -4,12 +4,18 @@ Firestore Companies Collection Migration Script
 Creates and populates the companies collection with municipal office data
 """
 
-from firebase_admin import credentials, firestore, initialize_app
+import firebase_admin
+from firebase_admin import credentials, firestore
 import os
 
-# Initialize Firebase
-cred = credentials.Certificate('firebase-credentials.json')
-app = initialize_app(cred)
+# Initialize Firebase (if not already initialized)
+try:
+    cred = credentials.Certificate('firebase-credentials.json')
+    firebase_admin.initialize_app(cred)
+except ValueError:
+    # Already initialized
+    pass
+
 db = firestore.client()
 
 # Company data structure
