@@ -326,12 +326,28 @@ def accounting_dashboard_municipal():
 @bp.route('/accounting/entities-municipal')
 @role_required('municipal','municipal_admin')
 def accounting_entities_municipal():
-    return render_template('municipal/accounting/entities-municipal.html')
+    from flask import session
+    municipality_name = session.get('municipality') or session.get('user_municipality')
+    region_name = session.get('region') or session.get('user_region')
+    province_name = session.get('province') or session.get('user_province')
+    return render_template('municipal/accounting/entities-municipal.html',
+        municipality_name=municipality_name,
+        region_name=region_name,
+        province_name=province_name
+    )
 
 @bp.route('/accounting/coa-templates-municipal')
 @role_required('municipal','municipal_admin')
 def accounting_coa_templates_municipal():
-    return render_template('municipal/accounting/coa-templates-municipal.html')
+    from flask import session
+    municipality_name = session.get('municipality') or session.get('user_municipality')
+    region_name = session.get('region') or session.get('user_region')
+    province_name = session.get('province') or session.get('user_province')
+    return render_template('municipal/accounting/coa-templates-municipal.html',
+        municipality_name=municipality_name,
+        region_name=region_name,
+        province_name=province_name
+    )
 
 @bp.route('/accounting/expense-category-municipal')
 @role_required('municipal','municipal_admin')
