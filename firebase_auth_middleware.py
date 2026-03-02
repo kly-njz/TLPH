@@ -1,5 +1,12 @@
 from functools import wraps
 from flask import request, jsonify, redirect, url_for, session
+import system_logs_storage
+from datetime import datetime, timedelta
+
+
+def _detect_device_from_request():
+    user_agent = request.headers.get('User-Agent', '')
+    return system_logs_storage.detect_device_type(user_agent)
 
 def firebase_auth_required(f):
     """Decorator to require authentication"""
@@ -62,6 +69,56 @@ def role_required(*allowed_roles):
                 response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
                 response.headers['Pragma'] = 'no-cache'
                 return response
+
+            # Log municipal page access (non-API GET routes)
+            try:
+                if (
+                    user_role in ('municipal', 'municipal_admin')
+                    and request.method == 'GET'
+                    and request.path.startswith('/municipal')
+                    and not request.path.startswith('/api')
+                ):
+                    now = datetime.utcnow()
+                    throttle_minutes = 2
+                    page_access_last_logged = session.get('page_access_last_logged', {})
+                    last_logged_iso = page_access_last_logged.get(request.path)
+                    should_log = True
+
+                    if last_logged_iso:
+                        try:
+                            last_logged_at = datetime.fromisoformat(last_logged_iso)
+                            if now - last_logged_at < timedelta(minutes=throttle_minutes):
+                                should_log = False
+                        except Exception:
+                            should_log = True
+
+                    if not should_log:
+                        print(f'ℹ️ PAGE_ACCESS throttled for {request.path}')
+                    else:
+                    municipality = session.get('municipality') or session.get('user_municipality') or 'unknown'
+                    user_email = session.get('user_email', 'unknown')
+                    user_agent = request.headers.get('User-Agent', '')
+
+                        system_logs_storage.add_system_log(
+                            municipality=municipality,
+                            user=user_email,
+                            action='PAGE_ACCESS',
+                            target=request.path,
+                            module='NAVIGATION',
+                            outcome='SUCCESS',
+                            message=f'Accessed page: {request.path}',
+                            device_type=_detect_device_from_request(),
+                            user_agent=user_agent,
+                            metadata={
+                                'method': request.method,
+                                'endpoint': request.endpoint
+                            }
+                        )
+
+                        page_access_last_logged[request.path] = now.isoformat()
+                        session['page_access_last_logged'] = page_access_last_logged
+            except Exception as e:
+                print(f'⚠️ Failed to log PAGE_ACCESS: {e}')
             
             print(f'✅ Access granted: {user_role} accessing {f.__name__}')
             result = f(*args, **kwargs)
