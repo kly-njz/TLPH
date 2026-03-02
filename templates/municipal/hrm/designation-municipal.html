@@ -6,6 +6,69 @@
   <title>DENR | Designation Profile</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  
+  <script type="module">
+    import { auth, db } from "{{ url_for('static', filename='js/firebase-config.js') }}";
+    import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    window.designationPage = function() {
+      return {
+        designations: [],
+        selectedDesignation: null,
+        loading: true,
+
+        async init() {
+          await this.loadDesignations();
+        },
+
+        async loadDesignations() {
+          try {
+            this.loading = true;
+            const q = query(collection(db, 'designations'), orderBy('time_Init', 'desc'));
+            const snapshot = await getDocs(q);
+            
+            this.designations = [];
+            snapshot.forEach(doc => {
+              this.designations.push({
+                id: doc.id,
+                ...doc.data()
+              });
+            });
+
+            if (this.designations.length > 0) {
+              this.selectedDesignation = this.designations[0];
+            }
+          } catch (error) {
+            console.error('Error loading designations:', error);
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        selectDesignation(designation) {
+          this.selectedDesignation = designation;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
+        formatDate(timestamp) {
+          if (!timestamp) return 'N/A';
+          try {
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleDateString('en-PH', { 
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+          } catch (e) {
+            return 'Invalid date';
+          }
+        }
+      }
+    }
+  </script>
+
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <script>
