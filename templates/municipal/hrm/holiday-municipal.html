@@ -7,6 +7,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 
+  <!-- Server-side data injection via data attributes -->
+  <div id="server-data" data-holidays="{{ holidays|default([], true)|tojson|safe }}" data-year="{{ year|default(2026, true) }}" style="display: none;"></div>
+
   <script>
     tailwind.config = {
       theme: {
@@ -111,7 +114,7 @@
             <span class="font-bold uppercase text-[11px] text-slate-700">Official List of Observances</span>
           </div>
           <div class="flex gap-2">
-              <select x-model="selectedYear" @change="loadData()" class="text-[10px] font-bold border border-gov-border rounded-[2px] px-2 bg-white outline-none">
+              <select x-model="selectedYear" @change="loadData()" title="Select fiscal year" class="text-[10px] font-bold border border-gov-border rounded-[2px] px-2 bg-white outline-none">
                   <option value="2026">FY 2026</option>
                   <option value="2025">FY 2025</option>
               </select>
@@ -195,7 +198,7 @@
         <input type="hidden" id="modalHolidayName" />
         <div>
           <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Office Status</label>
-          <select id="modalOfficeStatus" class="gov-input w-full" onchange="toggleTimeFields()">
+          <select id="modalOfficeStatus" title="Select office status" class="gov-input w-full" onchange="toggleTimeFields()">
             <option value="closed">Closed</option>
             <option value="open">Open</option>
           </select>
@@ -218,6 +221,11 @@
   <script type="module">
     import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
     import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    // Parse server data from data attributes
+    const serverDataEl = document.getElementById('server-data');
+    const serverHolidays = serverDataEl ? JSON.parse(serverDataEl.getAttribute('data-holidays') || '[]') : [];
+    const defaultYear = serverDataEl ? serverDataEl.getAttribute('data-year') : '2026';
 
     // Initialize Firebase for this page
     const firebaseConfig = {
@@ -261,9 +269,6 @@
         }
       }
     }
-
-    const serverHolidays = {{ holidays|default([], true)|tojson|safe }};
-    const defaultYear = '{{ year|default(2026, true) }}';
     function normalizeHolidayDate(value) {
       if (!value) return '';
       if (typeof value === 'string') return value.split('T')[0];
