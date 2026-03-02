@@ -119,7 +119,20 @@ def hrm_holiday():
     try:
         docs = db.collection('holidays').stream()
         for doc in docs:
-            holidays.append(doc.to_dict())
+            holiday = doc.to_dict() or {}
+            holiday['id'] = doc.id
+
+            date_value = holiday.get('date')
+            if isinstance(date_value, str):
+                holiday['date'] = date_value.split('T')[0]
+            elif hasattr(date_value, 'strftime'):
+                holiday['date'] = date_value.strftime('%Y-%m-%d')
+            elif hasattr(date_value, 'isoformat'):
+                holiday['date'] = date_value.isoformat().split('T')[0]
+            else:
+                holiday['date'] = ''
+
+            holidays.append(holiday)
     except Exception:
         pass
     from datetime import datetime

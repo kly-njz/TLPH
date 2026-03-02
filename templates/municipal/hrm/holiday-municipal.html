@@ -42,9 +42,10 @@
       opacity: 0.025; pointer-events: none; z-index: -1;
     }
   </style>
+
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="holidayPage()" @load="loadData()" x-cloak>
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="holidayPage()" x-init="loadData()" x-cloak>
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -129,6 +130,11 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 text-[12px]">
+                <template x-if="holidays.length === 0">
+                  <tr>
+                    <td colspan="5" class="p-4 text-center text-slate-400">No holiday records found</td>
+                  </tr>
+                </template>
                 <template x-for="holiday in holidays" :key="holiday.id">
                   <tr class="hover:bg-slate-50 transition-colors">
                     <td class="p-2 font-mono font-bold text-orange-800 bg-orange-50/30" x-text="formatDate(holiday.date)"></td>
@@ -256,10 +262,27 @@
       }
     }
 
+    const serverHolidays = {{ holidays|default([], true)|tojson|safe }};
+    const defaultYear = '{{ year|default(2026, true) }}';
+
+    function normalizeHolidayDate(value) {
+      if (!value) return '';
+      if (typeof value === 'string') return value.split('T')[0];
+      if (value && typeof value.toDate === 'function') return value.toDate().toISOString().split('T')[0];
+      if (value instanceof Date) return value.toISOString().split('T')[0];
+      return '';
+    }
+
     window.holidayPage = function() {
+      const normalizedServerHolidays = (serverHolidays || []).map((h, idx) => ({
+        ...h,
+        id: h.id || `server-${idx}`,
+        date: normalizeHolidayDate(h.date)
+      }));
+
       return {
-        holidays: [],
-        selectedYear: '2026',
+        holidays: normalizedServerHolidays,
+        selectedYear: String(defaultYear || '2026'),
         editingHoliday: null,
 
         get holidaysThisMonth() {
@@ -319,17 +342,7 @@
 
             const allHolidays = snapshot.docs.map(docItem => {
               const data = docItem.data();
-              let normalizedDate = data.date || '';
-
-              if (normalizedDate && typeof normalizedDate.toDate === 'function') {
-                normalizedDate = normalizedDate.toDate().toISOString().split('T')[0];
-              } else if (normalizedDate instanceof Date) {
-                normalizedDate = normalizedDate.toISOString().split('T')[0];
-              } else if (typeof normalizedDate === 'string') {
-                normalizedDate = normalizedDate.split('T')[0];
-              } else {
-                normalizedDate = '';
-              }
+              const normalizedDate = normalizeHolidayDate(data.date);
 
               return {
                 id: docItem.id,
@@ -338,9 +351,13 @@
               };
             });
 
-            this.holidays = allHolidays
+            const filteredHolidays = allHolidays
               .filter(h => !this.selectedYear || (h.date || '').startsWith(this.selectedYear))
               .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+            this.holidays = filteredHolidays.length > 0
+              ? filteredHolidays
+              : allHolidays.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
             if (this.holidays.length === 0) {
               this.holidays = [
@@ -353,7 +370,12 @@
             }
           } catch (error) {
             console.error('Error loading holidays:', error);
-            this.holidays = [];
+            this.holidays = normalizedServerHolidays.length > 0 ? normalizedServerHolidays : [
+              { id: '1', date: '2026-01-01', name: 'New Year\'s Day', type: 'National Holiday', office_status: 'closed', description: 'National holiday' },
+              { id: '2', date: '2026-02-25', name: 'EDSA Anniversary', type: 'National Holiday', office_status: 'closed', description: 'EDSA Revolution Anniversary' },
+              { id: '3', date: '2026-04-09', name: 'Araw ng Kagitingan', type: 'National Holiday', office_status: 'closed', description: 'Day of Valor' },
+              { id: '4', date: '2026-12-25', name: 'Christmas Day', type: 'National Holiday', office_status: 'closed', description: 'Christmas national holiday' }
+            ].filter(h => !this.selectedYear || h.date.startsWith(this.selectedYear));
           }
         }
       }
@@ -364,4 +386,6 @@
       document.getElementById('timeFields').style.display = (status === 'open') ? '' : 'none';
     }
   </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
+</html>
