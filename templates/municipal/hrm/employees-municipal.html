@@ -11,6 +11,11 @@
     import { auth, db } from "{{ url_for('static', filename='js/firebase-config.js') }}";
     import { collection, getDocs, addDoc, doc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
+    // Server-side data injection
+    const serverEmployees = {{ employees_data|default([], true)|tojson|safe }};
+    const serverDepartments = {{ departments_data|default([], true)|tojson|safe }};
+    const serverDesignations = {{ designations_data|default([], true)|tojson|safe }};
+
     // Notification component for header
     window.notificationData = function() {
       return {
@@ -79,19 +84,39 @@
         async loadEmployees() {
           try {
             this.loading = true;
-            const q = query(collection(db, 'employees'), orderBy('hire_date', 'desc'));
-            const snapshot = await getDocs(q);
             
-            this.employees = [];
-            snapshot.forEach(doc => {
-              this.employees.push({
-                id: doc.id,
-                ...doc.data()
+            // Use server data if available
+            if (serverEmployees.length > 0) {
+              this.employees = serverEmployees;
+              return;
+            }
+            
+            // Fallback to Firestore with orderBy
+            try {
+              const q = query(collection(db, 'employees'), orderBy('hire_date', 'desc'));
+              const snapshot = await getDocs(q);
+              this.employees = [];
+              snapshot.forEach(doc => {
+                this.employees.push({
+                  id: doc.id,
+                  ...doc.data()
+                });
               });
-            });
+            } catch (orderError) {
+              // If orderBy fails, try plain fetch
+              console.warn('Ordered employee query failed, using plain fetch:', orderError);
+              const snapshot = await getDocs(collection(db, 'employees'));
+              this.employees = [];
+              snapshot.forEach(doc => {
+                this.employees.push({
+                  id: doc.id,
+                  ...doc.data()
+                });
+              });
+            }
           } catch (error) {
             console.error('Error loading employees:', error);
-            alert('Error loading employees: ' + error.message);
+            this.employees = [];
           } finally {
             this.loading = false;
           }
@@ -99,6 +124,12 @@
 
         async loadDepartments() {
           try {
+            // Use server data if available
+            if (serverDepartments.length > 0) {
+              this.departments = serverDepartments;
+              return;
+            }
+            
             const snapshot = await getDocs(collection(db, 'departments'));
             this.departments = [];
             snapshot.forEach(doc => {
@@ -106,11 +137,18 @@
             });
           } catch (error) {
             console.error('Error loading departments:', error);
+            this.departments = [];
           }
         },
 
         async loadDesignations() {
           try {
+            // Use server data if available
+            if (serverDesignations.length > 0) {
+              this.designations = serverDesignations;
+              return;
+            }
+            
             const snapshot = await getDocs(collection(db, 'designations'));
             this.designations = [];
             snapshot.forEach(doc => {
@@ -118,6 +156,7 @@
             });
           } catch (error) {
             console.error('Error loading designations:', error);
+            this.designations = [];
           }
         },
 

@@ -160,7 +160,39 @@ def hrm_office_shift():
 @bp.route('/employees')
 @role_required('municipal','municipal_admin')
 def hrm_employees():
-    return render_template('municipal/hrm/employees-municipal.html')
+    db = get_firestore_db()
+    employees = []
+    departments = []
+    designations = []
+
+    try:
+        for doc in db.collection('employees').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            employees.append(item)
+    except Exception as e:
+        print(f"Error fetching employees: {e}")
+
+    try:
+        for doc in db.collection('departments').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            departments.append(item)
+    except Exception as e:
+        print(f"Error fetching departments: {e}")
+
+    try:
+        for doc in db.collection('designations').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            designations.append(item)
+    except Exception as e:
+        print(f"Error fetching designations: {e}")
+
+    return render_template('municipal/hrm/employees-municipal.html', 
+                          employees_data=employees,
+                          departments_data=departments,
+                          designations_data=designations)
 
 @bp.route('/attendance')
 @role_required('municipal','municipal_admin')
