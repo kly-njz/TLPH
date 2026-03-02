@@ -7,6 +7,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <style>
     /* Government Standard Typography & Scale */
@@ -32,6 +33,7 @@
     }
     .gov-input:focus { border-color:#0f766e; }
     html, body { height: 100%; }
+    [x-cloak] { display: none !important; }
   </style>
 </head>
 
@@ -50,7 +52,7 @@
   <div class="flex flex-1 overflow-hidden">
     {% include 'municipal/sidenav.html' %}
 
-    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden">
+    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden" x-data="depositPage()">
 
       <header class="bg-white mb-1 border border-slate-300 rounded-[2px] p-3 shadow-sm flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 shrink-0">
         <div class="flex items-center gap-3">
@@ -72,14 +74,14 @@
         </div>
 
         <div class="flex gap-1.5 items-center">
-          <select id="fundScope" class="gov-input cursor-pointer bg-slate-50 uppercase text-slate-700">
+          <select x-model="fundScope" @change="applyFilters()" class="gov-input cursor-pointer bg-slate-50 uppercase text-slate-700" title="Fund Type">
             <option value="ALL">All Funds</option>
             <option value="GENERAL">General Fund</option>
             <option value="TRUST">Trust Fund</option>
             <option value="SPECIAL">Special Fund</option>
           </select>
 
-          <button onclick="openCategoryModal()"
+          <button @click="openCategoryModal()"
             class="bg-teal-700 hover:bg-teal-800 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
             <span class="material-icons-round text-[14px]">add</span> Add Category
           </button>
@@ -88,19 +90,19 @@
 
       <section class="grid grid-cols-1 mb-1 sm:grid-cols-3 gap-2 shrink-0">
         <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-teal-700">
-          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deposits (YTD)</p>
-          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">₱ 245,000</div>
-          <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Municipal collection</p>
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Categories</p>
+          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.total">0</div>
+          <p class="text-[9px] text-slate-500 mt-0.5 font-medium">All deposit categories</p>
         </div>
         <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-indigo-600">
           <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Categories</p>
-          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">8</div>
+          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.active">0</div>
           <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Currently in use</p>
         </div>
         <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm bg-slate-800 text-white">
-          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">MoM Growth</p>
-          <div class="text-lg font-black text-teal-400 mt-0.5 leading-none">+6%</div>
-          <p class="text-[9px] text-slate-400 mt-0.5 font-medium">vs previous month</p>
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">General Fund</p>
+          <div class="text-lg font-black text-teal-400 mt-0.5 leading-none" x-text="generalFundCount">0</div>
+          <p class="text-[9px] text-slate-400 mt-0.5 font-medium">categories</p>
         </div>
       </section>
 
@@ -128,15 +130,15 @@
           </h2>
 
           <div class="flex flex-wrap gap-1.5 items-center">
-            <input id="searchCategory" type="text" placeholder="Search category..." class="gov-input w-44">
-            <select id="filterRevenue" class="gov-input cursor-pointer">
+            <input x-model="searchQuery" @input="applyFilters()" type="text" placeholder="Search category..." class="gov-input w-44" title="Search">
+            <select x-model="filterRevenue" @change="applyFilters()" class="gov-input cursor-pointer" title="Revenue Type">
               <option value="">All Revenue Types</option>
-              <option value="service">Service Revenue</option>
-              <option value="permit">Permit Fees</option>
-              <option value="grant">Grants</option>
-              <option value="other">Other Income</option>
+              <option value="Service Revenue">Service Revenue</option>
+              <option value="Permit Fees">Permit Fees</option>
+              <option value="Grants">Grants</option>
+              <option value="Other Income">Other Income</option>
             </select>
-            <button onclick="resetFilters()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] transition">
+            <button @click="resetFilters()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] transition">
               Reset
             </button>
           </div>
@@ -156,54 +158,32 @@
             </thead>
 
             <tbody id="categoryTable" class="text-[10px] divide-y divide-slate-100">
-
-              <tr class="hover:bg-slate-50 transition" data-revenue="permit" data-fund="GENERAL">
-                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Business Permit Fees</td>
-                <td class="px-3 py-1.5 border-r border-slate-100">
-                  <span class="font-mono font-bold text-slate-800">4101</span>
-                  <span class="text-slate-500 ml-0.5">— Permit Revenue</span>
-                </td>
-                <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                  <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 text-[8px]">Permit Fees</span>
-                </td>
-                <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                  <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-slate-100 text-slate-700 border-slate-300 text-[8px]">No Tax</span>
-                </td>
-                <td class="px-3 py-1.5 font-mono text-slate-600 text-center border-r border-slate-100">REV-001</td>
-                <td class="px-3 py-1.5 text-center">
-                  <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-1">Edit</button>
-                  <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
-                </td>
-              </tr>
-
-              {% for c in deposit_categories %}
-              <tr class="hover:bg-slate-50 transition" data-revenue="{{ c.revenue_type|lower }}" data-fund="{{ (c.fund_type or 'GENERAL')|upper }}">
-                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">{{ c.name }}</td>
-                <td class="px-3 py-1.5 border-r border-slate-100">
-                  <span class="font-mono font-bold text-slate-800">{{ c.coa_code }}</span>
-                  <span class="text-slate-500 ml-0.5">— {{ c.coa_name }}</span>
-                </td>
-                <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                  <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 text-[8px]">
-                    {{ c.revenue_type }}
-                  </span>
-                </td>
-                <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                  <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border text-[8px]
-                    {% if c.tax_type == 'VAT' %} bg-blue-50 text-blue-700 border-blue-200
-                    {% elif c.tax_type == 'Withholding' %} bg-amber-50 text-amber-700 border-amber-200
-                    {% else %} bg-slate-100 text-slate-700 border-slate-300 {% endif %}">
-                    {{ c.tax_type }}{% if c.tax_rate %} ({{ c.tax_rate }}%){% endif %}
-                  </span>
-                </td>
-                <td class="px-3 py-1.5 font-mono text-slate-600 text-center border-r border-slate-100">{{ c.budget_code or '—' }}</td>
-                <td class="px-3 py-1.5 text-center">
-                  <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-1">Edit</button>
-                  <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+              <template x-for="category in filteredCategories" :key="category.id">
+                <tr class="hover:bg-slate-50 transition">
+                  <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100" x-text="category.name"></td>
+                  <td class="px-3 py-1.5 border-r border-slate-100">
+                    <span class="font-mono font-bold text-slate-800" x-text="category.coa_code"></span>
+                    <span class="text-slate-500 ml-0.5" x-text="'— ' + category.coa_name"></span>
+                  </td>
+                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 text-[8px]" x-text="category.revenue_type"></span>
+                  </td>
+                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border text-[8px]"
+                          :class="getTaxBadgeClass(category.tax_type)"
+                          x-text="category.tax_type + (category.tax_rate ? ' (' + category.tax_rate + '%)' : '')"></span>
+                  </td>
+                  <td class="px-3 py-1.5 font-mono text-slate-600 text-center border-r border-slate-100" x-text="category.budget_code || '—'"></td>
+                  <td class="px-3 py-1.5 text-center">
+                    <button @click="deleteCategory(category.id)" class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="filteredCategories.length === 0">
+                <td colspan="6" class="px-3 py-8 text-center text-slate-500 text-[10px]">
+                  No deposit categories found. Click "Add Category" to create one.
                 </td>
               </tr>
-              {% endfor %}
-
             </tbody>
           </table>
         </div>
@@ -218,51 +198,51 @@
     </main>
   </div>
 
-  <div id="categoryModal" class="hidden fixed inset-0 z-[100] bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+  <div id="categoryModal" x-show="modalOpen" x-cloak class="fixed inset-0 z-[100] bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
     <div class="bg-white rounded-[2px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-400">
       <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white">
         <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Add Deposit Category (Municipal)</h3>
-        <button onclick="closeCategoryModal()" class="text-slate-400 hover:text-white">
+        <button @click="closeCategoryModal()" class="text-slate-400 hover:text-white">
           <span class="material-icons-round text-[16px]">close</span>
         </button>
       </div>
 
       <div class="p-4 bg-slate-50">
-        <form id="categoryForm" class="space-y-3">
+        <form @submit.prevent="saveCategory()" class="space-y-3">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Category Name *</label>
-              <input required type="text" class="gov-input w-full" placeholder="e.g., Business Permit Fees" />
+              <input required x-model="formData.name" type="text" class="gov-input w-full" placeholder="e.g., Business Permit Fees" />
             </div>
             <div>
-              <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">COA Account *</label>
-              <select required class="gov-input w-full cursor-pointer">
-                <option value="">Choose account...</option>
-                <option value="4001">4001 — Service Revenue</option>
-                <option value="4101">4101 — Permit Revenue</option>
-                <option value="4201">4201 — Grants</option>
-              </select>
+              <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">COA Code *</label>
+              <input required x-model="formData.coa_code" type="text" class="gov-input w-full" placeholder="e.g., 4101" />
             </div>
+          </div>
+
+          <div>
+            <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">COA Account Name *</label>
+            <input required x-model="formData.coa_name" type="text" class="gov-input w-full" placeholder="e.g., Permit Revenue" />
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Revenue Type *</label>
-              <select id="modalRevenue" required class="gov-input w-full cursor-pointer">
+              <select x-model="formData.revenue_type" required class="gov-input w-full cursor-pointer" title="Revenue Type">
                 <option value="">Select...</option>
-                <option value="service">Service Revenue</option>
-                <option value="permit">Permit Fees</option>
-                <option value="grant">Grants</option>
-                <option value="other">Other Income</option>
+                <option value="Service Revenue">Service Revenue</option>
+                <option value="Permit Fees">Permit Fees</option>
+                <option value="Grants">Grants</option>
+                <option value="Other Income">Other Income</option>
               </select>
             </div>
             <div>
               <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Tax Type *</label>
-              <select id="taxType" required class="gov-input w-full cursor-pointer">
+              <select x-model="formData.tax_type" required class="gov-input w-full cursor-pointer" title="Tax Type">
                 <option value="">Select...</option>
-                <option value="vat">VAT</option>
-                <option value="withholding">Withholding</option>
-                <option value="none">No Tax</option>
+                <option value="VAT">VAT</option>
+                <option value="Withholding">Withholding</option>
+                <option value="No Tax">No Tax</option>
               </select>
             </div>
           </div>
@@ -270,19 +250,19 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Tax Rate (%)</label>
-              <input id="taxRate" type="number" step="0.01" class="gov-input w-full disabled:bg-slate-200" placeholder="e.g., 12.00" />
+              <input x-model="formData.tax_rate" type="number" step="0.01" class="gov-input w-full" 
+                     :disabled="formData.tax_type === 'No Tax'" placeholder="e.g., 12.00" />
             </div>
             <div>
               <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Budget Code (Optional)</label>
-              <input type="text" class="gov-input w-full" placeholder="e.g., REV-001" />
+              <input x-model="formData.budget_code" type="text" class="gov-input w-full" placeholder="e.g., REV-001" />
             </div>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Fund Type (Optional)</label>
-              <select class="gov-input w-full cursor-pointer">
-                <option value="">Default (General)</option>
+              <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Fund Type</label>
+              <select x-model="formData.fund_type" class="gov-input w-full cursor-pointer" title="Fund Type">
                 <option value="GENERAL">General Fund</option>
                 <option value="TRUST">Trust Fund</option>
                 <option value="SPECIAL">Special Fund</option>
@@ -290,7 +270,7 @@
             </div>
             <div>
               <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Status</label>
-              <select class="gov-input w-full cursor-pointer">
+              <select x-model="formData.status" class="gov-input w-full cursor-pointer" title="Status">
                 <option value="ACTIVE">Active</option>
                 <option value="INACTIVE">Inactive</option>
               </select>
@@ -299,11 +279,11 @@
 
           <div>
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Description</label>
-            <textarea rows="2" class="gov-input w-full" placeholder="Optional notes..."></textarea>
+            <textarea x-model="formData.description" rows="2" class="gov-input w-full" placeholder="Optional notes..."></textarea>
           </div>
 
           <div class="pt-2 flex justify-end gap-2">
-            <button type="button" onclick="closeCategoryModal()" class="px-4 py-1.5 border border-slate-300 text-slate-600 font-bold uppercase text-[9px] rounded-[2px] bg-white hover:bg-slate-100">
+            <button type="button" @click="closeCategoryModal()" class="px-4 py-1.5 border border-slate-300 text-slate-600 font-bold uppercase text-[9px] rounded-[2px] bg-white hover:bg-slate-100">
               Cancel
             </button>
             <button type="submit" class="bg-teal-700 text-white px-5 py-1.5 text-[9px] font-black uppercase hover:bg-teal-800 transition rounded-[2px] shadow-sm">
@@ -318,95 +298,210 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    function openCategoryModal(){ document.getElementById('categoryModal').classList.remove('hidden'); }
-    function closeCategoryModal(){ document.getElementById('categoryModal').classList.add('hidden'); }
-    function exportCsv(){ alert('Export CSV (demo)'); }
-
-    document.getElementById('taxType').addEventListener('change', function(){
-      const r = document.getElementById('taxRate');
-      if(this.value === 'none'){ r.value=''; r.disabled=true; }
-      else { r.disabled=false; }
-    });
-
-    const search = document.getElementById('searchCategory');
-    const filterRevenue = document.getElementById('filterRevenue');
-    const fundScope = document.getElementById('fundScope');
-
-    const rows = () => Array.from(document.querySelectorAll('#categoryTable tr'));
-
-    function applyFilters(){
-      const q = (search.value || '').toLowerCase().trim();
-      const rev = (filterRevenue.value || '').toLowerCase().trim();
-      const fund = (fundScope.value || 'ALL').toUpperCase().trim();
-
-      rows().forEach(tr => {
-        const text = tr.innerText.toLowerCase();
-        const matchText = text.includes(q);
-
-        const rowRev = (tr.getAttribute('data-revenue') || '').toLowerCase();
-        const matchRev = !rev || rowRev === rev;
-
-        const rowFund = (tr.getAttribute('data-fund') || 'GENERAL').toUpperCase();
-        const matchFund = (fund === 'ALL' || rowFund === fund);
-
-        tr.style.display = (matchText && matchRev && matchFund) ? '' : 'none';
-      });
-    }
-
-    function resetFilters(){
-      search.value = '';
-      filterRevenue.value = '';
-      fundScope.value = 'ALL';
-      applyFilters();
-    }
-
-    search.addEventListener('input', applyFilters);
-    filterRevenue.addEventListener('change', applyFilters);
-    fundScope.addEventListener('change', applyFilters);
-
-    Chart.defaults.font.family = "Verdana, Arial, sans-serif";
-    Chart.defaults.font.size = 9;
-    Chart.defaults.color = "#64748b";
-
-    const chartConfig = { responsive:true, maintainAspectRatio:false, layout:{ padding:0 } };
-
-    document.addEventListener('DOMContentLoaded', function(){
-      new Chart(document.getElementById('depositTrendChart'),{
-        type:'line',
-        data:{
-          labels:['J','F','M','A','M','J','J','A'],
-          datasets:[{
-            label:'Deposits',
-            data:[22,24,23,28,26,30,32,35],
-            borderColor:'#0f766e',
-            backgroundColor:'rgba(15, 118, 110, 0.10)',
-            borderWidth:1.5,
-            fill:true,
-            pointRadius:0
-          }]
+    function depositPage() {
+      return {
+        // Data
+        categories: [],
+        stats: { total: 0, active: 0 },
+        modalOpen: false,
+        
+        // Filters
+        searchQuery: '',
+        filterRevenue: '',
+        fundScope: 'ALL',
+        
+        // Form
+        formData: {
+          name: '',
+          coa_code: '',
+          coa_name: '',
+          revenue_type: '',
+          tax_type: '',
+          tax_rate: null,
+          budget_code: '',
+          fund_type: 'GENERAL',
+          status: 'ACTIVE',
+          description: '',
+          municipality: '{{ municipality_name if municipality_name else "" }}'
         },
-        options:{ ...chartConfig, plugins:{ legend:{ display:false } }, scales:{ x:{ display:false }, y:{ display:false } } }
-      });
-
-      new Chart(document.getElementById('revenueMixChart'),{
-        type:'doughnut',
-        data:{
-          labels:['Service','Permits','RPT','Other'],
-          datasets:[{
-            data:[35,30,25,10],
-            backgroundColor:['#0f766e','#4f46e5','#10b981','#cbd5e1'],
-            borderWidth:0
-          }]
+        
+        // Computed
+        get filteredCategories() {
+          return this.categories.filter(cat => {
+            const q = this.searchQuery.toLowerCase();
+            const matchText = !q || cat.name.toLowerCase().includes(q) || 
+                             (cat.coa_code || '').toLowerCase().includes(q) ||
+                             (cat.coa_name || '').toLowerCase().includes(q);
+            
+            const matchRevenue = !this.filterRevenue || cat.revenue_type === this.filterRevenue;
+            
+            const matchFund = this.fundScope === 'ALL' || (cat.fund_type || 'GENERAL') === this.fundScope;
+            
+            return matchText && matchRevenue && matchFund;
+          });
         },
-        options:{
-          ...chartConfig,
-          cutout:'65%',
-          plugins:{ legend:{ position:'right', labels:{ boxWidth:8, font:{ size:8 } } } }
+        
+        get generalFundCount() {
+          return this.categories.filter(c => (c.fund_type || 'GENERAL') === 'GENERAL').length;
+        },
+        
+        // Methods
+        async init() {
+          await this.loadCategories();
+          this.renderCharts();
+        },
+        
+        async loadCategories() {
+          try {
+            const resp = await fetch('/api/municipal/deposits');
+            const data = await resp.json();
+            this.categories = data.categories || [];
+            this.stats = data.stats || { total: 0, active: 0 };
+            console.log('[DEPOSITS] Loaded:', this.categories.length, 'categories');
+          } catch (e) {
+            console.error('[DEPOSITS] Load error:', e);
+            alert('Failed to load deposit categories');
+          }
+        },
+        
+        openCategoryModal() {
+          this.modalOpen = true;
+        },
+        
+        closeCategoryModal() {
+          this.modalOpen = false;
+          this.resetForm();
+        },
+        
+        resetForm() {
+          this.formData = {
+            name: '',
+            coa_code: '',
+            coa_name: '',
+            revenue_type: '',
+            tax_type: '',
+            tax_rate: null,
+            budget_code: '',
+            fund_type: 'GENERAL',
+            status: 'ACTIVE',
+            description: '',
+            municipality: '{{ municipality_name if municipality_name else "" }}'
+          };
+        },
+        
+        async saveCategory() {
+          try {
+            const resp = await fetch('/api/municipal/deposits', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.formData)
+            });
+            
+            if (resp.ok) {
+              await this.loadCategories();
+              this.closeCategoryModal();
+              alert('Category added successfully!');
+            } else {
+              const error = await resp.json();
+              alert('Error: ' + (error.message || 'Failed to save'));
+            }
+          } catch (e) {
+            console.error('[DEPOSITS] Save error:', e);
+            alert('Failed to save category');
+          }
+        },
+        
+        async deleteCategory(id) {
+          if (!confirm('Delete this category? This action cannot be undone.')) return;
+          
+          try {
+            const resp = await fetch(`/api/municipal/deposits/${id}`, { method: 'DELETE' });
+            if (resp.ok) {
+              await this.loadCategories();
+              alert('Category deleted');
+            } else {
+              alert('Failed to delete category');
+            }
+          } catch (e) {
+            console.error('[DEPOSITS] Delete error:', e);
+            alert('Failed to delete category');
+          }
+        },
+        
+        getTaxBadgeClass(taxType) {
+          if (taxType === 'VAT') return 'bg-blue-50 text-blue-700 border-blue-200';
+          if (taxType === 'Withholding') return 'bg-amber-50 text-amber-700 border-amber-200';
+          return 'bg-slate-100 text-slate-700 border-slate-300';
+        },
+        
+        applyFilters() {
+          // Filters are reactive via computed property
+        },
+        
+        resetFilters() {
+          this.searchQuery = '';
+          this.filterRevenue = '';
+          this.fundScope = 'ALL';
+        },
+        
+        renderCharts() {
+          Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+          Chart.defaults.font.size = 9;
+          Chart.defaults.color = "#64748b";
+          
+          const chartConfig = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 } };
+          
+          // Deposit Trend Chart
+          new Chart(document.getElementById('depositTrendChart'), {
+            type: 'line',
+            data: {
+              labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'],
+              datasets: [{
+                label: 'Categories',
+                data: [3, 4, 4, 5, 5, 6, 6, this.stats.total],
+                borderColor: '#0f766e',
+                backgroundColor: 'rgba(15, 118, 110, 0.10)',
+                borderWidth: 1.5,
+                fill: true,
+                pointRadius: 0
+              }]
+            },
+            options: { 
+              ...chartConfig, 
+              plugins: { legend: { display: false } }, 
+              scales: { x: { display: false }, y: { display: false } } 
+            }
+          });
+          
+          // Revenue Mix Chart
+          const revenueCounts = {};
+          this.categories.forEach(cat => {
+            revenueCounts[cat.revenue_type] = (revenueCounts[cat.revenue_type] || 0) + 1;
+          });
+          
+          const labels = Object.keys(revenueCounts);
+          const data = Object.values(revenueCounts);
+          const colors = ['#0f766e', '#4f46e5', '#10b981', '#cbd5e1', '#f59e0b', '#ef4444'];
+          
+          new Chart(document.getElementById('revenueMixChart'), {
+            type: 'doughnut',
+            data: {
+              labels: labels,
+              datasets: [{
+                data: data,
+                backgroundColor: colors.slice(0, labels.length),
+                borderWidth: 0
+              }]
+            },
+            options: {
+              ...chartConfig,
+              cutout: '65%',
+              plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8 } } } }
+            }
+          });
         }
-      });
-
-      applyFilters();
-    });
+      }
+    }
   </script>
 
 </body>

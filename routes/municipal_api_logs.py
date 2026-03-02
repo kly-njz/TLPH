@@ -3,6 +3,7 @@ from firebase_auth_middleware import role_required
 from transaction_storage import get_all_transactions
 from firebase_config import get_firestore_db
 from firebase_admin import firestore
+import deposit_storage
 
 bp = Blueprint('municipal_api', __name__, url_prefix='/api/municipal')
 
@@ -91,3 +92,65 @@ def api_logs_financial_logs():
     except Exception as e:
         print(f"[ERROR] Fetching financial logs: {e}")
     return jsonify({'logs': logs})
+
+@bp.route('/deposits', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_deposits():
+    """Get all deposit categories for the municipal admin"""
+    try:
+        # You can filter by municipality if needed
+        municipality = request.args.get('municipality')
+        categories = deposit_storage.get_all_deposit_categories(municipality)
+        
+        # Calculate stats
+        total_categories = len(categories)
+        active_categories = len([c for c in categories if c.get('status') == 'ACTIVE'])
+        
+        return jsonify({
+            'categories': categories,
+            'stats': {
+                'total': total_categories,
+                'active': active_categories
+            }
+        })
+    except Exception as e:
+        print(f"[ERROR] Fetching deposits: {e}")
+        return jsonify({'categories': [], 'stats': {'total': 0, 'active': 0}}), 500
+
+@bp.route('/deposits', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_add_deposit():
+    """Add a new deposit category"""
+    try:
+        data = request.get_json()
+        result = deposit_storage.add_deposit_category(
+            name=data.get('name'),
+            coa_code=data.get('coa_code'),
+            coa_name=data.get('coa_name'),
+            revenue_type=data.get('revenue_type'),
+            tax_type=data.get('tax_type'),
+            tax_rate=data.get('tax_rate'),
+            budget_code=data.get('budget_code'),
+            fund_type=data.get('fund_type'),
+            status=data.get('status'),
+            description=data.get('description'),
+            municipality=data.get('municipality')
+        )
+        return jsonify({'status': 'success', 'category': result}), 201
+    except Exception as e:
+        print(f"[ERROR] Adding deposit: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@bp.route('/deposits/<category_id>', methods=['DELETE'])
+@role_required('municipal','municipal_admin')
+def api_delete_deposit(category_id):
+    """Delete a deposit category"""
+    try:
+        result = deposit_storage.delete_deposit_category(category_id)
+        if result:
+            return jsonify({'status': 'success'}), 200
+        else:
+            return jsonify({'status': 'error', 'message': 'Failed to delete'}), 500
+    except Exception as e:
+        print(f"[ERROR] Deleting deposit: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
