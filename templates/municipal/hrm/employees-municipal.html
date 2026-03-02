@@ -6,6 +6,252 @@
   <title>DENR | Employee Management</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  
+  <script type="module">
+    import { auth, db } from "{{ url_for('static', filename='js/firebase-config.js') }}";
+    import { collection, getDocs, addDoc, doc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    window.employeePage = function() {
+      return {
+        employees: [],
+        departments: [],
+        designations: [],
+        loading: true,
+        showAddModal: false,
+        searchQuery: '',
+        filterStatus: '',
+        filterDepartment: '',
+        
+        newEmployee: {
+          employee_id: '',
+          first_name: '',
+          middle_name: '',
+          last_name: '',
+          designation: '',
+          department_name: '',
+          division: '',
+          municipality: '',
+          province: 'Oriental Mindoro',
+          region: 'MIMAROPA',
+          contact_Number: '',
+          email: '',
+          hire_date: new Date().toISOString().split('T')[0],
+          status: 'Active',
+          attendance_status: 'On Duty',
+          basic_pay: 0,
+          allowances: 0,
+          duty_type: 'fixed office hours',
+          overtime_status: 'eligible',
+          office_address: '',
+          municipal_address: '',
+          role: 'municipal',
+          refField_title: '',
+          time_in: null,
+          time_out: null,
+          leaves_taken: 0,
+          rated_status: 'Satisfactory'
+        },
+
+        async init() {
+          await Promise.all([
+            this.loadEmployees(),
+            this.loadDepartments(),
+            this.loadDesignations()
+          ]);
+        },
+
+        async loadEmployees() {
+          try {
+            this.loading = true;
+            const q = query(collection(db, 'employees'), orderBy('hire_date', 'desc'));
+            const snapshot = await getDocs(q);
+            
+            this.employees = [];
+            snapshot.forEach(doc => {
+              this.employees.push({
+                id: doc.id,
+                ...doc.data()
+              });
+            });
+          } catch (error) {
+            console.error('Error loading employees:', error);
+            alert('Error loading employees: ' + error.message);
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        async loadDepartments() {
+          try {
+            const snapshot = await getDocs(collection(db, 'departments'));
+            this.departments = [];
+            snapshot.forEach(doc => {
+              this.departments.push({ id: doc.id, ...doc.data() });
+            });
+          } catch (error) {
+            console.error('Error loading departments:', error);
+          }
+        },
+
+        async loadDesignations() {
+          try {
+            const snapshot = await getDocs(collection(db, 'designations'));
+            this.designations = [];
+            snapshot.forEach(doc => {
+              this.designations.push({ id: doc.id, ...doc.data() });
+            });
+          } catch (error) {
+            console.error('Error loading designations:', error);
+          }
+        },
+
+        get filteredEmployees() {
+          return this.employees.filter(emp => {
+            const matchesSearch = !this.searchQuery || 
+              this.getFullName(emp).toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+              (emp.employee_id || '').toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+              (emp.designation || '').toLowerCase().includes(this.searchQuery.toLowerCase());
+            
+            const matchesStatus = !this.filterStatus || emp.status === this.filterStatus;
+            const matchesDepartment = !this.filterDepartment || emp.department_name === this.filterDepartment;
+            
+            return matchesSearch && matchesStatus && matchesDepartment;
+          });
+        },
+
+        get activeEmployeeCount() {
+          return this.employees.filter(e => e.status === 'Active').length;
+        },
+
+        openAddModal() {
+          this.resetForm();
+          this.showAddModal = true;
+        },
+
+        closeAddModal() {
+          this.showAddModal = false;
+          this.resetForm();
+        },
+
+        resetForm() {
+          this.newEmployee = {
+            employee_id: '',
+            first_name: '',
+            middle_name: '',
+            last_name: '',
+            designation: '',
+            department_name: '',
+            division: '',
+            municipality: '',
+            province: 'Oriental Mindoro',
+            region: 'MIMAROPA',
+            contact_Number: '',
+            email: '',
+            hire_date: new Date().toISOString().split('T')[0],
+            status: 'Active',
+            attendance_status: 'On Duty',
+            basic_pay: 0,
+            allowances: 0,
+            duty_type: 'fixed office hours',
+            overtime_status: 'eligible',
+            office_address: '',
+            municipal_address: '',
+            role: 'municipal',
+            refField_title: '',
+            time_in: null,
+            time_out: null,
+            leaves_taken: 0,
+            rated_status: 'Satisfactory'
+          };
+        },
+
+        async addEmployee() {
+          try {
+            // Validation
+            if (!this.newEmployee.employee_id || !this.newEmployee.first_name || !this.newEmployee.last_name) {
+              alert('Please fill in Employee ID, First Name, and Last Name');
+              return;
+            }
+
+            if (!this.newEmployee.email) {
+              alert('Please provide an email address');
+              return;
+            }
+
+            // Check for duplicate employee ID
+            const existingEmployee = this.employees.find(e => e.employee_id === this.newEmployee.employee_id);
+            if (existingEmployee) {
+              alert('Employee ID already exists');
+              return;
+            }
+
+            // Prepare data
+            const employeeData = {
+              ...this.newEmployee,
+              hire_date: new Date(this.newEmployee.hire_date),
+              basic_pay: parseFloat(this.newEmployee.basic_pay) || 0,
+              allowances: parseFloat(this.newEmployee.allowances) || 0,
+              leaves_taken: parseInt(this.newEmployee.leaves_taken) || 0,
+              time_Init: new Date()
+            };
+
+            // Add to Firestore
+            const docRef = await addDoc(collection(db, 'employees'), employeeData);
+            console.log('Employee added with ID:', docRef.id);
+
+            // Refresh employee list
+            await this.loadEmployees();
+
+            // Close modal and reset
+            this.closeAddModal();
+            alert('Employee added successfully!');
+
+          } catch (error) {
+            console.error('Error adding employee:', error);
+            alert('Error adding employee: ' + error.message);
+          }
+        },
+
+        getFullName(employee) {
+          const parts = [employee.first_name, employee.middle_name, employee.last_name].filter(Boolean);
+          return parts.join(' ') || 'N/A';
+        },
+
+        formatDate(timestamp) {
+          if (!timestamp) return 'N/A';
+          try {
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+          } catch (e) {
+            return 'Invalid date';
+          }
+        },
+
+        onDepartmentChange() {
+          // Auto-fill designation options based on department
+          const dept = this.departments.find(d => d.department_name === this.newEmployee.department_name);
+          if (dept) {
+            this.newEmployee.office_address = dept.office_location || '';
+          }
+        },
+
+        onDesignationChange() {
+          // Auto-fill from designation
+          const desg = this.designations.find(d => d.designation === this.newEmployee.designation);
+          if (desg) {
+            this.newEmployee.department_name = desg.Department_name || this.newEmployee.department_name;
+            this.newEmployee.division = desg.division || this.newEmployee.division;
+            this.newEmployee.basic_pay = desg.basic_pay || this.newEmployee.basic_pay;
+            this.newEmployee.duty_type = desg.duty_type || this.newEmployee.duty_type;
+            this.newEmployee.overtime_status = desg.overtime_status || this.newEmployee.overtime_status;
+            this.newEmployee.refField_title = desg.refField_title || this.newEmployee.refField_title;
+          }
+        }
+      }
+    }
+  </script>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <script>
     tailwind.config = {
@@ -44,7 +290,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="employeePage()">
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -61,10 +307,7 @@
           <p class="text-[10px] font-bold text-gov-muted uppercase tracking-widest">Employee Records, Service Status & Deployment</p>
         </div>
         <div class="flex gap-2">
-            <button class="bg-white border border-gov-border text-gov-primary px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-50 transition-all flex items-center gap-2">
-                <span class="material-icons-round text-sm">file_upload</span> Bulk Import
-            </button>
-            <button class="bg-gov-primary text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition-all flex items-center gap-2">
+            <button @click="openAddModal()" class="bg-gov-primary text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition-all flex items-center gap-2">
                 <span class="material-icons-round text-sm">person_add</span> Add Employee
             </button>
         </div>
@@ -76,30 +319,34 @@
             <div class="flex-1 min-w-[200px]">
                 <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Search Registry</label>
                 <div class="relative">
-                    <input type="text" placeholder="Name, ID, or Designation..." class="w-full pl-8 pr-3 py-1.5 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 bg-slate-50 text-[12px]">
+                    <input x-model="searchQuery" type="text" placeholder="Name, ID, or Designation..." class="w-full pl-8 pr-3 py-1.5 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 bg-slate-50 text-[12px]">
                     <span class="material-icons-round absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
                 </div>
             </div>
             <div>
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Service Status</label>
-                <select class="border border-gov-border bg-slate-50 rounded-[2px] px-2 py-1.5 text-[12px] font-bold outline-none focus:border-sky-600">
-                    <option>All Personnel</option>
-                    <option>Active Duty</option>
-                    <option>On Leave</option>
-                    <option>Deployed (Field)</option>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Department</label>
+                <select x-model="filterDepartment" class="border border-gov-border bg-slate-50 rounded-[2px] px-2 py-1.5 text-[12px] font-bold outline-none focus:border-sky-600" aria-label="Filter by department">
+                    <option value="">All Departments</option>
+                    <template x-for="dept in departments" :key="dept.id">
+                        <option :value="dept.department_name" x-text="dept.department_name"></option>
+                    </template>
                 </select>
             </div>
-            <div class="flex gap-2 self-end">
-                <button class="p-2 border border-gov-border rounded-[2px] hover:bg-slate-100 text-slate-500" title="Filter Options">
-                    <span class="material-icons-round text-sm">filter_list</span>
-                </button>
+            <div>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Service Status</label>
+                <select x-model="filterStatus" class="border border-gov-border bg-slate-50 rounded-[2px] px-2 py-1.5 text-[12px] font-bold outline-none focus:border-sky-600" aria-label="Filter by status">
+                    <option value="">All Personnel</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="On Leave">On Leave</option>
+                </select>
             </div>
         </div>
 
         <div class="bg-white border border-gov-border rounded-[3px] px-4 py-2 shadow-sm flex items-center justify-between">
             <div class="flex flex-col">
-                <span class="text-[9px] font-bold text-slate-500 uppercase leading-none">Total Roster</span>
-                <span class="text-2xl font-black text-gov-primary mt-1">42</span>
+                <span class="text-[9px] font-bold text-slate-500 uppercase leading-none">Active Employees</span>
+                <span class="text-2xl font-black text-gov-primary mt-1" x-text="activeEmployeeCount"></span>
             </div>
             <div class="h-10 w-10 bg-sky-50 text-sky-700 rounded-full flex items-center justify-center">
                 <span class="material-icons-round">groups</span>
@@ -113,7 +360,7 @@
             <span class="material-icons-round text-slate-600 text-sm">list_alt</span>
             <span class="font-bold uppercase text-[11px] text-slate-700">Official Personnel Ledger</span>
           </div>
-          <span class="text-[10px] font-bold text-slate-400">Showing 1-10 of 42 Records</span>
+          <span class="text-[10px] font-bold text-slate-400" x-text="'Showing ' + filteredEmployees.length + ' of ' + employees.length + ' Records'"></span>
         </div>
         
         <div class="flex-1 overflow-auto custom-scroll">
@@ -129,9 +376,52 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 text-[12px]">
-                <tbody id="employee-tbody" class="divide-y divide-slate-100 text-[12px]">
-                <!-- Employee rows will be rendered by employees-municipal.js -->
-                </tbody>
+                <template x-if="loading">
+                  <tr>
+                    <td colspan="6" class="p-8 text-center text-slate-400">
+                      <span class="material-icons-round text-4xl animate-spin">refresh</span>
+                      <p class="mt-2">Loading employees...</p>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="!loading && filteredEmployees.length === 0">
+                  <tr>
+                    <td colspan="6" class="p-8 text-center text-slate-400">
+                      <span class="material-icons-round text-4xl">inbox</span>
+                      <p class="mt-2">No employees found</p>
+                    </td>
+                  </tr>
+                </template>
+                <template x-for="emp in filteredEmployees" :key="emp.id">
+                  <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-2 text-center">
+                      <div class="w-8 h-8 rounded-sm bg-slate-200 overflow-hidden border border-gov-border mx-auto flex items-center justify-center text-slate-400">
+                        <span class="material-icons-round text-sm">person</span>
+                      </div>
+                    </td>
+                    <td class="p-2">
+                      <p class="font-bold text-gov-primary leading-none" x-text="getFullName(emp)"></p>
+                      <p class="text-[10px] text-slate-400 font-mono mt-1" x-text="emp.employee_id || 'N/A'"></p>
+                    </td>
+                    <td class="p-2">
+                      <p class="font-bold text-slate-700 leading-none" x-text="emp.designation || 'N/A'"></p>
+                      <p class="text-[9px] text-slate-500 uppercase mt-1" x-text="emp.department_name || 'N/A'"></p>
+                    </td>
+                    <td class="p-2">
+                      <p class="font-medium text-slate-600" x-text="(emp.municipality || 'N/A') + ' / ' + (emp.province || 'N/A')"></p>
+                    </td>
+                    <td class="p-2 text-center">
+                      <span :class="{
+                        'bg-emerald-100 text-emerald-800 border-emerald-200': emp.status === 'Active',
+                        'bg-slate-100 text-slate-600 border-slate-200': emp.status === 'Inactive',
+                        'bg-amber-100 text-amber-800 border-amber-200': emp.status === 'On Leave'
+                      }" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="emp.status || 'N/A'"></span>
+                    </td>
+                    <td class="p-2 text-right">
+                      <button class="text-sky-700 hover:text-sky-900 font-black uppercase text-[10px] tracking-tighter">Profile</button>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
         </div>
@@ -139,15 +429,173 @@
 
       <div class="shrink-0 border-t border-slate-200 pt-3 flex justify-between items-center opacity-60">
         <div class="flex items-center gap-4 text-[9px] font-bold text-slate-500 uppercase">
-            <span>Last Sync: 2024-10-24 16:45</span>
-            <span>Security: AES-256 PERSONNEL_ENC</span>
+            <span x-text="'Total Employees: ' + employees.length"></span>
+            <span x-text="'Active: ' + activeEmployeeCount"></span>
         </div>
-        <div class="text-[9px] font-black text-slate-800">UNAUTHORIZED MODIFICATION IS PROHIBITED BY LAW</div>
+        <div class="text-[9px] font-black text-slate-800">DENR HR MANAGEMENT SYSTEM</div>
       </div>
 
     </main>
   </div>
 
-<script src="/static/js/employees-municipal.js" type="module"></script>
+  <!-- Add Employee Modal -->
+  <div x-show="showAddModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" @click.self="closeAddModal()">
+    <div class="bg-white rounded-[3px] shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div class="bg-sky-900 px-4 py-3 text-white flex items-center justify-between sticky top-0">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round">person_add</span>
+          <span class="font-bold uppercase text-sm">Add New Employee</span>
+        </div>
+        <button @click="closeAddModal()" class="hover:bg-sky-800 p-1 rounded">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+
+      <form @submit.prevent="addEmployee()" class="p-4">
+        <!-- Employee ID and Basic Info -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Employee ID *</label>
+            <input x-model="newEmployee.employee_id" required type="text" placeholder="EMP-0001" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">First Name *</label>
+            <input x-model="newEmployee.first_name" required type="text" placeholder="Enter first name" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Middle Name</label>
+            <input x-model="newEmployee.middle_name" type="text" placeholder="Enter middle name" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Last Name *</label>
+            <input x-model="newEmployee.last_name" required type="text" placeholder="Enter last name" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Email *</label>
+            <input x-model="newEmployee.email" required type="email" placeholder="employee@denr.gov.ph" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+        </div>
+
+        <!-- Designation and Department -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Designation</label>
+            <select x-model="newEmployee.designation" @change="onDesignationChange()" title="Select a designation from the list" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+              <option value="">Select Designation</option>
+              <template x-for="desg in designations" :key="desg.id">
+                <option :value="desg.designation" x-text="desg.designation"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Department</label>
+            <select x-model="newEmployee.department_name" @change="onDepartmentChange()" title="Select a department from the list" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+              <option value="">Select Department</option>
+              <template x-for="dept in departments" :key="dept.id">
+                <option :value="dept.department_name" x-text="dept.department_name"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Division</label>
+            <input x-model="newEmployee.division" type="text" placeholder="e.g., Field Operations" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Contact Number</label>
+            <input x-model="newEmployee.contact_Number" type="text" placeholder="09171234567" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Municipality</label>
+            <input x-model="newEmployee.municipality" type="text" placeholder="e.g., Quezon City" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Province</label>
+            <input x-model="newEmployee.province" type="text" placeholder="e.g., NCR" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Region</label>
+            <input x-model="newEmployee.region" type="text" placeholder="e.g., Region IV-A" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+        </div>
+
+        <!-- Compensation -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Basic Pay</label>
+            <input x-model="newEmployee.basic_pay" type="number" step="0.01" placeholder="0.00" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Allowances</label>
+            <input x-model="newEmployee.allowances" type="number" step="0.01" placeholder="0.00" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Hire Date</label>
+            <input x-model=\"newEmployee.hire_date\" type=\"date\" title=\"Select hire date\" class=\"w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]\">
+          </div>
+        </div>
+
+        <!-- Work Details -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Duty Type</label>
+            <select x-model="newEmployee.duty_type" title="Select duty type" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+              <option value="fixed office hours">Fixed Office Hours</option>
+              <option value="field duty">Field Duty</option>
+              <option value="flexible">Flexible</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Status</label>
+            <select x-model="newEmployee.status" title="Select employment status" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="On Leave">On Leave</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Overtime Status</label>
+            <select x-model="newEmployee.overtime_status" title="Select overtime eligibility status" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+              <option value="eligible">Eligible</option>
+              <option value="exempt">Exempt</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Office Addresses -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Office Address</label>
+            <input x-model="newEmployee.office_address" type="text" placeholder="Enter office address" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+          <div>
+            <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Municipal Address</label>
+            <input x-model="newEmployee.municipal_address" type="text" placeholder="Enter municipal address" class="w-full px-3 py-2 border border-gov-border rounded-[2px] focus:outline-none focus:border-sky-600 text-[12px]">
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex justify-end gap-2 pt-4 border-t border-slate-200">
+          <button type="button" @click="closeAddModal()" class="px-4 py-2 border border-gov-border rounded-[2px] text-[11px] font-bold uppercase hover:bg-slate-50">
+            Cancel
+          </button>
+          <button type="submit" class="bg-sky-900 text-white px-4 py-2 rounded-[2px] text-[11px] font-bold uppercase hover:bg-sky-800 flex items-center gap-2">
+            <span class="material-icons-round text-sm">save</span>
+            Save Employee
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </body>
 </html>
