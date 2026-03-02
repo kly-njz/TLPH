@@ -66,15 +66,19 @@
       color: #1f2937; 
       background: #f8fafc; 
       border-bottom: 2px solid #e2e8f0; 
-      padding: 10px !important; 
+      padding: 12px !important; 
       letter-spacing: 0.3px;
+      text-align: left;
+      white-space: nowrap;
     }
     td { 
-      padding: 10px !important; 
+      padding: 12px !important; 
       border-bottom: 1px solid #f1f5f9; 
       vertical-align: middle;
       color: #374151;
       font-size: 12px;
+      word-wrap: break-word;
+      word-break: break-word;
     }
     
     tbody tr:hover { background: #f8fafc; }
@@ -117,11 +121,11 @@
     .table-container { 
       display: none;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 1050;
-      -webkit-backdrop-filter: blur(4px);
-      backdrop-filter: blur(4px);
+      margin-bottom: 12px;
+      width: 100%;
+      background: white;
+      border: 1px solid #cbd5e1;
+      border-radius: 2px;
     }
     .table-container.active { display: flex; }
 
@@ -200,6 +204,8 @@
       background: #f8fafc; 
       padding: 12px; 
       border-bottom: 1px solid #cbd5e1;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .search-input { 
@@ -225,8 +231,16 @@
     .empty-state i { font-size: 48px; margin-bottom: 12px; }
 
     /* Table wrapper */
-    table { width: 100%; border-collapse: collapse; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
     tbody { font-size: 12px; }
+    
+    .table-wrapper { 
+      width: 100%; 
+      overflow-x: auto; 
+      border-top: 1px solid #cbd5e1;
+    }
+    
+    .data-table { min-width: 100%; }
 
     /* Download Buttons */
     .download-buttons { 
@@ -290,6 +304,9 @@
       <button onclick="downloadInventoryHistoryPDF()" class="download-btn">
         <span class="material-icons-round" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">download</span> Inventory
       </button>
+      <button onclick="downloadLicensesPDF()" class="download-btn">
+        <span class="material-icons-round" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">download</span> Licenses
+      </button>
     </div>
 
     <!-- Toggle Buttons -->
@@ -297,6 +314,7 @@
       <button class="toggle-btn active" onclick="showTable('applications')">Applications</button>
       <button class="toggle-btn" onclick="showTable('services')">Services</button>
       <button class="toggle-btn" onclick="showTable('inventory')">Inventory</button>
+      <button class="toggle-btn" onclick="showTable('licenses')">Licenses & Permits</button>
     </div>
 
     <!-- Applications Table -->
@@ -421,6 +439,42 @@
       </div>
     </div>
 
+    <!-- Licenses & Permits Table -->
+    <div id="licensesContainer" class="table-container gov-card" style="display: none; flex-direction: column;">
+      <div class="search-container">
+        <input 
+          type="text" 
+          id="licensesSearch" 
+          class="search-input" 
+          placeholder="Search..."
+          onkeyup="filterTable('licenses')"
+          style="flex: 1; min-width: 150px;"
+        />
+        <select id="licensesStatusFilter" class="gov-input" onchange="filterTable('licenses')" style="width: 120px;">
+          <option value="">Status: ALL</option>
+          <option value="approved">APPROVED</option>
+          <option value="pending">PENDING</option>
+          <option value="rejected">REJECTED</option>
+        </select>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="data-table" id="licensesTable">
+          <thead>
+            <tr>
+              <th>Permit Type</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>ID</th>
+              <th style="text-align: center;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="licensesTableBody">
+            <tr class="no-results"><td colspan="5">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
   <!-- Service Detail Modal -->
@@ -489,6 +543,7 @@
     let allApplications = [];
     let allServices = [];
     let allInventory = [];
+    let allLicenses = [];
 
     // Toggle Table Visibility
     window.showTable = function(tableType) {
@@ -496,6 +551,7 @@
       document.getElementById('applicationsContainer').style.display = 'none';
       document.getElementById('servicesContainer').style.display = 'none';
       document.getElementById('inventoryContainer').style.display = 'none';
+      document.getElementById('licensesContainer').style.display = 'none';
       
       // Remove active state from all buttons
       document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
@@ -510,6 +566,9 @@
       } else if (tableType === 'inventory') {
         document.getElementById('inventoryContainer').style.display = 'flex';
         document.querySelectorAll('.toggle-btn')[2].classList.add('active');
+      } else if (tableType === 'licenses') {
+        document.getElementById('licensesContainer').style.display = 'flex';
+        document.querySelectorAll('.toggle-btn')[3].classList.add('active');
       }
     };
 
@@ -532,7 +591,17 @@
         // Status filtering (column index varies by table)
         let statusMatch = true;
         if (statusFilter) {
-          const statusCell = tableType === 'applications' ? row.cells[1] : tableType === 'services' ? row.cells[2] : null;
+          let statusCell = null;
+          if (tableType === 'applications') {
+            statusCell = row.cells[1];
+          } else if (tableType === 'services') {
+            statusCell = row.cells[2];
+          } else if (tableType === 'inventory') {
+            statusCell = row.cells[4];
+          } else if (tableType === 'licenses') {
+            statusCell = row.cells[1]; // Status is 2nd column in licenses table
+          }
+          
           if (statusCell) {
             const cellText = statusCell.textContent.toLowerCase();
             statusMatch = cellText.includes(statusFilter);
@@ -542,7 +611,7 @@
         // Category filtering (column index varies by table)
         let categoryMatch = true;
         if (categoryFilter) {
-          const categoryCell = row.cells[0]; // Category is always first column
+          const categoryCell = row.cells[0]; // Category/Type is always first column
           if (categoryCell) {
             const cellText = categoryCell.textContent.toLowerCase();
             categoryMatch = cellText.includes(categoryFilter);
@@ -560,9 +629,13 @@
       
       // Show no results message if all rows are hidden
       const noResultsRow = Array.from(rows).find(r => r.classList.contains('no-results'));
+      let colspanCount = 6;
+      if (tableType === 'inventory') colspanCount = 7;
+      else if (tableType === 'licenses') colspanCount = 5;
+      
       if (visibleCount === 0 && noResultsRow) {
         noResultsRow.classList.remove('hidden');
-        noResultsRow.innerHTML = `<td colspan="${tableType === 'inventory' ? 7 : 6}" style="text-align: center; padding: 40px 20px; color: #94a3b8;"><span class="material-icons-round" style="font-size: 48px; display: block; margin-bottom: 12px;">search_off</span>No records matching your filters</td>`;
+        noResultsRow.innerHTML = `<td colspan="${colspanCount}" style="text-align: center; padding: 40px 20px; color: #94a3b8;"><span class="material-icons-round" style="font-size: 48px; display: block; margin-bottom: 12px;">search_off</span>No records matching your filters</td>`;
       } else if (noResultsRow) {
         noResultsRow.classList.add('hidden');
       }
@@ -601,22 +674,25 @@
 
         // Load all data in parallel
         console.log('Loading data from Firebase...');
-        const [appsData, servicesData, inventoryData] = await Promise.all([
+        const [appsData, servicesData, inventoryData, licensesData] = await Promise.all([
           loadApplicationsData(user),
           loadServiceRequestsData(user),
-          loadInventoryData(user)
+          loadInventoryData(user),
+          loadLicensesData(user)
         ]);
 
-        console.log('Data loaded:', { apps: appsData.length, services: servicesData.length, inventory: inventoryData.length });
+        console.log('Data loaded:', { apps: appsData.length, services: servicesData.length, inventory: inventoryData.length, licenses: licensesData.length });
 
         allApplications = appsData;
         allServices = servicesData;
         allInventory = inventoryData;
+        allLicenses = licensesData;
 
         // Populate tables
         populateApplicationsTable();
         populateServicesTable();
         populateInventoryTable();
+        populateLicensesTable();
         
         console.log('Tables populated');
       } catch (error) {
@@ -700,6 +776,27 @@
       `).join('');
     }
 
+    function populateLicensesTable() {
+      const tbody = document.getElementById('licensesTableBody');
+      
+      if (allLicenses.length === 0) {
+        tbody.innerHTML = `<tr class="no-results"><td colspan="5" style="text-align: center; padding: 40px 20px; color: #94a3b8;"><span class="material-icons-round" style="font-size: 48px; display: block; margin-bottom: 12px;">assignment</span>No licenses found</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = allLicenses.map((license, idx) => `
+        <tr>
+          <td>${license.permitType}</td>
+          <td><span class="status-label ${getStatusClass(license.status)}">${getStatusLabel(license.status)}</span></td>
+          <td>${license.date}</td>
+          <td><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${license.id.substring(0, 8)}</code></td>
+          <td style="text-align: center;">
+            <button class="action-btn" onclick="alert('License Details ID: ${license.id}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
     async function loadApplicationsData(user) {
       try {
         console.log('loadApplicationsData: Starting for user', user.uid);
@@ -737,31 +834,6 @@
           });
         } catch (e) {
           console.error('Error loading applications:', e);
-        }
-
-        // Load from license_applications collection
-        try {
-          const licensesQuery = query(collection(db, 'license_applications'), where('userId', '==', user.uid));
-          const licensesSnapshot = await getDocs(licensesQuery);
-          console.log('License applications found:', licensesSnapshot.size);
-
-          licensesSnapshot.forEach((doc) => {
-            const license = doc.data();
-            const date = license.createdAt ? new Date(license.createdAt.toDate()).toLocaleDateString('en-PH', {
-              year: 'numeric', month: 'short', day: 'numeric'
-            }) : 'N/A';
-
-            applications.push({
-              id: doc.id,
-              category: (license.applicationType || 'License/Permit').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-              status: license.status || 'pending',
-              date: date,
-              amount: 0,
-              source: 'licenses'
-            });
-          });
-        } catch (e) {
-          console.error('Error loading licenses:', e);
         }
 
         // Load from payment transactions
@@ -896,6 +968,34 @@
         return inventory;
       } catch (error) {
         console.error('Error loading inventory:', error);
+        return [];
+      }
+    }
+
+    async function loadLicensesData(user) {
+      try {
+        const licenses = [];
+        const q = query(collection(db, 'license_applications'), where('userId', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+
+        querySnapshot.forEach((doc) => {
+          const item = doc.data();
+          const date = item.createdAt ? new Date(item.createdAt.toDate()).toLocaleDateString('en-PH', {
+            year: 'numeric', month: 'short', day: 'numeric'
+          }) : 'N/A';
+
+          licenses.push({
+            id: doc.id,
+            permitType: (item.applicationType || 'License/Permit').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            status: item.status || 'pending',
+            date: date
+          });
+        });
+
+        licenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+        return licenses;
+      } catch (error) {
+        console.error('Error loading licenses:', error);
         return [];
       }
     }
@@ -1845,6 +1945,114 @@
         const opt = {
           margin: 10,
           filename: 'denr-inventory-report.pdf',
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2 },
+          jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+        };
+
+        html2pdf().set(opt).from(element).save().finally(() => {
+          document.body.removeChild(element);
+        });
+      } catch (error) {
+        console.error('Error generating PDF:', error);
+        alert('Error generating PDF. Please try again.');
+      }
+    };
+
+    // Licenses & Permits Download PDF
+    window.downloadLicensesPDF = async function() {
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          alert('Please sign in to download licenses.');
+          return;
+        }
+
+        const q = query(collection(db, 'license_applications'), where('userId', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+          alert('No licenses to download.');
+          return;
+        }
+
+        const licenses = [];
+        querySnapshot.forEach((doc) => {
+          const item = doc.data();
+          const date = item.createdAt ? new Date(item.createdAt.toDate()).toLocaleDateString('en-PH') : 'N/A';
+          const permitName = (item.applicationType || 'License/Permit').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          
+          licenses.push({
+            date: item.createdAt || new Date(),
+            type: permitName,
+            status: (item.status || 'Unknown').toUpperCase(),
+            dateFormatted: date
+          });
+        });
+
+        licenses.sort((a, b) => {
+          const dateA = a.date instanceof Date ? a.date : new Date(a.date);
+          const dateB = b.date instanceof Date ? b.date : new Date(b.date);
+          return dateB - dateA;
+        });
+
+        const pdfContainer = document.createElement('div');
+        pdfContainer.style.padding = '20px';
+        pdfContainer.style.backgroundColor = '#ffffff';
+        pdfContainer.style.fontFamily = 'Arial, sans-serif';
+        
+        const header = document.createElement('div');
+        header.style.textAlign = 'center';
+        header.style.marginBottom = '20px';
+        header.style.borderBottom = '3px solid #059669';
+        header.style.paddingBottom = '15px';
+        
+        header.innerHTML = `
+          <h1 style="color: #047857; font-size: 22px; margin: 0; font-weight: 800;">DENR Licenses & Permits Report</h1>
+          <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 12px;">Department of Environment and Natural Resources</p>
+          <p style="color: #9ca3af; margin: 2px 0 0 0; font-size: 11px;">Generated: ${new Date().toLocaleString()}</p>
+        `;
+        pdfContainer.appendChild(header);
+
+        const detailsSection = document.createElement('div');
+        detailsSection.style.marginTop = '15px';
+
+        licenses.forEach((license, idx) => {
+          const card = document.createElement('div');
+          card.style.marginBottom = '15px';
+          card.style.padding = '12px';
+          card.style.border = '1px solid #e5e7eb';
+          card.style.borderRadius = '6px';
+          card.style.backgroundColor = '#f9fafb';
+          card.style.pageBreakInside = 'avoid';
+
+          card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #059669;">
+              <div>
+                <span style="display: inline-block; padding: 4px 8px; background: #d1fae5; color: #047857; border-radius: 4px; font-weight: 700; font-size: 10px; text-transform: uppercase; margin-bottom: 4px;">License</span>
+                <h3 style="color: #1b330d; font-size: 13px; font-weight: 700; margin: 4px 0 0 0;">${license.type}</h3>
+              </div>
+              <span style="color: #6b7280; font-weight: 600; font-size: 11px;">Permit #${idx + 1}</span>
+            </div>
+            
+            <div style="background: white; padding: 10px; border-radius: 4px; font-size: 11px;">
+              <p style="color: #6b7280; margin: 0;"><strong>Status:</strong> <span style="color: #059669; font-weight: 700;">${license.status}</span></p>
+              <p style="color: #6b7280; margin: 3px 0 0 0;"><strong>Date:</strong> ${license.dateFormatted}</p>
+            </div>
+          `;
+          
+          detailsSection.appendChild(card);
+        });
+
+        pdfContainer.appendChild(detailsSection);
+
+        const element = document.createElement('div');
+        element.appendChild(pdfContainer);
+        document.body.appendChild(element);
+
+        const opt = {
+          margin: 10,
+          filename: 'denr-licenses-report.pdf',
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2 },
           jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
