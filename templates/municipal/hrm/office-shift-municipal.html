@@ -44,7 +44,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="shiftPage()" @load="loadData()" x-cloak>
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -75,42 +75,41 @@
                 <span class="material-icons-round text-sm">history_toggle_off</span>
                 <span class="font-bold uppercase text-[10px] tracking-wider">Shift Specification</span>
             </div>
-            <span class="text-[9px] font-mono opacity-70">CODE: SHFT-REG-01</span>
+            <span class="text-[9px] font-mono opacity-70" x-text="'CODE: ' + (currentShift?.code || 'SHFT-REG-01')"></span>
           </div>
           
           <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-y-5 gap-x-8">
             <div>
               <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Shift Name</label>
-              <p class="font-bold text-sm text-slate-900">REGULAR DAY SHIFT (ADMIN)</p>
+              <p class="font-bold text-sm text-slate-900" x-text="currentShift?.name || 'REGULAR DAY SHIFT (ADMIN)'"></p>
             </div>
             <div>
               <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Duty Type</label>
-              <p class="font-bold text-slate-900 uppercase">Fixed Office Hours</p>
+              <p class="font-bold text-slate-900 uppercase" x-text="currentShift?.duty_type || 'Fixed Office Hours'"></p>
             </div>
             <div class="grid grid-cols-2 gap-4 md:col-span-1">
                 <div>
                     <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Start Time</label>
-                    <p class="font-bold text-indigo-900 text-base">08:00 AM</p>
+                    <p class="font-bold text-indigo-900 text-base" x-text="currentShift?.start_time || '08:00 AM'"></p>
                 </div>
                 <div>
                     <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">End Time</label>
-                    <p class="font-bold text-indigo-900 text-base">05:00 PM</p>
+                    <p class="font-bold text-indigo-900 text-base" x-text="currentShift?.end_time || '05:00 PM'"></p>
                 </div>
             </div>
             <div>
                 <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Grace Period</label>
-                <p class="font-bold text-slate-900">15 Minutes (Log-in)</p>
+                <p class="font-bold text-slate-900" x-text="(currentShift?.grace_period || 15) + ' Minutes (Log-in)'"></p>
             </div>
             <div class="md:col-span-2">
                 <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Work Days</label>
                 <div class="flex gap-1 mt-1">
-                    <span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px]">MON</span>
-                    <span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px]">TUE</span>
-                    <span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px]">WED</span>
-                    <span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px]">THU</span>
-                    <span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px]">FRI</span>
-                    <span class="bg-slate-100 text-slate-400 px-2 py-0.5 rounded-[2px] font-bold text-[9px]">SAT</span>
-                    <span class="bg-slate-100 text-slate-400 px-2 py-0.5 rounded-[2px] font-bold text-[9px]">SUN</span>
+                    <template x-for="day in ['MON', 'TUE', 'WED', 'THU', 'FRI']">
+                      <span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px]" x-text="day"></span>
+                    </template>
+                    <template x-for="day in ['SAT', 'SUN']">
+                      <span class="bg-slate-100 text-slate-400 px-2 py-0.5 rounded-[2px] font-bold text-[9px]" x-text="day"></span>
+                    </template>
                 </div>
             </div>
           </div>
@@ -162,8 +161,25 @@
               <th class="p-2 text-center">Status</th>
             </tr>
           </thead>
-          <tbody id="shift-employee-tbody" class="divide-y divide-slate-100 text-[12px]">
-            <!-- Employee rows will be rendered by office-shift-municipal.js -->
+          <tbody class="divide-y divide-slate-100 text-[12px]">
+            <template x-for="employee in shiftEmployees" :key="employee.id">
+              <tr class="hover:bg-slate-50 transition-colors">
+                <td class="p-2">
+                  <p class="font-bold text-gov-primary" x-text="employee.name"></p>
+                  <p class="text-[10px] text-slate-400" x-text="employee.designation || 'Staff'"></p>
+                </td>
+                <td class="p-2" x-text="employee.department || 'Administration'"></td>
+                <td class="p-2 font-mono text-slate-700" x-text="employee.avg_in_time || '08:15 AM'"></td>
+                <td class="p-2 text-center">
+                  <template x-if="employee.status === 'active'">
+                    <span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px]">ACTIVE</span>
+                  </template>
+                  <template x-if="employee.status !== 'active'">
+                    <span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-[2px] font-bold text-[9px]" x-text="employee.status || 'INACTIVE'"></span>
+                  </template>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </section>
@@ -179,6 +195,74 @@
     </main>
   </div>
 
-<script src="/static/js/office-shift-municipal.js" type="module"></script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+      authDomain: "tlph-denr-system.firebaseapp.com",
+      projectId: "tlph-denr-system",
+      storageBucket: "tlph-denr-system.appspot.com",
+      messagingSenderId: "999028568640",
+      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
+      measurementId: "G-TXKQ1Z0J1X"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.shiftPage = function() {
+      return {
+        shifts: [],
+        employees: [],
+        shiftEmployees: [],
+        currentShift: null,
+
+        async loadData() {
+          try {
+            // Load shifts
+            const shiftsRef = collection(db, 'shifts');
+            const shiftQ = query(shiftsRef);
+            const shiftSnapshot = await getDocs(shiftQ);
+            this.shifts = shiftSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            if (this.shifts.length === 0) {
+              this.currentShift = {
+                id: '1',
+                code: 'SHFT-REG-01',
+                name: 'REGULAR DAY SHIFT (ADMIN)',
+                duty_type: 'Fixed Office Hours',
+                start_time: '08:00 AM',
+                end_time: '05:00 PM',
+                grace_period: 15
+              };
+            } else {
+              this.currentShift = this.shifts[0];
+            }
+            
+            // Load employees
+            const employeesRef = collection(db, 'employees');
+            const empQ = query(employeesRef, orderBy('first_name'));
+            const empSnapshot = await getDocs(empQ);
+            this.employees = empSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Populate shift employees
+            this.shiftEmployees = this.employees.slice(0, 5).map((emp, idx) => ({
+              id: emp.id,
+              name: emp.first_name + ' ' + emp.last_name,
+              designation: emp.designation || 'Staff',
+              department: emp.department_name || 'Administration',
+              avg_in_time: ['08:15 AM', '08:00 AM', '08:20 AM', '08:10 AM', '08:05 AM'][idx],
+              status: 'active'
+            }));
+          } catch (error) {
+            console.error('Error loading shift data:', error);
+          }
+        }
+      }
+    }
+  </script>
+
 </body>
 </html>

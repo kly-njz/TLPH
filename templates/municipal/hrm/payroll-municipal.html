@@ -101,8 +101,8 @@
             <span class="font-bold uppercase text-[11px] text-slate-700">Master Disbursement List</span>
           </div>
           <div class="flex items-center gap-3">
-              <input type="text" placeholder="Search employee..." class="text-[10px] border border-gov-border rounded-[2px] px-2 py-1 outline-none">
-              <span class="text-[10px] font-bold text-slate-400">Total Entries: 42</span>
+              <input type="text" x-model="searchQuery" placeholder="Search employee..." class="text-[10px] border border-gov-border rounded-[2px] px-2 py-1 outline-none">
+              <span class="text-[10px] font-bold text-slate-400" x-text="'Total Entries: ' + payrollRecords.length"></span>
           </div>
         </div>
         
@@ -116,7 +116,7 @@
                   <th class="p-2 text-right text-rose-600">Deductions</th>
                   <th class="p-2 text-right text-emerald-800">Net Pay</th>
                   <th class="p-2 text-center">Method</th>
-                  <th class="p-2 text-right">Reference</th>
+                  <th class="p-2 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 text-[11px]">
@@ -141,7 +141,11 @@
                     <td class="p-2 text-center text-[10px] font-bold">
                       <span :class="{'text-blue-600': record.method === 'Bank'}" x-text="record.method || 'Cash'"></span>
                     </td>
-                    <td class="p-2 text-right text-[9px] font-mono" x-text="record.reference || '--'"></td>
+                    <td class="p-2 text-center">
+                      <button @click="viewPayslip(record)" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-[2px] text-[9px] font-bold uppercase transition-all flex items-center gap-1 mx-auto">
+                        <span class="material-icons-round text-xs">receipt_long</span> Payslip
+                      </button>
+                    </td>
                   </tr>
                 </template>
               </tbody>
@@ -160,6 +164,64 @@
       </div>
 
     </main>
+  </div>
+
+  <!-- Payslip Modal -->
+  <div id="payslip-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 hidden">
+    <div class="bg-white rounded shadow-lg w-full max-w-lg border-2 border-emerald-900 relative">
+      <div class="flex justify-between items-center border-b border-emerald-900 px-6 py-3 bg-emerald-900">
+        <div class="flex items-center gap-2">
+          <img src="/static/images/denr.jpg" alt="DENR Logo" class="h-10 w-10 rounded-full border border-emerald-700 bg-white">
+          <div>
+            <div class="text-xs text-white font-bold uppercase tracking-widest">Republic of the Philippines</div>
+            <div class="text-base text-white font-black leading-tight">Department of Environment and Natural Resources</div>
+            <div class="text-[10px] text-emerald-200 font-bold uppercase tracking-widest">Official Payslip</div>
+          </div>
+        </div>
+        <button @click="closePayslip()" class="text-white text-2xl font-bold">&times;</button>
+      </div>
+      <div class="px-8 py-6">
+        <div class="flex justify-between mb-2">
+          <div>
+            <div class="text-[11px] text-slate-500 font-bold uppercase">Employee Name</div>
+            <div class="text-base font-black text-gov-primary" x-text="selectedPayslip?.employee_name || '---'"></div>
+          </div>
+          <div>
+            <div class="text-[11px] text-slate-500 font-bold uppercase">Employee ID</div>
+            <div class="text-base font-black text-gov-primary" x-text="selectedPayslip?.employee_id || '---'"></div>
+          </div>
+        </div>
+        <div class="flex justify-between mb-2">
+          <div>
+            <div class="text-[11px] text-slate-500 font-bold uppercase">Position</div>
+            <div class="font-bold text-slate-700" x-text="selectedPayslip?.position || '---'"></div>
+          </div>
+          <div>
+            <div class="text-[11px] text-slate-500 font-bold uppercase">Payroll Period</div>
+            <div class="font-bold text-slate-700">January 2026</div>
+          </div>
+        </div>
+        <div class="border-t border-b border-slate-200 py-3 my-3 grid grid-cols-2 gap-4">
+          <div>
+            <div class="text-[11px] text-slate-500 font-bold uppercase mb-1">Earnings</div>
+            <div class="flex justify-between text-[13px] mb-1"><span>Basic Pay:</span><span x-text="selectedPayslip ? formatCurrency(selectedPayslip.basic_pay) : '₱ 0.00'"></span></div>
+            <div class="flex justify-between text-[13px] mb-1"><span>Allowance:</span><span x-text="selectedPayslip ? formatCurrency(selectedPayslip.allowances) : '₱ 0.00'"></span></div>
+          </div>
+          <div>
+            <div class="text-[11px] text-slate-500 font-bold uppercase mb-1">Deductions</div>
+            <div class="flex justify-between text-[13px] mb-1"><span>Total Deductions:</span><span x-text="selectedPayslip ? formatCurrency(selectedPayslip.deductions) : '₱ 0.00'"></span></div>
+          </div>
+        </div>
+        <div class="flex justify-between items-center mt-4">
+          <div class="text-[11px] text-slate-500 font-bold uppercase">Net Pay</div>
+          <div class="text-lg font-black text-emerald-900" x-text="selectedPayslip ? formatCurrency(selectedPayslip.net_pay) : '₱ 0.00'"></div>
+        </div>
+        <div class="mt-6 flex justify-between items-end">
+          <div class="text-[10px] text-slate-400 italic">This is a system-generated official document. <br>For verification, contact HR or Accounting.</div>
+          <div class="text-[10px] text-slate-700 font-bold uppercase">Authorized by: <span class="text-emerald-900">DENR HRM</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module">
@@ -187,6 +249,7 @@
         totalGross: 0,
         totalDeductions: 0,
         totalNet: 0,
+        selectedPayslip: null,
 
         get filteredPayroll() {
           return this.payrollRecords.filter(record => {
@@ -200,6 +263,16 @@
         formatCurrency(value) {
           if (!value) return '₱ 0.00';
           return '₱ ' + parseFloat(value).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        },
+
+        viewPayslip(record) {
+          this.selectedPayslip = record;
+          document.getElementById('payslip-modal').classList.remove('hidden');
+        },
+
+        closePayslip() {
+          this.selectedPayslip = null;
+          document.getElementById('payslip-modal').classList.add('hidden');
         },
 
         async loadData() {

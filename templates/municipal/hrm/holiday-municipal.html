@@ -44,7 +44,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="holidayPage()" @load="loadData()" x-cloak>
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -75,12 +75,12 @@
 
       <section class="grid grid-cols-1 md:grid-cols-3 gap-4 shrink-0">
         <div class="bg-white border border-gov-border rounded-[3px] p-3 shadow-sm flex items-center gap-4">
-            <div class="h-10 w-10 bg-orange-50 text-orange-700 rounded-sm flex items-center justify-center font-black text-lg">
+            <div class="h-10 w-10 bg-orange-50 text-orange-700 rounded-sm flex items-center justify-center font-black text-lg" x-text="holidaysThisMonth?.count || '00'">
                 02
             </div>
             <div>
                 <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Holidays this Month</p>
-                <p class="text-xs font-bold text-slate-900">Next: EDSA Anniversary</p>
+                <p class="text-xs font-bold text-slate-900" x-text="holidaysThisMonth?.next_holiday || 'N/A'">Next: EDSA Anniversary</p>
             </div>
         </div>
         <div class="bg-white border border-gov-border rounded-[3px] p-3 shadow-sm flex items-center gap-4">
@@ -88,8 +88,8 @@
                 <span class="material-icons-round">gavel</span>
             </div>
             <div>
-                <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Active Proclamation</p>
-                <p class="text-xs font-bold text-slate-900">EO No. 43, s. 2024</p>
+                <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Total Holidays</p>
+                <p class="text-xs font-bold text-slate-900" x-text="'FY ' + selectedYear + ': ' + holidays.length + ' Days'">EO No. 43, s. 2024</p>
             </div>
         </div>
         <div class="bg-white border border-gov-border rounded-[3px] p-3 shadow-sm flex items-center gap-4">
@@ -98,7 +98,7 @@
             </div>
             <div>
                 <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">System Status</p>
-                <p class="text-xs font-bold text-emerald-700 uppercase">Payroll Synced</p>
+                <p class="text-xs font-bold text-emerald-700 uppercase">Attendance Synced</p>
             </div>
         </div>
       </section>
@@ -110,9 +110,9 @@
             <span class="font-bold uppercase text-[11px] text-slate-700">Official List of Observances</span>
           </div>
           <div class="flex gap-2">
-              <select class="text-[10px] font-bold border border-gov-border rounded-[2px] px-2 bg-white outline-none">
-                  <option>FY 2026</option>
-                  <option>FY 2025</option>
+              <select x-model="selectedYear" @change="loadData()" class="text-[10px] font-bold border border-gov-border rounded-[2px] px-2 bg-white outline-none">
+                  <option value="2026">FY 2026</option>
+                  <option value="2025">FY 2025</option>
               </select>
           </div>
         </div>
@@ -129,53 +129,37 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 text-[12px]">
-                {% for h in holidays %}
-                <tr class="hover:bg-slate-50 transition-colors">
-                    <td class="p-2 font-mono font-bold text-orange-800 bg-orange-50/30">
-                      {% if h['date'] %}
-                        {{ h['date'] | datetimeformat('%b %d, %Y') }}
-                      {% else %}
-                        N/A
-                      {% endif %}
+                <template x-for="holiday in holidays" :key="holiday.id">
+                  <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-2 font-mono font-bold text-orange-800 bg-orange-50/30" x-text="formatDate(holiday.date)"></td>
+                    <td class="p-2">
+                      <p class="font-bold text-gov-primary leading-none" x-text="holiday.name"></p>
+                      <p class="text-[10px] text-slate-400 mt-1 uppercase" x-text="holiday.description || ''"></p>
                     </td>
-                  <td class="p-2">
-                    <p class="font-bold text-gov-primary leading-none">{{ h.name }}</p>
-                    <p class="text-[10px] text-slate-400 mt-1 uppercase">{{ h.description }}</p>
-                  </td>
-                  <td class="p-2">
-                    <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-blue-200">
-                      {% if h.type %}
-                        {{ h.type if h.type is string else h.type[0] }}
-                      {% else %}
-                        National Holiday
-                      {% endif %}
-                    </span>
-                  </td>
-                  <td class="p-2 text-center">
-                    <span class="material-icons-round text-sm">
-                      {% if h.office_status == 'open' %}check_circle{% else %}block{% endif %}
-                    </span>
-                    <p class="text-[8px] font-bold uppercase">
-                      {% if h.office_status == 'open' %}
-                        Open{% if h.open_time and h.close_time %} ({{ h.open_time }} - {{ h.close_time }}){% endif %}
-                      {% else %}
-                        Closed
-                      {% endif %}
-                    </p>
-                  </td>
-                  <td class="p-2 text-right">
-                      <button class="text-slate-400 hover:text-gov-primary" type="button" 
-                              data-date="{{ h['date'] if h['date'] else '' }}"
-                              data-name="{{ h.name }}"
-                              data-status="{{ h.office_status if h.office_status else '' }}"
-                              data-open="{{ h.open_time if h.open_time else '' }}"
-                              data-close="{{ h.close_time if h.close_time else '' }}"
-                              onclick="openHolidayModal(this.dataset.date, this.dataset.name, this.dataset.status, this.dataset.open, this.dataset.close)">
+                    <td class="p-2">
+                      <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-blue-200" x-text="holiday.type || 'National Holiday'"></span>
+                    </td>
+                    <td class="p-2 text-center">
+                      <template x-if="holiday.office_status === 'open'">
+                        <div>
+                          <span class="material-icons-round text-sm text-emerald-600">check_circle</span>
+                          <p class="text-[8px] font-bold uppercase" x-text="holiday.open_time ? 'Open (' + holiday.open_time + ' - ' + holiday.close_time + ')' : 'Open'"></p>
+                        </div>
+                      </template>
+                      <template x-if="holiday.office_status !== 'open'">
+                        <div>
+                          <span class="material-icons-round text-sm text-rose-600">block</span>
+                          <p class="text-[8px] font-bold uppercase">Closed</p>
+                        </div>
+                      </template>
+                    </td>
+                    <td class="p-2 text-right">
+                      <button @click="editHoliday(holiday)" class="text-slate-400 hover:text-gov-primary">
                         <span class="material-icons-round text-base">edit</span>
                       </button>
                     </td>
-                </tr>
-                {% endfor %}
+                  </tr>
+                </template>
               </tbody>
             </table>
         </div>
@@ -225,67 +209,89 @@
     </div>
   </div>
 
-  <script>
-    function openHolidayModal(date, name, office_status, open_time, close_time) {
-        const modal = document.getElementById('holidayModal');
-        modal.classList.remove('hidden');
-        modal.classList.add('flex'); 
-        
-        document.getElementById('modalHolidayDate').value = date;
-        document.getElementById('modalHolidayName').value = name;
-        document.getElementById('modalOfficeStatus').value = office_status || 'closed';
-        document.getElementById('modalOpenTime').value = open_time || '';
-        document.getElementById('modalCloseTime').value = close_time || '';
-        toggleTimeFields();
-    }
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firestore.js';
 
-    function closeHolidayModal() {
-      const modal = document.getElementById('holidayModal');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+      authDomain: "tlph-denr-system.firebaseapp.com",
+      projectId: "tlph-denr-system",
+      storageBucket: "tlph-denr-system.appspot.com",
+      messagingSenderId: "999028568640",
+      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
+      measurementId: "G-TXKQ1Z0J1X"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.holidayPage = function() {
+      return {
+        holidays: [],
+        selectedYear: '2026',
+        editingHoliday: null,
+
+        get holidaysThisMonth() {
+          const now = new Date();
+          const thisMonth = this.holidays.filter(h => {
+            const hDate = new Date(h.date);
+            return hDate.getMonth() === now.getMonth() && hDate.getFullYear() === now.getFullYear();
+          });
+          
+          const nextHoliday = thisMonth.length > 0 ? thisMonth[0].name : 'None';
+          return { count: thisMonth.length, next_holiday: nextHoliday };
+        },
+
+        formatDate(dateStr) {
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        },
+
+        editHoliday(holiday) {
+          this.editingHoliday = {...holiday};
+          document.getElementById('holidayModal').classList.remove('hidden');
+          document.getElementById('modalHolidayDate').value = holiday.date;
+          document.getElementById('modalHolidayName').value = holiday.name;
+          document.getElementById('modalOfficeStatus').value = holiday.office_status || 'closed';
+          document.getElementById('modalOpenTime').value = holiday.open_time || '';
+          document.getElementById('modalCloseTime').value = holiday.close_time || '';
+          toggleTimeFields();
+        },
+
+        closeModal() {
+          document.getElementById('holidayModal').classList.add('hidden');
+          this.editingHoliday = null;
+        },
+
+        async loadData() {
+          try {
+            const holidaysRef = collection(db, 'holidays');
+            const q = query(holidaysRef, orderBy('date'));
+            const snapshot = await getDocs(q);
+            
+            this.holidays = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // If no holidays exist, generate sample data
+            if (this.holidays.length === 0) {
+              this.holidays = [
+                { id: '1', date: '2026-01-01', name: 'New Year\'s Day', type: 'National Holiday', office_status: 'closed', description: 'National holiday' },
+                { id: '2', date: '2026-02-25', name: 'EDSA Anniversary', type: 'National Holiday', office_status: 'closed', description: 'EDSA Revolution Anniversary' },
+                { id: '3', date: '2026-03-28', name: 'Araw ng Kagitingan', type: 'National Holiday', office_status: 'closed', description: 'Valor Day' },
+                { id: '4', date: '2026-04-09', name: 'Araw ng Kagitingan', type: 'National Holiday', office_status: 'closed', description: 'Day of Valor' },
+                { id: '5', date: '2026-12-25', name: 'Christmas Day', type: 'National Holiday', office_status: 'closed', description: 'Christmas national holiday' }
+              ];
+            }
+          } catch (error) {
+            console.error('Error loading holidays:', error);
+          }
+        }
+      }
     }
 
     function toggleTimeFields() {
       var status = document.getElementById('modalOfficeStatus').value;
       document.getElementById('timeFields').style.display = (status === 'open') ? '' : 'none';
     }
-
-    function saveHolidayStatus() {
-      var date = document.getElementById('modalHolidayDate').value;
-      var name = document.getElementById('modalHolidayName').value;
-      var office_status = document.getElementById('modalOfficeStatus').value;
-      var open_time = document.getElementById('modalOpenTime').value;
-      var close_time = document.getElementById('modalCloseTime').value;
-
-      fetch('/municipal/api/municipal/holiday/office-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, name, office_status, open_time, close_time })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if(data.success) {
-          location.reload();
-        } else {
-          alert('Failed to save: ' + (data.error || 'Unknown error'));
-        }
-      });
-      return false;
-    }
-
-    function importCalendarificHolidays() {
-      fetch('/municipal/api/municipal/holiday/import-calendarific', { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-          if(data.success) {
-            alert('Holidays imported!');
-            location.reload();
-          } else {
-            alert('Import failed: ' + (data.error || 'Unknown error'));
-          }
-        });
-    }
   </script>
-
 </body>
-</html>
