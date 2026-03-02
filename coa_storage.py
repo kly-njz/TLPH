@@ -2,6 +2,7 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
+import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
@@ -12,11 +13,21 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
+
+def _slugify(value: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '_', (value or '').lower()).strip('_')
+
 # ==================== TEMPLATES ====================
 
-def add_coa_template(municipality: str, name: str, description: str = "", status: str = "active") -> Dict[str, Any]:
+def add_coa_template(
+    municipality: str,
+    name: str,
+    description: str = "",
+    status: str = "active",
+    template_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """Add a new COA template for a municipality"""
-    doc_id = f"{municipality}_{name.lower().replace(' ', '_')}"
+    doc_id = template_id or f"{_slugify(municipality)}_{_slugify(name)}"
     data = {
         "id": doc_id,
         "municipality": municipality,
@@ -113,7 +124,21 @@ def update_coa_account(account_id: str, **kwargs) -> Dict[str, Any]:
 
 def delete_coa_account(account_id: str) -> bool:
     """Delete a COA account"""
+    account = get_coa_account(account_id)
+    if not account:
+        return False
+
     db.collection("coa_accounts").document(account_id).delete()
+
+    template_id = account.get("template_id")
+    if template_id:
+        decrement_locked = 1 if account.get("locked") else 0
+        update_coa_template(
+            template_id,
+            account_count=firestore.Increment(-1),
+            locked_count=firestore.Increment(-decrement_locked),
+        )
+
     return True
 
 # ==================== SEED & UTILITY ====================
@@ -135,7 +160,13 @@ def seed_sample_templates():
     
     for tmpl in templates:
         template_id = f"municipality_{tmpl['code'].lower()}"
-        add_coa_template("municipality", tmpl["name"], tmpl["description"], "active")
+        add_coa_template(
+            "municipality",
+            tmpl["name"],
+            tmpl["description"],
+            "active",
+            template_id=template_id,
+        )
     
     # Add sample accounts to Standard template
     standard_template = "municipality_std"

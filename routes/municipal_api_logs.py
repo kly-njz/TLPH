@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 from firebase_auth_middleware import role_required
 from transaction_storage import get_all_transactions
 from firebase_config import get_firestore_db
@@ -8,6 +8,15 @@ import expense_storage
 import coa_storage
 
 bp = Blueprint('municipal_api', __name__, url_prefix='/api/municipal')
+
+
+def _get_current_municipality_scope():
+    return (
+        session.get('municipality')
+        or session.get('user_municipality')
+        or request.args.get('municipality')
+        or 'municipality'
+    )
 
 @bp.route('/logs/audit-logs-municipal', methods=['GET'])
 @role_required('municipal','municipal_admin')
@@ -224,7 +233,8 @@ def api_delete_expense(category_id):
 def api_get_coa_templates():
     """Get COA templates for municipality"""
     try:
-        templates = coa_storage.list_coa_templates('municipality')
+        municipality_scope = _get_current_municipality_scope()
+        templates = coa_storage.list_coa_templates(municipality_scope)
         return jsonify({
             'status': 'success',
             'templates': templates,
@@ -240,8 +250,9 @@ def api_create_coa_template():
     """Create a new COA template"""
     try:
         data = request.get_json()
+        municipality_scope = _get_current_municipality_scope()
         result = coa_storage.add_coa_template(
-            municipality='municipality',
+            municipality=municipality_scope,
             name=data.get('name'),
             description=data.get('description', ''),
             status=data.get('status', 'active')
@@ -258,6 +269,11 @@ def api_create_coa_template():
 def api_get_coa_accounts(template_id):
     """Get all accounts in a COA template"""
     try:
+        municipality_scope = _get_current_municipality_scope()
+        template = coa_storage.get_coa_template(template_id)
+        if not template or template.get('municipality') != municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Template not found in municipality scope'}), 404
+
         accounts = coa_storage.list_coa_accounts(template_id)
         
         # Calculate stats
@@ -286,6 +302,11 @@ def api_get_coa_accounts(template_id):
 def api_add_coa_account(template_id):
     """Add an account to a COA template"""
     try:
+        municipality_scope = _get_current_municipality_scope()
+        template = coa_storage.get_coa_template(template_id)
+        if not template or template.get('municipality') != municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Template not found in municipality scope'}), 404
+
         data = request.get_json()
         result = coa_storage.add_coa_account(
             template_id=template_id,
@@ -305,6 +326,15 @@ def api_add_coa_account(template_id):
 def api_delete_coa_account(account_id):
     """Delete a COA account"""
     try:
+        municipality_scope = _get_current_municipality_scope()
+        account = coa_storage.get_coa_account(account_id)
+        if not account:
+            return jsonify({'status': 'error', 'message': 'Account not found'}), 404
+
+        template = coa_storage.get_coa_template(account.get('template_id'))
+        if not template or template.get('municipality') != municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Account not found in municipality scope'}), 404
+
         result = coa_storage.delete_coa_account(account_id)
         if result:
             return jsonify({'status': 'success'}), 200
