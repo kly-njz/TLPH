@@ -45,8 +45,14 @@
         async loadDesignations() {
           try {
             this.loading = true;
-            const q = query(collection(db, 'designations'), orderBy('time_Init', 'desc'));
-            const snapshot = await getDocs(q);
+            let snapshot;
+            try {
+              const q = query(collection(db, 'designations'), orderBy('time_Init', 'desc'));
+              snapshot = await getDocs(q);
+            } catch (queryError) {
+              console.warn('Ordered designation query failed, using fallback query:', queryError);
+              snapshot = await getDocs(collection(db, 'designations'));
+            }
             
             this.designations = [];
             snapshot.forEach(doc => {
@@ -177,7 +183,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="designationPage()" @load="loadData()" x-cloak>
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="designationPage()" x-init="loadData()" x-cloak>
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -288,7 +294,20 @@
                 <div>
                   <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Field Service</label>
                   <p class="font-bold text-slate-700" x-text="selectedDesignation.field_service || 'N/A'"></p>
-       !-- Employees assigned to selected designation -->
+                </div>
+                <div>
+                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Work Arrangement</label>
+                  <p class="font-bold text-slate-700" x-text="selectedDesignation.work_arrangement || 'N/A'"></p>
+                </div>
+                <div>
+                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Created</label>
+                  <p class="font-bold text-slate-700" x-text="formatDate(selectedDesignation.time_Init)"></p>
+                </div>
+              </div>
+          </div>
+        </template>
+
+      <!-- Employees assigned to selected designation -->
       <section class="bg-white border border-gov-border rounded-[3px] shadow-sm" x-show="!loading && selectedDesignation">
         <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -398,29 +417,7 @@
                   <td class="p-2 font-mono text-[11px]" x-text="formatCurrency(designation.basic_pay)"></td>
                   <td class="p-2 text-center font-bold" x-text="employees.filter(e => e.designation === designation.designation).length"></td>
                   <td class="p-2 text-center">
-                    <span :class="designation.status === 'Active' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border
-                <th class="p-2">Designation</th>
-                <th class="p-2">Department</th>
-                <th class="p-2">Division</th>
-                <th class="p-2">Basic Pay</th>
-                <th class="p-2 text-center">Status</th>
-                <th class="p-2 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 text-[12px]">
-              <template x-if="designations.length === 0">
-                <tr>
-                  <td colspan="6" class="p-4 text-center text-slate-400">No designations available</td>
-                </tr>
-              </template>
-              <template x-for="designation in designations" :key="designation.id">
-                <tr>
-                  <td class="p-2 font-bold text-gov-primary" x-text="designation.designation || 'N/A'"></td>
-                  <td class="p-2 text-slate-600" x-text="designation.Department_name || 'N/A'"></td>
-                  <td class="p-2 text-slate-600" x-text="designation.division || 'N/A'"></td>
-                  <td class="p-2 font-mono" x-text="'₱' + (designation.basic_pay || 0).toLocaleString()"></td>
-                  <td class="p-2 text-center">
-                    <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-blue-200" x-text="designation.status || 'Active'"></span>
+                    <span :class="designation.status === 'Active' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="designation.status || 'N/A'"></span>
                   </td>
                   <td class="p-2 text-center">
                     <button @click="selectDesignation(designation)" class="text-blue-700 hover:text-blue-900 font-bold text-[10px] uppercase">
