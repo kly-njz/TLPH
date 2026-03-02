@@ -3,11 +3,33 @@ from flask_mail import Message, Mail
 from datetime import datetime
 import random
 from firebase_auth_middleware import firebase_auth_required
+import system_logs_storage
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
 # Store OTPs temporarily (in production, use Redis or database)
 otp_storage = {}
+
+# ==================== HELPERS ====================
+
+def detect_device_from_request():
+    """Detect device type from request headers"""
+    user_agent = request.headers.get('User-Agent', '')
+    return system_logs_storage.detect_device_type(user_agent)
+
+def get_user_municipality(user_id: str) -> str:
+    """Get municipality from user document in Firestore"""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+        user_doc = db.collection('users').document(user_id).get()
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            return user_data.get('municipality') or user_data.get('municipality_name') or 'unknown'
+        return 'unknown'
+    except Exception as e:
+        print(f'[ERROR] Getting user municipality: {e}')
+        return 'unknown'
 
 # Store users temporarily (in production, use database)
 users_db = {
@@ -204,15 +226,58 @@ def login_user():
         user = users_db.get(email)
         
         if not user:
+            # Log failed login attempt
+            device_type = detect_device_from_request()
+            user_agent = request.headers.get('User-Agent', '')
+            system_logs_storage.add_system_log(
+                municipality='unknown',
+                user=email,
+                action='LOGIN_ATTEMPT',
+                target='Authentication',
+                module='AUTH',
+                outcome='FAILED',
+                message='Invalid credentials - user not found',
+                device_type=device_type,
+                user_agent=user_agent
+            )
             return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
         
         # Verify password (in production, use proper password hashing)
         if user['password'] != password:
+            # Log failed login attempt
+            device_type = detect_device_from_request()
+            user_agent = request.headers.get('User-Agent', '')
+            system_logs_storage.add_system_log(
+                municipality='unknown',
+                user=email,
+                action='LOGIN_ATTEMPT',
+                target='Authentication',
+                module='AUTH',
+                outcome='FAILED',
+                message='Invalid credentials - wrong password',
+                device_type=device_type,
+                user_agent=user_agent
+            )
             return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
         
         # Set session
         session['user_email'] = email
         session['user_role'] = user['role']
+        
+        # Log successful login
+        device_type = detect_device_from_request()
+        user_agent = request.headers.get('User-Agent', '')
+        system_logs_storage.add_system_log(
+            municipality=user.get('data', {}).get('municipality', 'unknown'),
+            user=email,
+            action='LOGIN',
+            target='Authentication',
+            module='AUTH',
+            outcome='SUCCESS',
+            message=f'User {email} logged in successfully',
+            device_type=device_type,
+            user_agent=user_agent
+        )
         
         # Determine redirect URL based on role
         redirect_urls = {
@@ -254,7 +319,27 @@ def set_session():
         session['user_role'] = user_role
         session['user_id'] = user_id
 
+        # Get municipality from user document
+        municipality = get_user_municipality(user_id)
+        session['municipality'] = municipality
+        session['user_municipality'] = municipality
+
         print(f'Session set for {user_email} with role {user_role} and user_id {user_id}')
+
+        # Log successful login
+        device_type = detect_device_from_request()
+        user_agent = request.headers.get('User-Agent', '')
+        system_logs_storage.add_system_log(
+            municipality=municipality,
+            user=user_email,
+            action='LOGIN',
+            target='Authentication',
+            module='AUTH',
+            outcome='SUCCESS',
+            message=f'User {user_email} ({user_role}) logged in successfully via Firebase',
+            device_type=device_type,
+            user_agent=user_agent
+        )
 
         return jsonify({'success': True, 'message': 'Session set successfully'})
     
@@ -266,6 +351,25 @@ def set_session():
 def logout():
     """Clear Flask session on logout"""
     try:
+        # Capture user info before clearing session
+        user_email = session.get('user_email', 'unknown')
+        municipality = session.get('municipality') or session.get('user_municipality') or 'unknown'
+        
+        # Log logout
+        device_type = detect_device_from_request()
+        user_agent = request.headers.get('User-Agent', '')
+        system_logs_storage.add_system_log(
+            municipality=municipality,
+            user=user_email,
+            action='LOGOUT',
+            target='Authentication',
+            module='AUTH',
+            outcome='SUCCESS',
+            message=f'User {user_email} logged out',
+            device_type=device_type,
+            user_agent=user_agent
+        )
+        
         session.clear()
         return jsonify({'success': True, 'message': 'Logged out successfully'})
     except Exception as e:
