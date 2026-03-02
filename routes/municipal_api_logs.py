@@ -6,6 +6,7 @@ from firebase_admin import firestore
 import deposit_storage
 import expense_storage
 import coa_storage
+import entities_storage
 
 bp = Blueprint('municipal_api', __name__, url_prefix='/api/municipal')
 
@@ -342,4 +343,116 @@ def api_delete_coa_account(account_id):
             return jsonify({'status': 'error', 'message': 'Failed to delete'}), 500
     except Exception as e:
         print(f"[ERROR] Deleting COA account: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# ==================== ENTITIES API ====================
+
+@bp.route('/entities', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_entities():
+    """Get all entities for the municipality"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        entities = entities_storage.list_entities(municipality_scope)
+        stats = entities_storage.get_entity_stats(municipality_scope)
+        return jsonify({
+            'status': 'success',
+            'entities': entities,
+            'stats': stats
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Getting entities: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@bp.route('/entities', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_create_entity():
+    """Create a new entity"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        data = request.get_json()
+        
+        result = entities_storage.add_entity(
+            municipality=municipality_scope,
+            name=data.get('name'),
+            entity_type=data.get('type'),
+            office_or_unit=data.get('office_or_unit', ''),
+            bank_account=data.get('bank_account', ''),
+            status=data.get('status', 'ACTIVE')
+        )
+        return jsonify({'status': 'success', 'entity': result}), 201
+    except Exception as e:
+        print(f"[ERROR] Creating entity: {e}")
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
+@bp.route('/entities/<entity_id>', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_entity(entity_id):
+    """Get a specific entity"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        entity = entities_storage.get_entity(entity_id)
+        
+        if not entity or entity.get('municipality') != municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Entity not found'}), 404
+        
+        return jsonify({'status': 'success', 'entity': entity}), 200
+    except Exception as e:
+        print(f"[ERROR] Getting entity: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@bp.route('/entities/<entity_id>', methods=['PUT'])
+@role_required('municipal','municipal_admin')
+def api_update_entity(entity_id):
+    """Update an entity"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        entity = entities_storage.get_entity(entity_id)
+        
+        if not entity or entity.get('municipality') != municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Entity not found'}), 404
+        
+        data = request.get_json()
+        update_fields = {}
+        
+        if 'name' in data:
+            update_fields['name'] = data['name']
+        if 'type' in data:
+            update_fields['type'] = data['type']
+        if 'office_or_unit' in data:
+            update_fields['office_or_unit'] = data['office_or_unit']
+        if 'bank_account' in data:
+            update_fields['bank_account'] = data['bank_account']
+        if 'status' in data:
+            update_fields['status'] = data['status']
+        
+        result = entities_storage.update_entity(entity_id, **update_fields)
+        return jsonify({'status': 'success', 'entity': result}), 200
+    except Exception as e:
+        print(f"[ERROR] Updating entity: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@bp.route('/entities/<entity_id>', methods=['DELETE'])
+@role_required('municipal','municipal_admin')
+def api_delete_entity(entity_id):
+    """Delete an entity"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        entity = entities_storage.get_entity(entity_id)
+        
+        if not entity or entity.get('municipality') != municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Entity not found'}), 404
+        
+        result = entities_storage.delete_entity(entity_id)
+        if result:
+            return jsonify({'status': 'success'}), 200
+        else:
+            return jsonify({'status': 'error', 'message': 'Failed to delete'}), 500
+    except Exception as e:
+        print(f"[ERROR] Deleting entity: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
