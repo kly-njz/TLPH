@@ -368,7 +368,15 @@ def logs_audit_logs_municipal():
 @bp.route('/logs/system-logs-municipal')
 @role_required('municipal','municipal_admin')
 def logs_system_logs_municipal():
-    return render_template('municipal/logs/system-logs-municipal.html')
+    from flask import session
+    municipality_name = session.get('municipality') or session.get('user_municipality')
+    region_name = session.get('region') or session.get('user_region')
+    province_name = session.get('province') or session.get('user_province')
+    return render_template('municipal/logs/system-logs-municipal.html',
+        municipality_name=municipality_name,
+        region_name=region_name,
+        province_name=province_name
+    )
 
 # API endpoint for audit logs (real payment/fund transfer logs)
 from routes.municipal_api_logs import bp as municipal_api_logs_bp
