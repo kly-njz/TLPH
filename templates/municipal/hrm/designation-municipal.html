@@ -6,6 +6,7 @@
   <title>DENR | Designation Profile</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <script>
     tailwind.config = {
@@ -22,7 +23,7 @@
               bg: '#f3f4f6',
               panel: '#ffffff',
               primary: '#0f172a',
-              gold: '#854d0e', // Gold accent for Authority/Designations
+              gold: '#854d0e',
             }
           }
         }
@@ -44,7 +45,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="designationPage()">
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -67,85 +68,183 @@
         </div>
       </div>
 
-      <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         
-        <div class="lg:col-span-2 bg-white border border-gov-border rounded-[3px] shadow-sm overflow-hidden">
-          <div class="bg-amber-900 px-3 py-2 text-white flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <span class="material-icons-round text-sm">badge</span>
-                <span class="font-bold uppercase text-[10px] tracking-wider">Designation Specification</span>
-            </div>
-            <span class="text-[9px] font-mono opacity-70">CODE: DES-TECH-449</span>
+        <template x-if="loading">
+          <div class="lg:col-span-3 text-center py-12">
+            <span class="material-icons-round text-4xl text-slate-400 animate-spin">refresh</span>
+            <p class="text-slate-500 mt-2">Loading designation data...</p>
           </div>
-          
-          <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-y-5 gap-x-8">
-            <div>
-              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Official Title</label>
-              <p class="font-bold text-sm text-slate-900">TECHNICAL FIELD INSPECTOR</p>
-            </div>
-            <div>
-              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Authority Grade</label>
-              <p class="font-bold text-slate-900">Grade II (Evaluator)</p>
-            </div>
-            <div class="md:col-span-2">
-              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Standard Duties</label>
-              <p class="font-bold text-slate-900 leading-tight">Verification of land usage, environmental risk assessment, and on-site compliance auditing for permit applications.</p>
-            </div>
-            <div>
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Signing Authority</label>
-                <span class="inline-flex items-center gap-1 text-blue-700 font-bold">
-                    <span class="material-icons-round text-xs">draw</span> Preliminary Approval Only
-                </span>
-            </div>
-          </div>
-        </div>
+        </template>
 
-        <div class="bg-white border border-gov-border rounded-[3px] p-4 shadow-sm">
-            <span class="text-[9px] font-bold text-slate-500 uppercase block border-b border-slate-100 pb-1 mb-3">Module Permissions</span>
-            <div class="space-y-2">
-              <div class="flex items-center gap-2 text-emerald-700 font-bold text-[11px]">
-                <span class="material-icons-round text-sm">check_circle</span> Field Reports (Full Access)
+        <template x-if="!loading && designations.length === 0">
+          <div class="lg:col-span-3 text-center py-12">
+            <span class="material-icons-round text-4xl text-slate-400">inbox</span>
+            <p class="text-slate-500 mt-2">No designations found</p>
+          </div>
+        </template>
+
+        <template x-if="!loading && selectedDesignation">
+          <div class="lg:col-span-2 bg-white border border-gov-border rounded-[3px] shadow-sm overflow-hidden">
+            <div class="bg-amber-900 px-3 py-2 text-white flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                  <span class="material-icons-round text-sm">badge</span>
+                  <span class="font-bold uppercase text-[10px] tracking-wider">Designation Specification</span>
               </div>
-              <div class="flex items-center gap-2 text-emerald-700 font-bold text-[11px]">
-                <span class="material-icons-round text-sm">check_circle</span> Inspection Logs (Write)
-              </div>
-              <div class="flex items-center gap-2 text-emerald-700 font-bold text-[11px]">
-                <span class="material-icons-round text-sm">check_circle</span> Map Overlays (Read-Only)
-              </div>
-              <div class="flex items-center gap-2 text-rose-700 font-bold text-[11px]">
-                <span class="material-icons-round text-sm">cancel</span> Budgetary Approval (Restricted)
-              </div>
-              <div class="flex items-center gap-2 text-rose-700 font-bold text-[11px]">
-                <span class="material-icons-round text-sm">cancel</span> System Configuration (Restricted)
-              </div>
+              <span class="text-[9px] font-mono opacity-70" x-text="'CODE: ' + (selectedDesignation.id || 'N/A').substring(0, 12).toUpperCase()"></span>
             </div>
+            
+            <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-y-5 gap-x-8">
+              <div>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Official Title</label>
+                <p class="font-bold text-sm text-slate-900" x-text="(selectedDesignation.designation || 'N/A').toUpperCase()"></p>
+              </div>
+              <div>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Department</label>
+                <p class="font-bold text-slate-900" x-text="selectedDesignation.Department_name || 'N/A'"></p>
+              </div>
+              <div>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Division</label>
+                <p class="font-bold text-slate-900" x-text="selectedDesignation.division || 'N/A'"></p>
+              </div>
+              <div>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Basic Pay</label>
+                <p class="font-bold text-slate-900" x-text="'₱' + (selectedDesignation.basic_pay || 0).toLocaleString()"></p>
+              </div>
+              <div class="md:col-span-2">
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Description</label>
+                <p class="font-bold text-slate-900 leading-tight" x-text="selectedDesignation.description || 'No description provided'"></p>
+              </div>
+              <div>
+                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Duty Type</label>
+                  <span class="inline-flex items-center gap-1 text-blue-700 font-bold">
+                      <span class="material-icons-round text-xs">schedule</span> 
+                      <span x-text="selectedDesignation.duty_type || 'N/A'"></span>
+                  </span>
+              </div>
+              <div>
+                  <label class="block text-[9px] font-black text-slate-400 upper x-show="!loading">
+        <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-round text-slate-600 text-sm">list</span>
+            <span class="font-bold uppercase text-[11px] text-slate-700">All Designations</span>
+          </div>
+          <span class="bg-amber-800 text-white text-[9px] font-black px-2 py-0.5 rounded-full" x-text="designations.length + ' total'"></span>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
+                <th class="p-2">Designation</th>
+                <th class="p-2">Department</th>
+                <th class="p-2">Division</th>
+                <th class="p-2">Basic Pay</th>
+                <th class="p-2 text-center">Status</th>
+                <th class="p-2 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-[12px]">
+              <template x-if="designations.length === 0">
+                <tr>
+                  <td colspan="6" class="p-4 text-center text-slate-400">No designations available</td>
+                </tr>
+              </template>
+              <template x-for="designation in designations" :key="designation.id">
+                <tr>
+                  <td class="p-2 font-bold text-gov-primary" x-text="designation.designation || 'N/A'"></td>
+                  <td class="p-2 text-slate-600" x-text="designation.Department_name || 'N/A'"></td>
+                  <td class="p-2 text-slate-600" x-text="designation.division || 'N/A'"></td>
+                  <td class="p-2 font-mono" x-text="'₱' + (designation.basic_pay || 0).toLocaleString()"></td>
+                  <td class="p-2 text-center">
+                    <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-blue-200" x-text="designation.status || 'Active'"></span>
+                  </td>
+                  <td class="p-2 text-center">
+                    <button @click="selectDesignation(designation)" class="text-blue-700 hover:text-blue-900 font-bold text-[10px] uppercase">
+                      <span class="material-icons-round text-sm align-middle">visibility</span> View
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
       </section>
 
-      <section class="bg-white border border-gov-border rounded-[3px] shadow-sm">
-        <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="material-icons-round text-slate-600 text-sm">assignment_ind</span>
-            <span class="font-bold uppercase text-[11px] text-slate-700">Currently Assigned Personnel</span>
-          </div>
-          <span class="bg-amber-800 text-white text-[9px] font-black px-2 py-0.5 rounded-full">ACTIVE ROSTER</span>
+      <div class="mt-auto border-t border-slate-200 pt-3 flex justify-between items-center opacity-60">
+        <div class="flex items-center gap-4 text-[9px] font-bold text-slate-500 uppercase">
+            <span x-text="'Total Designations: ' + designations.length"></span>
+            <span>Module: HRM</span>
         </div>
-        
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
-              <th class="p-2">Employee Name</th>
-              <th class="p-2">Region / Municipality</th>
-              <th class="p-2">Date Designated</th>
-              <th class="p-2 text-center">Audit Status</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 text-[12px]">
-            <tr>
-              <td class="p-2 font-bold text-gov-primary">Engr. Roberto Gomez</td>
-              <td class="p-2 text-slate-600 uppercase">Region IV-A / San Juan</td>
-              <td class="p-2 font-mono">2023-01-15</td>
-              <td class="p-2 text-center">
+        <div class="text-[9px] font-black text-slate-800">DENR PERSONNEL MANAGEMENT SYSTEM</div>
+      </div>
+
+    </main>
+  </div>
+
+  <script type="module">
+    import { auth, db } from "{{ url_for('static', filename='js/firebase-config.js') }}";
+    import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    function designationPage() {
+      return {
+        designations: [],
+        selectedDesignation: null,
+        loading: true,
+
+        async init() {
+          await this.loadDesignations();
+        },
+
+        async loadDesignations() {
+          try {
+            this.loading = true;
+            const q = query(collection(db, 'designations'), orderBy('time_Init', 'desc'));
+            const snapshot = await getDocs(q);
+            
+            this.designations = [];
+            snapshot.forEach(doc => {
+              this.designations.push({
+                id: doc.id,
+                ...doc.data()
+              });
+            });
+
+            if (this.designations.length > 0) {
+              this.selectedDesignation = this.designations[0];
+            }
+          } catch (error) {
+            console.error('Error loading designations:', error);
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        selectDesignation(designation) {
+          this.selectedDesignation = designation;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
+        formatDate(timestamp) {
+          if (!timestamp) return 'N/A';
+          try {
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleDateString('en-PH', { 
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+          } catch (e) {
+            return 'Invalid date';
+          }
+        }
+      }
+    }
+
+    window.designationPage = designationPage;
+  </script       <td class="p-2 text-center">
                 <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border border-blue-200">Current</span>
               </td>
             </tr>
