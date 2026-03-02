@@ -82,7 +82,18 @@ def notification():
 @bp.route('/company')
 @role_required('municipal','municipal_admin')
 def hrm_company():
-    return render_template('municipal/hrm/company-municipal.html')
+    db = get_firestore_db()
+    companies = []
+
+    try:
+        for doc in db.collection('companies').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            companies.append(item)
+    except Exception as e:
+        print(f"Error fetching companies: {e}")
+
+    return render_template('municipal/hrm/company-municipal.html', companies_data=companies)
 
 @bp.route('/department')
 @role_required('municipal','municipal_admin')

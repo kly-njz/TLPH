@@ -317,6 +317,9 @@
       }
     }
 
+    // Server-side data injection
+    const serverCompanies = {{ companies_data|default([], true)|tojson|safe }};
+
     window.companyPage = function() {
       return {
         company: {
@@ -344,13 +347,30 @@
         async loadCompanies() {
           try {
             this.loading = true;
-            const companiesRef = collection(db, 'companies');
-            const q = query(companiesRef, orderBy('office_name'));
-            const snapshot = await getDocs(q);
             
-            if (snapshot.docs.length > 0) {
-              const companyDoc = snapshot.docs[0];
-              this.company = { id: companyDoc.id, ...companyDoc.data() };
+            // Always use server data (even if empty) - prevents Firestore permission errors
+            if (serverCompanies.length > 0) {
+              this.company = serverCompanies[0];
+              this.editCompany = { ...this.company };
+            } else {
+              // Server returned no data - use empty defaults instead of calling Firestore
+              this.company = {
+                id: null,
+                office_name: 'No Data',
+                municipality: '',
+                province: '',
+                region: '',
+                lgu_class: '',
+                physical_address: '',
+                email: '',
+                contact_number: '',
+                office_hours: '',
+                verification_status: 'Pending',
+                linked_users: 0,
+                pending_requests: 0,
+                active_programs: 0,
+                status: 'Inactive'
+              };
               this.editCompany = { ...this.company };
             }
             
