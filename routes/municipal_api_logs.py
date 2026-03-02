@@ -34,35 +34,42 @@ def _resolve_user_municipality_by_email(email):
 
 def _resolve_municipality_from_user_context():
     municipality = session.get('municipality') or session.get('user_municipality')
+    print(f"[DEBUG] _resolve_municipality_from_user_context - session value: '{municipality}'")
     if municipality and str(municipality).lower() not in ('unknown', 'municipality', ''):
+        print(f"[DEBUG] Using session municipality: '{municipality}'")
         return municipality
 
     try:
         db = get_firestore_db()
         user_id = session.get('user_id')
         if user_id:
+            print(f"[DEBUG] Looking up user_id: {user_id}")
             user_doc = db.collection('users').document(user_id).get()
             if user_doc.exists:
                 user_data = user_doc.to_dict() or {}
                 municipality = user_data.get('municipality') or user_data.get('municipality_name')
                 if municipality:
+                    print(f"[DEBUG] Found municipality from user_id: '{municipality}'")
                     session['municipality'] = municipality
                     session['user_municipality'] = municipality
                     return municipality
 
         user_email = session.get('user_email')
         if user_email:
+            print(f"[DEBUG] Looking up user_email: {user_email}")
             docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
             for doc in docs:
                 user_data = doc.to_dict() or {}
                 municipality = user_data.get('municipality') or user_data.get('municipality_name')
                 if municipality:
+                    print(f"[DEBUG] Found municipality from user_email: '{municipality}'")
                     session['municipality'] = municipality
                     session['user_municipality'] = municipality
                     return municipality
     except Exception as e:
         print(f"[WARN] Could not resolve municipality from user context: {e}")
 
+    print(f"[DEBUG] Could not resolve municipality from context")
     return None
 
 
@@ -521,52 +528,39 @@ def api_get_system_logs():
     """Get system logs for the municipality"""
     try:
         municipality_scope = _get_current_municipality_scope()
+        current_user_email = session.get('user_email', '').lower()
+        
+        print(f"\n[DEBUG] api_get_system_logs - municipality_scope: '{municipality_scope}', user_email: '{current_user_email}'")
 
+        logs = []
+        
+        # Primary: Try direct municipality query
         if municipality_scope:
             logs = system_logs_storage.list_system_logs(municipality_scope, limit=500)
-        else:
-            logs = []
+            print(f"[DEBUG] Direct query returned {len(logs)} logs")
 
-        # Fallback #1: handle municipality format mismatches (case/spacing)
+        # Fallback #1: If no logs found, get ALL logs and filter by current user's email
+        # This ensures users always see their own logs even if municipality is mismatched
+        if not logs and current_user_email:
+            print(f"[DEBUG] Direct query failed, getting logs for current user: {current_user_email}")
+            all_logs = system_logs_storage.list_system_logs(None, limit=2000)
+            logs = [
+                log for log in all_logs
+                if (log.get('user') or '').lower() == current_user_email
+            ][:500]
+            print(f"[DEBUG] User-filtered query found {len(logs)} logs")
+
+        # Fallback #2: If still no logs, try normalized municipality match
         if not logs and municipality_scope:
             all_logs = system_logs_storage.list_system_logs(None, limit=2000)
             scope_norm = _normalize_scope(municipality_scope)
+            print(f"[DEBUG] Trying fallback #2 - normalized scope: '{scope_norm}'")
+            print(f"[DEBUG] Checking {len(all_logs)} total logs for normalized match")
             logs = [
                 log for log in all_logs
                 if _normalize_scope(log.get('municipality')) == scope_norm
             ][:500]
-
-        # Fallback #2: for old logs where municipality was stored incorrectly,
-        # infer municipality from log user email against users collection.
-        if not logs and municipality_scope:
-            all_logs = system_logs_storage.list_system_logs(None, limit=2000)
-            scope_norm = _normalize_scope(municipality_scope)
-            email_muni_cache = {}
-            filtered = []
-
-            for log in all_logs:
-                email = (log.get('user') or '').strip().lower()
-                if not email or '@' not in email:
-                    continue
-
-                if email not in email_muni_cache:
-                    email_muni_cache[email] = _resolve_user_municipality_by_email(email)
-
-                if _normalize_scope(email_muni_cache.get(email)) == scope_norm:
-                    filtered.append(log)
-
-            logs = filtered[:500]
-
-        # Fallback: when scope is missing or existing logs were saved with municipality='unknown',
-        # show current user's own logs so the table does not stay empty.
-        if not logs:
-            user_email = session.get('user_email')
-            if user_email:
-                all_logs = system_logs_storage.list_system_logs(None, limit=1000)
-                logs = [
-                    log for log in all_logs
-                    if (log.get('user') or '').lower() == user_email.lower()
-                ][:500]
+            print(f"[DEBUG] Normalized match found {len(logs)} logs")
 
         # Build stats from returned logs to avoid additional scope/index issues.
         stats = {

@@ -33,7 +33,9 @@ def get_user_municipality(user_id: str = None, user_email: str = None) -> str:
                 user_data = user_doc.to_dict() or {}
                 municipality = user_data.get('municipality') or user_data.get('municipality_name')
                 if municipality:
-                    return _normalize_municipality(municipality)
+                    normalized = _normalize_municipality(municipality)
+                    print(f"[DEBUG] get_user_municipality(user_id={user_id}) -> '{normalized}' (raw: '{municipality}')")
+                    return normalized
 
         if user_email:
             docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
@@ -41,8 +43,11 @@ def get_user_municipality(user_id: str = None, user_email: str = None) -> str:
                 user_data = doc.to_dict() or {}
                 municipality = user_data.get('municipality') or user_data.get('municipality_name')
                 if municipality:
-                    return _normalize_municipality(municipality)
+                    normalized = _normalize_municipality(municipality)
+                    print(f"[DEBUG] get_user_municipality(user_email={user_email}) -> '{normalized}' (raw: '{municipality}')")
+                    return normalized
 
+        print(f"[DEBUG] get_user_municipality - no municipality found for user_id={user_id}, user_email={user_email}")
         return 'unknown'
     except Exception as e:
         print(f'[ERROR] Getting user municipality: {e}')

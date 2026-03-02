@@ -52,6 +52,7 @@ def add_system_log(
     metadata: dict = None,
 ) -> Dict[str, Any]:
     """Add a system log entry"""
+    print(f"[DEBUG] add_system_log - municipality: '{municipality}', user: '{user}', action: '{action}'")
     doc_ref = db.collection("system_logs").document()
     log_entry = {
         "id": doc_ref.id,
@@ -70,6 +71,7 @@ def add_system_log(
         "timestamp": datetime.utcnow().isoformat()
     }
     doc_ref.set(log_entry)
+    print(f"[DEBUG] Log saved with ID: {doc_ref.id}")
     return {**log_entry, "id": doc_ref.id}
 
 
