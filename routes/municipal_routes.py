@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, session
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
 
@@ -165,7 +165,21 @@ def hrm_employees():
 @bp.route('/attendance')
 @role_required('municipal','municipal_admin')
 def hrm_attendance():
-    return render_template('municipal/hrm/attendance-municipal.html')
+    db = get_firestore_db()
+    employees = []
+
+    try:
+        for doc in db.collection('employees').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            employees.append(item)
+    except Exception:
+        pass
+
+    return render_template(
+        'municipal/hrm/attendance-municipal.html',
+        employees_data=employees
+    )
 
 @bp.route('/holiday')
 @role_required('municipal','municipal_admin')
@@ -200,6 +214,31 @@ def hrm_holiday():
         holidays=holidays,
         year=year
     )
+
+@bp.route('/api/context')
+@role_required('municipal','municipal_admin')
+def municipal_context():
+    municipality = session.get('municipality') or session.get('user_municipality')
+
+    if not municipality:
+        try:
+            user_id = session.get('user_id')
+            if user_id:
+                db = get_firestore_db()
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    municipality = user_data.get('municipality') or user_data.get('municipality_name')
+                    if municipality:
+                        session['municipality'] = municipality
+                        session['user_municipality'] = municipality
+        except Exception:
+            municipality = None
+
+    return jsonify({
+        'municipality': municipality or 'Municipality',
+        'user_email': session.get('user_email', '')
+    })
 
 # API endpoint to update office status/hours for a holiday
 @bp.route('/api/municipal/holiday/office-status', methods=['POST'])

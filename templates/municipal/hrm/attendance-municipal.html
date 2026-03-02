@@ -180,6 +180,8 @@
     import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
     import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
+    const serverEmployees = {{ employees_data|default([], true)|tojson|safe }};
+
     const firebaseConfig = {
       apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
       authDomain: "tlph-denr-system.firebaseapp.com",
@@ -224,7 +226,7 @@
 
     window.attendancePage = function() {
       return {
-        employees: [],
+        employees: serverEmployees,
         attendanceRecords: [],
         searchQuery: '',
         presentCount: 0,
@@ -243,18 +245,23 @@
 
         async loadData() {
           try {
-            // Load employees from Firestore
-            const employeesRef = collection(db, 'employees');
-            const q = query(employeesRef, orderBy('first_name'));
-            const snapshot = await getDocs(q);
+            if (!this.employees || this.employees.length === 0) {
+              const employeesRef = collection(db, 'employees');
+              let snapshot;
+              try {
+                const q = query(employeesRef, orderBy('first_name'));
+                snapshot = await getDocs(q);
+              } catch (queryError) {
+                console.warn('Ordered attendance query failed, using fallback query:', queryError);
+                snapshot = await getDocs(employeesRef);
+              }
+              this.employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            }
             
-            this.employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // Sample attendance data (in production, query from attendance collection)
             this.attendanceRecords = this.employees.map((emp, idx) => ({
               id: emp.id,
-              employee_id: emp.employee_id,
-              employee_name: emp.first_name + ' ' + emp.last_name,
+              employee_id: emp.employee_id || emp.emp_id || 'N/A',
+              employee_name: [emp.first_name, emp.last_name].filter(Boolean).join(' ') || emp.full_name || 'N/A',
               time_in: '08:00 AM',
               time_out: '05:00 PM',
               duration: '9h 0m',

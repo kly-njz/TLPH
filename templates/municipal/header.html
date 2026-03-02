@@ -117,33 +117,23 @@
         }
     }
 
-    // Load municipality name from Firebase
+    // Load municipality name from backend context API
     async function loadMunicipalityName() {
         try {
-            // Import Firebase modules
-            const { auth, db } = await import('/static/js/firebase-config.js');
-            const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
-            const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
-
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    try {
-                        const userDoc = await getDoc(doc(db, 'users', user.uid));
-                        if (userDoc.exists()) {
-                            const userData = userDoc.data();
-                            const municipality = userData.municipality || 'Unknown Municipality';
-                            document.getElementById('municipalityName').textContent = municipality + ' Municipality';
-                        } else {
-                            document.getElementById('municipalityName').textContent = 'Municipality';
-                        }
-                    } catch (error) {
-                        console.error('Error fetching user data:', error);
-                        document.getElementById('municipalityName').textContent = 'Municipality';
-                    }
-                } else {
-                    document.getElementById('municipalityName').textContent = 'Not Logged In';
-                }
+            const response = await fetch('/municipal/api/context', {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin'
             });
+
+            if (!response.ok) {
+                document.getElementById('municipalityName').textContent = 'Municipality';
+                return;
+            }
+
+            const data = await response.json();
+            const municipality = (data && data.municipality) ? data.municipality : 'Municipality';
+            document.getElementById('municipalityName').textContent = municipality + ' Municipality';
         } catch (error) {
             console.error('Error loading municipality name:', error);
             document.getElementById('municipalityName').textContent = 'Municipality';
