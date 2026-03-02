@@ -1,6 +1,7 @@
 """System Logs Management for Municipal Scope"""
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -16,6 +17,11 @@ db = firestore.client()
 def _slugify(value: str) -> str:
     """Convert string to slug format"""
     return re.sub(r'[^a-z0-9]+', '_', (value or '').lower()).strip('_')
+
+
+def _where(query, field: str, op: str, value):
+    """Apply Firestore query filter using keyword-based syntax."""
+    return query.where(filter=FieldFilter(field, op, value))
 
 
 # ==================== SYSTEM LOGS ====================
@@ -65,7 +71,7 @@ def list_system_logs(municipality: Optional[str] = None, limit: int = 500) -> Li
     """List system logs, optionally filtered by municipality"""
     query = db.collection("system_logs")
     if municipality:
-        query = query.where("municipality", "==", municipality)
+        query = _where(query, "municipality", "==", municipality)
     
     query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
     query = query.limit(limit)
@@ -85,11 +91,10 @@ def list_system_logs_by_action(
     limit: int = 100
 ) -> List[Dict[str, Any]]:
     """List system logs filtered by action"""
-    query = db.collection("system_logs").where(
-        "municipality", "==", municipality
-    ).where(
-        "action", "==", action.upper()
-    ).order_by(
+    query = db.collection("system_logs")
+    query = _where(query, "municipality", "==", municipality)
+    query = _where(query, "action", "==", action.upper())
+    query = query.order_by(
         "created_at", direction=firestore.Query.DESCENDING
     ).limit(limit)
     
@@ -107,13 +112,11 @@ def get_login_logs(municipality: str, hours: int = 24) -> List[Dict[str, Any]]:
     from datetime import timedelta
     cutoff = datetime.utcnow() - timedelta(hours=hours)
     
-    query = db.collection("system_logs").where(
-        "municipality", "==", municipality
-    ).where(
-        "action", "==", "LOGIN"
-    ).where(
-        "created_at", ">=", cutoff
-    ).order_by(
+    query = db.collection("system_logs")
+    query = _where(query, "municipality", "==", municipality)
+    query = _where(query, "action", "==", "LOGIN")
+    query = _where(query, "created_at", ">=", cutoff)
+    query = query.order_by(
         "created_at", direction=firestore.Query.DESCENDING
     )
     
@@ -131,13 +134,11 @@ def get_approval_logs(municipality: str, hours: int = 72) -> List[Dict[str, Any]
     from datetime import timedelta
     cutoff = datetime.utcnow() - timedelta(hours=hours)
     
-    query = db.collection("system_logs").where(
-        "municipality", "==", municipality
-    ).where(
-        "action", "==", "APPROVE"
-    ).where(
-        "created_at", ">=", cutoff
-    ).order_by(
+    query = db.collection("system_logs")
+    query = _where(query, "municipality", "==", municipality)
+    query = _where(query, "action", "==", "APPROVE")
+    query = _where(query, "created_at", ">=", cutoff)
+    query = query.order_by(
         "created_at", direction=firestore.Query.DESCENDING
     )
     

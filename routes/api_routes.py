@@ -186,6 +186,13 @@ def register_user():
         }
 
         user_role = role_mapping.get(role, 'user')
+        municipality_scope = (
+            session.get('municipality')
+            or session.get('user_municipality')
+            or data.get('municipality')
+            or data.get('data', {}).get('municipality')
+            or 'unknown'
+        )
 
         if not email or not password:
             return jsonify({'success': False, 'message': 'Email and password are required'}), 400
@@ -205,6 +212,18 @@ def register_user():
 
         # Check if user already exists
         if email in users_db:
+            system_logs_storage.add_system_log(
+                municipality=municipality_scope,
+                user=session.get('user_email', email),
+                action='CREATE_ACCOUNT_ATTEMPT',
+                target='User Account',
+                target_id=email,
+                module='USER_MANAGEMENT',
+                outcome='FAILED',
+                message=f'Account creation failed: {email} already exists',
+                device_type=detect_device_from_request(),
+                user_agent=request.headers.get('User-Agent', '')
+            )
             return jsonify({'success': False, 'message': 'User already exists'}), 400
 
         # Store user (in production, hash password and use database)
@@ -213,6 +232,23 @@ def register_user():
             'role': user_role,
             'data': data
         }
+
+        system_logs_storage.add_system_log(
+            municipality=municipality_scope,
+            user=session.get('user_email', email),
+            action='CREATE_ACCOUNT',
+            target='User Account',
+            target_id=email,
+            module='USER_MANAGEMENT',
+            outcome='SUCCESS',
+            message=f'Created account for {email} with role {user_role}',
+            device_type=detect_device_from_request(),
+            user_agent=request.headers.get('User-Agent', ''),
+            metadata={
+                'created_email': email,
+                'created_role': user_role
+            }
+        )
 
         return jsonify({'success': True, 'message': 'Registration successful', 'role': user_role})
 
@@ -395,9 +431,23 @@ def logout():
 def check_session():
     """Quick session check for instant auth verification"""
     if 'user_email' in session:
+        role = session.get('user_role', '')
+        municipality = session.get('municipality') or session.get('user_municipality') or 'unknown'
+        if role in ['municipal', 'municipal_admin']:
+            system_logs_storage.add_system_log(
+                municipality=municipality,
+                user=session.get('user_email', 'unknown'),
+                action='SESSION_CHECK',
+                target='Session',
+                module='AUTH',
+                outcome='SUCCESS',
+                message='Municipal session validated',
+                device_type=detect_device_from_request(),
+                user_agent=request.headers.get('User-Agent', '')
+            )
         return jsonify({
             'authenticated': True,
-            'role': session.get('user_role', ''),
+            'role': role,
             'email': session.get('user_email', '')
         })
     return jsonify({'authenticated': False}), 401
