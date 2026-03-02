@@ -6,6 +6,130 @@
   <title>DENR | Departmental Profile</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  
+  <script type="module">
+    import { auth, db } from "{{ url_for('static', filename='js/firebase-config.js') }}";
+    import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    window.departmentPage = function() {
+      return {
+        departments: [],
+        employees: [],
+        designations: [],
+        selectedDepartment: null,
+        loading: true,
+        filterDivision: '',
+        filterStatus: '',
+
+        async init() {
+          await Promise.all([
+            this.loadDepartments(),
+            this.loadEmployees(),
+            this.loadDesignations()
+          ]);
+        },
+
+        async loadDepartments() {
+          try {
+            this.loading = true;
+            const q = query(collection(db, 'departments'), orderBy('time_Init', 'desc'));
+            const snapshot = await getDocs(q);
+            
+            this.departments = [];
+            snapshot.forEach(doc => {
+              this.departments.push({
+                id: doc.id,
+                ...doc.data()
+              });
+            });
+
+            if (this.departments.length > 0) {
+              this.selectedDepartment = this.departments[0];
+            }
+          } catch (error) {
+            console.error('Error loading departments:', error);
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        async loadEmployees() {
+          try {
+            const snapshot = await getDocs(collection(db, 'employees'));
+            this.employees = [];
+            snapshot.forEach(doc => {
+              this.employees.push({ id: doc.id, ...doc.data() });
+            });
+          } catch (error) {
+            console.error('Error loading employees:', error);
+          }
+        },
+
+        async loadDesignations() {
+          try {
+            const snapshot = await getDocs(collection(db, 'designations'));
+            this.designations = [];
+            snapshot.forEach(doc => {
+              this.designations.push({ id: doc.id, ...doc.data() });
+            });
+          } catch (error) {
+            console.error('Error loading designations:', error);
+          }
+        },
+
+        selectDepartment(dept) {
+          this.selectedDepartment = dept;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
+        get departmentEmployees() {
+          if (!this.selectedDepartment) return [];
+          return this.employees.filter(emp => {
+            const matchesDept = emp.department_name === this.selectedDepartment.department_name;
+            const matchesDivision = !this.filterDivision || emp.division === this.filterDivision;
+            const matchesStatus = !this.filterStatus || emp.status === this.filterStatus;
+            return matchesDept && matchesDivision && matchesStatus;
+          });
+        },
+
+        get departmentDesignations() {
+          if (!this.selectedDepartment) return [];
+          return this.designations.filter(d => d.Department_name === this.selectedDepartment.department_name);
+        },
+
+        get divisions() {
+          if (!this.selectedDepartment) return [];
+          const empDivisions = this.employees
+            .filter(e => e.department_name === this.selectedDepartment.department_name)
+            .map(e => e.division)
+            .filter(Boolean);
+          return [...new Set(empDivisions)];
+        },
+
+        get employeeCount() {
+          if (!this.selectedDepartment) return 0;
+          return this.employees.filter(e => e.department_name === this.selectedDepartment.department_name && e.status === 'Active').length;
+        },
+
+        formatDate(timestamp) {
+          if (!timestamp) return 'N/A';
+          try {
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+          } catch (e) {
+            return 'Invalid date';
+          }
+        },
+
+        getFullName(employee) {
+          const parts = [employee.first_name, employee.middle_name, employee.last_name].filter(Boolean);
+          return parts.join(' ') || 'N/A';
+        }
+      }
+    }
+  </script>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <script>
     tailwind.config = {
@@ -44,7 +168,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="departmentPage()">
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -70,131 +194,207 @@
         </div>
       </div>
 
-      <section class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <template x-if="loading">
+        <div class="text-center py-12">
+          <span class="material-icons-round text-4xl text-slate-400 animate-spin">refresh</span>
+          <p class="text-slate-500 mt-2">Loading departments...</p>
+        </div>
+      </template>
+
+      <template x-if="!loading && departments.length === 0">
+        <div class="text-center py-12">
+          <span class="material-icons-round text-4xl text-slate-400">inbox</span>
+          <p class="text-slate-500 mt-2">No departments found</p>
+        </div>
+      </template>
+
+      <section class="grid grid-cols-1 lg:grid-cols-4 gap-4" x-show="!loading && selectedDepartment">
         
         <div class="lg:col-span-3 bg-white border border-gov-border rounded-[3px] shadow-sm overflow-hidden">
           <div class="bg-slate-800 px-3 py-2 text-white flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <span class="material-icons-round text-sm">account_tree</span>
-                <span class="font-bold uppercase text-[10px] tracking-wider">Technical Bureau Classification</span>
+                <span class="font-bold uppercase text-[10px] tracking-wider">Department/Bureau Information</span>
             </div>
-            <span class="text-[9px] font-mono opacity-70">ID: BUR-SEC-7710</span>
+            <span class="text-[9px] font-mono opacity-70" x-text="'ID: ' + (selectedDepartment.id || 'N/A').substring(0, 12).toUpperCase()"></span>
           </div>
           
           <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-y-5 gap-x-8">
             <div class="md:col-span-2">
               <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Full Department Name</label>
-              <p class="font-bold text-sm text-slate-900">ENVIRONMENTAL MANAGEMENT BUREAU (EMB) - CALABARZON</p>
+              <p class="font-bold text-sm text-slate-900" x-text="selectedDepartment.department_name || 'N/A'"></p>
             </div>
             <div>
-              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Acronym / Alias</label>
-              <p class="font-bold text-slate-900">EMB-R4A</p>
+              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Acronym / Code</label>
+              <p class="font-bold text-slate-900" x-text="selectedDepartment.department_code || 'N/A'"></p>
             </div>
             <div class="md:col-span-2">
               <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Primary Sector Mandate</label>
-              <p class="font-bold text-slate-900 leading-tight">Pollution Control, Waste Management, & Environmental Impact Assessments</p>
+              <p class="font-bold text-slate-900 leading-tight" x-text="selectedDepartment.mandate || 'N/A'"></p>
             </div>
             <div>
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Bureau Status</label>
-                <span class="inline-flex items-center gap-1 text-emerald-700 font-bold">
-                    <span class="h-2 w-2 rounded-full bg-emerald-600"></span> Fully Operational
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Status</label>
+                <span :class="selectedDepartment.status === 'Active' ? 'text-emerald-700' : 'text-slate-500'" class="inline-flex items-center gap-1 font-bold">
+                    <span :class="selectedDepartment.status === 'Active' ? 'bg-emerald-600' : 'bg-slate-400'" class="h-2 w-2 rounded-full"></span>
+                    <span x-text="selectedDepartment.status || 'N/A'"></span>
                 </span>
+            </div>
+            <div>
+              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Region</label>
+              <p class="font-bold text-slate-900" x-text="selectedDepartment.region || 'N/A'"></p>
+            </div>
+            <div>
+              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Municipality</label>
+              <p class="font-bold text-slate-900" x-text="selectedDepartment.municipality || 'N/A'"></p>
+            </div>
+            <div>
+              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Office Location</label>
+              <p class="font-bold text-slate-900" x-text="selectedDepartment.office_location || 'N/A'"></p>
             </div>
           </div>
         </div>
 
         <div class="bg-white border border-gov-border rounded-[3px] p-4 shadow-sm">
-            <span class="text-[9px] font-bold text-slate-500 uppercase block border-b border-slate-100 pb-1 mb-3">Bureau Performance</span>
+            <span class="text-[9px] font-bold text-slate-500 uppercase block border-b border-slate-100 pb-1 mb-3">Department Statistics</span>
             <div class="space-y-4">
               <div class="flex justify-between items-end">
-                <span class="text-slate-600 font-medium">Assigned LGUs</span>
-                <span class="font-black text-base leading-none">142</span>
+                <span class="text-slate-600 font-medium">Active Employees</span>
+                <span class="font-black text-base leading-none" x-text="employeeCount"></span>
               </div>
               <div class="flex justify-between items-end">
-                <span class="text-slate-600 font-medium">Active Monitors</span>
-                <span class="font-black text-base leading-none">842</span>
+                <span class="text-slate-600 font-medium">Designations</span>
+                <span class="font-black text-base leading-none" x-text="departmentDesignations.length"></span>
               </div>
-              <div class="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
-                <div class="bg-slate-800 h-full w-[78%]"></div>
+              <div class="flex justify-between items-end">
+                <span class="text-slate-600 font-medium">Divisions</span>
+                <span class="font-black text-base leading-none" x-text="divisions.length"></span>
               </div>
-              <p class="text-[9px] text-slate-400 text-center font-bold">78% Target Accomplishment</p>
+              <div x-show="selectedDepartment.head_of_department">
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Department Head</label>
+                <p class="font-bold text-slate-700" x-text="selectedDepartment.head_of_department || 'N/A'"></p>
+              </div>
             </div>
         </div>
       </section>
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        
-        <section class="bg-white border border-gov-border rounded-[3px] shadow-sm">
-          <div class="bg-slate-50 px-3 py-2 border-b border-gov-border">
-            <span class="font-bold uppercase text-[11px] text-slate-700">Sectoral Divisions</span>
+      <!-- Department Employees -->
+      <section class="bg-white border border-gov-border rounded-[3px] shadow-sm" x-show="!loading && selectedDepartment">
+        <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-round text-slate-600 text-sm">people</span>
+            <span class="font-bold uppercase text-[11px] text-slate-700">Department Personnel</span>
           </div>
+          <div class="flex items-center gap-2">
+            <select x-model="filterDivision" class="text-[10px] px-2 py-1 border border-slate-300 rounded-[2px]" aria-label="Filter by division">
+              <option value="">All Divisions</option>
+              <template x-for="div in divisions" :key="div">
+                <option :value="div" x-text="div"></option>
+              </template>
+            </select>
+            <select x-model="filterStatus" class="text-[10px] px-2 py-1 border border-slate-300 rounded-[2px]" aria-label="Filter by status">
+              <option value="">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="On Leave">On Leave</option>
+            </select>
+            <span class="bg-slate-700 text-white text-[9px] font-black px-2 py-0.5 rounded-full" x-text="departmentEmployees.length + ' found'"></span>
+          </div>
+        </div>
+        
+        <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
-            <thead class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
-              <tr>
-                <th class="p-2">Division Name</th>
-                <th class="p-2">Head of Unit</th>
-                <th class="p-2 text-right">Items</th>
+            <thead>
+              <tr class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
+                <th class="p-2">Employee ID</th>
+                <th class="p-2">Name</th>
+                <th class="p-2">Designation</th>
+                <th class="p-2">Division</th>
+                <th class="p-2">Municipality</th>
+                <th class="p-2 text-center">Status</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
-              <tr>
-                <td class="p-2 font-bold">Solid Waste Mgmt.</td>
-                <td class="p-2">Engr. Roberto Gomez</td>
-                <td class="p-2 text-right font-mono">1,204</td>
-              </tr>
-              <tr>
-                <td class="p-2 font-bold">Air Quality Unit</td>
-                <td class="p-2">Dr. Elena Reyes</td>
-                <td class="p-2 text-right font-mono">452</td>
-              </tr>
-              <tr>
-                <td class="p-2 font-bold">Toxic Chemicals Unit</td>
-                <td class="p-2">Lic. Mark Anthony</td>
-                <td class="p-2 text-right font-mono">89</td>
-              </tr>
+            <tbody class="divide-y divide-slate-100 text-[12px]">
+              <template x-if="departmentEmployees.length === 0">
+                <tr>
+                  <td colspan="6" class="p-4 text-center text-slate-400">No employees in this department</td>
+                </tr>
+              </template>
+              <template x-for="employee in departmentEmployees" :key="employee.id">
+                <tr class="hover:bg-slate-50">
+                  <td class="p-2 font-mono text-[11px]" x-text="employee.employee_id || 'N/A'"></td>
+                  <td class="p-2 font-bold text-gov-primary" x-text="getFullName(employee)"></td>
+                  <td class="p-2 text-slate-600" x-text="employee.designation || 'N/A'"></td>
+                  <td class="p-2 text-slate-600" x-text="employee.division || 'N/A'"></td>
+                  <td class="p-2 text-slate-600" x-text="employee.municipality || 'N/A'"></td>
+                  <td class="p-2 text-center">
+                    <span :class="{
+                      'bg-emerald-100 text-emerald-800 border-emerald-200': employee.status === 'Active',
+                      'bg-slate-100 text-slate-600 border-slate-200': employee.status === 'Inactive',
+                      'bg-amber-100 text-amber-800 border-amber-200': employee.status === 'On Leave'
+                    }" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="employee.status || 'N/A'"></span>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
-        </section>
+        </div>
+      </section>
 
-        <section class="bg-white border border-gov-border rounded-[3px] shadow-sm">
-            <div class="bg-slate-50 px-3 py-2 border-b border-gov-border">
-              <span class="font-bold uppercase text-[11px] text-slate-700">Department Leads</span>
-            </div>
-            <div class="p-2 space-y-2">
-                <div class="flex items-center justify-between p-2 rounded-[2px] bg-slate-50 border border-slate-200">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 bg-slate-300 rounded-sm flex items-center justify-center text-slate-600">
-                            <span class="material-icons-round text-base">person</span>
-                        </div>
-                        <div>
-                            <p class="font-bold text-gov-primary leading-none">Engr. Teodoro M. Baguilat</p>
-                            <p class="text-[9px] text-slate-500 uppercase mt-1">Regional Director</p>
-                        </div>
-                    </div>
-                    <span class="text-[10px] text-slate-400 font-mono">RD-001</span>
-                </div>
-                <div class="flex items-center justify-between p-2 rounded-[2px] bg-slate-50 border border-slate-200">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 bg-slate-300 rounded-sm flex items-center justify-center text-slate-600">
-                            <span class="material-icons-round text-base">person</span>
-                        </div>
-                        <div>
-                            <p class="font-bold text-gov-primary leading-none">Atty. Vanessa L. Lopez</p>
-                            <p class="text-[9px] text-slate-500 uppercase mt-1">Legal Division Chief</p>
-                        </div>
-                    </div>
-                    <span class="text-[10px] text-slate-400 font-mono">CH-004</span>
-                </div>
-            </div>
-          </section>
-      </div>
+      <!-- All Departments List -->
+      <section class="bg-white border border-gov-border rounded-[3px] shadow-sm" x-show="!loading">
+        <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-round text-slate-600 text-sm">corporate_fare</span>
+            <span class="font-bold uppercase text-[11px] text-slate-700">All Departments</span>
+          </div>
+          <span class="bg-slate-800 text-white text-[9px] font-black px-2 py-0.5 rounded-full" x-text="departments.length + ' total'"></span>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
+                <th class="p-2">Department Name</th>
+                <th class="p-2">Code</th>
+                <th class="p-2">Municipality</th>
+                <th class="p-2 text-center">Employees</th>
+                <th class="p-2 text-center">Status</th>
+                <th class="p-2 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-[12px]">
+              <template x-if="departments.length === 0">
+                <tr>
+                  <td colspan="6" class="p-4 text-center text-slate-400">No departments available</td>
+                </tr>
+              </template>
+              <template x-for="dept in departments" :key="dept.id">
+                <tr :class="{ 'bg-blue-50': selectedDepartment && selectedDepartment.id === dept.id }">
+                  <td class="p-2 font-bold text-gov-primary" x-text="dept.department_name || 'N/A'"></td>
+                  <td class="p-2 font-mono text-[11px]" x-text="dept.department_code || 'N/A'"></td>
+                  <td class="p-2 text-slate-600" x-text="dept.municipality || 'N/A'"></td>
+                  <td class="p-2 text-center font-bold" x-text="employees.filter(e => e.department_name === dept.department_name && e.status === 'Active').length"></td>
+                  <td class="p-2 text-center">
+                    <span :class="dept.status === 'Active' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="dept.status || 'N/A'"></span>
+                  </td>
+                  <td class="p-2 text-center">
+                    <button @click="selectDepartment(dept)" class="text-blue-700 hover:text-blue-900 font-bold text-[10px] uppercase">
+                      <span class="material-icons-round text-sm align-middle">visibility</span> View
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <div class="mt-auto border-t border-slate-200 pt-3 flex justify-between items-center opacity-60">
         <div class="flex items-center gap-4 text-[9px] font-bold text-slate-500 uppercase">
-            <span>Server Time: 2024-10-24 14:02:11</span>
-            <span>IP Logged: 192.168.1.14</span>
+            <span x-text="'Total Departments: ' + departments.length"></span>
+            <span x-text="'Total Employees: ' + employees.length"></span>
         </div>
-        <div class="text-[9px] font-black text-slate-800">OFFICIAL USE ONLY • DATA PRIVACY ACT COMPLIANT</div>
+        <div class="text-[9px] font-black text-slate-800">DENR HR MANAGEMENT SYSTEM</div>
       </div>
 
     </main>
