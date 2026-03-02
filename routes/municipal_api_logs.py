@@ -5,6 +5,7 @@ from firebase_config import get_firestore_db
 from firebase_admin import firestore
 import deposit_storage
 import expense_storage
+import coa_storage
 
 bp = Blueprint('municipal_api', __name__, url_prefix='/api/municipal')
 
@@ -215,4 +216,100 @@ def api_delete_expense(category_id):
             return jsonify({'status': 'error', 'message': 'Failed to delete'}), 500
     except Exception as e:
         print(f"[ERROR] Deleting expense: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+# ==================== COA TEMPLATES ====================
+
+@bp.route('/coa/templates', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_coa_templates():
+    """Get COA templates for municipality"""
+    try:
+        templates = coa_storage.list_coa_templates('municipality')
+        return jsonify({
+            'status': 'success',
+            'templates': templates,
+            'count': len(templates)
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Getting COA templates: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@bp.route('/coa/templates', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_create_coa_template():
+    """Create a new COA template"""
+    try:
+        data = request.get_json()
+        result = coa_storage.add_coa_template(
+            municipality='municipality',
+            name=data.get('name'),
+            description=data.get('description', ''),
+            status=data.get('status', 'active')
+        )
+        return jsonify({'status': 'success', 'template': result}), 201
+    except Exception as e:
+        print(f"[ERROR] Creating COA template: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# ==================== COA ACCOUNTS ====================
+
+@bp.route('/coa/accounts/<template_id>', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_coa_accounts(template_id):
+    """Get all accounts in a COA template"""
+    try:
+        accounts = coa_storage.list_coa_accounts(template_id)
+        
+        # Calculate stats
+        locked_count = sum(1 for a in accounts if a.get('locked'))
+        type_counts = {}
+        for a in accounts:
+            atype = a.get('account_type', 'unknown')
+            type_counts[atype] = type_counts.get(atype, 0) + 1
+        
+        return jsonify({
+            'status': 'success',
+            'accounts': accounts,
+            'stats': {
+                'total': len(accounts),
+                'locked': locked_count,
+                'editable': len(accounts) - locked_count,
+                'by_type': type_counts
+            }
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Getting COA accounts: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@bp.route('/coa/accounts/<template_id>', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_add_coa_account(template_id):
+    """Add an account to a COA template"""
+    try:
+        data = request.get_json()
+        result = coa_storage.add_coa_account(
+            template_id=template_id,
+            code=data.get('code'),
+            name=data.get('name'),
+            account_type=data.get('account_type'),
+            locked=data.get('locked', False),
+            description=data.get('description', '')
+        )
+        return jsonify({'status': 'success', 'account': result}), 201
+    except Exception as e:
+        print(f"[ERROR] Adding COA account: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@bp.route('/coa/accounts/<account_id>', methods=['DELETE'])
+@role_required('municipal','municipal_admin')
+def api_delete_coa_account(account_id):
+    """Delete a COA account"""
+    try:
+        result = coa_storage.delete_coa_account(account_id)
+        if result:
+            return jsonify({'status': 'success'}), 200
+        else:
+            return jsonify({'status': 'error', 'message': 'Failed to delete'}), 500
+    except Exception as e:
+        print(f"[ERROR] Deleting COA account: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
