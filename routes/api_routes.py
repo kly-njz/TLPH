@@ -203,13 +203,22 @@ def register_user():
         }
 
         user_role = role_mapping.get(role, 'user')
-        municipality_scope = (
-            session.get('municipality')
-            or session.get('user_municipality')
-            or data.get('municipality')
-            or data.get('data', {}).get('municipality')
-            or 'unknown'
-        )
+        
+        # Get municipality from current user (if municipal user creating account)
+        # or from request data, normalized for consistency
+        municipality_scope = 'unknown'
+        if session.get('user_role') == 'municipal' and session.get('user_email'):
+            current_email = session.get('user_email')
+            current_user = users_db.get(current_email)
+            if current_user:
+                municipality_scope = _normalize_municipality(current_user.get('data', {}).get('municipality', 'unknown'))
+        
+        if municipality_scope == 'unknown':
+            municipality_scope = _normalize_municipality(
+                data.get('municipality')
+                or data.get('data', {}).get('municipality')
+                or 'unknown'
+            )
 
         if not email or not password:
             return jsonify({'success': False, 'message': 'Email and password are required'}), 400
@@ -263,7 +272,8 @@ def register_user():
             user_agent=request.headers.get('User-Agent', ''),
             metadata={
                 'created_email': email,
-                'created_role': user_role
+                'created_role': user_role,
+                'municipality': municipality_scope
             }
         )
 
@@ -290,8 +300,9 @@ def login_user():
             # Log failed login attempt
             device_type = detect_device_from_request()
             user_agent = request.headers.get('User-Agent', '')
+            municipality = 'unknown'  # User not found, can't fetch municipality
             system_logs_storage.add_system_log(
-                municipality='unknown',
+                municipality=municipality,
                 user=email,
                 action='LOGIN_ATTEMPT',
                 target='Authentication',
@@ -305,11 +316,12 @@ def login_user():
         
         # Verify password (in production, use proper password hashing)
         if user['password'] != password:
-            # Log failed login attempt
+            # Log failed login attempt - get municipality from user data
+            municipality = _normalize_municipality(user.get('data', {}).get('municipality', 'unknown'))
             device_type = detect_device_from_request()
             user_agent = request.headers.get('User-Agent', '')
             system_logs_storage.add_system_log(
-                municipality='unknown',
+                municipality=municipality,
                 user=email,
                 action='LOGIN_ATTEMPT',
                 target='Authentication',
@@ -321,8 +333,8 @@ def login_user():
             )
             return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
         
-        # Get municipality from user data
-        municipality = user.get('data', {}).get('municipality', 'unknown')
+        # Get municipality from user data - normalize it for consistency
+        municipality = _normalize_municipality(user.get('data', {}).get('municipality', 'unknown'))
         
         # Set session
         session['user_email'] = email
@@ -332,7 +344,7 @@ def login_user():
         session['province'] = user.get('data', {}).get('province', '')
         session['user_province'] = user.get('data', {}).get('province', '')
         
-        # Log successful login
+        # Log successful login with normalized municipality from user data
         device_type = detect_device_from_request()
         user_agent = request.headers.get('User-Agent', '')
         system_logs_storage.add_system_log(
@@ -387,14 +399,14 @@ def set_session():
         session['user_role'] = user_role
         session['user_id'] = user_id
 
-        # Get municipality from user document
+        # Get municipality from user document - always fetch from Firestore to ensure match
         municipality = get_user_municipality(user_id=user_id, user_email=user_email)
         session['municipality'] = municipality
         session['user_municipality'] = municipality
 
         print(f'Session set for {user_email} with role {user_role} and user_id {user_id}')
 
-        # Log successful login
+        # Log successful login with municipality fetched from Firestore users collection
         device_type = detect_device_from_request()
         user_agent = request.headers.get('User-Agent', '')
         system_logs_storage.add_system_log(
@@ -421,9 +433,12 @@ def logout():
     try:
         # Capture user info before clearing session
         user_email = session.get('user_email', 'unknown')
-        municipality = session.get('municipality') or session.get('user_municipality') or 'unknown'
+        user_id = session.get('user_id')
         
-        # Log logout
+        # Get fresh municipality from Firestore to ensure consistency
+        municipality = get_user_municipality(user_id=user_id, user_email=user_email) if user_email != 'unknown' else 'unknown'
+        
+        # Log logout with fresh municipality from Firestore
         device_type = detect_device_from_request()
         user_agent = request.headers.get('User-Agent', '')
         system_logs_storage.add_system_log(
@@ -449,11 +464,25 @@ def check_session():
     """Quick session check for instant auth verification"""
     if 'user_email' in session:
         role = session.get('user_role', '')
-        municipality = session.get('municipality') or session.get('user_municipality') or 'unknown'
+        user_email = session.get('user_email', 'unknown')
+        user_id = session.get('user_id')
+        
+        # Get fresh municipality from Firestore or users_db
+        if user_email != 'unknown':
+            # Try to get from Firestore first (Firebase users)
+            if user_id:
+                municipality = get_user_municipality(user_id=user_id, user_email=user_email)
+            else:
+                # Fall back to users_db (demo users)
+                user = users_db.get(user_email)
+                municipality = _normalize_municipality(user.get('data', {}).get('municipality', 'unknown')) if user else 'unknown'
+        else:
+            municipality = 'unknown'
+        
         if role in ['municipal', 'municipal_admin']:
             system_logs_storage.add_system_log(
                 municipality=municipality,
-                user=session.get('user_email', 'unknown'),
+                user=user_email,
                 action='SESSION_CHECK',
                 target='Session',
                 module='AUTH',
@@ -465,7 +494,7 @@ def check_session():
         return jsonify({
             'authenticated': True,
             'role': role,
-            'email': session.get('user_email', '')
+            'email': user_email
         })
     return jsonify({'authenticated': False}), 401
 
