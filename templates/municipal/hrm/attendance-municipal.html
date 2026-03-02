@@ -44,7 +44,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="attendancePage()" @load="loadData()" x-cloak>
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -75,22 +75,22 @@
         <div class="lg:col-span-3 bg-white border border-gov-border rounded-[3px] shadow-sm p-3 flex flex-wrap items-center justify-around gap-4 text-center">
             <div>
               <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Present Today</p>
-              <p class="text-xl font-black text-emerald-700" id="present-today-count">0</p>
+              <p class="text-xl font-black text-emerald-700" x-text="presentCount"></p>
             </div>
             <div class="w-px h-8 bg-slate-200 hidden md:block"></div>
             <div>
               <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Late Arrivals</p>
-              <p class="text-xl font-black text-rose-700" id="late-arrivals-count">0</p>
+              <p class="text-xl font-black text-rose-700" x-text="lateCount"></p>
             </div>
             <div class="w-px h-8 bg-slate-200 hidden md:block"></div>
             <div>
               <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">On Official Business</p>
-              <p class="text-xl font-black text-blue-700" id="official-business-count">0</p>
+              <p class="text-xl font-black text-blue-700" x-text="officialBusinessCount"></p>
             </div>
             <div class="w-px h-8 bg-slate-200 hidden md:block"></div>
             <div class="flex-1 min-w-[200px]">
                 <div class="relative">
-                    <input type="text" placeholder="Search employee or ID..." class="w-full pl-8 pr-3 py-1.5 border border-gov-border rounded-[2px] focus:outline-none focus:border-slate-600 bg-slate-50 text-[11px]">
+                    <input x-model="searchQuery" type="text" placeholder="Search employee or ID..." class="w-full pl-8 pr-3 py-1.5 border border-gov-border rounded-[2px] focus:outline-none focus:border-slate-600 bg-slate-50 text-[11px]">
                     <span class="material-icons-round absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
                 </div>
             </div>
@@ -100,7 +100,7 @@
             <span class="material-icons-round text-3xl opacity-50">calendar_today</span>
             <div>
               <span class="text-[10px] font-bold uppercase opacity-70 block leading-none">Reference Date</span>
-              <span class="text-sm font-black tracking-tight" id="current-date"></span>
+              <span class="text-sm font-black tracking-tight" x-text="currentDate"></span>
             </div>
         </div>
       </section>
@@ -130,9 +130,38 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 text-[12px]">
-                <tbody id="attendance-tbody" class="divide-y divide-slate-100 text-[12px]">
-                <!-- Attendance rows will be rendered by attendance-municipal.js -->
-                </tbody>
+              <tbody id="attendance-tbody" class="divide-y divide-slate-100 text-[12px]">
+                <template x-if="filteredAttendance.length === 0">
+                  <tr>
+                    <td colspan="6" class="p-8 text-center text-slate-400">
+                      <span class="material-icons-round text-4xl">inbox</span>
+                      <p class="mt-2">No attendance records found</p>
+                    </td>
+                  </tr>
+                </template>
+                <template x-for="record in filteredAttendance" :key="record.id">
+                  <tr>
+                    <td class="p-2">
+                      <p class="font-bold text-gov-primary" x-text="record.employee_name || 'N/A'"></p>
+                      <p class="text-[10px] text-slate-400 font-mono" x-text="record.employee_id || 'N/A'"></p>
+                    </td>
+                    <td class="p-2" x-text="record.time_in || '--:--'"></td>
+                    <td class="p-2" x-text="record.time_out || '--:--'"></td>
+                    <td class="p-2" x-text="record.duration || '0h 0m'"></td>
+                    <td class="p-2 text-center">
+                      <span :class="{
+                        'bg-emerald-100 text-emerald-800': record.status === 'Present',
+                        'bg-rose-100 text-rose-800': record.status === 'Late',
+                        'bg-blue-100 text-blue-800': record.status === 'Official Business',
+                        'bg-slate-100 text-slate-600': record.status === 'Absent'
+                      }" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="record.status || 'N/A'"></span>
+                    </td>
+                    <td class="p-2 text-right">
+                      <button class="text-sky-700 hover:text-sky-900 font-black uppercase text-[10px] tracking-tighter">Edit</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
               </tbody>
             </table>
         </div>
@@ -147,17 +176,79 @@
       </div>
 
     </main>
-  <script>
-  // Set Reference Date to today in format: MMM DD, YYYY
-  window.addEventListener('DOMContentLoaded', function() {
-    const el = document.getElementById('current-date');
-    if (el) {
-      const now = new Date();
-      const options = { month: 'short', day: '2-digit', year: 'numeric' };
-      el.textContent = now.toLocaleDateString('en-US', options).toUpperCase();
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+      authDomain: "tlph-denr-system.firebaseapp.com",
+      projectId: "tlph-denr-system",
+      storageBucket: "tlph-denr-system.appspot.com",
+      messagingSenderId: "999028568640",
+      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
+      measurementId: "G-TXKQ1Z0J1X"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.attendancePage = function() {
+      return {
+        employees: [],
+        attendanceRecords: [],
+        searchQuery: '',
+        presentCount: 0,
+        lateCount: 0,
+        officialBusinessCount: 0,
+        currentDate: '',
+
+        get filteredAttendance() {
+          return this.attendanceRecords.filter(record => {
+            const query = this.searchQuery.toLowerCase();
+            return !query || 
+                   (record.employee_name && record.employee_name.toLowerCase().includes(query)) ||
+                   (record.employee_id && record.employee_id.includes(query));
+          });
+        },
+
+        async loadData() {
+          try {
+            // Load employees from Firestore
+            const employeesRef = collection(db, 'employees');
+            const q = query(employeesRef, orderBy('first_name'));
+            const snapshot = await getDocs(q);
+            
+            this.employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Sample attendance data (in production, query from attendance collection)
+            this.attendanceRecords = this.employees.map((emp, idx) => ({
+              id: emp.id,
+              employee_id: emp.employee_id,
+              employee_name: emp.first_name + ' ' + emp.last_name,
+              time_in: '08:00 AM',
+              time_out: '05:00 PM',
+              duration: '9h 0m',
+              status: idx % 3 === 0 ? 'Late' : idx % 5 === 0 ? 'Official Business' : 'Present'
+            }));
+            
+            // Calculate statistics
+            this.presentCount = this.attendanceRecords.filter(r => r.status === 'Present').length;
+            this.lateCount = this.attendanceRecords.filter(r => r.status === 'Late').length;
+            this.officialBusinessCount = this.attendanceRecords.filter(r => r.status === 'Official Business').length;
+            
+            // Set current date
+            const now = new Date();
+            const options = { month: 'short', day: '2-digit', year: 'numeric' };
+            this.currentDate = now.toLocaleDateString('en-US', options).toUpperCase();
+          } catch (error) {
+            console.error('Error loading data:', error);
+          }
+        }
+      }
     }
-  });
   </script>
+  <script>
   </div>
 
 <script src="/static/js/attendance-municipal-firestore.js" type="module"></script>
