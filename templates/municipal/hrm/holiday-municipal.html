@@ -296,13 +296,52 @@
 
         async loadData() {
           try {
+            if (!db) {
+              const existingApps = getApps();
+              if (existingApps.length > 0) {
+                db = getFirestore(existingApps[0]);
+              } else {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+              }
+            }
+
             const holidaysRef = collection(db, 'holidays');
-            const q = query(holidaysRef, orderBy('date'));
-            const snapshot = await getDocs(q);
-            
-            this.holidays = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // If no holidays exist, generate sample data
+            let snapshot;
+
+            try {
+              const q = query(holidaysRef, orderBy('date'));
+              snapshot = await getDocs(q);
+            } catch (queryError) {
+              console.warn('Ordered holiday query failed, using fallback query:', queryError);
+              snapshot = await getDocs(holidaysRef);
+            }
+
+            const allHolidays = snapshot.docs.map(docItem => {
+              const data = docItem.data();
+              let normalizedDate = data.date || '';
+
+              if (normalizedDate && typeof normalizedDate.toDate === 'function') {
+                normalizedDate = normalizedDate.toDate().toISOString().split('T')[0];
+              } else if (normalizedDate instanceof Date) {
+                normalizedDate = normalizedDate.toISOString().split('T')[0];
+              } else if (typeof normalizedDate === 'string') {
+                normalizedDate = normalizedDate.split('T')[0];
+              } else {
+                normalizedDate = '';
+              }
+
+              return {
+                id: docItem.id,
+                ...data,
+                date: normalizedDate
+              };
+            });
+
+            this.holidays = allHolidays
+              .filter(h => !this.selectedYear || (h.date || '').startsWith(this.selectedYear))
+              .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
             if (this.holidays.length === 0) {
               this.holidays = [
                 { id: '1', date: '2026-01-01', name: 'New Year\'s Day', type: 'National Holiday', office_status: 'closed', description: 'National holiday' },
@@ -310,10 +349,11 @@
                 { id: '3', date: '2026-03-28', name: 'Araw ng Kagitingan', type: 'National Holiday', office_status: 'closed', description: 'Valor Day' },
                 { id: '4', date: '2026-04-09', name: 'Araw ng Kagitingan', type: 'National Holiday', office_status: 'closed', description: 'Day of Valor' },
                 { id: '5', date: '2026-12-25', name: 'Christmas Day', type: 'National Holiday', office_status: 'closed', description: 'Christmas national holiday' }
-              ];
+              ].filter(h => !this.selectedYear || h.date.startsWith(this.selectedYear));
             }
           } catch (error) {
             console.error('Error loading holidays:', error);
+            this.holidays = [];
           }
         }
       }
