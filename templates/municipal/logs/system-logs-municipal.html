@@ -511,6 +511,14 @@
   <script>
     function systemLogsPage(){
       return {
+        // Notification data for header/sidenav
+        notificationData: {
+          count: 0,
+          unread: [],
+          all: []
+        },
+        count: 0,
+        
         // ui state
         q: '',
         module: 'ALL',
@@ -536,49 +544,11 @@
         page: 1,
         pageSize: 12,
 
-        // demo dataset (replace with server data)
-        logs: [
-          { id:'AL-000201', ts:'2026-02-19T09:14:12', user:'Juan Dela Cruz', role:'Municipal Admin', module:'DEPOSITS', action:'CREATE', target:'Deposit Category', targetId:'DC-REV-001', ip:'192.168.1.21', outcome:'SUCCESS',
-            message:'Created deposit category mapping for Business Permit Fees.',
-            diff:{ created:{ name:'Business Permit Fees', coa:'4101', tax:'None', budget_code:'REV-001' } }
-          },
-          { id:'AL-000202', ts:'2026-02-19T09:20:48', user:'Maria Santos', role:'Treasury', module:'EXPENSES', action:'EDIT', target:'Expense Category', targetId:'EC-5-02-03-010', ip:'192.168.1.44', outcome:'SUCCESS',
-            message:'Updated default VAT rate for Office Supplies.',
-            diff:{ before:{ tax_type:'VAT', rate:'0%' }, after:{ tax_type:'VAT', rate:'12%' } }
-          },
-          { id:'AL-000203', ts:'2026-02-18T16:02:11', user:'Maria Santos', role:'Treasury', module:'ACCOUNTING', action:'EXPORT', target:'Journal Entries', targetId:'JE-EXPORT-20260218', ip:'192.168.1.44', outcome:'WARN',
-            message:'Exported journal entries. Large dataset, verify access scope.',
-            diff:{ params:{ range:'THIS_MONTH', format:'CSV' } }
-          },
-          { id:'AL-000204', ts:'2026-02-18T14:55:03', user:'System', role:'System', module:'SYSTEM', action:'LOGIN', target:'User Session', targetId:'SSN-9F22', ip:'192.168.1.21', outcome:'SUCCESS',
-            message:'User authenticated via municipal portal.',
-            diff:{ method:'password', mfa:'enabled' }
-          },
-          { id:'AL-000205', ts:'2026-02-18T10:41:29', user:'Auditor', role:'Audit', module:'COA', action:'EDIT', target:'COA Template', targetId:'COA-MUN-STD', ip:'192.168.1.90', outcome:'FAIL',
-            message:'Edit denied. Insufficient permission (COA_LOCKED).',
-            diff:{ required:'COA_EDIT', granted:false }
-          },
-          { id:'AL-000206', ts:'2026-02-17T13:09:10', user:'Juan Dela Cruz', role:'Municipal Admin', module:'PERMISSIONS', action:'PERMISSION_CHANGE', target:'User', targetId:'USR-00123', ip:'192.168.1.21', outcome:'SUCCESS',
-            message:'Granted CREATE/EDIT on Expenses module.',
-            diff:{ added:['EXPENSES_CREATE','EXPENSES_EDIT'], removed:[] }
-          },
-          { id:'AL-000207', ts:'2026-02-17T11:33:51', user:'Maria Santos', role:'Treasury', module:'DEPOSITS', action:'DELETE', target:'Deposit Category', targetId:'DC-REV-009', ip:'192.168.1.44', outcome:'SUCCESS',
-            message:'Deleted obsolete category mapping (replaced by REV-001).',
-            diff:{ deleted:{ id:'DC-REV-009' } }
-          },
-          { id:'AL-000208', ts:'2026-02-16T15:18:20', user:'Juan Dela Cruz', role:'Municipal Admin', module:'ENTITIES', action:'EDIT', target:'Bank Account', targetId:'LBP-1234-XXXX', ip:'192.168.1.21', outcome:'WARN',
-            message:'Updated bank alias. Verify with bank statement reconciliation.',
-            diff:{ before:{ alias:'Treasury Main' }, after:{ alias:'Treasury Collections' } }
-          },
-          { id:'AL-000209', ts:'2026-02-15T09:02:47', user:'Maria Santos', role:'Treasury', module:'ACCOUNTING', action:'APPROVE', target:'Journal Entry', targetId:'JE-2026-00235', ip:'192.168.1.44', outcome:'SUCCESS',
-            message:'Approved journal entry.',
-            diff:{ status:{ from:'PENDING', to:'APPROVED' } }
-          },
-          { id:'AL-000210', ts:'2026-02-14T17:40:05', user:'System', role:'System', module:'SYSTEM', action:'LOGOUT', target:'User Session', targetId:'SSN-88B1', ip:'192.168.1.44', outcome:'SUCCESS',
-            message:'User logged out.',
-            diff:{ reason:'manual' }
-          },
-        ],
+        // loading state
+        loading: true,
+
+        // dataset
+        logs: [],
 
         // computed
         get totalPages(){
@@ -799,9 +769,44 @@
           }
         },
 
-        init(){
+        async init(){
+          await this.loadLogs();
           this.applyFilters();
-        }
+        },
+
+        async loadLogs(){
+          try {
+            this.loading = true;
+            const response = await fetch('/api/municipal/system-logs');
+            const data = await response.json();
+            
+            if (response.ok) {
+              // Map API response to table format
+              this.logs = (data.logs || []).map(log => ({
+                id: log.id,
+                ts: log.created_at || log.timestamp,
+                user: log.user,
+                role: 'User',
+                module: log.module || 'SYSTEM',
+                action: log.action,
+                target: log.target,
+                targetId: log.target_id,
+                device_type: log.device_type || 'Unknown',
+                outcome: log.outcome,
+                message: log.message,
+                user_agent: log.user_agent,
+                metadata: log.metadata || {}
+              }));
+              this.stats = data.stats || {};
+            } else {
+              console.error('Failed to load logs');
+            }
+          } catch (error) {
+            console.error('Load logs error:', error);
+          } finally {
+            this.loading = false;
+          }
+        },
       }
     }
   </script>
