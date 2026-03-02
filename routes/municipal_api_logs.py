@@ -12,12 +12,46 @@ import system_logs_storage
 bp = Blueprint('municipal_api', __name__, url_prefix='/api/municipal')
 
 
+def _resolve_municipality_from_user_context():
+    municipality = session.get('municipality') or session.get('user_municipality')
+    if municipality and str(municipality).lower() not in ('unknown', 'municipality', ''):
+        return municipality
+
+    try:
+        db = get_firestore_db()
+        user_id = session.get('user_id')
+        if user_id:
+            user_doc = db.collection('users').document(user_id).get()
+            if user_doc.exists:
+                user_data = user_doc.to_dict() or {}
+                municipality = user_data.get('municipality') or user_data.get('municipality_name')
+                if municipality:
+                    session['municipality'] = municipality
+                    session['user_municipality'] = municipality
+                    return municipality
+
+        user_email = session.get('user_email')
+        if user_email:
+            docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+            for doc in docs:
+                user_data = doc.to_dict() or {}
+                municipality = user_data.get('municipality') or user_data.get('municipality_name')
+                if municipality:
+                    session['municipality'] = municipality
+                    session['user_municipality'] = municipality
+                    return municipality
+    except Exception as e:
+        print(f"[WARN] Could not resolve municipality from user context: {e}")
+
+    return None
+
+
 def _get_current_municipality_scope():
-    return (
+    return _resolve_municipality_from_user_context() or (
         session.get('municipality')
         or session.get('user_municipality')
         or request.args.get('municipality')
-        or 'municipality'
+        or None
     )
 
 @bp.route('/logs/audit-logs-municipal', methods=['GET'])
@@ -467,8 +501,49 @@ def api_get_system_logs():
     """Get system logs for the municipality"""
     try:
         municipality_scope = _get_current_municipality_scope()
-        logs = system_logs_storage.list_system_logs(municipality_scope, limit=500)
-        stats = system_logs_storage.get_system_log_stats(municipality_scope)
+
+        if municipality_scope:
+            logs = system_logs_storage.list_system_logs(municipality_scope, limit=500)
+        else:
+            logs = []
+
+        # Fallback: when scope is missing or existing logs were saved with municipality='unknown',
+        # show current user's own logs so the table does not stay empty.
+        if not logs:
+            user_email = session.get('user_email')
+            if user_email:
+                all_logs = system_logs_storage.list_system_logs(None, limit=1000)
+                logs = [
+                    log for log in all_logs
+                    if (log.get('user') or '').lower() == user_email.lower()
+                ][:500]
+
+        # Build stats from returned logs to avoid additional scope/index issues.
+        stats = {
+            'total': len(logs),
+            'by_action': {},
+            'by_outcome': {},
+            'by_device': {},
+            'by_module': {},
+            'logins_24h': 0,
+            'approvals_72h': 0
+        }
+
+        for log in logs:
+            action = log.get('action', 'UNKNOWN')
+            outcome = log.get('outcome', 'UNKNOWN')
+            device = log.get('device_type', 'Unknown')
+            module = log.get('module', 'UNKNOWN')
+            stats['by_action'][action] = stats['by_action'].get(action, 0) + 1
+            stats['by_outcome'][outcome] = stats['by_outcome'].get(outcome, 0) + 1
+            stats['by_device'][device] = stats['by_device'].get(device, 0) + 1
+            stats['by_module'][module] = stats['by_module'].get(module, 0) + 1
+
+            if action == 'LOGIN':
+                stats['logins_24h'] += 1
+            if action == 'APPROVE':
+                stats['approvals_72h'] += 1
+
         return jsonify({
             'status': 'success',
             'logs': logs,

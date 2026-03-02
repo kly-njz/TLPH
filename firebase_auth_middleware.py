@@ -2,11 +2,46 @@ from functools import wraps
 from flask import request, jsonify, redirect, url_for, session
 import system_logs_storage
 from datetime import datetime, timedelta
+from firebase_config import get_firestore_db
 
 
 def _detect_device_from_request():
     user_agent = request.headers.get('User-Agent', '')
     return system_logs_storage.detect_device_type(user_agent)
+
+
+def _resolve_municipality_for_session():
+    municipality = session.get('municipality') or session.get('user_municipality')
+    if municipality and str(municipality).lower() not in ('unknown', 'municipality', ''):
+        return municipality
+
+    try:
+        db = get_firestore_db()
+        user_id = session.get('user_id')
+        if user_id:
+            user_doc = db.collection('users').document(user_id).get()
+            if user_doc.exists:
+                user_data = user_doc.to_dict() or {}
+                municipality = user_data.get('municipality') or user_data.get('municipality_name')
+                if municipality:
+                    session['municipality'] = municipality
+                    session['user_municipality'] = municipality
+                    return municipality
+
+        user_email = session.get('user_email')
+        if user_email:
+            docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+            for doc in docs:
+                user_data = doc.to_dict() or {}
+                municipality = user_data.get('municipality') or user_data.get('municipality_name')
+                if municipality:
+                    session['municipality'] = municipality
+                    session['user_municipality'] = municipality
+                    return municipality
+    except Exception as e:
+        print(f'⚠️ Could not resolve municipality for session: {e}')
+
+    return 'unknown'
 
 def firebase_auth_required(f):
     """Decorator to require authentication"""
@@ -95,7 +130,7 @@ def role_required(*allowed_roles):
                     if not should_log:
                         print(f'ℹ️ PAGE_ACCESS throttled for {request.path}')
                     else:
-                        municipality = session.get('municipality') or session.get('user_municipality') or 'unknown'
+                        municipality = _resolve_municipality_for_session()
                         user_email = session.get('user_email', 'unknown')
                         user_agent = request.headers.get('User-Agent', '')
 
