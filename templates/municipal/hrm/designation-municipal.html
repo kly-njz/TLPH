@@ -14,11 +14,16 @@
     window.designationPage = function() {
       return {
         designations: [],
+        employees: [],
         selectedDesignation: null,
         loading: true,
+        loadingEmployees: false,
+        filterDepartment: '',
+        filterStatus: '',
 
         async init() {
           await this.loadDesignations();
+          await this.loadEmployees();
         },
 
         async loadDesignations() {
@@ -45,9 +50,48 @@
           }
         },
 
+        async loadEmployees() {
+          try {
+            this.loadingEmployees = true;
+            const snapshot = await getDocs(collection(db, 'employees'));
+            
+            this.employees = [];
+            snapshot.forEach(doc => {
+              this.employees.push({
+                id: doc.id,
+                ...doc.data()
+              });
+            });
+          } catch (error) {
+            console.error('Error loading employees:', error);
+          } finally {
+            this.loadingEmployees = false;
+          }
+        },
+
         selectDesignation(designation) {
           this.selectedDesignation = designation;
           window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
+        get filteredEmployees() {
+          if (!this.selectedDesignation) return [];
+          
+          return this.employees.filter(emp => {
+            const matchesDesignation = emp.designation === this.selectedDesignation.designation;
+            const matchesDepartment = !this.filterDepartment || emp.department_name === this.filterDepartment;
+            const matchesStatus = !this.filterStatus || emp.status === this.filterStatus;
+            return matchesDesignation && matchesDepartment && matchesStatus;
+          });
+        },
+
+        get departments() {
+          return [...new Set(this.employees.map(e => e.department_name).filter(Boolean))];
+        },
+
+        get employeeCount() {
+          if (!this.selectedDesignation) return 0;
+          return this.employees.filter(e => e.designation === this.selectedDesignation.designation).length;
         },
 
         formatDate(timestamp) {
@@ -64,6 +108,15 @@
           } catch (e) {
             return 'Invalid date';
           }
+        },
+
+        formatCurrency(amount) {
+          return '₱' + (amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+
+        getFullName(employee) {
+          const parts = [employee.first_name, employee.middle_name, employee.last_name].filter(Boolean);
+          return parts.join(' ') || 'N/A';
         }
       }
     }
@@ -171,12 +224,16 @@
                 <p class="font-bold text-slate-900" x-text="selectedDesignation.division || 'N/A'"></p>
               </div>
               <div>
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Basic Pay</label>
-                <p class="font-bold text-slate-900" x-text="'₱' + (selectedDesignation.basic_pay || 0).toLocaleString()"></p>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Basic Pay Range</label>
+                <p class="font-bold text-slate-900" x-text="formatCurrency(selectedDesignation.basic_pay)"></p>
               </div>
               <div class="md:col-span-2">
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Description</label>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Description / Responsibilities</label>
                 <p class="font-bold text-slate-900 leading-tight" x-text="selectedDesignation.description || 'No description provided'"></p>
+              </div>
+              <div class="md:col-span-2" x-show="selectedDesignation.required_qualifications">
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Required Qualifications</label>
+                <p class="font-bold text-slate-900 leading-tight" x-text="selectedDesignation.required_qualifications || 'N/A'"></p>
               </div>
               <div>
                   <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Duty Type</label>
@@ -192,6 +249,20 @@
                       <span x-text="selectedDesignation.overtime_status || 'N/A'"></span>
                   </span>
               </div>
+              <div>
+                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Authority Level</label>
+                  <span class="inline-flex items-center gap-1 text-amber-700 font-bold">
+                      <span class="material-icons-round text-xs">verified_user</span> 
+                      <span x-text="selectedDesignation.authority_level || 'N/A'"></span>
+                  </span>
+              </div>
+              <div>
+                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Employees Assigned</label>
+                  <span class="inline-flex items-center gap-1 text-emerald-700 font-bold">
+                      <span class="material-icons-round text-xs">people</span> 
+                      <span x-text="employeeCount + ' personnel'"></span>
+                  </span>
+              </div>
             </div>
           </div>
 
@@ -201,24 +272,80 @@
                 <div>
                   <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Field Service</label>
                   <p class="font-bold text-slate-700" x-text="selectedDesignation.field_service || 'N/A'"></p>
-                </div>
-                <div>
-                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Status</label>
-                  <p class="font-bold text-slate-700" x-text="selectedDesignation.status || 'N/A'"></p>
-                </div>
-                <div>
-                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Reference Title</label>
-                  <p class="font-bold text-slate-700" x-text="selectedDesignation.refField_title || 'N/A'"></p>
-                </div>
-                <div x-show="selectedDesignation.time_Init">
-                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Created Date</label>
-                  <p class="font-mono text-slate-700" x-text="formatDate(selectedDesignation.time_Init)"></p>
-                </div>
-              </div>
+       !-- Employees assigned to selected designation -->
+      <section class="bg-white border border-gov-border rounded-[3px] shadow-sm" x-show="!loading && selectedDesignation">
+        <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-round text-slate-600 text-sm">people</span>
+            <span class="font-bold uppercase text-[11px] text-slate-700">Personnel with this Designation</span>
           </div>
-        </template>
+          <div class="flex items-center gap-2">
+            <select x-model="filterDepartment" class="text-[10px] px-2 py-1 border border-slate-300 rounded-[2px]" aria-label="Filter by department">
+              <option value="">All Departments</option>
+              <template x-for="dept in departments" :key="dept">
+                <option :value="dept" x-text="dept"></option>
+              </template>
+            </select>
+            <select x-model="filterStatus" class="text-[10px] px-2 py-1 border border-slate-300 rounded-[2px]" aria-label="Filter by status">
+              <option value="">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="On Leave">On Leave</option>
+            </select>
+            <span class="bg-emerald-700 text-white text-[9px] font-black px-2 py-0.5 rounded-full" x-text="filteredEmployees.length + ' found'"></span>
+          </div>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
+                <th class="p-2">Employee ID</th>
+                <th class="p-2">Full Name</th>
+                <th class="p-2">Department</th>
+                <th class="p-2">Municipality</th>
+                <th class="p-2">Hire Date</th>
+                <th class="p-2">Basic Pay</th>
+                <th class="p-2 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-[12px]">
+              <template x-if="loadingEmployees">
+                <tr>
+                  <td colspan="7" class="p-4 text-center text-slate-400">
+                    <span class="material-icons-round text-2xl animate-spin">refresh</span>
+                    <p>Loading employees...</p>
+                  </td>
+                </tr>
+              </template>
+              <template x-if="!loadingEmployees && filteredEmployees.length === 0">
+                <tr>
+                  <td colspan="7" class="p-4 text-center text-slate-400">No employees with this designation</td>
+                </tr>
+              </template>
+              <template x-for="employee in filteredEmployees" :key="employee.id">
+                <tr class="hover:bg-slate-50">
+                  <td class="p-2 font-mono text-[11px]" x-text="employee.employee_id || 'N/A'"></td>
+                  <td class="p-2 font-bold text-gov-primary" x-text="getFullName(employee)"></td>
+                  <td class="p-2 text-slate-600" x-text="employee.department_name || 'N/A'"></td>
+                  <td class="p-2 text-slate-600" x-text="employee.municipality || 'N/A'"></td>
+                  <td class="p-2 font-mono text-[11px]" x-text="formatDate(employee.hire_date)"></td>
+                  <td class="p-2 font-mono" x-text="formatCurrency(employee.basic_pay)"></td>
+                  <td class="p-2 text-center">
+                    <span :class="{
+                      'bg-emerald-100 text-emerald-800 border-emerald-200': employee.status === 'Active',
+                      'bg-slate-100 text-slate-600 border-slate-200': employee.status === 'Inactive',
+                      'bg-amber-100 text-amber-800 border-amber-200': employee.status === 'On Leave'
+                    }" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="employee.status || 'N/A'"></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
       </section>
 
+      <!-- All Designations List -->
       <section class="bg-white border border-gov-border rounded-[3px] shadow-sm" x-show="!loading">
         <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -232,6 +359,30 @@
           <table class="w-full text-left border-collapse">
             <thead>
               <tr class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
+                <th class="p-2">Designation</th>
+                <th class="p-2">Department</th>
+                <th class="p-2">Division</th>
+                <th class="p-2">Basic Pay</th>
+                <th class="p-2 text-center">Personnel</th>
+                <th class="p-2 text-center">Status</th>
+                <th class="p-2 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-[12px]">
+              <template x-if="designations.length === 0">
+                <tr>
+                  <td colspan="7" class="p-4 text-center text-slate-400">No designations available</td>
+                </tr>
+              </template>
+              <template x-for="designation in designations" :key="designation.id">
+                <tr :class="{ 'bg-amber-50': selectedDesignation && selectedDesignation.id === designation.id }">
+                  <td class="p-2 font-bold text-gov-primary" x-text="designation.designation || 'N/A'"></td>
+                  <td class="p-2 text-slate-600" x-text="designation.Department_name || 'N/A'"></td>
+                  <td class="p-2 text-slate-600" x-text="designation.division || 'N/A'"></td>
+                  <td class="p-2 font-mono text-[11px]" x-text="formatCurrency(designation.basic_pay)"></td>
+                  <td class="p-2 text-center font-bold" x-text="employees.filter(e => e.designation === designation.designation).length"></td>
+                  <td class="p-2 text-center">
+                    <span :class="designation.status === 'Active' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border
                 <th class="p-2">Designation</th>
                 <th class="p-2">Department</th>
                 <th class="p-2">Division</th>
