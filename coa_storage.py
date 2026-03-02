@@ -1,16 +1,14 @@
 """COA (Chart of Accounts) Management for Municipal Scope"""
 import firebase_admin
-from firebase_admin import firestore, credentials
+from firebase_admin import credentials, firestore
 import os
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 # Initialize Firebase
-if not firebase_admin.list_apps():
-    cred_path = os.path.join(os.path.dirname(__file__), 'firebase-credentials.json')
-    if os.path.exists(cred_path):
-        cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred)
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase-credentials.json")
+    firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
