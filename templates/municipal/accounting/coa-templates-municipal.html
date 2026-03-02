@@ -68,7 +68,7 @@
             </div>
 
             <div class="flex gap-2">
-              <button @click="openTemplateModal()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 flex items-center gap-1">
+              <button type="button" @click="openTemplateModal()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 flex items-center gap-1">
                 <span class="material-icons-round text-[14px]">add</span> Create
               </button>
             </div>
@@ -166,7 +166,7 @@
                   <option value="locked">Locked</option>
                   <option value="editable">Editable</option>
                 </select>
-                <button @click="openAccountModal()" class="gov-btn bg-emerald-700 text-white hover:bg-emerald-800 flex items-center gap-1">
+                <button type="button" @click="openAccountModal()" :disabled="templates.length === 0 || !selectedTemplateId" :class="(templates.length === 0 || !selectedTemplateId) ? 'opacity-60 cursor-not-allowed' : ''" class="gov-btn bg-emerald-700 text-white hover:bg-emerald-800 flex items-center gap-1" title="Add account to selected template">
                   <span class="material-icons-round text-[12px]">add</span> Add
                 </button>
               </div>
@@ -317,6 +317,8 @@
         
         templateModalOpen: false,
         accountModalOpen: false,
+        isSavingTemplate: false,
+        isSavingAccount: false,
         
         newTemplate: { name: '', description: '' },
         newAccount: { code: '', name: '', account_type: 'asset', locked: false },
@@ -416,22 +418,42 @@
             alert('Please enter template name');
             return;
           }
+          this.isSavingTemplate = true;
           try {
             const res = await fetch('/api/municipal/coa/templates', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(this.newTemplate)
             });
+            const payload = await res.json();
             if(res.ok){
               this.templateModalOpen = false;
               await this.loadTemplates();
+              if (payload?.template?.id) {
+                await this.selectTemplate(payload.template.id);
+              } else if (!this.selectedTemplateId && this.filteredTemplates.length > 0) {
+                await this.selectTemplate(this.filteredTemplates[0].id);
+              }
+            } else {
+              alert(payload?.message || 'Failed to create template');
             }
           } catch(e){
             console.error('Error saving template:', e);
+            alert('Error creating template');
+          } finally {
+            this.isSavingTemplate = false;
           }
         },
 
         openAccountModal(){
+          if(this.templates.length === 0) {
+            alert('Create a template first');
+            this.openTemplateModal();
+            return;
+          }
+          if(!this.selectedTemplateId && this.filteredTemplates.length > 0) {
+            this.selectTemplate(this.filteredTemplates[0].id);
+          }
           if(!this.selectedTemplateId) {
             alert('Please select a template first');
             return;
@@ -445,18 +467,26 @@
             alert('Please fill in all required fields');
             return;
           }
+          this.isSavingAccount = true;
           try {
             const res = await fetch(`/api/municipal/coa/accounts/${this.selectedTemplateId}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(this.newAccount)
             });
+            const payload = await res.json();
             if(res.ok){
               this.accountModalOpen = false;
               await this.loadAccounts(this.selectedTemplateId);
+              await this.loadTemplates();
+            } else {
+              alert(payload?.message || 'Failed to add account');
             }
           } catch(e){
             console.error('Error saving account:', e);
+            alert('Error adding account');
+          } finally {
+            this.isSavingAccount = false;
           }
         },
 
