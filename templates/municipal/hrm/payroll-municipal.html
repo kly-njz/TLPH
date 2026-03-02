@@ -83,7 +83,7 @@
         </div>
         <div class="bg-white border border-gov-border rounded-[3px] p-3 shadow-sm border-t-2 border-t-blue-600">
           <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Net Disbursement</p>
-          <p class="text-lg font-black text-blue-900 font-mono-num" id="net-disbursement">₱ 0.00</p>
+          <p class="text-lg font-black text-blue-900 font-mono-num" x-text="formatCurrency(totalNet)"></p>
         </div>
         <div class="bg-slate-800 text-white border border-gov-border rounded-[3px] p-3 shadow-sm flex flex-col justify-center">
             <p class="text-[9px] font-bold uppercase opacity-60 tracking-tighter leading-none">Status</p>
@@ -120,9 +120,30 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 text-[11px]">
-                <tbody id="payroll-tbody" class="divide-y divide-slate-100 text-[11px]">
-                <!-- Payroll rows will be rendered by payroll-municipal.js -->
-                </tbody>
+                <template x-if="filteredPayroll.length === 0">
+                  <tr>
+                    <td colspan="7" class="p-8 text-center text-slate-400">
+                      <span class="material-icons-round text-4xl">inbox</span>
+                      <p class="mt-2">No payroll records found</p>
+                    </td>
+                  </tr>
+                </template>
+                <template x-for="record in filteredPayroll" :key="record.id">
+                  <tr>
+                    <td class="p-2 bg-slate-50 border-r border-slate-200">
+                      <p class="font-bold text-gov-primary" x-text="record.employee_name"></p>
+                      <p class="text-[9px] text-slate-500" x-text="record.position"></p>
+                    </td>
+                    <td class="p-2 text-right font-mono-num" x-text="formatCurrency(record.basic_pay)"></td>
+                    <td class="p-2 text-right font-mono-num" x-text="formatCurrency(record.allowances)"></td>
+                    <td class="p-2 text-right font-mono-num text-rose-600" x-text="formatCurrency(record.deductions)"></td>
+                    <td class="p-2 text-right font-mono-num text-emerald-800" x-text="formatCurrency(record.net_pay)"></td>
+                    <td class="p-2 text-center text-[10px] font-bold">
+                      <span :class="{'text-blue-600': record.method === 'Bank'}" x-text="record.method || 'Cash'"></span>
+                    </td>
+                    <td class="p-2 text-right text-[9px] font-mono" x-text="record.reference || '--'"></td>
+                  </tr>
+                </template>
               </tbody>
             </table>
         </div>
@@ -141,6 +162,86 @@
     </main>
   </div>
 
-<script src="/static/js/payroll-municipal.js" type="module"></script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+      authDomain: "tlph-denr-system.firebaseapp.com",
+      projectId: "tlph-denr-system",
+      storageBucket: "tlph-denr-system.appspot.com",
+      messagingSenderId: "999028568640",
+      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
+      measurementId: "G-TXKQ1Z0J1X"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.payrollPage = function() {
+      return {
+        employees: [],
+        payrollRecords: [],
+        searchQuery: '',
+        totalGross: 0,
+        totalDeductions: 0,
+        totalNet: 0,
+
+        get filteredPayroll() {
+          return this.payrollRecords.filter(record => {
+            const query = this.searchQuery.toLowerCase();
+            return !query || 
+                   record.employee_name.toLowerCase().includes(query) ||
+                   record.employee_id.includes(query);
+          });
+        },
+
+        formatCurrency(value) {
+          if (!value) return '₱ 0.00';
+          return '₱ ' + parseFloat(value).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        },
+
+        async loadData() {
+          try {
+            const employeesRef = collection(db, 'employees');
+            const q = query(employeesRef, orderBy('first_name'));
+            const snapshot = await getDocs(q);
+            
+            this.employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Generate payroll records from employees
+            this.payrollRecords = this.employees.map((emp, idx) => {
+              const basicPay = emp.basic_pay || 25000;
+              const allowances = emp.allowances || 3000;
+              const deductions = (basicPay * 0.12) + 500;
+              const netPay = basicPay + allowances - deductions;
+              
+              return {
+                id: emp.id,
+                employee_id: emp.employee_id,
+                employee_name: emp.first_name + ' ' + emp.last_name,
+                position: emp.designation || 'Staff',
+                basic_pay: basicPay,
+                allowances: allowances,
+                deductions: deductions,
+                net_pay: netPay,
+                method: idx % 2 === 0 ? 'Bank' : 'Cash',
+                reference: 'PAY-2026-' + String(idx + 1).padStart(3, '0')
+              };
+            });
+            
+            // Calculate totals
+            this.totalGross = this.payrollRecords.reduce((sum, r) => sum + r.basic_pay + r.allowances, 0);
+            this.totalDeductions = this.payrollRecords.reduce((sum, r) => sum + r.deductions, 0);
+            this.totalNet = this.payrollRecords.reduce((sum, r) => sum + r.net_pay, 0);
+          } catch (error) {
+            console.error('Error loading payroll data:', error);
+          }
+        }
+      }
+    }
+  </script>
+
 </body>
 </html>
