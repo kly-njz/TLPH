@@ -17,15 +17,32 @@ def detect_device_from_request():
     user_agent = request.headers.get('User-Agent', '')
     return system_logs_storage.detect_device_type(user_agent)
 
-def get_user_municipality(user_id: str) -> str:
+def _normalize_municipality(value: str) -> str:
+    return ' '.join(str(value or '').strip().split())
+
+
+def get_user_municipality(user_id: str = None, user_email: str = None) -> str:
     """Get municipality from user document in Firestore"""
     try:
         from firebase_config import get_firestore_db
         db = get_firestore_db()
-        user_doc = db.collection('users').document(user_id).get()
-        if user_doc.exists:
-            user_data = user_doc.to_dict()
-            return user_data.get('municipality') or user_data.get('municipality_name') or 'unknown'
+
+        if user_id:
+            user_doc = db.collection('users').document(user_id).get()
+            if user_doc.exists:
+                user_data = user_doc.to_dict() or {}
+                municipality = user_data.get('municipality') or user_data.get('municipality_name')
+                if municipality:
+                    return _normalize_municipality(municipality)
+
+        if user_email:
+            docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+            for doc in docs:
+                user_data = doc.to_dict() or {}
+                municipality = user_data.get('municipality') or user_data.get('municipality_name')
+                if municipality:
+                    return _normalize_municipality(municipality)
+
         return 'unknown'
     except Exception as e:
         print(f'[ERROR] Getting user municipality: {e}')
@@ -371,7 +388,7 @@ def set_session():
         session['user_id'] = user_id
 
         # Get municipality from user document
-        municipality = get_user_municipality(user_id)
+        municipality = get_user_municipality(user_id=user_id, user_email=user_email)
         session['municipality'] = municipality
         session['user_municipality'] = municipality
 

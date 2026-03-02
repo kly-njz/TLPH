@@ -12,6 +12,26 @@ import system_logs_storage
 bp = Blueprint('municipal_api', __name__, url_prefix='/api/municipal')
 
 
+def _normalize_scope(value):
+    return ' '.join(str(value or '').strip().lower().split())
+
+
+def _resolve_user_municipality_by_email(email):
+    if not email:
+        return None
+    try:
+        db = get_firestore_db()
+        docs = db.collection('users').where('email', '==', email).limit(1).stream()
+        for doc in docs:
+            user_data = doc.to_dict() or {}
+            municipality = user_data.get('municipality') or user_data.get('municipality_name')
+            if municipality:
+                return municipality
+    except Exception as e:
+        print(f"[WARN] Could not resolve user municipality by email: {e}")
+    return None
+
+
 def _resolve_municipality_from_user_context():
     municipality = session.get('municipality') or session.get('user_municipality')
     if municipality and str(municipality).lower() not in ('unknown', 'municipality', ''):
@@ -506,6 +526,36 @@ def api_get_system_logs():
             logs = system_logs_storage.list_system_logs(municipality_scope, limit=500)
         else:
             logs = []
+
+        # Fallback #1: handle municipality format mismatches (case/spacing)
+        if not logs and municipality_scope:
+            all_logs = system_logs_storage.list_system_logs(None, limit=2000)
+            scope_norm = _normalize_scope(municipality_scope)
+            logs = [
+                log for log in all_logs
+                if _normalize_scope(log.get('municipality')) == scope_norm
+            ][:500]
+
+        # Fallback #2: for old logs where municipality was stored incorrectly,
+        # infer municipality from log user email against users collection.
+        if not logs and municipality_scope:
+            all_logs = system_logs_storage.list_system_logs(None, limit=2000)
+            scope_norm = _normalize_scope(municipality_scope)
+            email_muni_cache = {}
+            filtered = []
+
+            for log in all_logs:
+                email = (log.get('user') or '').strip().lower()
+                if not email or '@' not in email:
+                    continue
+
+                if email not in email_muni_cache:
+                    email_muni_cache[email] = _resolve_user_municipality_by_email(email)
+
+                if _normalize_scope(email_muni_cache.get(email)) == scope_norm:
+                    filtered.append(log)
+
+            logs = filtered[:500]
 
         # Fallback: when scope is missing or existing logs were saved with municipality='unknown',
         # show current user's own logs so the table does not stay empty.
