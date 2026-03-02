@@ -72,5 +72,15 @@ def datetimeformat(value, format='%b %d, %Y'):
 def account_disabled():
     return render_template('account-disabled.html')
 
+# Debug route for seeding COA (remove in production)
+@app.route('/__debug__/seed-coa')
+def debug_seed_coa():
+    try:
+        import coa_storage
+        coa_storage.seed_sample_templates()
+        return {'status': 'success', 'message': 'COA seeded successfully'}, 200
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}, 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
