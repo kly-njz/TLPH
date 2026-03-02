@@ -40,7 +40,9 @@ users_db = {
             'firstName': 'Municipal',
             'lastName': 'Admin',
             'email': 'municipal@gmail.com',
-            'phone': '000-000-0000'
+            'phone': '000-000-0000',
+            'municipality': 'Makati',
+            'province': 'Metro Manila'
         }
     },
     'regional@gmail.com': {
@@ -50,7 +52,9 @@ users_db = {
             'firstName': 'Regional',
             'lastName': 'Admin',
             'email': 'regional@gmail.com',
-            'phone': '000-000-0000'
+            'phone': '000-000-0000',
+            'municipality': 'Regional',
+            'province': 'National'
         }
     },
     'superadmin@gmail.com': {
@@ -60,7 +64,9 @@ users_db = {
             'firstName': 'Super',
             'lastName': 'Admin',
             'email': 'superadmin@gmail.com',
-            'phone': '000-000-0000'
+            'phone': '000-000-0000',
+            'municipality': 'Admin',
+            'province': 'National'
         }
     },
     'national@gmail.com': {
@@ -70,7 +76,9 @@ users_db = {
             'firstName': 'National',
             'lastName': 'Admin',
             'email': 'national@gmail.com',
-            'phone': '000-000-0000'
+            'phone': '000-000-0000',
+            'municipality': 'National',
+            'province': 'National'
         }
     }
 }
@@ -260,15 +268,22 @@ def login_user():
             )
             return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
         
+        # Get municipality from user data
+        municipality = user.get('data', {}).get('municipality', 'unknown')
+        
         # Set session
         session['user_email'] = email
         session['user_role'] = user['role']
+        session['municipality'] = municipality
+        session['user_municipality'] = municipality
+        session['province'] = user.get('data', {}).get('province', '')
+        session['user_province'] = user.get('data', {}).get('province', '')
         
         # Log successful login
         device_type = detect_device_from_request()
         user_agent = request.headers.get('User-Agent', '')
         system_logs_storage.add_system_log(
-            municipality=user.get('data', {}).get('municipality', 'unknown'),
+            municipality=municipality,
             user=email,
             action='LOGIN',
             target='Authentication',
