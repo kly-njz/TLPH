@@ -33,41 +33,47 @@ def _resolve_user_municipality_by_email(email):
 
 
 def _resolve_municipality_from_user_context():
-    municipality = session.get('municipality') or session.get('user_municipality')
-    print(f"[DEBUG] _resolve_municipality_from_user_context - session value: '{municipality}'")
-    if municipality and str(municipality).lower() not in ('unknown', 'municipality', ''):
-        print(f"[DEBUG] Using session municipality: '{municipality}'")
-        return municipality
-
+    """Resolve municipality - always fetch from Firestore first to avoid stale session values"""
+    print(f"[DEBUG] _resolve_municipality_from_user_context starting")
+    
     try:
         db = get_firestore_db()
         user_id = session.get('user_id')
+        user_email = session.get('user_email')
+        
+        # Try user_id first (fresh from Firestore)
         if user_id:
-            print(f"[DEBUG] Looking up user_id: {user_id}")
+            print(f"[DEBUG] Looking up fresh municipality by user_id: {user_id}")
             user_doc = db.collection('users').document(user_id).get()
             if user_doc.exists:
                 user_data = user_doc.to_dict() or {}
                 municipality = user_data.get('municipality') or user_data.get('municipality_name')
                 if municipality:
-                    print(f"[DEBUG] Found municipality from user_id: '{municipality}'")
+                    print(f"[DEBUG] Found fresh municipality from user_id: '{municipality}'")
                     session['municipality'] = municipality
                     session['user_municipality'] = municipality
                     return municipality
 
-        user_email = session.get('user_email')
+        # Try user_email as fallback (fresh from Firestore)
         if user_email:
-            print(f"[DEBUG] Looking up user_email: {user_email}")
+            print(f"[DEBUG] Looking up fresh municipality by user_email: {user_email}")
             docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
             for doc in docs:
                 user_data = doc.to_dict() or {}
                 municipality = user_data.get('municipality') or user_data.get('municipality_name')
                 if municipality:
-                    print(f"[DEBUG] Found municipality from user_email: '{municipality}'")
+                    print(f"[DEBUG] Found fresh municipality from user_email: '{municipality}'")
                     session['municipality'] = municipality
                     session['user_municipality'] = municipality
                     return municipality
     except Exception as e:
-        print(f"[WARN] Could not resolve municipality from user context: {e}")
+        print(f"[WARN] Could not resolve fresh municipality from Firestore: {e}")
+
+    # Last resort: use stale session value if available
+    municipality = session.get('municipality') or session.get('user_municipality')
+    if municipality and str(municipality).lower() not in ('unknown', 'municipality', ''):
+        print(f"[DEBUG] Using stale session municipality: '{municipality}'")
+        return municipality
 
     print(f"[DEBUG] Could not resolve municipality from context")
     return None
@@ -533,38 +539,48 @@ def api_get_system_logs():
         print(f"\n[DEBUG] api_get_system_logs - municipality_scope: '{municipality_scope}', user_email: '{current_user_email}'")
 
         logs = []
+        user_logs = []
         
-        # Primary: Try direct municipality query
-        if municipality_scope:
-            logs = system_logs_storage.list_system_logs(municipality_scope, limit=500)
-            print(f"[DEBUG] Direct query returned {len(logs)} logs")
-
-        # Fallback #1: If no logs found, get ALL logs and filter by current user's email
-        # This ensures users always see their own logs even if municipality is mismatched
-        if not logs and current_user_email:
-            print(f"[DEBUG] Direct query failed, getting logs for current user: {current_user_email}")
+        # ALWAYS get current user's own logs by email (primary source of truth)
+        if current_user_email:
+            print(f"[DEBUG] Fetching logs for current user by email: {current_user_email}")
             all_logs = system_logs_storage.list_system_logs(None, limit=2000)
-            logs = [
+            user_logs = [
                 log for log in all_logs
                 if (log.get('user') or '').lower() == current_user_email
-            ][:500]
-            print(f"[DEBUG] User-filtered query found {len(logs)} logs")
+            ]
+            print(f"[DEBUG] Found {len(user_logs)} logs for current user by email")
 
-        # Fallback #2: If still no logs, try normalized municipality match
+        # Also try to get logs by municipality
+        if municipality_scope:
+            print(f"[DEBUG] Fetching logs by municipality: {municipality_scope}")
+            logs = system_logs_storage.list_system_logs(municipality_scope, limit=500)
+            print(f"[DEBUG] Direct municipality query returned {len(logs)} logs")
+
+        # Try normalized municipality match as fallback
         if not logs and municipality_scope:
             all_logs = system_logs_storage.list_system_logs(None, limit=2000)
             scope_norm = _normalize_scope(municipality_scope)
-            print(f"[DEBUG] Trying fallback #2 - normalized scope: '{scope_norm}'")
-            print(f"[DEBUG] Checking {len(all_logs)} total logs for normalized match")
+            print(f"[DEBUG] Trying normalized municipality match - scope: '{scope_norm}'")
             logs = [
                 log for log in all_logs
                 if _normalize_scope(log.get('municipality')) == scope_norm
             ][:500]
             print(f"[DEBUG] Normalized match found {len(logs)} logs")
 
+        # Combine: user logs + municipality logs (remove duplicates by id)
+        all_ids = {log.get('id'): log for log in user_logs}
+        for log in logs:
+            log_id = log.get('id')
+            if log_id and log_id not in all_ids:
+                all_ids[log_id] = log
+        
+        final_logs = list(all_ids.values())[:500]
+        print(f"[DEBUG] Final combined logs: {len(final_logs)}")
+
         # Build stats from returned logs to avoid additional scope/index issues.
         stats = {
-            'total': len(logs),
+            'total': len(final_logs),
             'by_action': {},
             'by_outcome': {},
             'by_device': {},
@@ -573,7 +589,7 @@ def api_get_system_logs():
             'approvals_72h': 0
         }
 
-        for log in logs:
+        for log in final_logs:
             action = log.get('action', 'UNKNOWN')
             outcome = log.get('outcome', 'UNKNOWN')
             device = log.get('device_type', 'Unknown')
@@ -590,7 +606,7 @@ def api_get_system_logs():
 
         return jsonify({
             'status': 'success',
-            'logs': logs,
+            'logs': final_logs,
             'stats': stats
         }), 200
     except Exception as e:

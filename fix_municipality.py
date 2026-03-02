@@ -7,8 +7,8 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# Fix: Update pagaduanjohnmark29@gmail.com municipality to 'Naujan' to match their logs
-print("Fixing municipality mismatch...")
+# Revert: Update pagaduanjohnmark29@gmail.com municipality back to 'Victoria'
+print("Reverting municipality back to Victoria...")
 
 # Find the user by email
 docs = db.collection('users').where('email', '==', 'pagaduanjohnmark29@gmail.com').limit(1).stream()
@@ -16,11 +16,12 @@ for doc in docs:
     print(f"Found user: {doc.id}")
     print(f"  Current municipality: {doc.to_dict().get('municipality')}")
     
-    # Update municipality to 'Naujan' to match their logs
+    # Update municipality back to 'Victoria'
     db.collection('users').document(doc.id).update({
-        'municipality': 'Naujan'
+        'municipality': 'Victoria'
     })
-    print(f"  Updated municipality to: 'Naujan'")
+    print(f"  Updated municipality back to: 'Victoria'")
     print()
 
-print("Done! Municipality has been fixed.")
+print("Done! Municipality has been reverted to Victoria.")
+
