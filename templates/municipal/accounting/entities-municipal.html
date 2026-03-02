@@ -17,11 +17,32 @@
   .chart-container { position:relative; height:100%; width:100%; overflow:hidden; }
 
   html, body { height:100%; }
+
+  .toast-enter { opacity: 0; transform: translateY(-10px); }
+  .toast-enter-active { opacity: 1; transform: translateY(0); transition: all 0.3s ease; }
+  .toast-exit { opacity: 1; transform: translateY(0); }
+  .toast-exit-active { opacity: 0; transform: translateY(-10px); transition: all 0.3s ease; }
 </style>
 </head>
 
-<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-hidden" x-data="entitiesPage()" x-init="init()">
   
+  <!-- Toast Notification -->
+  <div x-show="toast.show" x-transition:enter="toast-enter-active" x-transition:leave="toast-exit-active"
+       class="fixed top-4 right-4 z-[9999] max-w-sm w-full pointer-events-auto">
+    <div :class="toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'"
+         class="border-l-4 rounded-[2px] p-3 shadow-lg flex items-start gap-2">
+      <span class="material-icons-round text-[18px]" x-text="toast.type === 'success' ? 'check_circle' : 'error'"></span>
+      <div class="flex-1">
+        <p class="text-[10px] font-black uppercase tracking-wide" x-text="toast.type === 'success' ? 'Success' : 'Error'"></p>
+        <p class="text-[11px] font-medium mt-0.5" x-text="toast.message"></p>
+      </div>
+      <button @click="toast.show = false" class="text-current opacity-60 hover:opacity-100">
+        <span class="material-icons-round text-[14px]">close</span>
+      </button>
+    </div>
+  </div>
+
   <div
     class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]"
     style="background-image:url('/static/images/denr.jpg'); background-position:center 30%; background-size:520px;"
@@ -70,17 +91,17 @@
     <section class="grid grid-cols-1 mb-1 sm:grid-cols-3 gap-2 shrink-0">
       <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-800">
         <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Municipal Offices</p>
-        <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">12</div>
+        <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.offices">0</div>
         <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Departments/units</p>
       </div>
       <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-emerald-700">
         <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Linked Bank Accts</p>
-        <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">5</div>
+        <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.banks">0</div>
         <p class="text-[9px] text-slate-500 mt-0.5 font-medium">For collections/disburse</p>
       </div>
       <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm bg-slate-800 text-white">
         <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Entities</p>
-        <div class="text-lg font-black text-emerald-400 mt-0.5 leading-none">17</div>
+        <div class="text-lg font-black text-emerald-400 mt-0.5 leading-none" x-text="stats.total">0</div>
         <p class="text-[9px] text-slate-400 mt-0.5 font-medium">Within municipality</p>
       </div>
     </section>
@@ -117,25 +138,25 @@
         <div class="flex flex-wrap items-center gap-1.5">
           <div class="relative">
             <span class="material-icons-round text-slate-400 absolute left-1.5 top-1/2 -translate-y-1/2 text-[12px]">search</span>
-            <input type="text" id="searchInput" placeholder="Search entity..."
+            <input type="text" x-model="filters.search" placeholder="Search entity..."
                    class="pl-6 pr-2 py-0.5 text-[10px] font-bold border border-slate-300 rounded-[2px] w-56 bg-white outline-none focus:border-blue-800">
           </div>
 
-          <select id="typeFilter" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white uppercase text-slate-700">
+          <select x-model="filters.type" aria-label="Filter by entity type" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white uppercase text-slate-700">
             <option value="ALL">All Types</option>
             <option value="MUNICIPAL">Municipal Unit</option>
             <option value="OFFICE">Office/Department</option>
             <option value="BANK">Bank Account</option>
           </select>
 
-          <select id="statusFilter" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white uppercase text-slate-700">
+          <select x-model="filters.status" aria-label="Filter by status" class="px-2 py-1 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white uppercase text-slate-700">
             <option value="ALL">All Status</option>
             <option value="ACTIVE">Active</option>
             <option value="SUSPENDED">Suspended</option>
             <option value="PENDING">Pending</option>
           </select>
 
-          <button onclick="resetFilters()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] transition">
+          <button @click="resetFilters()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] transition">
             Reset
           </button>
         </div>
@@ -156,81 +177,42 @@
 
           <tbody id="entityTable" class="text-[10px] divide-y divide-slate-100">
 
-            <tr class="hover:bg-blue-50 transition bg-slate-50/50" data-type="MUNICIPAL" data-status="ACTIVE">
-              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">
-                {{ municipality_name if municipality_name else 'Municipality Government' }}
-              </td>
-              <td class="px-3 py-1.5 text-blue-800 font-black border-r border-slate-100">MUNICIPAL</td>
-              <td class="px-3 py-1.5 text-slate-600 border-r border-slate-100">Main LGU</td>
-              <td class="px-3 py-1.5 border-r border-slate-100 font-mono text-slate-600">LBP-0000-XXXX</td>
-              <td class="px-3 py-1.5 border-r border-slate-100 text-center">
-                <span class="px-1 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-[2px] font-black text-[8px] uppercase">Active</span>
-              </td>
-              <td class="px-3 py-1.5 text-center">
-                <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
-              </td>
-            </tr>
+            <!-- Dynamically loaded entities -->
+            <template x-for="entity in filteredEntities" :key="entity.id">
+              <tr class="hover:bg-slate-50 transition">
+                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100" x-text="entity.name"></td>
+                <td class="px-3 py-1.5 border-r border-slate-100 font-bold text-slate-600" x-text="entity.type"></td>
+                <td class="px-3 py-1.5 border-r border-slate-100 text-slate-700" x-text="entity.office_or_unit || '—'"></td>
+                <td class="px-3 py-1.5 border-r border-slate-100 font-mono text-slate-600" x-text="entity.bank_account || '—'"></td>
+                <td class="px-3 py-1.5 border-r border-slate-100 text-center">
+                  <span class="px-1 py-0.5 rounded-[2px] font-black text-[8px] uppercase border"
+                        :class="{
+                          'bg-emerald-100 text-emerald-800 border-emerald-200': entity.status === 'ACTIVE',
+                          'bg-rose-100 text-rose-800 border-rose-200': entity.status === 'SUSPENDED',
+                          'bg-amber-100 text-amber-800 border-amber-200': entity.status === 'PENDING'
+                        }"
+                        x-text="entity.status || 'ACTIVE'"></span>
+                </td>
+                <td class="px-3 py-1.5 text-center">
+                  <button @click="editEntity(entity)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
+                </td>
+              </tr>
+            </template>
 
-            <tr class="hover:bg-slate-50 transition" data-type="OFFICE" data-status="ACTIVE">
-              <td class="px-3 py-1.5 font-bold pl-8 text-slate-700 border-r border-slate-100 flex items-center gap-1">
-                <span class="material-icons-round text-slate-300 text-[12px]">subdirectory_arrow_right</span>
-                Municipal Treasury Office
-              </td>
-              <td class="px-3 py-1.5 border-r border-slate-100 font-bold text-slate-600">OFFICE</td>
-              <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Treasury</td>
-              <td class="px-3 py-1.5 border-r border-slate-100 font-mono text-slate-600">LBP-1234-XXXX</td>
-              <td class="px-3 py-1.5 border-r border-slate-100 text-center">
-                <span class="px-1 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-[2px] font-black text-[8px] uppercase">Active</span>
-              </td>
-              <td class="px-3 py-1.5 text-center">
-                <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
+            <!-- No data message -->
+            <tr x-show="filteredEntities.length === 0">
+              <td colspan="6" class="px-3 py-8 text-center text-slate-500 text-[11px]">
+                <span class="material-icons-round text-slate-300 text-[32px] block mb-1">inbox</span>
+                No entities found
               </td>
             </tr>
-
-            <tr class="hover:bg-slate-50 transition" data-type="OFFICE" data-status="PENDING">
-              <td class="px-3 py-1.5 font-bold pl-8 text-slate-700 border-r border-slate-100 flex items-center gap-1">
-                <span class="material-icons-round text-slate-300 text-[12px]">subdirectory_arrow_right</span>
-                Municipal Engineering Office
-              </td>
-              <td class="px-3 py-1.5 border-r border-slate-100 font-bold text-slate-600">OFFICE</td>
-              <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Engineering</td>
-              <td class="px-3 py-1.5 border-r border-slate-100 font-mono text-slate-400">—</td>
-              <td class="px-3 py-1.5 border-r border-slate-100 text-center">
-                <span class="px-1 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 rounded-[2px] font-black text-[8px] uppercase">Pending</span>
-              </td>
-              <td class="px-3 py-1.5 text-center">
-                <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
-              </td>
-            </tr>
-
-            {% for e in entities %}
-            <tr class="hover:bg-slate-50 transition"
-                data-type="{{ (e.type or 'OFFICE')|upper }}"
-                data-status="{{ (e.status or 'ACTIVE')|upper }}">
-              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">{{ e.name }}</td>
-              <td class="px-3 py-1.5 border-r border-slate-100 font-bold text-slate-600">{{ e.type }}</td>
-              <td class="px-3 py-1.5 border-r border-slate-100 text-slate-700">{{ e.office_or_unit or '—' }}</td>
-              <td class="px-3 py-1.5 border-r border-slate-100 font-mono text-slate-600">{{ e.bank_account or '—' }}</td>
-              <td class="px-3 py-1.5 border-r border-slate-100 text-center">
-                <span class="px-1 py-0.5 rounded-[2px] font-black text-[8px] uppercase border
-                  {% if (e.status or '') == 'ACTIVE' %} bg-emerald-100 text-emerald-800 border-emerald-200
-                  {% elif (e.status or '') == 'SUSPENDED' %} bg-rose-100 text-rose-800 border-rose-200
-                  {% else %} bg-amber-100 text-amber-800 border-amber-200 {% endif %}">
-                  {{ e.status or 'ACTIVE' }}
-                </span>
-              </td>
-              <td class="px-3 py-1.5 text-center">
-                <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
-              </td>
-            </tr>
-            {% endfor %}
 
           </tbody>
         </table>
       </div>
     </section>
 
-    <div x-show="modalOpen" style="display:none;" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[3000] p-4">
+    <div x-show="modalOpen" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[3000] p-4">
       <div @click.away="modalOpen = false" class="bg-white rounded-[2px] w-full max-w-sm p-0 shadow-2xl border border-slate-400 overflow-hidden">
         <div class="bg-slate-800 px-4 py-2 flex justify-between items-center">
           <h3 class="text-[11px] font-black uppercase tracking-widest text-white m-0">Register New Entity (Municipal)</h3>
@@ -239,36 +221,37 @@
           </button>
         </div>
 
-        <form class="p-4 space-y-3 bg-slate-50" onsubmit="event.preventDefault(); alert('Save entity (demo)'); modalOpen=false;">
+        <form class="p-4 space-y-3 bg-slate-50" @submit.prevent="saveEntity">
           <div>
             <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Entity Type</label>
-            <select x-model="newEntityType" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white focus:border-blue-800 outline-none">
-              <option value="Office">Office/Department</option>
-              <option value="Bank">Bank Account</option>
-              <option value="Unit">Local Unit (Optional)</option>
+            <select x-model="newEntity.type" aria-label="Entity type" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white focus:border-blue-800 outline-none">
+              <option value="OFFICE">Office/Department</option>
+              <option value="BANK">Bank Account</option>
+              <option value="UNIT">Local Unit (Optional)</option>
             </select>
           </div>
 
           <div>
             <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Official Name</label>
-            <input type="text" placeholder="e.g. Municipal Budget Office"
+            <input type="text" x-model="newEntity.name" placeholder="e.g. Municipal Budget Office"
                    class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none focus:border-blue-800 uppercase">
           </div>
 
-          <div x-show="newEntityType !== 'Bank'" style="display:none;">
+          <div x-show="newEntity.type !== 'BANK'">
             <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Office / Unit</label>
-            <select class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none focus:border-blue-800">
-              <option>Treasury</option>
-              <option>Accounting</option>
-              <option>Budget</option>
-              <option>Engineering</option>
-              <option>Admin</option>
+            <select x-model="newEntity.office_or_unit" aria-label="Office or unit" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none focus:border-blue-800">
+              <option value="">Select...</option>
+              <option value="Treasury">Treasury</option>
+              <option value="Accounting">Accounting</option>
+              <option value="Budget">Budget</option>
+              <option value="Engineering">Engineering</option>
+              <option value="Admin">Admin</option>
             </select>
           </div>
 
-          <div x-show="newEntityType === 'Bank'" style="display:none;" class="bg-blue-50 border border-blue-200 p-2 rounded-[2px]">
+          <div x-show="newEntity.type === 'BANK'" class="bg-blue-50 border border-blue-200 p-2 rounded-[2px]">
             <label class="block text-[9px] font-bold text-blue-800 uppercase mb-1">Depository Bank Account</label>
-            <input type="text" placeholder="Format: LBP-XXXX-XXXX"
+            <input type="text" x-model="newEntity.bank_account" placeholder="Format: LBP-XXXX-XXXX"
                    class="w-full px-2 py-1 text-[10px] font-mono border border-blue-300 rounded-[2px] bg-white outline-none focus:border-blue-800">
             <p class="mt-1 text-[9px] text-blue-800 font-medium">
               Tip: link this bank to deposit/expense modules for proper reporting.
@@ -277,16 +260,17 @@
 
           <div>
             <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Status</label>
-            <select class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none focus:border-blue-800">
-              <option>Active</option>
-              <option>Pending</option>
-              <option>Suspended</option>
+            <select x-model="newEntity.status" aria-label="Entity status" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none focus:border-blue-800">
+              <option value="ACTIVE">Active</option>
+              <option value="PENDING">Pending</option>
+              <option value="SUSPENDED">Suspended</option>
             </select>
           </div>
 
           <div class="pt-2">
-            <button type="submit" class="w-full bg-blue-900 hover:bg-blue-950 text-white py-2 rounded-[2px] text-[10px] font-black uppercase shadow-sm">
-              Save Entity Record
+            <button type="submit" :disabled="saving" class="w-full bg-blue-900 hover:bg-blue-950 text-white py-2 rounded-[2px] text-[10px] font-black uppercase shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+              <span x-show="!saving">Save Entity Record</span>
+              <span x-show="saving">Saving...</span>
             </button>
           </div>
         </form>
@@ -299,93 +283,261 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-  const searchInput = document.getElementById('searchInput');
-  const typeFilter = document.getElementById('typeFilter');
-  const statusFilter = document.getElementById('statusFilter');
+  function entitiesPage() {
+    return {
+      modalOpen: false,
+      saving: false,
+      loading: true,
+      entities: [],
+      stats: {
+        total: 0,
+        offices: 0,
+        banks: 0,
+        units: 0,
+        by_type: {},
+        by_status: {}
+      },
+      filters: {
+        search: '',
+        type: 'ALL',
+        status: 'ALL'
+      },
+      newEntity: {
+        type: 'OFFICE',
+        name: '',
+        office_or_unit: '',
+        bank_account: '',
+        status: 'ACTIVE'
+      },
+      toast: {
+        show: false,
+        type: 'success',
+        message: ''
+      },
 
-  function applyFilters(){
-    const q = (searchInput.value || '').toLowerCase().trim();
-    const t = (typeFilter.value || 'ALL').toUpperCase();
-    const s = (statusFilter.value || 'ALL').toUpperCase();
+      get filteredEntities() {
+        return this.entities.filter(entity => {
+          const matchSearch = !this.filters.search || 
+            entity.name.toLowerCase().includes(this.filters.search.toLowerCase()) ||
+            (entity.office_or_unit || '').toLowerCase().includes(this.filters.search.toLowerCase()) ||
+            (entity.bank_account || '').toLowerCase().includes(this.filters.search.toLowerCase());
+          
+          const matchType = this.filters.type === 'ALL' || entity.type === this.filters.type;
+          const matchStatus = this.filters.status === 'ALL' || entity.status === this.filters.status;
+          
+          return matchSearch && matchType && matchStatus;
+        });
+      },
 
-    document.querySelectorAll('#entityTable tr').forEach(row => {
-      const text = row.innerText.toLowerCase();
-      const rowType = (row.getAttribute('data-type') || '').toUpperCase();
-      const rowStatus = (row.getAttribute('data-status') || '').toUpperCase();
+      async init() {
+        this.initCharts();
+        await this.loadEntities();
+      },
 
-      const matchText = text.includes(q);
-      const matchType = (t === 'ALL' || rowType === t);
-      const matchStatus = (s === 'ALL' || rowStatus === s);
+      async loadEntities() {
+        try {
+          this.loading = true;
+          const response = await fetch('/api/municipal/entities');
+          const data = await response.json();
+          
+          if (response.ok) {
+            this.entities = data.entities || [];
+            this.stats = data.stats || this.stats;
+            this.updateCharts();
+          } else {
+            this.showToast('error', 'Failed to load entities');
+          }
+        } catch (error) {
+          console.error('Load error:', error);
+          this.showToast('error', 'Failed to load entities');
+        } finally {
+          this.loading = false;
+        }
+      },
 
-      row.style.display = (matchText && matchType && matchStatus) ? '' : 'none';
-    });
-  }
+      showToast(type, message) {
+        this.toast = { show: true, type, message };
+        setTimeout(() => {
+          this.toast.show = false;
+        }, 2800);
+      },
 
-  function resetFilters(){
-    searchInput.value = '';
-    typeFilter.value = 'ALL';
-    statusFilter.value = 'ALL';
-    applyFilters();
-  }
+      resetForm() {
+        this.newEntity = {
+          type: 'OFFICE',
+          name: '',
+          office_or_unit: '',
+          bank_account: '',
+          status: 'ACTIVE'
+        };
+      },
 
-  searchInput.addEventListener('input', applyFilters);
-  typeFilter.addEventListener('change', applyFilters);
-  statusFilter.addEventListener('change', applyFilters);
+      resetFilters() {
+        this.filters = {
+          search: '',
+          type: 'ALL',
+          status: 'ALL'
+        };
+      },
 
-  Chart.defaults.font.family = "Verdana, Arial, sans-serif";
-  Chart.defaults.font.size = 9;
-  Chart.defaults.color = "#64748b";
+      editEntity(entity) {
+        // TODO: Implement edit functionality
+        this.showToast('error', 'Edit functionality coming soon');
+      },
 
-  const chartConfig = {
-    responsive: true,
-    maintainAspectRatio: false,
-    layout: { padding: 0 }
-  };
+      async saveEntity() {
+        if (!this.newEntity.name.trim()) {
+          this.showToast('error', 'Entity name is required');
+          return;
+        }
 
-  new Chart(document.getElementById('typeChart'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Offices', 'Bank Accounts', 'Local Units'],
-      datasets: [{
-        data: [12, 5, 0],
-        backgroundColor: ['#1e3a8a', '#10b981', '#cbd5e1'],
-        borderWidth: 0
-      }]
-    },
-    options: {
-      ...chartConfig,
-      cutout: '70%',
-      plugins: {
-        legend: {
-          position: 'right',
-          labels: { boxWidth: 8, font: { size: 8 }, padding: 10 }
+        if (this.newEntity.type !== 'BANK' && !this.newEntity.office_or_unit) {
+          this.showToast('error', 'Office/Unit is required for non-bank entities');
+          return;
+        }
+
+        if (this.newEntity.type === 'BANK' && !this.newEntity.bank_account.trim()) {
+          this.showToast('error', 'Bank account number is required');
+          return;
+        }
+
+        this.saving = true;
+
+        try {
+          const response = await fetch('/api/municipal/entities', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this.newEntity)
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            this.showToast('success', 'Entity saved successfully');
+            this.modalOpen = false;
+            this.resetForm();
+            await this.loadEntities();
+          } else {
+            this.showToast('error', data.error || 'Failed to save entity');
+          }
+        } catch (error) {
+          console.error('Save error:', error);
+          this.showToast('error', 'Network error. Please try again.');
+        } finally {
+          this.saving = false;
+        }
+      },
+
+      typeChartInstance: null,
+      statusChartInstance: null,
+
+      initCharts() {
+        // Destroy existing charts if they exist
+        if (this.typeChartInstance) {
+          this.typeChartInstance.destroy();
+          this.typeChartInstance = null;
+        }
+        if (this.statusChartInstance) {
+          this.statusChartInstance.destroy();
+          this.statusChartInstance = null;
+        }
+
+        Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+        Chart.defaults.font.size = 9;
+        Chart.defaults.color = "#64748b";
+
+        const chartConfig = {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: 0 }
+        };
+
+        const typeCanvas = document.getElementById('typeChart');
+        const statusCanvas = document.getElementById('statusChart');
+
+        if (!typeCanvas || !statusCanvas) {
+          console.error('Chart canvases not found');
+          return;
+        }
+
+        this.typeChartInstance = new Chart(typeCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: ['Offices', 'Bank Accounts', 'Local Units'],
+            datasets: [{
+              data: [0, 0, 0],
+              backgroundColor: ['#1e3a8a', '#10b981', '#cbd5e1'],
+              borderWidth: 0
+            }]
+          },
+          options: {
+            ...chartConfig,
+            cutout: '70%',
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: { boxWidth: 8, font: { size: 8 }, padding: 10 }
+              }
+            }
+          }
+        });
+
+        this.statusChartInstance = new Chart(statusCanvas, {
+          type: 'bar',
+          data: {
+            labels: ['Active', 'Suspended', 'Pending'],
+            datasets: [{
+              data: [0, 0, 0],
+              backgroundColor: ['#10b981', '#f43f5e', '#f59e0b'],
+              borderRadius: 2,
+              barPercentage: 0.6
+            }]
+          },
+          options: {
+            ...chartConfig,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { grid: { display: false } },
+              y: { display: false }
+            }
+          }
+        });
+      },
+
+      updateCharts() {
+        try {
+          if (this.typeChartInstance) {
+            this.typeChartInstance.data.datasets[0].data = [
+              this.stats.offices || 0,
+              this.stats.banks || 0,
+              this.stats.units || 0
+            ];
+            this.typeChartInstance.update();
+          }
+
+          if (this.statusChartInstance) {
+            this.statusChartInstance.data.datasets[0].data = [
+              this.stats.by_status?.ACTIVE || 0,
+              this.stats.by_status?.SUSPENDED || 0,
+              this.stats.by_status?.PENDING || 0
+            ];
+            this.statusChartInstance.update();
+          }
+        } catch (error) {
+          console.error('Error updating charts:', error);
         }
       }
-    }
-  });
+    };
+  }
 
-  new Chart(document.getElementById('statusChart'), {
-    type: 'bar',
-    data: {
-      labels: ['Active', 'Suspended', 'Pending'],
-      datasets: [{
-        data: [15, 0, 2],
-        backgroundColor: ['#10b981', '#f43f5e', '#f59e0b'],
-        borderRadius: 2,
-        barPercentage: 0.6
-      }]
-    },
-    options: {
-      ...chartConfig,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { display: false } },
-        y: { display: false }
-      }
-    }
-  });
-
-  applyFilters();
+  // Global notification function for header.html
+  function notificationData() {
+    return {
+      count: 0,
+      unread: [],
+      all: []
+    };
+  }
 </script>
 
 </body>
