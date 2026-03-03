@@ -1,323 +1,106 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DENR | System Audit Logs</title>
+<aside id="superadmin-sidenav"
+  style="font-family: Inter, sans-serif;"
+  class="fixed left-0 top-0 h-full w-64 bg-[#0f172a] flex flex-col z-[1040] shadow-xl overflow-y-auto">
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            denr: '#006400',
-            'audit-crimson': '#991b1b',
-            'audit-slate': '#0f172a',
-            'gov-blue': '#0038a8',
-            'gov-red': '#ce1126',
-          },
-          fontFamily: { serif: ['Georgia','serif'], sans: ['Inter','sans-serif'] }
-        }
-      }
-    }
-  </script>
-  <style>
-    .gov-strip{background:linear-gradient(to right,#0038a8 50%,#ce1126 50%);height:4px;width:100%;position:fixed;top:0;left:0;z-index:5000}
-    ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#991b1b;border-radius:10px}
-    html,body{height:100vh;overflow:hidden}
-    .main-wrapper{transition:all .3s ease-in-out}
-    td,th{padding:.4rem .75rem!important}
-  </style>
-</head>
-
-<body class="min-h-screen bg-[#f4f7f6] font-sans text-slate-900 overflow-x-hidden flex flex-col">
-  <div class="gov-strip"></div>
-
-  <div class="fixed top-1 w-full z-[4000] no-print">
-    {% include 'super-admin/header-superadmin.html' %}
-  </div>
-
-  <div class="fixed left-0 h-full z-[3000] no-print">
-    {% include 'super-admin/sidenav-superadmin.html' %}
-  </div>
-
-  <main class="lg:ml-64 pt-24 h-screen flex flex-col transition-all duration-300 main-wrapper">
-    <div class="max-w-[1750px] mx-auto w-full px-4 flex flex-col flex-1 min-h-0 space-y-2">
-
-      <!-- Header -->
-      <header class="bg-white border border-slate-300 border-t-4 border-t-audit-crimson p-3 flex items-center gap-4 shadow-sm shrink-0">
-        <div class="bg-slate-900 p-2 rounded-lg border border-slate-700">
-          <span class="material-icons-round text-white text-2xl">history_edu</span>
-        </div>
-        <div class="flex-1 border-l-2 border-slate-200 pl-4">
-          <h1 class="font-serif text-lg font-black uppercase tracking-tight text-slate-800 leading-none">System Logs</h1>
-          <p class="text-[9px] font-bold text-audit-crimson uppercase tracking-widest mt-1">National • Regional • Municipal Activity Trail</p>
-        </div>
-        <div class="flex gap-2 no-print">
-          <button id="btnCsv" class="bg-white border border-slate-400 px-3 py-1 text-[9px] font-black uppercase hover:bg-slate-50 transition">
-            Export
-          </button>
-          <button class="bg-audit-crimson text-white px-4 py-1 text-[9px] font-black uppercase shadow-md hover:bg-red-900 transition flex items-center gap-1">
-            <span class="material-icons-round text-sm">verified</span> Archive
-          </button>
-        </div>
-      </header>
-
-      <!-- KPI -->
-      <div class="grid grid-cols-5 gap-2 shrink-0">
-        <div class="bg-white border-t-2 border-t-slate-800 p-2 shadow-sm text-center">
-          <p class="text-[8px] font-black text-slate-400 uppercase">Events (Shown)</p>
-          <h3 id="kTotal" class="text-xl font-black text-slate-800 leading-none">0</h3>
-        </div>
-        <div class="bg-white border-t-2 border-t-gov-blue p-2 shadow-sm text-center">
-          <p class="text-[8px] font-black text-slate-400 uppercase">National</p>
-          <h3 id="kNat" class="text-xl font-black text-gov-blue leading-none">0</h3>
-        </div>
-        <div class="bg-white border-t-2 border-t-amber-500 p-2 shadow-sm text-center">
-          <p class="text-[8px] font-black text-slate-400 uppercase">Regional</p>
-          <h3 id="kReg" class="text-xl font-black text-amber-600 leading-none">0</h3>
-        </div>
-        <div class="bg-white border-t-2 border-t-denr p-2 shadow-sm text-center">
-          <p class="text-[8px] font-black text-slate-400 uppercase">Municipal</p>
-          <h3 id="kMun" class="text-xl font-black text-denr leading-none">0</h3>
-        </div>
-        <div class="bg-white border-t-2 border-t-audit-crimson p-2 shadow-sm text-center">
-          <p class="text-[8px] font-black text-slate-400 uppercase">Flags</p>
-          <h3 id="kFlags" class="text-xl font-black text-audit-crimson leading-none">0</h3>
-        </div>
-      </div>
-
-      <!-- Charts -->
-      <div class="grid grid-cols-12 gap-2 h-40 shrink-0">
-        <div class="col-span-8 bg-white border border-slate-200 p-3 shadow-sm">
-          <h4 class="text-[9px] font-black text-slate-500 uppercase border-l-2 border-audit-crimson pl-2 mb-2">Activity Frequency (Daily)</h4>
-          <div class="h-28"><canvas id="trend"></canvas></div>
-        </div>
-        <div class="col-span-4 bg-white border border-slate-200 p-3 shadow-sm text-center">
-          <h4 class="text-[9px] font-black text-slate-500 uppercase border-l-2 border-audit-slate pl-2 mb-2 text-left">Level Mix</h4>
-          <div class="h-28"><canvas id="mix"></canvas></div>
-        </div>
-      </div>
-
-      <!-- Table -->
-      <div class="bg-white border border-slate-200 shadow-md flex flex-col flex-1 min-h-0 overflow-hidden">
-        <!-- Filters -->
-        <div class="p-3 bg-slate-50 border-b grid grid-cols-1 md:grid-cols-5 gap-2 shrink-0 no-print">
-          <div class="md:col-span-2 space-y-0.5">
-            <label class="text-[8px] font-black text-slate-400 uppercase ml-1">Search</label>
-            <input id="q" oninput="applyFilters()"
-              class="w-full px-2 py-1 text-[11px] border border-slate-300 rounded outline-none focus:ring-1 focus:ring-audit-crimson"
-              placeholder="User, Office, Action, Module, IP..." />
-          </div>
-
-          <div class="space-y-0.5">
-            <label class="text-[8px] font-black text-slate-400 uppercase ml-1">Category</label>
-            <select id="lvl" onchange="applyFilters()"
-              class="w-full px-2 py-1 text-[11px] border border-slate-300 bg-white font-bold outline-none rounded">
-              <option value="all">-- ALL --</option>
-              <option value="National">NATIONAL</option>
-              <option value="Regional">REGIONAL</option>
-              <option value="Municipal">MUNICIPAL</option>
-            </select>
-          </div>
-
-          <div class="space-y-0.5">
-            <label class="text-[8px] font-black text-slate-400 uppercase ml-1">Module</label>
-            <select id="mod" onchange="applyFilters()"
-              class="w-full px-2 py-1 text-[11px] border border-slate-300 bg-white outline-none rounded">
-              <option value="all">-- ALL MODULES --</option>
-              <option value="Auth">Auth</option>
-              <option value="User Management">User Management</option>
-              <option value="Applications">Applications</option>
-              <option value="Permit Processing">Permit Processing</option>
-              <option value="Transactions">Transactions</option>
-              <option value="Inventory">Inventory</option>
-              <option value="Security">Security</option>
-              <option value="Services">Services</option>
-              <option value="Settings">Settings</option>
-              <option value="Audit">Audit</option>
-            </select>
-          </div>
-
-          <div class="flex items-end gap-2">
-            <button onclick="location.reload()"
-              class="w-full bg-slate-800 text-white py-1.5 text-[10px] font-black uppercase hover:bg-black transition tracking-widest rounded">
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        <div class="overflow-y-auto flex-1">
-          <table class="w-full text-left border-collapse" id="masterTable">
-            <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-              <tr class="text-[9px] uppercase font-black text-slate-600">
-                <th>Timestamp</th>
-                <th>Category</th>
-                <th>Office</th>
-                <th>User</th>
-                <th>Action Registry</th>
-                <th>Module</th>
-                <th class="text-right">Info</th>
-              </tr>
-            </thead>
-            <tbody id="body" class="divide-y divide-slate-100 text-[11px] text-slate-700"></tbody>
-          </table>
-        </div>
-
-        <div class="px-3 py-1.5 bg-slate-800 text-white flex justify-between items-center text-[8px] font-black uppercase shrink-0">
-          <div>Matches: <span id="count" class="text-amber-400">0</span> Entries</div>
-          <div class="flex items-center gap-2 text-red-400">
-            <span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
-            SECURE AUDIT SESSION v2.0
-          </div>
-        </div>
-      </div>
+  <!-- Logo / Brand -->
+  <div class="flex items-center gap-3 px-4 py-4 border-b border-slate-700 shrink-0">
+    <div class="w-9 h-9 bg-green-700 flex items-center justify-center rounded shrink-0">
+      <span class="material-icons-round text-white text-[20px]">admin_panel_settings</span>
     </div>
-  </main>
+    <div class="leading-tight overflow-hidden">
+      <p class="text-[11px] font-black text-white uppercase tracking-tight m-0 truncate">DENR Super Admin</p>
+      <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest m-0 mt-0.5">Master Console</p>
+    </div>
+  </div>
 
-  <script>
-    // ---- Mock System Logs (National/Regional/Municipal) ----
-    const LOGS = [
-      { t:"2026-02-28 09:12:11", lvl:"National",  office:"DENR Central Office",        user:"superadmin@tlph.gov.ph", mod:"User Management",     act:"Created User",   ip:"203.177.12.44",  sev:"Info",     msg:"Created Regional Admin account (Region IV-A)." },
-      { t:"2026-02-28 10:03:57", lvl:"Regional",  office:"Region IV-A (CALABARZON)",   user:"regional.admin@tlph.gov.ph", mod:"Permit Processing", act:"Approved",      ip:"112.201.55.19",  sev:"Info",     msg:"Approved Environmental Permit #ENV-2026-0142." },
-      { t:"2026-02-28 10:41:23", lvl:"Municipal", office:"Tagaytay City",              user:"municipal.admin@tlph.gov.ph", mod:"Services",         act:"Forwarded",     ip:"49.146.88.2",    sev:"Warning",  msg:"Forwarded seminar request to Regional for validation." },
-      { t:"2026-02-27 14:20:03", lvl:"Municipal", office:"Silang, Cavite",             user:"silang.muni@tlph.gov.ph", mod:"Inventory",           act:"Updated Stock",  ip:"49.147.12.88",   sev:"Info",     msg:"Updated inventory item: Tree Seedlings (+120)." },
-      { t:"2026-02-27 15:15:44", lvl:"Regional",  office:"Region IV-A (CALABARZON)",   user:"regional.staff@tlph.gov.ph", mod:"Applications",      act:"Reviewed",      ip:"112.201.55.21",  sev:"Info",     msg:"Reviewed Fisheries License application #FIS-2026-0029." },
-      { t:"2026-02-26 08:02:35", lvl:"National",  office:"DENR Central Office",        user:"national.auditor@tlph.gov.ph", mod:"Audit",           act:"Exported Report", ip:"203.177.12.18", sev:"Info",     msg:"Exported system audit report for February 2026." },
-      { t:"2026-02-26 11:09:09", lvl:"Municipal", office:"Alfonso, Cavite",            user:"alfonso.muni@tlph.gov.ph", mod:"Permit Processing",  act:"Submitted",     ip:"49.146.77.55",   sev:"Info",     msg:"Submitted Forestry Permit application #FOR-2026-0107." },
-      { t:"2026-02-25 13:55:40", lvl:"Regional",  office:"Region IV-A (CALABARZON)",   user:"regional.admin@tlph.gov.ph", mod:"User Management",  act:"Disabled User", ip:"112.201.55.19",  sev:"Warning",  msg:"Disabled account due to inactive status (temp.staff)." },
-      { t:"2026-02-25 16:10:12", lvl:"National",  office:"DENR Central Office",        user:"superadmin@tlph.gov.ph", mod:"Settings",            act:"Updated Policy", ip:"203.177.12.44", sev:"Info",     msg:"Updated approval workflow thresholds for permits." },
-      { t:"2026-02-24 09:33:00", lvl:"Municipal", office:"Mendez, Cavite",             user:"mendez.muni@tlph.gov.ph", mod:"Services",            act:"Completed",     ip:"49.146.99.10",   sev:"Info",     msg:"Marked service request #SRV-2026-0041 as completed." },
-      { t:"2026-02-23 22:18:51", lvl:"Regional",  office:"Region III (Central Luzon)", user:"r3.security@tlph.gov.ph", mod:"Security",            act:"Login Failed",  ip:"45.12.88.19",    sev:"Critical", msg:"Brute force attempt detected; account locked for 15 minutes." }
-    ];
+  <!-- Nav Links -->
+  <nav class="flex-1 px-2 py-3 space-y-0.5 text-[11px] font-bold text-slate-300">
 
-    // ---- Charts ----
-    const OPT_LINE = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-      scales:{ x:{ ticks:{font:{size:9}} }, y:{ ticks:{font:{size:9}, precision:0}, beginAtZero:true } } };
+    <a href="/super-admin/dashboard"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-green-400">dashboard</span>
+      <span>Dashboard</span>
+    </a>
 
-    let trendChart, mixChart;
+    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest px-3 pt-3 pb-1 m-0">Registry</p>
 
-    const day = (t)=>t.slice(0,10);
-    const dt = (t)=>new Date(t.replace(" ","T"));
+    <a href="/superadmin/user-application"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-blue-400">description</span>
+      <span>Applications</span>
+    </a>
 
-    function countsByDay(data){
-      const m={}; data.forEach(x=>m[day(x.t)]=(m[day(x.t)]||0)+1);
-      const labels=Object.keys(m).sort();
-      return { labels, values: labels.map(k=>m[k]) };
-    }
-    function countsByLevel(data){
-      const c={National:0,Regional:0,Municipal:0};
-      data.forEach(x=>c[x.lvl]=(c[x.lvl]||0)+1);
-      return c;
-    }
-    function initCharts(data){
-      const d=countsByDay(data), c=countsByLevel(data);
-      trendChart = new Chart(document.getElementById('trend'), {
-        type:'line',
-        data:{ labels:d.labels, datasets:[{ data:d.values, borderColor:'#991b1b', backgroundColor:'rgba(153,27,27,.06)', fill:true, tension:.3, borderWidth:2, pointRadius:2 }]},
-        options: OPT_LINE
-      });
+    <a href="/superadmin/user-service-request"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-amber-400">room_service</span>
+      <span>Service Requests</span>
+    </a>
 
-      mixChart = new Chart(document.getElementById('mix'), {
-        type:'doughnut',
-        data:{ labels:['National','Regional','Municipal'], datasets:[{ data:[c.National,c.Regional,c.Municipal], backgroundColor:['#0038a8','#d97706','#006400'], borderWidth:0 }]},
-        options:{ responsive:true, maintainAspectRatio:false, cutout:'70%',
-          plugins:{ legend:{ position:'right', labels:{ boxWidth:8, font:{ size:8 } } } } }
-      });
-    }
-    function updateCharts(data){
-      const d=countsByDay(data), c=countsByLevel(data);
-      trendChart.data.labels = d.labels;
-      trendChart.data.datasets[0].data = d.values;
-      trendChart.update();
+    <a href="/superadmin/permits"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-emerald-400">verified</span>
+      <span>Permits & Licenses</span>
+    </a>
 
-      mixChart.data.datasets[0].data = [c.National,c.Regional,c.Municipal];
-      mixChart.update();
-    }
+    <a href="/superadmin/transaction"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-indigo-400">receipt_long</span>
+      <span>Transactions</span>
+    </a>
 
-    // ---- Table + Filters ----
-    const sevPill = (s)=>{
-      const cls = s==='Critical' ? 'bg-red-100 text-red-700 border-red-300' :
-                  s==='Warning'  ? 'bg-amber-100 text-amber-700 border-amber-300' :
-                                  'bg-blue-100 text-blue-700 border-blue-300';
-      return `<span class="px-1.5 py-0.5 rounded border text-[8px] font-black uppercase ${cls}">${s}</span>`;
-    };
-    const lvlPill = (l)=>{
-      const cls = l==='National' ? 'bg-blue-100 text-gov-blue border-blue-300' :
-                  l==='Regional' ? 'bg-amber-100 text-amber-700 border-amber-300' :
-                                   'bg-green-100 text-denr border-green-300';
-      return `<span class="px-1.5 py-0.5 rounded border text-[8px] font-black uppercase ${cls}">${l}</span>`;
-    };
+    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest px-3 pt-3 pb-1 m-0">Assets</p>
 
-    function render(data){
-      const body=document.getElementById('body');
-      body.innerHTML='';
-      document.getElementById('count').textContent=data.length;
+    <a href="/superadmin/inventory"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-cyan-400">inventory_2</span>
+      <span>Inventory</span>
+    </a>
 
-      // KPIs
-      const c=countsByLevel(data);
-      document.getElementById('kTotal').textContent=data.length;
-      document.getElementById('kNat').textContent=c.National||0;
-      document.getElementById('kReg').textContent=c.Regional||0;
-      document.getElementById('kMun').textContent=c.Municipal||0;
-      document.getElementById('kFlags').textContent=data.filter(x=>x.sev!=='Info').length;
+    <a href="/superadmin/user-inventory"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-teal-400">manage_accounts</span>
+      <span>User Inventory</span>
+    </a>
 
-      data.forEach(r=>{
-        const tr=document.createElement('tr');
-        tr.className="hover:bg-red-50/30 transition-colors border-b";
-        tr.innerHTML=`
-          <td class="font-bold text-slate-400 font-mono text-[10px]">${r.t}</td>
-          <td class="font-black">${lvlPill(r.lvl)}</td>
-          <td class="font-bold text-slate-700">${r.office}</td>
-          <td class="font-black text-slate-800 tracking-tighter">${r.user}</td>
-          <td class="font-bold text-slate-600">${r.act}</td>
-          <td class="font-black uppercase text-[9px] text-slate-500">${r.mod}</td>
-          <td class="text-right">
-            <button onclick="alert('${(r.msg||'').replace(/'/g,"\\'")}\\n\\nIP: ${r.ip}\\nSeverity: ${r.sev}')" class="text-slate-400 hover:text-audit-crimson" title="View details">
-              <span class="material-icons-round text-sm">info</span>
-            </button>
-          </td>`;
-        body.appendChild(tr);
-      });
-    }
+    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest px-3 pt-3 pb-1 m-0">Administration</p>
 
-    function applyFilters(){
-      const s=(document.getElementById('q').value||'').toLowerCase();
-      const L=document.getElementById('lvl').value;
-      const M=document.getElementById('mod').value;
+    <a href="/superadmin/account"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-violet-400">group</span>
+      <span>Accounts</span>
+    </a>
 
-      let data = LOGS.slice()
-        .filter(x => (L==='all'||x.lvl===L) && (M==='all'||x.mod===M))
-        .filter(x => !s || (x.t+' '+x.lvl+' '+x.office+' '+x.user+' '+x.mod+' '+x.act+' '+x.ip+' '+x.msg).toLowerCase().includes(s))
-        .sort((a,b)=>dt(b.t)-dt(a.t));
+    <a href="/superadmin/audit-logs"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-rose-400">history_edu</span>
+      <span>Audit Logs</span>
+    </a>
 
-      render(data);
-      updateCharts(data);
-    }
+  </nav>
 
-    // Export CSV (uses current filtered view)
-    document.getElementById('btnCsv').onclick = ()=>{
-      const rows = [...document.querySelectorAll('#body tr')].map(tr=>[...tr.children].map(td=>td.innerText.replace(/\s+/g,' ').trim()));
-      const headers = ["Timestamp","Category","Office","User","Action","Module","Info"];
-      const csv = [headers.join(","), ...rows.map(r=>r.map(x=>`"${x.replace(/"/g,'""')}"`).join(","))].join("\n");
-      const a=document.createElement('a');
-      a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));
-      a.download="system_logs_export.csv";
-      a.click();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 500);
-    };
+  <!-- Footer -->
+  <div class="shrink-0 border-t border-slate-700 px-3 py-3 space-y-0.5 text-[11px] font-bold text-slate-300">
+    <a href="/superadmin/superadmin-profile"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-slate-400">person</span>
+      <span>Profile</span>
+    </a>
+    <a href="/superadmin/superadmin-notification"
+       class="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-700 hover:text-white transition-colors">
+      <span class="material-icons-round text-[18px] text-slate-400">notifications</span>
+      <span>Notifications</span>
+    </a>
+  </div>
 
-    // Init
-    window.onload = ()=>{
-      const init = LOGS.slice().sort((a,b)=>dt(b.t)-dt(a.t));
-      initCharts(init);
-      render(init);
-      applyFilters(); // ensures charts + kpis in sync if defaults change
-    };
-  </script>
-</body>
-</html>
+</aside>
+
+<script>
+  (function () {
+    const path = window.location.pathname;
+    document.querySelectorAll('#superadmin-sidenav a').forEach(function (a) {
+      if (a.getAttribute('href') === path) {
+        a.classList.add('bg-slate-700', 'text-white');
+      }
+    });
+  })();
+</script>
