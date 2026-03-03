@@ -92,7 +92,7 @@
       font-weight: 800; 
       text-transform: uppercase; 
       border: 1px solid;
-      width: 95px;
+      white-space: nowrap;
       text-align: center;
       letter-spacing: 0.2px;
     }
@@ -100,7 +100,8 @@
     .status-pending { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
     .status-rejected { background: #fef2f2; color: #7f1d1d; border-color: #fca5a5; }
     .status-under-review { background: #eff6ff; color: #0c2d6b; border-color: #bfdbfe; }
-    .status-forwarded { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+    .status-forwarded { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
+    .status-forwarded-national { background: #f5f3ff; color: #5b21b6; border-color: #ddd6fe; }
 
     /* Action Buttons */
     .action-btn { 
@@ -239,6 +240,89 @@
       overflow-x: auto; 
       border-top: 1px solid #cbd5e1;
     }
+
+    /* Responsive adjustments */
+    @media (max-width: 1024px) {
+      .toggle-buttons {
+        flex-direction: column;
+      }
+      .toggle-btn {
+        font-size: 8px;
+        padding: 6px 8px;
+      }
+      .search-container {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .search-input, .gov-input {
+        width: 100% !important;
+      }
+      /* make download section stack */
+      .download-buttons {
+        flex-direction: column;
+      }
+      .download-btn {
+        width: 100%;
+        text-align: center;
+      }
+    }
+
+    @media (max-width: 768px) {
+      th, td {
+        font-size: 10px;
+        padding: 8px !important;
+      }
+      .action-btn {
+        padding: 2px 6px;
+        font-size: 8px;
+      }
+      .status-label {
+        font-size: 8px;
+        padding: 2px 6px;
+        width: auto;
+      }
+      .download-btn {
+        padding: 6px 10px;
+        font-size: 8px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      body {
+        font-size: 11px;
+      }
+      .toggle-btn {
+        padding: 4px 6px;
+        font-size: 7px;
+      }
+      .search-input {
+        font-size: 9px;
+      }
+      .download-btn {
+        padding: 4px 8px;
+        font-size: 7px;
+      }
+      /* transform table into block cards */
+      .data-table, .data-table thead, .data-table tbody, .data-table th, .data-table td, .data-table tr {
+        display: block;
+      }
+      .data-table thead tr { position: absolute; top: -9999px; left: -9999px; }
+      .data-table tr { margin-bottom: 1rem; border-bottom: 1px solid #e2e8f0; }
+      .data-table td {
+        /* add label before each cell value */
+        position: relative;
+        padding-left: 50%;
+        text-align: left;
+      }
+      .data-table td::before {
+        position: absolute;
+        left: 0;
+        width: 45%;
+        padding-left: 10px;
+        white-space: nowrap;
+        font-weight: 700;
+      }
+    }
     
     .data-table { min-width: 100%; }
 
@@ -373,11 +457,20 @@
           onkeyup="filterTable('services')"
           style="flex: 1; min-width: 150px;"
         />
-        <select id="servicesStatusFilter" class="gov-input" onchange="filterTable('services')" style="width: 120px;">
+        <select id="servicesStatusFilter" class="gov-input" onchange="filterTable('services')" style="width: 145px;">
           <option value="">Status: ALL</option>
-          <option value="approved">APPROVED</option>
-          <option value="pending">PENDING</option>
-          <option value="rejected">REJECTED</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved By</option>
+          <option value="rejected">Rejected By</option>
+          <option value="fwd">Forwarded To</option>
+        </select>
+        <select id="servicesCategoryFilter" class="gov-input" onchange="filterTable('services')" style="width: 150px;">
+          <option value="">Type: ALL</option>
+          <option value="compensation">Compensation</option>
+          <option value="seminar">Seminars</option>
+          <option value="farm-visit">Farm Visits</option>
+          <option value="chemical">Chemicals</option>
+          <option value="financial">Financial</option>
         </select>
       </div>
       <div style="overflow-x: auto;">
@@ -608,13 +701,18 @@
           }
         }
         
-        // Category filtering (column index varies by table)
+        // Category filtering — services use data-category attribute; other tables use cell text
         let categoryMatch = true;
         if (categoryFilter) {
-          const categoryCell = row.cells[0]; // Category/Type is always first column
-          if (categoryCell) {
-            const cellText = categoryCell.textContent.toLowerCase();
-            categoryMatch = cellText.includes(categoryFilter);
+          if (tableType === 'services') {
+            const rowCat = (row.dataset.category || '').toLowerCase();
+            categoryMatch = rowCat === categoryFilter;
+          } else {
+            const categoryCell = row.cells[0]; // Category/Type is always first column
+            if (categoryCell) {
+              const cellText = categoryCell.textContent.toLowerCase();
+              categoryMatch = cellText.includes(categoryFilter);
+            }
           }
         }
         
@@ -647,7 +745,8 @@
       if (normalized === 'pending' || normalized === 'submitted') return 'status-pending';
       if (normalized === 'rejected') return 'status-rejected';
       if (normalized.includes('review')) return 'status-under-review';
-      if (normalized.includes('forward')) return 'status-forwarded';
+      if (normalized === 'forwarded-national') return 'status-forwarded-national';
+      if (normalized.includes('forward') || normalized === 'to-review') return 'status-forwarded';
       return 'status-pending';
     }
 
@@ -658,8 +757,20 @@
       if (normalized === 'submitted') return 'SUBMITTED';
       if (normalized === 'rejected') return 'REJECTED';
       if (normalized === 'under-review' || normalized.includes('review')) return 'UNDER REVIEW';
+      if (normalized === 'to-review') return 'FWD → REGIONAL';
+      if (normalized === 'forwarded-national') return 'FWD → NATIONAL';
       if (normalized.includes('forward')) return 'FORWARDED';
       return status.toUpperCase();
+    }
+
+    function getServiceCategory(serviceType) {
+      const t = (serviceType || '').toLowerCase();
+      if (t.includes('compensation')) return 'compensation';
+      if (t.includes('training') || t.includes('seminar') || t.includes('orientation') || t.includes('gap')) return 'seminar';
+      if (t.includes('visit') || t.includes('inspection') || t.includes('farm')) return 'farm-visit';
+      if (t.includes('chemical') || t.includes('pesticide') || t.includes('fertilizer') || t.includes('input usage')) return 'chemical';
+      if (t.includes('financial') || t.includes('subsidy') || t.includes('loan') || t.includes('grant')) return 'financial';
+      return 'other';
     }
 
     async function loadHistory() {
@@ -710,12 +821,12 @@
 
       tbody.innerHTML = allApplications.map((app, idx) => `
         <tr>
-          <td>${app.category}</td>
-          <td><span class="status-label ${getStatusClass(app.status)}">${getStatusLabel(app.status)}</span></td>
-          <td>${app.date}</td>
-          <td>${peso.format(app.amount)}</td>
-          <td><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${app.id.substring(0, 8)}</code></td>
-          <td style="text-align: center;">
+          <td data-label="Category">${app.category}</td>
+          <td data-label="Status"><span class="status-label ${getStatusClass(app.status)}">${getStatusLabel(app.status)}</span></td>
+          <td data-label="Date">${app.date}</td>
+          <td data-label="Amount">${peso.format(app.amount)}</td>
+          <td data-label="ID"><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${app.id.substring(0, 8)}</code></td>
+          <td data-label="Action" style="text-align: center;">
             ${app.detailsLink ? `<a href="${app.detailsLink}" class="action-btn"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</a>` : ''}
             ${app.receiptData ? `<button class="action-btn" onclick="viewReceipt('${app.receiptData.ref}', '${app.receiptData.type}', '${app.date}', '${peso.format(app.receiptData.amount)}', '${app.receiptData.desc}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">receipt</span>Receipt</button>` : ''}
           </td>
@@ -736,17 +847,19 @@
         const statusDisplay =
           st === 'approved' && service.approvedByLevel ? `APPROVED BY ${service.approvedByLevel.toUpperCase()}` :
           st === 'rejected' && service.rejectedByLevel ? `REJECTED BY ${service.rejectedByLevel.toUpperCase()}` :
-          (st === 'forwarded' || st.includes('forward')) && service.forwardedTo ? `FORWARDED TO ${service.forwardedTo.toUpperCase()}` :
+          st === 'to-review' ? 'FWD → REGIONAL' :
+          st === 'forwarded-national' ? 'FWD → NATIONAL' :
           getStatusLabel(service.status);
         const statusClass = getStatusClass(service.status);
+        const cat = getServiceCategory(service.type);
         return `
-        <tr>
-          <td>${service.type}</td>
-          <td>${service.description.substring(0, 40)}${service.description.length > 40 ? '...' : ''}</td>
-          <td><span class="status-label ${statusClass}">${statusDisplay}</span></td>
-          <td>${service.date}</td>
-          <td><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${service.id.substring(0, 8)}</code></td>
-          <td style="text-align: center;">
+        <tr data-category="${cat}">
+          <td data-label="Service Type">${service.type}</td>
+          <td data-label="Description">${service.description.substring(0, 40)}${service.description.length > 40 ? '...' : ''}</td>
+          <td data-label="Status"><span class="status-label ${statusClass}">${statusDisplay}</span></td>
+          <td data-label="Date">${service.date}</td>
+          <td data-label="ID"><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${service.id.substring(0, 8)}</code></td>
+          <td data-label="Action" style="text-align: center;">
             <button class="action-btn" onclick="openServiceDetail('${service.id}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</button>
           </td>
         </tr>
@@ -763,13 +876,13 @@
 
       tbody.innerHTML = allInventory.map((item, idx) => `
         <tr>
-          <td>${item.category}</td>
-          <td>${Number(item.harvestQty).toLocaleString()} units</td>
-          <td>${peso.format(item.investment)}</td>
-          <td>${peso.format(item.unitPrice)}</td>
-          <td><span class="status-label status-approved">ACTIVE</span></td>
-          <td>${item.date}</td>
-          <td style="text-align: center;">
+          <td data-label="Category">${item.category}</td>
+          <td data-label="Harvest Qty">${Number(item.harvestQty).toLocaleString()} units</td>
+          <td data-label="Investment">${peso.format(item.investment)}</td>
+          <td data-label="Unit Price">${peso.format(item.unitPrice)}</td>
+          <td data-label="Status"><span class="status-label status-approved">ACTIVE</span></td>
+          <td data-label="Date">${item.date}</td>
+          <td data-label="Action" style="text-align: center;">
             <a href="/user/inventory/stock-info/${item.id}" class="action-btn"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</a>
           </td>
         </tr>
@@ -786,11 +899,11 @@
 
       tbody.innerHTML = allLicenses.map((license, idx) => `
         <tr>
-          <td>${license.permitType}</td>
-          <td><span class="status-label ${getStatusClass(license.status)}">${getStatusLabel(license.status)}</span></td>
-          <td>${license.date}</td>
-          <td><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${license.id.substring(0, 8)}</code></td>
-          <td style="text-align: center;">
+          <td data-label="Permit Type">${license.permitType}</td>
+          <td data-label="Status"><span class="status-label ${getStatusClass(license.status)}">${getStatusLabel(license.status)}</span></td>
+          <td data-label="Date">${license.date}</td>
+          <td data-label="ID"><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${license.id.substring(0, 8)}</code></td>
+          <td data-label="Action" style="text-align: center;">
             <button class="action-btn" onclick="alert('License Details ID: ${license.id}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</button>
           </td>
         </tr>
@@ -905,7 +1018,8 @@
           const status = (item.status || '').toLowerCase();
           const paymentStatus = (item.paymentStatus || '').toLowerCase();
 
-          if (status === 'approved' || status === 'pending' || status === 'submitted' || 
+          if (status === 'approved' || status === 'pending' || status === 'submitted' ||
+              status === 'to-review' || status === 'forwarded-national' || status === 'rejected' || status === 'under-review' ||
               paymentStatus === 'completed' || paymentStatus === 'paid' || paymentStatus === 'free') {
             const date = item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-PH', {
               year: 'numeric', month: 'short', day: 'numeric'
@@ -1095,6 +1209,43 @@
           </div>
           ${d.description ? `<div class="mt-3 pt-3 border-t border-gray-100"><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-1">Description</p><p class="text-xs text-gray-700 font-semibold">${d.description}</p></div>` : ''}
         `;
+        // Add seminar-specific fields
+        const svc = (d.serviceType || '').toLowerCase();
+        const fmt = (val) => val ? String(val).charAt(0).toUpperCase() + String(val).slice(1) : 'N/A';
+        const fmtDT = (val) => val ? new Date(val).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A';
+        let seminarHtml = '';
+        if (svc.includes('good agricultural') || svc.includes('gap training')) {
+          seminarHtml = `<div class="col-span-2"><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Participants</p><p class="font-semibold text-gray-800">${d.participants || 'N/A'}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Participation Type</p><p class="font-semibold text-gray-800">${fmt(d.participationType)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Training Mode</p><p class="font-semibold text-gray-800">${fmt(d.trainingMode)}</p></div>
+            <div class="col-span-2"><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Preferred Date & Time</p><p class="font-semibold text-gray-800">${fmtDT(d.datetime)}</p></div>`;
+        } else if (svc.includes('pest & disease') || svc.includes('pest disease management')) {
+          seminarHtml = `<div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Crop / Species</p><p class="font-semibold text-gray-800">${fmt(d.cropSpecies)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Audience Level</p><p class="font-semibold text-gray-800">${fmt(d.audienceLevel)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Participants</p><p class="font-semibold text-gray-800">${d.participants || 'N/A'}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Preferred Date & Time</p><p class="font-semibold text-gray-800">${fmtDT(d.datetime)}</p></div>`;
+        } else if (svc.includes('safe pesticide') || svc.includes('pesticide handling')) {
+          seminarHtml = `<div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Pesticides Used</p><p class="font-semibold text-gray-800">${fmt(d.pesticidesUsed)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Storage Practice</p><p class="font-semibold text-gray-800">${fmt(d.storagePractice)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Participants</p><p class="font-semibold text-gray-800">${d.participants || 'N/A'}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Preferred Date & Time</p><p class="font-semibold text-gray-800">${fmtDT(d.datetime)}</p></div>`;
+        } else if (svc.includes('nursery') || svc.includes('propagation')) {
+          seminarHtml = `<div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Request Type</p><p class="font-semibold text-gray-800">${fmt(d.requestType)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Propagation Method</p><p class="font-semibold text-gray-800">${fmt(d.propagationMethod)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Nursery Type</p><p class="font-semibold text-gray-800">${fmt(d.nurseryType)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Participants</p><p class="font-semibold text-gray-800">${d.participants || 'N/A'}</p></div>`;
+        } else if (svc.includes('regulatory') || svc.includes('compliance orientation')) {
+          seminarHtml = `<div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Compliance Topic</p><p class="font-semibold text-gray-800">${fmt(d.complianceTopic)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Target Audience</p><p class="font-semibold text-gray-800">${fmt(d.targetAudience)}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Participants</p><p class="font-semibold text-gray-800">${d.participants || 'N/A'}</p></div>
+            <div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Preferred Date & Time</p><p class="font-semibold text-gray-800">${fmtDT(d.datetime)}</p></div>`;
+        }
+        if (seminarHtml) {
+          html += `<div class="mt-3 pt-3 border-t border-green-100 bg-green-50 rounded-lg p-3">
+            <p class="text-green-800 font-black uppercase tracking-widest text-[10px] mb-2"><i class="fa-solid fa-chalkboard-teacher mr-1"></i> Seminar Details</p>
+            <div class="grid grid-cols-2 gap-3 text-xs">${seminarHtml}</div>
+          </div>`;
+        }
         document.getElementById('sdmBody').innerHTML = html;
       } catch (err) {
         console.error('Error loading service detail:', err);

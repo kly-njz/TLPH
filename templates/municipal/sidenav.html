@@ -27,9 +27,10 @@
       <span class="material-icons-round">description</span>
       <span>Application</span>
     </a>
-    <a href="/municipal/services" class="nav-btn-link">
+    <a href="/municipal/services" class="nav-btn-link" id="navServiceLink">
       <span class="material-icons-round">room_service</span>
       <span>Service Request</span>
+      <span id="navServiceBadge" class="ml-auto hidden min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[8px] font-black flex items-center justify-center leading-none"></span>
     </a>
 
     <div class="nav-category-label">Resources</div>
@@ -315,4 +316,44 @@
     });
 
   })();
+</script>
+
+<script type="module">
+  // Live pending service request badge in sidenav
+  import { auth, db } from '/static/js/firebase-config.js';
+  import { collection, query, where, onSnapshot, getDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+  import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) return;
+    try {
+      const adminDoc = await getDoc(doc(db, 'users', user.uid));
+      const adminMuni = adminDoc.exists() ? (adminDoc.data().municipality || '').toUpperCase() : null;
+      if (!adminMuni) return;
+
+      const badge = document.getElementById('navServiceBadge');
+      if (!badge) return;
+
+      const q = query(
+        collection(db, 'service_requests'),
+        where('status', '==', 'pending')
+      );
+
+      onSnapshot(q, (snapshot) => {
+        let count = 0;
+        snapshot.forEach(d => {
+          const muni = (d.data().municipality || '').toUpperCase();
+          if (muni === adminMuni) count++;
+        });
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : count;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      });
+    } catch (e) {
+      console.warn('sidenav badge error:', e);
+    }
+  });
 </script>
