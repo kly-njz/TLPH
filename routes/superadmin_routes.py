@@ -43,6 +43,11 @@ def accounts_view():
 def audit_logs_view():
     return render_template('super-admin/audit-logs-superadmin/audit-logs-superadmin.html')
 
+@bp.route('/system-logs')
+@role_required('super-admin','superadmin')
+def system_logs_view():
+    return render_template('super-admin/system-logs/system-logs.html')
+
 @bp.route('/superadmin-profile')
 @role_required('super-admin','superadmin')
 def superadmin_profile():
@@ -146,7 +151,7 @@ def accounting_expense_categories():
 def accounting_deposit_categories():
     return render_template('super-admin/accounting/deposit-categories.html')
 
-@bp.route('/accounting/permissions')
+@bp.route('/permissions')
 def accounting_permissions():
     return render_template('super-admin/accounting/permissions.html')
 
@@ -160,47 +165,48 @@ def accounting_audit():
 # Template: templates/super-admin/human-resource-superadmin/<file>.html
 # -------------------------
 
-@bp.route('/human-resource-superadmin/company-superadmin')
+@bp.route('/hrm/company')
 @role_required('super-admin','superadmin')
 def hr_company_view():
     return render_template('super-admin/human-resource-superadmin/company-superadmin.html')
 
-@bp.route('/human-resource-superadmin/department-superadmin')
+@bp.route('/hrm/department')
 @role_required('super-admin','superadmin')
 def hr_department_view():
     return render_template('super-admin/human-resource-superadmin/department-superadmin.html')
 
-@bp.route('/human-resource-superadmin/designation-superadmin')
+@bp.route('/hrm/designation')
+
 @role_required('super-admin','superadmin')
 def hr_designation_view():
     return render_template('super-admin/human-resource-superadmin/designation-superadmin.html')
 
-@bp.route('/human-resource-superadmin/shift-superadmin')
+@bp.route('/hrm/shift')
 @role_required('super-admin','superadmin')
 def hr_shift_view():
     return render_template('super-admin/human-resource-superadmin/shift-superadmin.html')
 
-@bp.route('/human-resource-superadmin/employee-superadmin')
+@bp.route('/hrm/employee')
 @role_required('super-admin','superadmin')
 def hr_employee_view():
     return render_template('super-admin/human-resource-superadmin/employee-superadmin.html')
 
-@bp.route('/human-resource-superadmin/attendance-superadmin')
+@bp.route('/hrm/attendance')
 @role_required('super-admin','superadmin')
 def hr_attendance_view():
     return render_template('super-admin/human-resource-superadmin/attendance-superadmin.html')
 
-@bp.route('/human-resource-superadmin/holiday-superadmin')
+@bp.route('/hrm/holiday')
 @role_required('super-admin','superadmin')
 def hr_holiday_view():
     return render_template('super-admin/human-resource-superadmin/holiday-superadmin.html')
 
-@bp.route('/human-resource-superadmin/leave-request-superadmin')
+@bp.route('/hrm/leave-request')
 @role_required('super-admin','superadmin')
 def hr_leave_request_view():
     return render_template('super-admin/human-resource-superadmin/leave-request-superadmin.html')
 
-@bp.route('/human-resource-superadmin/payroll-superadmin')
+@bp.route('/hrm/payroll')
 @role_required('super-admin','superadmin')
 def hr_payroll_view():
     return render_template('super-admin/human-resource-superadmin/payroll-superadmin.html')

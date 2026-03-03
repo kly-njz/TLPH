@@ -4,192 +4,243 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Accounting Dashboard — Super Admin</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'gov-blue': '#1e3a8a', 
+                        'gov-red': '#be123c',  
+                        'denr-dark': '#14532d', 
+                        'denr-green': '#15803d', 
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        /* Government Standard Typography & Layout */
+        body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; margin: 0; color: #1e293b; }
+        
+        .gov-strip { background: linear-gradient(to right, #1e3a8a 50%, #be123c 50%); height: 3px; width: 100%; position: fixed; top: 0; z-index: 2000; }
+        
+        /* Compact Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Gov UI Utilities */
+        .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; color: #1e293b; }
+        .gov-input:focus { border-color: #1e3a8a; }
+        .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+        
+        /* Dense Table Formatting */
+        th { font-size: 9px !important; font-weight: 800 !important; text-transform: uppercase !important; color: #475569 !important; background: #f8fafc !important; border-bottom: 2px solid #cbd5e1 !important; padding: 6px 8px !important; position: sticky; top: 0; z-index: 10; text-align: left; }
+        td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9 !important; vertical-align: middle !important; border-top: none !important; }
+
+        /* Tab Styles */
+        .nav-trigger { padding: 6px 16px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; cursor: pointer; background: transparent; }
+        .nav-trigger:hover { color: #1e293b; background: #f1f5f9; }
+        .nav-trigger.active { color: #1e3a8a; border-bottom-color: #1e3a8a; background: #eff6ff; }
+
+        [x-cloak] { display: none !important; }
+
+        @media print { 
+            .no-print { display: none !important; } 
+            main { margin-left: 0 !important; padding-top: 0 !important; position: static !important; overflow: visible !important; } 
+            .gov-card { box-shadow: none !important; border: 1px solid #000 !important; break-inside: avoid; }
+        }
     </style>
 </head>
-<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+<body class="h-screen w-screen overflow-hidden flex flex-col">
+    
+    <div class="gov-strip no-print"></div>
 
-    {% include 'super-admin/header-superadmin.html' %}
-    {% include 'super-admin/sidenav-superadmin.html' %}
+    <div class="fixed left-0 top-0 h-full z-[1060] hidden lg:block w-[260px] no-print">
+        {% include 'super-admin/sidenav-superadmin.html' %}
+    </div>
 
-    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10" x-data="accountingDashboard()" @load="loadData()" x-cloak>
+    <div class="fixed top-[3px] w-full lg:w-[calc(100%-260px)] lg:left-[260px] z-[1050] no-print">
+        {% include 'super-admin/header-superadmin.html' %}
+    </div>
 
-        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
-            <div class="flex items-center gap-4">
-                <div class="bg-blue-700 p-2.5 rounded-sm hidden sm:block">
-                    <span class="material-icons-round text-white text-xl">account_balance</span>
+    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar transition-all duration-300 bg-slate-100 flex flex-col">
+        
+        <div class="w-full flex flex-col gap-2 min-h-0" x-data="accountingDashboard()" x-init="loadData()" x-cloak> 
+            
+            <header class="gov-card p-2 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 border-b-4 border-b-gov-blue">
+                <div class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='images/denr.jpg') }}" class="h-8 w-8 rounded-sm shadow-sm" alt="DENR Seal">
+                    <div class="border-l border-slate-300 pl-3">
+                        <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight leading-tight m-0">Accounting Dashboard</h1>
+                        <p class="text-[9px] font-bold text-gov-blue uppercase tracking-widest leading-tight m-0 mt-0.5">System-wide accounting control & oversight</p>
+                    </div>
                 </div>
-                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
-                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">Accounting Dashboard</h1>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">System-wide accounting control & oversight</p>
+                <div class="flex gap-2 items-center no-print mt-2 sm:mt-0">
+                    <button onclick="window.print()" class="gov-btn bg-slate-800 text-white hover:bg-slate-900 shadow-sm">
+                        <i class="fa-solid fa-print"></i> Export Report
+                    </button>
+                </div>
+            </header>
+
+            <section class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 shrink-0">
+                <div class="gov-card border-t-2 border-t-denr-green p-2 text-center transition-all hover:bg-slate-50">
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Apps</p>
+                    <h3 class="text-sm font-black text-slate-900 m-0 mt-0.5" id="kpi-apps">0</h3>
+                </div>
+                <div class="gov-card border-t-2 border-t-gov-blue p-2 text-center transition-all hover:bg-slate-50">
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Reqs</p>
+                    <h3 class="text-sm font-black text-slate-900 m-0 mt-0.5" id="kpi-reqs">0</h3>
+                </div>
+                <div class="gov-card border-t-2 border-t-amber-500 p-2 text-center transition-all hover:bg-slate-50">
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Permits</p>
+                    <h3 class="text-sm font-black text-slate-900 m-0 mt-0.5" id="kpi-permits">0</h3>
+                </div>
+                <div class="gov-card border-t-2 border-t-emerald-600 p-2 text-center transition-all hover:bg-slate-50">
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Inv</p>
+                    <h3 class="text-sm font-black text-slate-900 m-0 mt-0.5" id="kpi-inv">0</h3>
+                </div>
+                <div class="gov-card border-t-2 border-t-indigo-600 p-2 text-center transition-all hover:bg-slate-50">
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Assets</p>
+                    <h3 class="text-sm font-black text-slate-900 m-0 mt-0.5" id="kpi-uinv">0</h3>
+                </div>
+                <div class="gov-card border-t-2 border-t-gov-red p-2 text-center bg-red-50/30 transition-all hover:bg-red-50">
+                    <p class="text-[8px] font-black text-gov-red uppercase tracking-widest m-0">Rev</p>
+                    <h3 class="text-sm font-black text-gov-red m-0 mt-0.5" id="kpi-txn">0</h3>
+                </div>
+                <div class="gov-card border-t-2 border-t-slate-800 p-2 text-center transition-all hover:bg-slate-50">
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Users</p>
+                    <h3 class="text-sm font-black text-slate-900 m-0 mt-0.5" id="kpi-users">0</h3>
+                </div>
+            </section>
+
+            <section class="gov-card p-2 shrink-0">
+                <div class="flex items-center justify-between mb-2 border-b border-slate-100 pb-1">
+                    <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 m-0">Fund Distribution by Municipality</h2>
+                </div>
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-2">
+                    <template x-for="fund in funds.slice(0, 5)" :key="fund.id">
+                        <div class="gov-card p-2 border-l-4 border-l-denr-green bg-green-50/20 shadow-none">
+                            <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 truncate" x-text="fund.municipality"></p>
+                            <h3 class="text-[13px] font-black text-denr-green leading-none mt-1 m-0 font-mono" x-text="formatCurrency(fund.amount)"></h3>
+                            <p class="text-[7px] font-bold text-slate-400 uppercase mt-1 m-0" x-text="(fund.fund_type || 'General').toUpperCase() + ' FUND'"></p>
+                        </div>
+                    </template>
+                    <div class="gov-card p-2 border-l-4 border-l-gov-blue bg-blue-50 border-blue-200 shadow-none">
+                        <p class="text-[8px] font-black text-blue-800 uppercase tracking-widest m-0">Total Allocated</p>
+                        <h3 class="text-[13px] font-black text-gov-blue leading-none mt-1 m-0 font-mono" x-text="formatCurrency(totalFunds)"></h3>
+                        <p class="text-[7px] font-bold text-blue-500 uppercase mt-1 m-0">All Municipalities</p>
+                    </div>
+                </div>
+            </section>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-2 shrink-0 no-print">
+                <div class="lg:col-span-2 gov-card p-2">
+                    <h4 class="text-[9px] font-black text-slate-700 uppercase mb-1 border-l-2 border-gov-blue pl-2 m-0">Nationwide Trends</h4>
+                    <div class="h-[140px] w-full relative"><canvas id="lineChart"></canvas></div>
+                </div>
+                <div class="gov-card p-2">
+                    <h4 class="text-[9px] font-black text-slate-700 uppercase mb-1 border-l-2 border-gov-red pl-2 m-0">Regional Rank</h4>
+                    <div class="h-[140px] w-full relative"><canvas id="barChart"></canvas></div>
                 </div>
             </div>
-            <div class="flex gap-2 no-print">
-                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm" onclick="window.print()">
-                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export Report</span>
-                </button>
-            </div>
-        </header>
 
-        <section class="bg-white border border-slate-200 shadow-sm rounded-sm mb-3 p-3">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">Fund Distribution by Municipality</h2>
-            </div>
-            <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                <template x-for="fund in funds.slice(0, 5)" :key="fund.id">
-                  <div class="bg-white border border-slate-200 border-l-4 border-l-green-700 p-3 shadow-sm rounded-sm">
-                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider" x-text="fund.municipality"></p>
-                    <h3 class="text-xl font-black text-green-700 leading-none mt-1" x-text="formatCurrency(fund.amount)"></h3>
-                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1" x-text="(fund.fund_type || 'General').toUpperCase() + ' Fund'"></p>
-                  </div>
-                </template>
-                <div class="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-300 border-l-4 border-l-blue-700 p-3 shadow-sm rounded-sm">
-                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Allocated</p>
-                    <h3 class="text-xl font-black text-blue-700 leading-none mt-1" x-text="formatCurrency(totalFunds)"></h3>
-                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">All Municipalities</p>
+            <section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden">
+                
+                <div class="p-2 bg-slate-50 border-b border-slate-200 shrink-0 no-print">
+                    <div class="flex flex-col lg:flex-row gap-2 justify-between items-center">
+                        <div class="flex flex-wrap gap-2 w-full lg:w-auto items-center">
+                            <div class="flex items-center gap-1">
+                                <label class="text-[8px] font-black text-slate-500 uppercase">Search</label>
+                                <input id="searchInput" class="gov-input w-40" placeholder="Filter Registry...">
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <label class="text-[8px] font-black text-slate-500 uppercase">Sector</label>
+                                <select id="categorySelect" class="gov-input w-36 cursor-pointer"></select>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <label class="text-[8px] font-black text-slate-500 uppercase">Jurisdiction</label>
+                                <select id="scopeSelect" class="gov-input w-32 cursor-pointer">
+                                    <option value="all">ALL REGIONS</option>
+                                    <option value="NCR">NCR</option>
+                                    <option value="CAR">CAR</option>
+                                    <option value="I">REGION I</option>
+                                    <option value="II">REGION II</option>
+                                    <option value="III">REGION III</option>
+                                    <option value="IV-A">REGION IV-A</option>
+                                    <option value="IV-B">REGION IV-B</option>
+                                    <option value="V">REGION V</option>
+                                    <option value="VI">REGION VI</option>
+                                    <option value="VII">REGION VII</option>
+                                    <option value="VIII">REGION VIII</option>
+                                    <option value="IX">REGION IX</option>
+                                    <option value="X">REGION X</option>
+                                    <option value="XI">REGION XI</option>
+                                    <option value="XII">REGION XII</option>
+                                    <option value="XIII">REGION XIII</option>
+                                    <option value="BARMM">BARMM</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button onclick="exportTableToCSV()" class="gov-btn bg-denr-green text-white hover:bg-denr-dark shadow-sm shrink-0 w-full lg:w-auto">
+                            <i class="fa-solid fa-file-csv"></i> Export CSV
+                        </button>
+                    </div>
                 </div>
-            </div>
-        </section>
 
-        <section class="bg-white border border-slate-200 shadow-sm rounded-sm mb-3 p-3">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">System Overview</h2>
-            </div>
-            <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                <div class="bg-white border border-slate-200 border-l-4 border-l-blue-700 p-3 shadow-sm rounded-sm">
-                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total General Fund</p>
-                    <h3 class="text-xl font-black text-blue-900 leading-none mt-1" x-text="formatCurrency(funds.filter(f => f.fund_type === 'national').reduce((sum, f) => sum + (f.amount || 0), 0))">₱ 0.00</h3>
-                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">Available Budget</p>
-                </div>
-                <div class="bg-white border border-slate-200 border-l-4 border-l-green-700 p-3 shadow-sm rounded-sm">
-                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Posted Entries</p>
-                    <h3 id="statPosted" class="text-xl font-black text-green-700 leading-none mt-1">1,284</h3>
-                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">All time</p>
-                </div>
-                <div class="bg-white border border-slate-200 border-l-4 border-l-amber-600 p-3 shadow-sm rounded-sm">
-                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Pending Approvals</p>
-                    <h3 id="statPending" class="text-xl font-black text-amber-600 leading-none mt-1">23</h3>
-                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">Requires action</p>
-                </div>
-                <div class="bg-white border border-slate-200 border-l-4 border-l-red-600 p-3 shadow-sm rounded-sm">
-                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">System Alerts</p>
-                    <h3 id="statAlerts" class="text-xl font-black text-red-600 leading-none mt-1">8</h3>
-                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">Unmapped/broken</p>
-                </div>
-                <div class="bg-white border border-slate-200 border-l-4 border-l-slate-700 p-3 shadow-sm rounded-sm">
-                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Avg Approval Time</p>
-                    <h3 id="statAvgTime" class="text-xl font-black text-slate-900 leading-none mt-1">2.3</h3>
-                    <p class="text-[8px] font-bold text-slate-400 uppercase mt-1">Days latency</p>
-                </div>
-            </div>
-        </section>
+                <nav class="flex bg-white border-b border-slate-200 no-print overflow-x-auto custom-scrollbar shrink-0 px-2">
+                    <button class="nav-trigger active" data-tab="applications">Applications</button>
+                    <button class="nav-trigger" data-tab="requests">Service Requests</button>
+                    <button class="nav-trigger" data-tab="inventory">Inventory</button>
+                    <button class="nav-trigger" data-tab="permits">Licensing</button>
+                    <button class="nav-trigger" data-tab="transactions">Revenue</button>
+                    <button class="nav-trigger" data-tab="users">Accounts</button>
+                </nav>
 
-        <section class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-            <div class="bg-white border border-slate-200 shadow-sm rounded-sm p-3 flex flex-col h-[220px]">
-                <div class="flex items-center justify-between mb-3 shrink-0">
-                    <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">Usage Per Entity</h2>
-                    <span class="text-[10px] font-bold text-slate-400 uppercase">Transaction count</span>
+                <div class="flex-1 overflow-auto custom-scrollbar bg-white relative">
+                    <table id="masterTable" class="w-full text-left border-collapse m-0">
+                        <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
+                            <tr id="tableHeadRow"></tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-100 text-[10px] text-slate-800">
+                            </tbody>
+                    </table>
                 </div>
-                <div class="flex-1 relative">
-                    <canvas id="usageChart"></canvas>
+                
+                <div class="px-3 py-1.5 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-[9px] font-black text-slate-500 uppercase tracking-widest shrink-0 no-print">
+                    <div>Matches Found: <span id="resultCount" class="text-gov-blue">0</span></div>
+                    <div class="flex items-center gap-1.5 italic">
+                        <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                        Secure Registry • System Synced
+                    </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="bg-white border border-slate-200 shadow-sm rounded-sm p-3 flex flex-col h-[220px]">
-                <div class="flex items-center justify-between mb-3 shrink-0">
-                    <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">Approval Latency</h2>
-                    <span class="text-[10px] font-bold text-slate-400 uppercase">Average days</span>
-                </div>
-                <div class="flex-1 relative">
-                    <canvas id="latencyChart"></canvas>
-                </div>
-            </div>
-        </section>
-
-        <section class="flex-1 min-h-0 bg-white rounded-sm border border-slate-200 shadow-sm relative flex flex-col">
-            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex justify-between items-center gap-3 shrink-0">
-                <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">System Alerts & Issues</h2>
-                <button class="text-[9px] font-black uppercase text-slate-400 hover:text-slate-900 transition flex items-center gap-1">
-                    <span class="material-icons-round text-sm">refresh</span> Refresh
-                </button>
-            </div>
-
-            <div class="flex-1 overflow-auto custom-scrollbar">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
-                        <tr>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Alert Type</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Entity</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Description</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Severity</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Date</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600 text-center">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="alertsTable" class="text-xs">
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-sm font-black text-[9px] uppercase">Unmapped COA</span></td>
-                            <td class="py-2.5 px-4 font-bold text-slate-700">Region IV-B</td>
-                            <td class="py-2.5 px-4 text-slate-600">Category "Office Supplies" has no account mapping</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-sm font-black text-[9px] uppercase">High</span></td>
-                            <td class="py-2.5 px-4 text-slate-500 font-bold uppercase text-[10px]">2026-02-15</td>
-                            <td class="py-2.5 px-4 text-center"><button class="text-blue-700 font-bold hover:underline">Fix Now</button></td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-sm font-black text-[9px] uppercase">Broken COA Link</span></td>
-                            <td class="py-2.5 px-4 font-bold text-slate-700">NCR - Manila</td>
-                            <td class="py-2.5 px-4 text-slate-600">Account code 1001-001 does not exist in COA</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-sm font-black text-[9px] uppercase">Medium</span></td>
-                            <td class="py-2.5 px-4 text-slate-500 font-bold uppercase text-[10px]">2026-02-14</td>
-                            <td class="py-2.5 px-4 text-center"><button class="text-blue-700 font-bold hover:underline">Fix Now</button></td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-sm font-black text-[9px] uppercase">Missing Tax Config</span></td>
-                            <td class="py-2.5 px-4 font-bold text-slate-700">Region VII</td>
-                            <td class="py-2.5 px-4 text-slate-600">Deposit category has no tax settings configured</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-sm font-black text-[9px] uppercase">Low</span></td>
-                            <td class="py-2.5 px-4 text-slate-500 font-bold uppercase text-[10px]">2026-02-13</td>
-                            <td class="py-2.5 px-4 text-center"><button class="text-blue-700 font-bold hover:underline">Fix Now</button></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
+        </div>
     </main>
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-        import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-
-        const firebaseConfig = {
-          apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
-          authDomain: "tlph-denr-system.firebaseapp.com",
-          projectId: "tlph-denr-system",
-          storageBucket: "tlph-denr-system.appspot.com",
-          messagingSenderId: "999028568640",
-          appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
-          measurementId: "G-TXKQ1Z0J1X"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
+    <script>
+        // ALPINE COMPONENT LOGIC (Local Data Version)
         window.accountingDashboard = function() {
           return {
-            funds: [],
+            // Local Dummy Data representing funds
+            funds: [
+                { id: 1, municipality: "Calapan City", amount: 4500000, fund_type: "general" },
+                { id: 2, municipality: "Naujan", amount: 3200000, fund_type: "national" },
+                { id: 3, municipality: "Victoria", amount: 2800000, fund_type: "general" },
+                { id: 4, municipality: "Baco", amount: 1500000, fund_type: "general" },
+                { id: 5, municipality: "San Teodoro", amount: 1100000, fund_type: "national" }
+            ],
             totalFunds: 0,
             
             formatCurrency(value) {
@@ -197,93 +248,153 @@
               return '₱ ' + parseFloat(value).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
             },
             
-            async loadData() {
-              try {
-                const fundRef = collection(db, 'municipal_fund_distribution');
-                const snapshot = await getDocs(fundRef);
-                
-                this.funds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                // Calculate total funds
+            loadData() {
+                // Compute total funds from local array
                 this.totalFunds = this.funds.reduce((sum, fund) => sum + (fund.amount || 0), 0);
-                
-                console.log('Funds loaded:', this.funds);
-                console.log('Total funds:', this.totalFunds);
-              } catch (error) {
-                console.error('Error loading fund data:', error);
-              }
             }
           }
         }
     </script>
 
     <script>
-        const usageCtx = document.getElementById('usageChart').getContext('2d');
-        new Chart(usageCtx, {
-            type: 'bar',
-            data: {
-                labels: ['NCR', 'CAR', 'Region I', 'Region II', 'Region III', 'Region IV-A', 'Region IV-B', 'Region V'],
-                datasets: [{
-                    label: 'Transactions',
-                    data: [245, 89, 156, 112, 198, 234, 167, 145],
-                    backgroundColor: '#1e40af',
-                    borderRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: { 
-                        beginAtZero: true,
-                        grid: { color: '#f1f5f9' },
-                        ticks: { font: { size: 10 } }
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: { font: { size: 9 } }
+        const CATEGORIES = {
+            applications: ["Forestry Management", "Biodiversity", "Lands", "Mining", "Environmental Services"],
+            requests: ["Site Inspection", "Administrative Audit", "Clearance", "Certification"],
+            inventory: ["Seedlings", "Wildlife Registry", "Seized Materials", "Government Assets"],
+            permits: ["Tree Cutting", "Wildlife Trade", "ECC", "PTO", "CITES"],
+            transactions: ["Application Fee", "Permit Fee", "Administrative Penalty"],
+            users: ["Central Office", "Regional Director", "PENRO Official", "CENRO Personnel"]
+        };
+
+        const DATA = {
+            applications: [
+                { date: "2026-02-13", ref: "DENR-APP-2026-001", entity: "MIMAROPA Dev Corp", sector: "Forestry Management", region: "IV-B", lgu: "Calapan City", status: "PENDING" },
+                { date: "2026-02-12", ref: "DENR-APP-2026-002", entity: "Naujan NGO", sector: "Biodiversity", region: "IV-B", lgu: "Naujan", status: "APPROVED" },
+                { date: "2026-02-11", ref: "DENR-APP-2026-003", entity: "NCR Project", sector: "Lands", region: "NCR", lgu: "Quezon City", status: "APPROVED" }
+            ],
+            requests: [{ date: "2026-02-13", ref: "SR-9910-B", entity: "Mindoro Cooperative", sector: "Inspection", region: "IV-B", lgu: "Victoria", status: "FOR REVIEW" }],
+            inventory: [{ cat: "Seedlings", desc: "Narra Saplings", qty: 5000, region: "IV-B", lgu: "Baco" }],
+            permits: [{ ref: "PMT-CITES-882", entity: "Nature Exporters", sector: "Wildlife Trade", region: "IV-B", lgu: "San Teodoro", status: "ACTIVE" }],
+            transactions: [{ ref: "OR-10291-TX", entity: "MIMAROPA Corp", type: "Permit Fee", date: "2026-02-13", region: "IV-B", status: "PAID", amount: 15400 }],
+            users: [{ name: "Maria Santos", email: "maria@denr.gov.ph", type: "Regional Director", region: "IV-B", lgu: "Calapan", status: "ACTIVE" }]
+        };
+
+        const HEADERS = {
+            applications: ["Date", "Registry ID", "Entity", "Sector", "Region", "LGU", "Status"],
+            requests: ["Date", "Request ID", "Client", "Category", "Region", "LGU", "Status"],
+            inventory: ["Category", "Description", "Qty", "Region", "Muni"],
+            permits: ["License No", "Licensee", "Sector", "Region", "LGU", "Status"],
+            transactions: ["OR No.", "Payor", "Fee Type", "Date", "Reg", "Status", "Amt"],
+            users: ["Personnel", "Email", "Designation", "Reg", "LGU", "Acc"]
+        };
+
+        let activeTab = "applications";
+        const $ = (id) => document.getElementById(id);
+        let myLineChart, myBarChart;
+
+        function populateCategories() {
+            const select = $("categorySelect");
+            select.innerHTML = '<option value="all">-- ALL SECTORS --</option>';
+            (CATEGORIES[activeTab] || []).forEach(cat => {
+                const opt = document.createElement("option"); opt.value = cat; opt.textContent = cat.toUpperCase(); select.appendChild(opt);
+            });
+        }
+
+        function renderTable() {
+            const head = $("tableHeadRow"); const body = $("tableBody");
+            const search = $("searchInput").value.toLowerCase();
+            const catF = $("categorySelect").value;
+            const scopeF = $("scopeSelect").value;
+            
+            head.innerHTML = ""; body.innerHTML = "";
+            (HEADERS[activeTab] || []).forEach(t => { 
+                const th = document.createElement("th"); 
+                th.textContent = t; 
+                th.className = "border-r border-slate-200";
+                head.appendChild(th); 
+            });
+            
+            const filtered = (DATA[activeTab] || []).filter(r => {
+                const mSearch = Object.values(r).join(" ").toLowerCase().includes(search);
+                const mCat = catF === "all" || r.sector === catF || r.category === catF || r.cat === catF || r.type === catF || r.type === catF;
+                const mScope = scopeF === "all" || r.region === scopeF || r.Reg === scopeF || r.reg === scopeF;
+                return mSearch && mCat && mScope;
+            });
+
+            $("resultCount").textContent = filtered.length;
+            filtered.forEach(r => {
+                const tr = document.createElement("tr"); 
+                tr.className = "hover:bg-blue-50 transition-colors border-b border-slate-100 data-row";
+                Object.values(r).forEach(v => {
+                    const td = document.createElement("td"); 
+                    td.className = "px-3 py-1.5 border-r border-slate-100 whitespace-nowrap text-slate-700 font-bold";
+                    
+                    // Simple formatting for status or amounts
+                    if (typeof v === 'string' && (v === 'APPROVED' || v === 'PAID' || v === 'ACTIVE')) {
+                        td.innerHTML = `<span class="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase">${v}</span>`;
+                    } else if (typeof v === 'string' && v === 'PENDING') {
+                        td.innerHTML = `<span class="bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase">${v}</span>`;
+                    } else if (typeof v === 'number' && v > 1000) {
+                        td.textContent = '₱ ' + v.toLocaleString();
+                        td.classList.add("text-blue-700", "font-mono");
+                    } else {
+                        td.textContent = v;
                     }
-                }
+                    tr.appendChild(td);
+                });
+                body.appendChild(tr);
+            });
+        }
+
+        function initCharts() {
+            myLineChart = new Chart($('lineChart'), { 
+                type: 'line', 
+                data: { labels: ['07','08','09','10','11','12','13'], datasets: [{ label:'Submissions', data:[450, 620, 580, 890, 720, 950, 1100], borderColor:'#1e3a8a', pointRadius: 2, fill: true, tension: 0.3, backgroundColor: 'rgba(30, 58, 138, 0.1)' }] },
+                options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9}}}}}
+            });
+            myBarChart = new Chart($('barChart'), { 
+                type: 'bar', 
+                data: { labels: ['NCR','IV-A','IV-B','III','VII'], datasets: [{ data:[92, 85, 95, 78, 88], backgroundColor:['#14532d','#15803d','#1e3a8a','#f59e0b','#be123c'] }] },
+                options: { indexAxis: 'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{max:100,ticks:{font:{size:9}}},y:{ticks:{font:{size:9}}}} }
+            });
+        }
+
+        function exportTableToCSV() {
+            let csv = [];
+            const rows = document.querySelectorAll("#masterTable tr");
+            for (let i = 0; i < rows.length; i++) {
+                let row = [], cols = rows[i].querySelectorAll("td, th");
+                for (let j = 0; j < cols.length; j++) row.push('"' + cols[j].innerText.replace(/"/g, '""') + '"');
+                csv.push(row.join(","));
             }
+            const csvBlob = new Blob([csv.join("\n")], { type: "text/csv" });
+            const url = window.URL.createObjectURL(csvBlob);
+            const a = document.createElement("a");
+            a.href = url; a.download = `DENR_ACCOUNTING_MASTER_${activeTab.toUpperCase()}_2026.csv`; a.click();
+        }
+
+        document.querySelectorAll(".nav-trigger").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                document.querySelectorAll(".nav-trigger").forEach(b => b.classList.remove("active"));
+                e.target.classList.add("active");
+                activeTab = e.target.getAttribute("data-tab");
+                populateCategories(); renderTable();
+            });
         });
 
-        const latencyCtx = document.getElementById('latencyChart').getContext('2d');
-        new Chart(latencyCtx, {
-            type: 'line',
-            data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'],
-                datasets: [{
-                    label: 'Avg Days',
-                    data: [3.2, 2.8, 2.5, 2.3, 2.7, 2.1, 2.4, 2.3],
-                    borderColor: '#d97706',
-                    backgroundColor: 'rgba(217, 119, 6, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: { 
-                        beginAtZero: true,
-                        grid: { color: '#f1f5f9' },
-                        ticks: { font: { size: 10 } }
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: { font: { size: 9 } }
-                    }
+        $("searchInput").addEventListener("input", renderTable);
+        $("categorySelect").addEventListener("change", renderTable);
+        $("scopeSelect").addEventListener("change", renderTable);
+
+        window.onload = () => { 
+            initCharts(); populateCategories(); renderTable(); 
+            ["apps","reqs","permits","inv","uinv","txn","users"].forEach(k => {
+                const el = $( `kpi-${k}`);
+                if (el) {
+                    el.textContent = DATA[k === "uinv" ? "applications" : k === "txn" ? "transactions" : k]?.length || 0;
                 }
-            }
-        });
+            });
+        };
     </script>
-
 </body>
 </html>
