@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Municipal Accounts | Regional Admin</title>
+  <!-- ph-locations MUST be first so window._phLoc is available to everything below -->
+  <script src="/static/js/ph-locations.js"></script>
+  <script>window._phLoc = (typeof philippineLocations !== 'undefined') ? philippineLocations : {};</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/regional-style.css') }}">
@@ -259,9 +262,6 @@
     let adminRegionName = '';
     let allAccounts     = [];
 
-    // Philippine locations (inline from ph-locations.js logic)
-    const philippineLocations = window._phLoc || {};
-
     // ─── boot ────────────────────────────────────────────
     onAuthStateChanged(auth, async (user) => {
       if (!user) { window.location.href = '/login'; return; }
@@ -412,14 +412,15 @@
 
     // ─── populate municipality dropdown (modal) ───────────
     window.populateMunicipalityDropdown = function() {
-      const prov    = document.getElementById('cProvince').value;
-      const munSel  = document.getElementById('cMunicipality');
+      const prov   = document.getElementById('cProvince').value;
+      const munSel = document.getElementById('cMunicipality');
       munSel.innerHTML = '<option value="">— Select Municipality —</option>';
       if (!prov) return;
 
-      // Match province key (case-insensitive)
-      const key = Object.keys(philippineLocations).find(k => k.toUpperCase() === prov.toUpperCase());
-      const munis = key ? philippineLocations[key] : [];
+      // Always read live from window._phLoc (never use a stale module-level capture)
+      const locs = window._phLoc || {};
+      const key  = Object.keys(locs).find(k => k.toUpperCase() === prov.toUpperCase());
+      const munis = key ? locs[key] : [];
       munis.forEach(m => {
         const opt = document.createElement('option'); opt.value = m; opt.textContent = m;
         munSel.appendChild(opt);
@@ -528,18 +529,6 @@
     // ─── close modal on backdrop click ───────────────────
     document.getElementById('createModal').addEventListener('click', function(e) {
       if (e.target === this) closeCreateModal();
-    });
-  </script>
-
-  <!-- ph-locations must load BEFORE the module so window._phLoc is ready -->
-  <script src="/static/js/ph-locations.js"></script>
-  <script>window._phLoc = (typeof philippineLocations !== 'undefined') ? philippineLocations : {};</script>
-  <script>
-    // Patch: update the module's lookup once locations are ready
-    document.addEventListener('DOMContentLoaded', () => {
-      if (window._phLoc && Object.keys(window._phLoc).length === 0 && typeof philippineLocations !== 'undefined') {
-        window._phLoc = philippineLocations;
-      }
     });
   </script>
 
