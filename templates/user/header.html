@@ -147,6 +147,15 @@
 
 <script type="module" src="{{ url_for('static', filename='js/service-auto-handler.js') }}"></script>
 
+<script>
+    // Apply cached photo IMMEDIATELY (before any async Firebase call) to prevent flash
+    (function() {
+        const img = document.getElementById('navProfilePic');
+        const cached = localStorage.getItem('_navPhoto');
+        if (img && cached) img.src = cached;
+    })();
+</script>
+
 <script type="module">
     // Load real profile photo into navbar avatar
     import { auth, db } from '/static/js/firebase-config.js';
@@ -154,9 +163,13 @@
     import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
     onAuthStateChanged(auth, async (user) => {
-        if (!user) return;
         const img = document.getElementById('navProfilePic');
         if (!img) return;
+
+        if (!user) {
+            localStorage.removeItem('_navPhoto');
+            return;
+        }
 
         try {
             const snap = await getDoc(doc(db, 'users', user.uid));
@@ -167,12 +180,12 @@
             const name = `${data.firstName || ''} ${data.lastName || ''}`.trim() || user.displayName || 'User';
             const fallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=fff&color=15803d&bold=true`;
 
-            if (photoURL) {
-                img.src = photoURL;
-                img.onerror = () => { img.src = fallback; };
-            } else {
-                img.src = fallback;
-            }
+            const resolved = photoURL || fallback;
+            img.src = resolved;
+            img.onerror = () => { img.src = fallback; localStorage.setItem('_navPhoto', fallback); };
+
+            // Cache so next page load shows it instantly with no flash
+            localStorage.setItem('_navPhoto', resolved);
         } catch (e) {
             console.warn('Could not load nav profile pic:', e);
         }
