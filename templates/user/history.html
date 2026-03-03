@@ -457,18 +457,20 @@
           onkeyup="filterTable('services')"
           style="flex: 1; min-width: 150px;"
         />
-        <select id="servicesStatusFilter" class="gov-input" onchange="filterTable('services')" style="width: 140px;">
+        <select id="servicesStatusFilter" class="gov-input" onchange="filterTable('services')" style="width: 145px;">
           <option value="">Status: ALL</option>
-          <option value="approved">APPROVED</option>
-          <option value="pending">PENDING</option>
-          <option value="rejected">REJECTED</option>
-          <option value="to-review">FORWARDED</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved By</option>
+          <option value="rejected">Rejected By</option>
+          <option value="fwd">Forwarded To</option>
         </select>
         <select id="servicesCategoryFilter" class="gov-input" onchange="filterTable('services')" style="width: 150px;">
           <option value="">Type: ALL</option>
-          <option value="seminar">Seminars / Training</option>
           <option value="compensation">Compensation</option>
-          <option value="farm">Farm Services</option>
+          <option value="seminar">Seminars</option>
+          <option value="farm-visit">Farm Visits</option>
+          <option value="chemical">Chemicals</option>
+          <option value="financial">Financial</option>
         </select>
       </div>
       <div style="overflow-x: auto;">
@@ -699,13 +701,18 @@
           }
         }
         
-        // Category filtering (column index varies by table)
+        // Category filtering — services use data-category attribute; other tables use cell text
         let categoryMatch = true;
         if (categoryFilter) {
-          const categoryCell = row.cells[0]; // Category/Type is always first column
-          if (categoryCell) {
-            const cellText = categoryCell.textContent.toLowerCase();
-            categoryMatch = cellText.includes(categoryFilter);
+          if (tableType === 'services') {
+            const rowCat = (row.dataset.category || '').toLowerCase();
+            categoryMatch = rowCat === categoryFilter;
+          } else {
+            const categoryCell = row.cells[0]; // Category/Type is always first column
+            if (categoryCell) {
+              const cellText = categoryCell.textContent.toLowerCase();
+              categoryMatch = cellText.includes(categoryFilter);
+            }
           }
         }
         
@@ -738,7 +745,8 @@
       if (normalized === 'pending' || normalized === 'submitted') return 'status-pending';
       if (normalized === 'rejected') return 'status-rejected';
       if (normalized.includes('review')) return 'status-under-review';
-      if (normalized.includes('forward')) return 'status-forwarded';
+      if (normalized === 'forwarded-national') return 'status-forwarded-national';
+      if (normalized.includes('forward') || normalized === 'to-review') return 'status-forwarded';
       return 'status-pending';
     }
 
@@ -753,6 +761,16 @@
       if (normalized === 'forwarded-national') return 'FWD → NATIONAL';
       if (normalized.includes('forward')) return 'FORWARDED';
       return status.toUpperCase();
+    }
+
+    function getServiceCategory(serviceType) {
+      const t = (serviceType || '').toLowerCase();
+      if (t.includes('compensation')) return 'compensation';
+      if (t.includes('training') || t.includes('seminar') || t.includes('orientation') || t.includes('gap')) return 'seminar';
+      if (t.includes('visit') || t.includes('inspection') || t.includes('farm')) return 'farm-visit';
+      if (t.includes('chemical') || t.includes('pesticide') || t.includes('fertilizer') || t.includes('input usage')) return 'chemical';
+      if (t.includes('financial') || t.includes('subsidy') || t.includes('loan') || t.includes('grant')) return 'financial';
+      return 'other';
     }
 
     async function loadHistory() {
@@ -833,8 +851,9 @@
           st === 'forwarded-national' ? 'FWD → NATIONAL' :
           getStatusLabel(service.status);
         const statusClass = getStatusClass(service.status);
+        const cat = getServiceCategory(service.type);
         return `
-        <tr>
+        <tr data-category="${cat}">
           <td data-label="Service Type">${service.type}</td>
           <td data-label="Description">${service.description.substring(0, 40)}${service.description.length > 40 ? '...' : ''}</td>
           <td data-label="Status"><span class="status-label ${statusClass}">${statusDisplay}</span></td>
