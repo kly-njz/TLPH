@@ -794,6 +794,11 @@ def payroll_national_view():
 def audit_logs():
     return render_template('national/system/audit.html')
 
+@bp.route('/system-logs')
+@role_required('national', 'national_admin')
+def system_logs():
+    return render_template('national/system/system-logs.html')
+
 @bp.route('/permissions')
 @role_required('national', 'national_admin')
 def permissions_national_view():
