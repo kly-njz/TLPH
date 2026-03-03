@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Municipal Accounts | Regional Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/regional-style.css') }}">
+  <style>
+    body { font-family: 'Verdana','Arial',sans-serif; background:#e2e8f0; font-size: 11px; }
+    .gov-input {
+      padding: 5px 10px; font-size: 10px; font-weight: 700;
+      border: 1px solid #cbd5e1; border-radius: 2px; background: #fff; outline: none; width: 100%;
+    }
+    .gov-input:focus { border-color: #1e3a8a; }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #1e3a8a; color: #fff; padding: 6px 14px;
+      border: none; border-radius: 2px; font-size: 10px; font-weight: 900;
+      text-transform: uppercase; letter-spacing: .05em; cursor: pointer;
+    }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-danger  { background: #991b1b; } .btn-danger:hover  { background: #7f1d1d; }
+    .btn-warn    { background: #92400e; } .btn-warn:hover    { background: #78350f; }
+    .btn-success { background: #065f46; } .btn-success:hover { background: #064e3b; }
+    label.form-label {
+      display: block; font-size: 9px; font-weight: 900; text-transform: uppercase;
+      letter-spacing: .1em; color: #64748b; margin-bottom: 3px;
+    }
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 9000; display: flex; align-items: center; justify-content: center;
+    }
+    .modal-box {
+      background: #fff; border-radius: 4px; width: 100%; max-width: 520px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3); max-height: 90vh; overflow-y: auto;
+    }
+    .status-active   { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+    .status-disabled { background:#fef2f2; color:#7f1d1d; border:1px solid #fca5a5; }
+    .status-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 2px;
+      font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em;
+    }
+  </style>
+</head>
+
+<body class="flex flex-col min-h-screen">
+  {% include 'regional/header.html' %}
+
+  <div class="flex flex-1 overflow-hidden" style="margin-top:0;">
+    {% include 'regional/sidenav.html' %}
+
+    <main class="flex-1 px-4 py-4 overflow-y-auto" style="margin-left:260px;">
+
+      <!-- Page header -->
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-[2px] bg-blue-900 flex items-center justify-center shrink-0">
+            <span class="material-icons-round text-white text-[18px]">location_city</span>
+          </div>
+          <div class="leading-tight">
+            <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Municipal Accounts</h1>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0" id="regionLabel">Loading region…</p>
+          </div>
+        </div>
+        <button id="btnCreateAccount" class="btn-primary" onclick="openCreateModal()">
+          <span class="material-icons-round text-[15px]">add_circle</span>
+          Create Municipal Account
+        </button>
+      </div>
+
+      <!-- KPI strip -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-800">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total</p>
+          <div class="text-xl font-black text-slate-800 leading-none" id="kpiTotal">—</div>
+        </div>
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-emerald-700">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active</p>
+          <div class="text-xl font-black text-emerald-700 leading-none" id="kpiActive">—</div>
+        </div>
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-rose-700">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Disabled</p>
+          <div class="text-xl font-black text-rose-700 leading-none" id="kpiDisabled">—</div>
+        </div>
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-amber-600">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Provinces</p>
+          <div class="text-xl font-black text-amber-700 leading-none" id="kpiProvinces">—</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="bg-white border border-slate-300 rounded-[2px] shadow-sm p-3 mb-3 flex flex-wrap gap-2 items-end">
+        <div class="flex-1 min-w-[160px]">
+          <label class="form-label">Search</label>
+          <div class="relative">
+            <span class="material-icons-round text-slate-400 absolute left-2 top-1/2 -translate-y-1/2 text-[13px]">search</span>
+            <input id="searchInput" class="gov-input pl-7" placeholder="name, email, municipality…" oninput="renderTable()">
+          </div>
+        </div>
+        <div class="min-w-[130px]">
+          <label class="form-label">Province</label>
+          <select id="provinceFilter" class="gov-input" onchange="renderTable()">
+            <option value="">All Provinces</option>
+          </select>
+        </div>
+        <div class="min-w-[150px]">
+          <label class="form-label">Municipality</label>
+          <select id="municipalityFilter" class="gov-input" onchange="renderTable()">
+            <option value="">All Municipalities</option>
+          </select>
+        </div>
+        <div class="min-w-[110px]">
+          <label class="form-label">Status</label>
+          <select id="statusFilter" class="gov-input" onchange="renderTable()">
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </div>
+        <button onclick="clearFilters()" class="btn-primary" style="background:#475569; margin-top:14px;">
+          <span class="material-icons-round text-[13px]">clear_all</span> Clear
+        </button>
+      </div>
+
+      <!-- Table -->
+      <div class="bg-white border border-slate-300 rounded-[2px] shadow-sm overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 bg-slate-50">
+              <th class="px-4 py-2 text-[8px] font-black uppercase tracking-widest text-slate-500">Name</th>
+              <th class="px-4 py-2 text-[8px] font-black uppercase tracking-widest text-slate-500">Email</th>
+              <th class="px-4 py-2 text-[8px] font-black uppercase tracking-widest text-slate-500">Municipality</th>
+              <th class="px-4 py-2 text-[8px] font-black uppercase tracking-widest text-slate-500">Province</th>
+              <th class="px-4 py-2 text-[8px] font-black uppercase tracking-widest text-slate-500 text-center">Status</th>
+              <th class="px-4 py-2 text-[8px] font-black uppercase tracking-widest text-slate-500 text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="accountsTbody">
+            <tr id="loadingRow">
+              <td colspan="6" class="px-4 py-10 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <span class="material-icons-round animate-spin text-blue-400 text-[32px] block mb-2">sync</span>
+                Loading municipal accounts…
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div id="emptyState" class="hidden px-4 py-10 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          <span class="material-icons-round text-slate-300 text-[40px] block mb-2">location_city</span>
+          No municipal accounts found in your region scope.
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ===================== CREATE ACCOUNT MODAL ===================== -->
+  <div id="createModal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-blue-900 text-[20px]">person_add</span>
+          <h2 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Create Municipal Account</h2>
+        </div>
+        <button onclick="closeCreateModal()" class="text-slate-400 hover:text-rose-600 transition">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+
+      <div class="px-5 py-4 space-y-3">
+        <div id="createMsg" class="hidden text-[10px] font-bold px-3 py-2 rounded-[2px]"></div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">First Name *</label>
+            <input id="cFirstName" class="gov-input" type="text" placeholder="Juan" />
+          </div>
+          <div>
+            <label class="form-label">Last Name *</label>
+            <input id="cLastName" class="gov-input" type="text" placeholder="Dela Cruz" />
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Email Address *</label>
+          <input id="cEmail" class="gov-input" type="email" placeholder="admin@municipality.gov.ph" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">Password *</label>
+            <input id="cPassword" class="gov-input" type="password" placeholder="Min. 6 characters" />
+          </div>
+          <div>
+            <label class="form-label">Phone</label>
+            <input id="cPhone" class="gov-input" type="text" placeholder="+63" />
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Province *</label>
+          <select id="cProvince" class="gov-input" onchange="populateMunicipalityDropdown()">
+            <option value="">— Select Province —</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="form-label">Municipality *</label>
+          <select id="cMunicipality" class="gov-input">
+            <option value="">— Select Municipality —</option>
+          </select>
+        </div>
+
+        <p class="text-[9px] text-slate-500 font-bold">
+          <span class="material-icons-round text-[12px] align-middle text-blue-700">info</span>
+          Account will be placed under your region scope. The new admin can log in immediately after creation.
+        </p>
+      </div>
+
+      <div class="px-5 py-3 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+        <button onclick="closeCreateModal()" class="btn-primary" style="background:#475569;">Cancel</button>
+        <button id="btnSubmitCreate" onclick="submitCreateAccount()" class="btn-primary">
+          <span class="material-icons-round text-[14px]">save</span> Create Account
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== SCRIPTS ===================== -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { collection, getDocs, doc, getDoc, setDoc, updateDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { onAuthStateChanged, createUserWithEmailAndPassword, getAuth } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    // ─── state ───────────────────────────────────────────
+    let adminProvinces  = [];
+    let adminRegion     = '';
+    let adminRegionName = '';
+    let allAccounts     = [];
+
+    // Philippine locations (inline from ph-locations.js logic)
+    const philippineLocations = window._phLoc || {};
+
+    // ─── boot ────────────────────────────────────────────
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { window.location.href = '/login'; return; }
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) {
+          const d = snap.data();
+          adminRegion     = d.region     || '';
+          adminRegionName = d.regionName || '';
+          adminProvinces  = (d.provinces || []).map(p => p.trim().toUpperCase());
+        }
+        document.getElementById('regionLabel').textContent =
+          `Region ${adminRegion} (${adminRegionName}) • ${adminProvinces.join(', ')}`;
+
+        // populate province KPI + filter dropdowns
+        populateProvinceSelects();
+        await loadAccounts();
+      } catch (e) { console.error(e); }
+    });
+
+    // ─── populate province selects ───────────────────────
+    function populateProvinceSelects() {
+      const kpi  = document.getElementById('kpiProvinces');
+      const pFil = document.getElementById('provinceFilter');
+      const cPro = document.getElementById('cProvince');
+      if (kpi)  kpi.textContent = adminProvinces.length;
+
+      adminProvinces.forEach(p => {
+        [pFil, cPro].forEach(sel => {
+          const opt = document.createElement('option');
+          opt.value = p;
+          opt.textContent = p;
+          sel.appendChild(opt);
+        });
+      });
+    }
+
+    // ─── load accounts ───────────────────────────────────
+    async function loadAccounts() {
+      try {
+        const snap = await getDocs(query(collection(db, 'users'), where('role', '==', 'municipal')));
+        allAccounts = [];
+        snap.forEach(d => {
+          const u = d.data();
+          const prov = (u.province || '').trim().toUpperCase();
+          if (adminProvinces.length > 0 && !adminProvinces.includes(prov)) return;
+          allAccounts.push({
+            id      : d.id,
+            name    : `${u.firstName || ''} ${u.lastName || ''}`.trim() || '—',
+            email   : u.email   || '—',
+            municipality: u.municipality || '—',
+            province: prov,
+            status  : (u.status || 'active').toLowerCase(),
+            createdAt: u.createdAt || ''
+          });
+        });
+        // populate municipality filter
+        const munSet = new Set(allAccounts.map(a => a.municipality).filter(Boolean));
+        const mFil = document.getElementById('municipalityFilter');
+        mFil.innerHTML = '<option value="">All Municipalities</option>';
+        Array.from(munSet).sort().forEach(m => {
+          const opt = document.createElement('option'); opt.value = m; opt.textContent = m;
+          mFil.appendChild(opt);
+        });
+        renderTable();
+      } catch (e) { console.error('loadAccounts error:', e); }
+    }
+
+    // ─── render table ────────────────────────────────────
+    window.renderTable = function() {
+      const q   = document.getElementById('searchInput').value.toLowerCase();
+      const pF  = document.getElementById('provinceFilter').value;
+      const mF  = document.getElementById('municipalityFilter').value;
+      const sF  = document.getElementById('statusFilter').value;
+      const tbody = document.getElementById('accountsTbody');
+      const empty = document.getElementById('emptyState');
+
+      const filtered = allAccounts.filter(a => {
+        if (pF && a.province    !== pF) return false;
+        if (mF && a.municipality !== mF) return false;
+        if (sF && a.status       !== sF) return false;
+        if (q && !`${a.name} ${a.email} ${a.municipality}`.toLowerCase().includes(q)) return false;
+        return true;
+      });
+
+      document.getElementById('kpiTotal').textContent    = allAccounts.length;
+      document.getElementById('kpiActive').textContent   = allAccounts.filter(a => a.status === 'active').length;
+      document.getElementById('kpiDisabled').textContent = allAccounts.filter(a => a.status !== 'active').length;
+
+      document.getElementById('loadingRow')?.remove();
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        empty.classList.remove('hidden');
+      } else {
+        empty.classList.add('hidden');
+        tbody.innerHTML = filtered.map(a => {
+          const isActive = a.status === 'active';
+          return `
+          <tr class="border-b border-slate-100 hover:bg-blue-50 transition-all">
+            <td class="px-4 py-3 align-middle">
+              <div class="font-black text-slate-900 uppercase">${a.name}</div>
+              <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Municipal Admin</div>
+            </td>
+            <td class="px-4 py-3 align-middle font-mono text-[10px] text-slate-600 lowercase">${a.email}</td>
+            <td class="px-4 py-3 align-middle font-bold text-slate-700 uppercase">${a.municipality}</td>
+            <td class="px-4 py-3 align-middle font-bold text-blue-800 uppercase text-[9px]">${a.province}</td>
+            <td class="px-4 py-3 align-middle text-center">
+              <span class="status-badge ${isActive ? 'status-active' : 'status-disabled'}">${isActive ? 'Active' : 'Disabled'}</span>
+            </td>
+            <td class="px-4 py-3 align-middle text-center">
+              <div class="flex justify-center gap-1">
+                <button onclick="toggleAccount('${a.id}','${a.status}')"
+                  class="btn-primary text-[8px] px-2 py-1 ${isActive ? 'btn-warn' : 'btn-success'}">
+                  <span class="material-icons-round text-[12px]">${isActive ? 'do_not_disturb_on' : 'check_circle'}</span>
+                  ${isActive ? 'Disable' : 'Enable'}
+                </button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
+      }
+    };
+
+    // ─── toggle account status ────────────────────────────
+    window.toggleAccount = async function(id, currentStatus) {
+      const isActive = currentStatus === 'active';
+      const newStatus = isActive ? 'disabled' : 'active';
+      const label = isActive ? 'disable' : 'enable';
+      if (!confirm(`Are you sure you want to ${label} this municipal admin account?`)) return;
+      try {
+        await updateDoc(doc(db, 'users', id), { status: newStatus });
+        const acc = allAccounts.find(a => a.id === id);
+        if (acc) acc.status = newStatus;
+        renderTable();
+      } catch (e) {
+        alert('Error updating account: ' + e.message);
+        console.error(e);
+      }
+    };
+
+    // ─── populate municipality dropdown (modal) ───────────
+    window.populateMunicipalityDropdown = function() {
+      const prov    = document.getElementById('cProvince').value;
+      const munSel  = document.getElementById('cMunicipality');
+      munSel.innerHTML = '<option value="">— Select Municipality —</option>';
+      if (!prov) return;
+
+      // Match province key (case-insensitive)
+      const key = Object.keys(philippineLocations).find(k => k.toUpperCase() === prov.toUpperCase());
+      const munis = key ? philippineLocations[key] : [];
+      munis.forEach(m => {
+        const opt = document.createElement('option'); opt.value = m; opt.textContent = m;
+        munSel.appendChild(opt);
+      });
+    };
+
+    // ─── open / close modal ──────────────────────────────
+    window.openCreateModal = function() {
+      document.getElementById('createModal').classList.remove('hidden');
+      document.getElementById('createMsg').classList.add('hidden');
+      ['cFirstName','cLastName','cEmail','cPassword','cPhone'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('cProvince').value    = adminProvinces.length === 1 ? adminProvinces[0] : '';
+      document.getElementById('cMunicipality').innerHTML = '<option value="">— Select Municipality —</option>';
+      if (adminProvinces.length === 1) populateMunicipalityDropdown();
+    };
+
+    window.closeCreateModal = function() {
+      document.getElementById('createModal').classList.add('hidden');
+    };
+
+    // ─── submit create ────────────────────────────────────
+    window.submitCreateAccount = async function() {
+      const firstName  = document.getElementById('cFirstName').value.trim();
+      const lastName   = document.getElementById('cLastName').value.trim();
+      const email      = document.getElementById('cEmail').value.trim();
+      const password   = document.getElementById('cPassword').value;
+      const phone      = document.getElementById('cPhone').value.trim();
+      const province   = document.getElementById('cProvince').value;
+      const municipality = document.getElementById('cMunicipality').value;
+      const msgEl = document.getElementById('createMsg');
+
+      const showMsg = (text, type) => {
+        msgEl.textContent = text;
+        msgEl.className = `text-[10px] font-bold px-3 py-2 rounded-[2px] ${type === 'err' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`;
+        msgEl.classList.remove('hidden');
+      };
+
+      if (!firstName || !lastName || !email || !password || !province || !municipality) {
+        showMsg('Please fill in all required fields.', 'err'); return;
+      }
+      if (password.length < 6) {
+        showMsg('Password must be at least 6 characters.', 'err'); return;
+      }
+
+      const btn = document.getElementById('btnSubmitCreate');
+      btn.disabled = true;
+      btn.textContent = 'Creating…';
+
+      try {
+        // Use a secondary auth instance to avoid signing out the current admin
+        const secondaryAuth = getAuth();
+        const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+        const newUid = credential.user.uid;
+
+        await setDoc(doc(db, 'users', newUid), {
+          firstName    : firstName,
+          lastName     : lastName,
+          email        : email,
+          phone        : phone,
+          municipality : municipality,
+          province     : province,
+          region       : adminRegion,
+          regionName   : adminRegionName,
+          role         : 'municipal',
+          applicationType: 'municipal',
+          status       : 'active',
+          createdAt    : new Date().toISOString(),
+          createdByRegion: adminRegion
+        });
+
+        // Sign out the newly created user from secondary auth (Firebase reuses the same instance here)
+        // Re-authenticate current admin is handled by Firebase SDK automatically
+        showMsg(`✓ Municipal account for ${municipality} created successfully!`, 'ok');
+        allAccounts.push({
+          id: newUid, name: `${firstName} ${lastName}`.trim(), email,
+          municipality, province: province.toUpperCase(), status: 'active', createdAt: new Date().toISOString()
+        });
+        renderTable();
+        // Reset form fields
+        ['cFirstName','cLastName','cEmail','cPassword','cPhone'].forEach(id => {
+          document.getElementById(id).value = '';
+        });
+      } catch (e) {
+        console.error('Create account error:', e);
+        if (e.code === 'auth/email-already-in-use') {
+          showMsg('That email address is already in use.', 'err');
+        } else {
+          showMsg('Error: ' + e.message, 'err');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons-round text-[14px]">save</span> Create Account';
+      }
+    };
+
+    // ─── clear filters ────────────────────────────────────
+    window.clearFilters = function() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('provinceFilter').value = '';
+      document.getElementById('municipalityFilter').value = '';
+      document.getElementById('statusFilter').value = '';
+      renderTable();
+    };
+
+    // ─── close modal on backdrop click ───────────────────
+    document.getElementById('createModal').addEventListener('click', function(e) {
+      if (e.target === this) closeCreateModal();
+    });
+  </script>
+
+  <!-- ph-locations must load BEFORE the module so window._phLoc is ready -->
+  <script src="/static/js/ph-locations.js"></script>
+  <script>window._phLoc = (typeof philippineLocations !== 'undefined') ? philippineLocations : {};</script>
+  <script>
+    // Patch: update the module's lookup once locations are ready
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window._phLoc && Object.keys(window._phLoc).length === 0 && typeof philippineLocations !== 'undefined') {
+        window._phLoc = philippineLocations;
+      }
+    });
+  </script>
+
+</body>
+</html>

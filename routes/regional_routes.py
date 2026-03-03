@@ -44,6 +44,11 @@ def transaction_view():
 def regional_account_management_view():
     return render_template('regional/user-management-regional-list.html')
 
+@bp.route('/municipal-accounts')
+@role_required('regional','regional_admin')
+def municipal_accounts_view():
+    return render_template('regional/municipal-accounts.html')
+
 @bp.route('/audit-logs-view')
 @role_required('regional','regional_admin')
 def audit_logs_view():
