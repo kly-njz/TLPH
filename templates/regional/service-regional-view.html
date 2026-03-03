@@ -85,7 +85,9 @@
                     <section class="gov-card p-3 shadow-sm">
                         <div class="flex items-center gap-4">
                             <div class="h-16 w-16 flex-none border-2 border-gov-primary p-0.5 bg-white">
-                                <img :src="applicantPhoto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(applicantName) + '&background=1e3a8a&color=fff&size=64'" class="h-full w-full object-cover" />
+                                <img :src="applicantPhoto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(applicantName) + '&background=1e3a8a&color=fff&size=64'" 
+                                     @error="$event.target.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(applicantName) + '&background=1e3a8a&color=fff&size=64'"
+                                     class="h-full w-full object-cover" />
                             </div>
                             <div class="min-w-0">
                                 <h2 class="text-base font-black uppercase text-slate-900 leading-tight" x-text="applicantName"></h2>
@@ -196,6 +198,13 @@
                             <h3 class="label-text flex items-center gap-2"><span class="material-icons-round text-sm">gavel</span> Administrative Disposition</h3>
                             <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">National Audit Enabled</p>
                         </div>
+                        <!-- Locked notice when already in a final state -->
+                        <template x-if="statusAction">
+                          <div class="mb-2 flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-2 rounded-[2px]">
+                            <span class="material-icons-round text-amber-600 text-[16px]">lock</span>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-amber-700 m-0">Actions locked — this request has already been <span x-text="statusAction"></span>. No further action can be taken.</p>
+                          </div>
+                        </template>
                         <div class="grid gap-2 grid-cols-3">
                             <button @click="updateStatus('rejected')" :disabled="actionBusy || statusAction" class="bg-white border border-rose-200 text-rose-700 font-black text-[9px] py-2 uppercase hover:bg-rose-600 hover:text-white transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">Reject</button>
                             <button @click="updateStatus('forwarded-national')" :disabled="actionBusy || statusAction" class="bg-white border border-violet-300 text-violet-700 font-black text-[9px] py-2 uppercase hover:bg-violet-600 hover:text-white transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">Forward to National</button>
@@ -399,6 +408,12 @@
                             this.statusText = sm.text;
                             this.statusClass = sm.cls;
 
+                            // Lock action buttons if already in a terminal/national-handled state
+                            const FINAL_STATUSES = ['approved', 'rejected', 'forwarded-national', 'approved-national', 'rejected-national'];
+                            if (FINAL_STATUSES.includes(d.status)) {
+                                this.statusAction = d.status;
+                            }
+
                             // documents — scan all array-valued fields (file inputs stored as filenames)
                             const FILE_EXT = /\.(pdf|jpg|jpeg|png|doc|docx|xlsx|xls|csv|txt|zip)$/i;
                             this.docFiles = [];
@@ -435,7 +450,7 @@
                                         this.applicantName = (`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'Unknown').toUpperCase();
                                         this.applicantEmail = u.email || d.userEmail || '—';
                                         this.applicantContact = u.contactNumber || u.phone || u.mobileNumber || '—';
-                                        this.applicantPhoto = u.photoURL || u.profilePhoto || '';
+                                        this.applicantPhoto = u.photoURL || u.photoUrl || u.profilePhoto || u.profile_photo || u.photo || '';
                                         const brgy = d.barangay || u.barangay || '';
                                         const mun  = d.municipality || u.municipality || '';
                                         const prov = d.province || u.province || '';

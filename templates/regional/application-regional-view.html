@@ -79,7 +79,9 @@
             
             <section class="gov-card p-3 border-t-4 border-t-blue-900 flex gap-3 items-start shrink-0">
               <div class="w-16 h-16 bg-slate-100 border border-slate-300 shrink-0 rounded-[2px] overflow-hidden">
-                <img :src="applicant.photo" alt="Photo" class="w-full h-full object-cover" />
+                <img :src="applicant.photo || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(applicant.name) + '&background=1e3a8a&color=fff&size=64'" 
+                     @error="$event.target.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(applicant.name) + '&background=1e3a8a&color=fff&size=64'"
+                     alt="Photo" class="w-full h-full object-cover" />
               </div>
               <div class="min-w-0">
                 <h2 class="text-[12px] font-black text-slate-900 uppercase leading-tight truncate" x-text="applicant.name"></h2>
@@ -174,17 +176,17 @@
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                     <h3 class="text-[10px] font-black uppercase tracking-widest text-white">Administrative Disposition</h3>
-                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Action will be recorded in audit trail</p>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5" x-text="isFinal ? 'Actions locked — this request is already ' + applicant.status : 'Action will be recorded in audit trail'"></p>
                 </div>
                 
                 <div class="flex gap-1.5">
-                  <button @click="updateStatus('rejected')" class="gov-btn border border-rose-600 bg-transparent text-rose-400 hover:bg-rose-600 hover:text-white transition-colors">
+                  <button @click="updateStatus('rejected')" :disabled="isFinal" :class="isFinal ? 'opacity-40 cursor-not-allowed' : ''" class="gov-btn border border-rose-600 bg-transparent text-rose-400 hover:bg-rose-600 hover:text-white transition-colors">
                     Reject
                   </button>
-                  <button @click="forwardToNational()" class="gov-btn border border-blue-400 bg-transparent text-blue-300 hover:bg-blue-600 hover:text-white transition-colors">
+                  <button @click="forwardToNational()" :disabled="isFinal" :class="isFinal ? 'opacity-40 cursor-not-allowed' : ''" class="gov-btn border border-blue-400 bg-transparent text-blue-300 hover:bg-blue-600 hover:text-white transition-colors">
                     Forward to National
                   </button>
-                  <button @click="updateStatus('approved')" class="gov-btn bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm">
+                  <button @click="updateStatus('approved')" :disabled="isFinal" :class="isFinal ? 'opacity-40 cursor-not-allowed' : ''" class="gov-btn bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm">
                     Approve Permit
                   </button>
                 </div>
@@ -226,6 +228,7 @@
           address: "---",
           area: "0"
         },
+        isFinal: false,
         stats: {
           species: "0",
           harvest: "0"
@@ -280,7 +283,7 @@
                 this.applicant = {
                   name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || appData.userName || 'N/A',
                   ref: applicationId.substring(0, 12).toUpperCase(),
-                  photo: userData.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + (userData.firstName || 'User'),
+                  photo: userData.photoURL || userData.photoUrl || userData.profilePhoto || userData.profile_photo || userData.photo || appData.photoURL || '',
                   status: (appData.status || 'pending').toUpperCase().replace('-', ' '),
                   productName: appData.productName || 'N/A',
                   categoryLabel: categoryLabels[appData.category] || appData.category || 'N/A',
@@ -306,6 +309,12 @@
                 ];
 
                 this.loading = false;
+
+                // Lock action buttons if status is already final / handled by national
+                const FINAL_STATUSES = ['approved', 'rejected', 'forwarded-to-national', 'approved-national', 'rejected-national', 'forwarded-national'];
+                if (FINAL_STATUSES.includes((appData.status || '').toLowerCase())) {
+                    this.isFinal = true;
+                }
                 
               } catch (error) {
                 console.error('Error loading application:', error);
