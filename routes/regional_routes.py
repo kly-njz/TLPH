@@ -109,8 +109,7 @@ def municipal_accounts_create():
 def audit_logs_view():
     return render_template('regional/audit-logs-regional-view.html')
 
-@bp.route('/system-logs')
-@bp.route('/system-logs-view')
+@bp.route('/system-logs') 
 @role_required('regional','regional_admin')
 def system_logs_view():
     return render_template('regional/logs/system-logs.html')
