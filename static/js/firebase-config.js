@@ -6,13 +6,12 @@ import { getStorage } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-s
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
-  authDomain: "tlph-denr-system.firebaseapp.com",
-  projectId: "tlph-denr-system",
-  storageBucket: "tlph-denr-system.appspot.com",
-  messagingSenderId: "999028568640",
-  appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
-  measurementId: "G-TXKQ1Z0J1X"
+  apiKey: "AIzaSyCj3EnEG1XhF7_xWgt1vQK_VkT7288yd64",
+  authDomain: "denr-d02ae.firebaseapp.com",
+  projectId: "denr-d02ae",
+  storageBucket: "denr-d02ae.firebasestorage.app",
+  messagingSenderId: "499245517370",
+  appId: "1:499245517370:web:c66598d7c86d5567a64303"
 };
 
 // Initialize Firebase safely (avoid duplicate-app errors)
