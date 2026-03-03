@@ -106,6 +106,7 @@ def municipal_accounts_create():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
     
+@bp.route('/audit-logs')
 @bp.route('/audit-logs-view')
 @role_required('regional','regional_admin')
 def audit_logs_view():
