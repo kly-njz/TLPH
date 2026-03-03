@@ -105,6 +105,8 @@ def municipal_accounts_create():
         return jsonify({'success': False, 'error': 'An account with that email already exists.'}), 409
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+@bp.route('/audit-logs-view')
 @role_required('regional','regional_admin')
 def audit_logs_view():
     return render_template('regional/audit-logs-regional-view.html')
