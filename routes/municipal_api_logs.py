@@ -33,50 +33,70 @@ def _resolve_user_municipality_by_email(email):
 
 
 def _resolve_municipality_from_user_context():
-    """Resolve municipality - always fetch from Firestore first to avoid stale session values"""
-    print(f"[DEBUG] _resolve_municipality_from_user_context starting")
+    """Resolve municipality - ALWAYS fetch from users collection in Firestore, never rely on session"""
+    print(f"\n[DEBUG] _resolve_municipality_from_user_context starting")
+    print(f"[DEBUG] Session user_id: {session.get('user_id')}")
+    print(f"[DEBUG] Session user_email: {session.get('user_email')}")
     
     try:
         db = get_firestore_db()
         user_id = session.get('user_id')
         user_email = session.get('user_email')
         
-        # Try user_id first (fresh from Firestore)
+        # PRIMARY: Try user_id first (most reliable)
         if user_id:
-            print(f"[DEBUG] Looking up fresh municipality by user_id: {user_id}")
-            user_doc = db.collection('users').document(user_id).get()
-            if user_doc.exists:
-                user_data = user_doc.to_dict() or {}
-                municipality = user_data.get('municipality') or user_data.get('municipality_name')
-                if municipality:
-                    print(f"[DEBUG] Found fresh municipality from user_id: '{municipality}'")
-                    session['municipality'] = municipality
-                    session['user_municipality'] = municipality
-                    return municipality
+            print(f"[DEBUG] Looking up user document by user_id: {user_id}")
+            try:
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    print(f"[DEBUG] Found user document by user_id")
+                    print(f"[DEBUG] User document municipality field: {user_data.get('municipality')}")
+                    
+                    municipality = user_data.get('municipality') or user_data.get('municipality_name')
+                    if municipality:
+                        municipality = str(municipality).strip()
+                        print(f"[DEBUG] ✓ RESOLVED municipality from user_id: '{municipality}'")
+                        return municipality
+                    else:
+                        print(f"[ERROR] User document has no municipality field!")
+                else:
+                    print(f"[ERROR] User document does not exist for user_id: {user_id}")
+            except Exception as e:
+                print(f"[ERROR] Error looking up user_id: {e}")
 
-        # Try user_email as fallback (fresh from Firestore)
+        # FALLBACK: Try user_email (if user_id failed)
         if user_email:
-            print(f"[DEBUG] Looking up fresh municipality by user_email: {user_email}")
-            docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
-            for doc in docs:
-                user_data = doc.to_dict() or {}
-                municipality = user_data.get('municipality') or user_data.get('municipality_name')
-                if municipality:
-                    print(f"[DEBUG] Found fresh municipality from user_email: '{municipality}'")
-                    session['municipality'] = municipality
-                    session['user_municipality'] = municipality
-                    return municipality
+            print(f"[DEBUG] Looking up user document by user_email: {user_email}")
+            try:
+                query = db.collection('users').where('email', '==', user_email).limit(1)
+                docs = list(query.stream())
+                
+                if docs:
+                    user_data = docs[0].to_dict() or {}
+                    print(f"[DEBUG] Found user document by user_email")
+                    print(f"[DEBUG] User document municipality field: {user_data.get('municipality')}")
+                    
+                    municipality = user_data.get('municipality') or user_data.get('municipality_name')
+                    if municipality:
+                        municipality = str(municipality).strip()
+                        print(f"[DEBUG] ✓ RESOLVED municipality from user_email: '{municipality}'")
+                        return municipality
+                    else:
+                        print(f"[ERROR] User document has no municipality field!")
+                else:
+                    print(f"[ERROR] No user document found for email: {user_email}")
+            except Exception as e:
+                print(f"[ERROR] Error looking up user_email: {e}")
+        
+        print(f"[ERROR] Could not resolve municipality - no valid user_id or user_email in session")
+        return None
+        
     except Exception as e:
-        print(f"[WARN] Could not resolve fresh municipality from Firestore: {e}")
-
-    # Last resort: use stale session value if available
-    municipality = session.get('municipality') or session.get('user_municipality')
-    if municipality and str(municipality).lower() not in ('unknown', 'municipality', ''):
-        print(f"[DEBUG] Using stale session municipality: '{municipality}'")
-        return municipality
-
-    print(f"[DEBUG] Could not resolve municipality from context")
-    return None
+        print(f"[ERROR] Critical error in municipality resolution: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def _get_current_municipality_scope():
@@ -146,56 +166,104 @@ def api_logs_audit_logs_municipal():
 @bp.route('/logs/financial-logs', methods=['GET'])
 @role_required('municipal','municipal_admin')
 def api_logs_financial_logs():
-    db = firestore.client()
-    logs = []
+    """Get financial logs for audit display"""
     try:
-        docs = db.collection('financial_logs').order_by('created_at', direction=firestore.Query.DESCENDING).stream()
-        for doc in docs:
-            log = doc.to_dict()
-            log['id'] = doc.id
-            # Map Firestore fields to frontend audit log fields
-            logs.append({
-                'id': log.get('id'),
-                'ts': log.get('created_at'),
-                'user': log.get('user_email', '—'),
-                'role': 'User',
-                'module': 'PAYMENTS',
-                'action': (log.get('status') or '').upper(),
-                'target': log.get('transaction_name', log.get('description', 'Payment')),
-                'targetId': log.get('invoice_id', log.get('external_id', '')),
-                'device_type': log.get('device_type', ''),
-                'ip': '',
-                'outcome': 'SUCCESS' if (log.get('status', '').upper() == 'PAID') else ('FAIL' if log.get('status', '').upper() == 'FAILED' else 'WARN'),
-                'message': log.get('description', ''),
-                'diff': log
-            })
+        db = firestore.client()
+        
+        print(f"[DEBUG] api_logs_financial_logs - fetching from transitions and transfers")
+        
+        logs = []
+        
+        # Fetch all transactions
+        try:
+            all_transactions = get_all_transactions()
+            print(f"[DEBUG] Found {len(all_transactions)} transactions total")
+            
+            for t in all_transactions:
+                logs.append({
+                    'id': t.get('id'),
+                    'ts': t.get('created_at'),
+                    'user': t.get('user_email', '—'),
+                    'role': 'User',
+                    'module': 'PAYMENTS',
+                    'action': t.get('status', '—').upper(),
+                    'target': t.get('transaction_name', t.get('description', 'Payment')),
+                    'targetId': t.get('invoice_id', t.get('external_id', '')),
+                    'device_type': t.get('device_type', ''),
+                    'ip': t.get('ip', ''),
+                    'outcome': 'SUCCESS' if (t.get('status', '').upper() == 'PAID') else ('FAIL' if t.get('status', '').upper() == 'FAILED' else 'WARN'),
+                    'message': t.get('description', ''),
+                    'diff': t
+                })
+        except Exception as e:
+            print(f"[ERROR] Fetching transactions: {e}")
+        
+        # Fetch fund transfers
+        try:
+            docs = db.collection('municipal_fund_distribution').stream()
+            for doc in docs:
+                d = doc.to_dict()
+                d['id'] = doc.id
+                logs.append({
+                    'id': d.get('id'),
+                    'ts': d.get('created_at'),
+                    'user': d.get('initiated_by', 'Regional Office'),
+                    'role': 'Regional',
+                    'module': 'FUND_TRANSFER',
+                    'action': d.get('status', '—').upper(),
+                    'target': d.get('target_municipality', ''),
+                    'targetId': d.get('reference', ''),
+                    'ip': '',
+                    'outcome': 'SUCCESS' if d.get('status', '').upper() == 'COMPLETED' else ('FAIL' if d.get('status', '').upper() == 'FAILED' else 'WARN'),
+                    'message': d.get('description', ''),
+                    'diff': d
+                })
+        except Exception as e:
+            print(f"[ERROR] Fetching fund transfers: {e}")
+        
+        print(f"[DEBUG] Final financial logs count: {len(logs)}")
+        
+        # Sort by timestamp descending
+        logs = [l for l in logs if l['ts']]
+        logs.sort(key=lambda x: x['ts'], reverse=True)
+        
+        return jsonify({'logs': logs}), 200
     except Exception as e:
-        print(f"[ERROR] Fetching financial logs: {e}")
-    return jsonify({'logs': logs})
+        print(f"[ERROR] Getting financial logs: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'logs': []}), 200
 
 @bp.route('/deposits', methods=['GET'])
 @role_required('municipal','municipal_admin')
 def api_get_deposits():
-    """Get all deposit categories for the municipal admin"""
+    """Get all deposit categories for the municipal admin - FILTERED BY MUNICIPALITY SCOPE"""
     try:
-        # You can filter by municipality if needed
-        municipality = request.args.get('municipality')
-        categories = deposit_storage.get_all_deposit_categories(municipality)
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            print(f"[ERROR] Could not resolve municipality for deposits")
+            return jsonify({'status': 'error', 'message': 'Could not determine your municipality', 'categories': []}), 403
+        
+        # ALWAYS use municipality from session scope, not from request params
+        print(f"[DEBUG] api_get_deposits - fetching for municipality: '{municipality_scope}'")
+        categories = deposit_storage.get_all_deposit_categories(municipality_scope)
         
         # Calculate stats
         total_categories = len(categories)
         active_categories = len([c for c in categories if c.get('status') == 'ACTIVE'])
         
         return jsonify({
+            'status': 'success',
             'categories': categories,
             'stats': {
                 'total': total_categories,
                 'active': active_categories
             }
-        })
+        }), 200
     except Exception as e:
         print(f"[ERROR] Fetching deposits: {e}")
-        return jsonify({'categories': [], 'stats': {'total': 0, 'active': 0}}), 500
+        return jsonify({'status': 'error', 'message': str(e), 'categories': [], 'stats': {'total': 0, 'active': 0}}), 500
 
 @bp.route('/deposits', methods=['POST'])
 @role_required('municipal','municipal_admin')
@@ -238,26 +306,33 @@ def api_delete_deposit(category_id):
 @bp.route('/expenses', methods=['GET'])
 @role_required('municipal','municipal_admin')
 def api_get_expenses():
-    """Get all expense categories for the municipal admin"""
+    """Get all expense categories for the municipal admin - FILTERED BY MUNICIPALITY SCOPE"""
     try:
-        # You can filter by municipality if needed
-        municipality = request.args.get('municipality')
-        categories = expense_storage.get_all_expense_categories(municipality)
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            print(f"[ERROR] Could not resolve municipality for expenses")
+            return jsonify({'status': 'error', 'message': 'Could not determine your municipality', 'categories': []}), 403
+        
+        # ALWAYS use municipality from session scope, not from request params
+        print(f"[DEBUG] api_get_expenses - fetching for municipality: '{municipality_scope}'")
+        categories = expense_storage.get_all_expense_categories(municipality_scope)
         
         # Calculate stats
         total_categories = len(categories)
         active_categories = len([c for c in categories if c.get('status') == 'ACTIVE'])
         
         return jsonify({
+            'status': 'success',
             'categories': categories,
             'stats': {
                 'total': total_categories,
                 'active': active_categories
             }
-        })
+        }), 200
     except Exception as e:
         print(f"[ERROR] Fetching expenses: {e}")
-        return jsonify({'categories': [], 'stats': {'total': 0, 'active': 0}}), 500
+        return jsonify({'status': 'error', 'message': str(e), 'categories': [], 'stats': {'total': 0, 'active': 0}}), 500
 
 @bp.route('/expenses', methods=['POST'])
 @role_required('municipal','municipal_admin')
@@ -531,54 +606,47 @@ def api_delete_entity(entity_id):
 @bp.route('/system-logs', methods=['GET'])
 @role_required('municipal','municipal_admin')
 def api_get_system_logs():
-    """Get system logs for the municipality"""
+    """Get system logs for the municipality - FETCHES FROM USER'S MUNICIPALITY FIELD"""
     try:
-        municipality_scope = _get_current_municipality_scope()
+        # Get municipality DIRECTLY from user's document
+        municipality_scope = _resolve_municipality_from_user_context()
         current_user_email = session.get('user_email', '').lower()
         
-        print(f"\n[DEBUG] api_get_system_logs - municipality_scope: '{municipality_scope}', user_email: '{current_user_email}'")
+        print(f"\n[DEBUG] ===== api_get_system_logs START =====")
+        print(f"[DEBUG] Current user email: '{current_user_email}'")
+        print(f"[DEBUG] Resolved municipality from user document: '{municipality_scope}'")
+
+        if not municipality_scope:
+            print(f"[ERROR] Could not resolve municipality from user document for {current_user_email}")
+            return jsonify({'status': 'error', 'message': 'Could not determine your municipality'}), 403
 
         logs = []
-        user_logs = []
         
-        # ALWAYS get current user's own logs by email (primary source of truth)
-        if current_user_email:
-            print(f"[DEBUG] Fetching logs for current user by email: {current_user_email}")
-            all_logs = system_logs_storage.list_system_logs(None, limit=2000)
-            user_logs = [
-                log for log in all_logs
-                if (log.get('user') or '').lower() == current_user_email
-            ]
-            print(f"[DEBUG] Found {len(user_logs)} logs for current user by email")
+        # Fetch logs by municipality from Firestore
+        print(f"[DEBUG] Fetching system logs from Firestore for municipality: '{municipality_scope}'")
+        logs = system_logs_storage.list_system_logs(municipality_scope, limit=500)
+        print(f"[DEBUG] Firestore returned {len(logs)} logs")
 
-        # Also try to get logs by municipality
-        if municipality_scope:
-            print(f"[DEBUG] Fetching logs by municipality: {municipality_scope}")
-            logs = system_logs_storage.list_system_logs(municipality_scope, limit=500)
-            print(f"[DEBUG] Direct municipality query returned {len(logs)} logs")
-
-        # Try normalized municipality match as fallback
-        if not logs and municipality_scope:
-            all_logs = system_logs_storage.list_system_logs(None, limit=2000)
-            scope_norm = _normalize_scope(municipality_scope)
-            print(f"[DEBUG] Trying normalized municipality match - scope: '{scope_norm}'")
-            logs = [
-                log for log in all_logs
-                if _normalize_scope(log.get('municipality')) == scope_norm
-            ][:500]
-            print(f"[DEBUG] Normalized match found {len(logs)} logs")
-
-        # Combine: user logs + municipality logs (remove duplicates by id)
-        all_ids = {log.get('id'): log for log in user_logs}
-        for log in logs:
-            log_id = log.get('id')
-            if log_id and log_id not in all_ids:
-                all_ids[log_id] = log
+        # CRITICAL: Validate all returned logs match the exact municipality
+        # This prevents any cross-municipality data leakage
+        final_logs = []
+        filtered_out = 0
         
-        final_logs = list(all_ids.values())[:500]
-        print(f"[DEBUG] Final combined logs: {len(final_logs)}")
+        for i, log in enumerate(logs):
+            log_municipality = log.get('municipality', '')
+            
+            # Exact string comparison (after stripping whitespace)
+            if log_municipality.strip() == municipality_scope.strip():
+                final_logs.append(log)
+                print(f"[DEBUG] Log {i+1}: ✓ VALID municipality '{log_municipality}'")
+            else:
+                filtered_out += 1
+                print(f"[WARN] Log {i+1}: ✗ INVALID municipality '{log_municipality}' (expected '{municipality_scope}')")
+        
+        print(f"[DEBUG] Final validation: {len(final_logs)} valid logs, {filtered_out} filtered out")
+        print(f"[DEBUG] ===== api_get_system_logs END =====\n")
 
-        # Build stats from returned logs to avoid additional scope/index issues.
+        # Build stats from validated logs only
         stats = {
             'total': len(final_logs),
             'by_action': {},
@@ -606,11 +674,14 @@ def api_get_system_logs():
 
         return jsonify({
             'status': 'success',
+            'municipality': municipality_scope,
             'logs': final_logs,
             'stats': stats
         }), 200
     except Exception as e:
         print(f"[ERROR] Getting system logs: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
