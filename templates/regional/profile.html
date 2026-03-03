@@ -6,223 +6,387 @@
     <title>Admin Profile | DENR Regional</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/regional-style.css') }}">
 
     <style>
-        /* OFFICIAL ARIAL FORCE BOI */
-        * { font-family: Arial, Helvetica, sans-serif !important; }
-        body { background-color: #f1f5f9; color: #1e293b; margin: 0; }
-
-        .material-icons-round {
-            font-family: 'Material Icons Round' !important;
-            display: inline-flex;
-            vertical-align: middle;
-            line-height: 1;
+        body { font-family: Arial, Helvetica, sans-serif; background: #f1f5f9; font-size: 11px; color: #1e293b; }
+        .material-icons-round { font-family: 'Material Icons Round' !important; display: inline-flex; vertical-align: middle; line-height: 1; }
+        .gov-input {
+            width: 100%; padding: 6px 10px; font-size: 11px; font-weight: 700;
+            border: 1px solid #cbd5e1; border-radius: 2px; background: #fff;
+            outline: none; font-family: Arial, Helvetica, sans-serif;
+            transition: border-color .2s;
         }
-
-        /* OFFSET PARA SA SIDENAV MO ROPA */
-        .main-wrapper { 
-            padding-left: 300px; 
-            min-height: 100vh; 
-            padding-top: 40px; 
-            transition: all 0.3s ease;
-        }
-        
-        /* GOV CARD STYLE */
-        .gov-card {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            border-top: 4px solid #1e3a8a;
-            border-radius: 0;
-        }
-
-        .profile-avatar-boxy {
-            width: 120px;
-            height: 120px;
-            background: #1e3a8a;
-            color: #ffffff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 48px;
-            font-weight: 900;
-            border: 1px solid #cbd5e1;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        .info-label {
-            font-size: 10px;
-            font-weight: 800;
-            text-transform: uppercase;
-            color: #64748b;
-            letter-spacing: 0.1em;
-            margin-bottom: 2px;
-        }
-
-        .info-value {
-            font-size: 14px;
-            font-weight: 700;
-            color: #0f172a;
-            margin-bottom: 20px;
-            text-transform: uppercase;
-        }
-
+        .gov-input:focus { border-color: #1e3a8a; }
+        .gov-input[readonly] { background: #f8fafc; color: #475569; cursor: default; }
+        .label-text { display: block; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; color: #64748b; margin-bottom: 3px; }
         .btn-gov {
-            border-radius: 0;
-            font-weight: 900;
-            text-transform: uppercase;
-            font-size: 11px;
-            letter-spacing: 1px;
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 6px 14px; border: none; border-radius: 2px;
+            font-size: 10px; font-weight: 900; text-transform: uppercase;
+            letter-spacing: .05em; cursor: pointer; transition: all .2s;
+            font-family: Arial, Helvetica, sans-serif;
         }
-
-        @media (max-width: 1024px) { .main-wrapper { padding-left: 0; } }
+        .btn-gov:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
-<body>
+<body class="text-slate-800 bg-slate-100 h-screen overflow-hidden flex flex-col">
 
-    {% include 'regional/sidenav.html' %}
+    <div class="flex flex-1 overflow-hidden">
+        <div class="no-print z-20">
+            {% include 'regional/sidenav.html' %}
+        </div>
 
-    <div class="main-wrapper">
-        <div class="container-fluid px-4 lg:px-5">
-            
-            <div class="mb-8 border-bottom pb-4 d-flex justify-content-between align-items-end">
-                <div>
-                    <h1 class="text-2xl font-black uppercase tracking-tight text-slate-900 m-0">Administrator Profile</h1>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-1 italic">Official Regional Personnel Record • Region IV-A</p>
+        <main class="flex-1 flex flex-col min-w-0 p-3 gap-2 overflow-y-auto lg:ml-[260px] h-screen">
+
+            <!-- Page Header -->
+            <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900 mb-1">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white shrink-0">
+                        <span class="material-icons-round text-[18px]">manage_accounts</span>
+                    </div>
+                    <div class="leading-tight">
+                        <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Administrator Profile</h1>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0" id="regionLabel">Loading…</p>
+                    </div>
                 </div>
-                <div class="text-end no-print">
-                    <p class="text-[9px] font-bold text-slate-400 uppercase m-0">System ID: REG-4A-001</p>
-                </div>
+            </header>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="flex-1 flex flex-col items-center justify-center py-20">
+                <span class="material-icons-round text-blue-400 text-[40px] block mb-3" style="animation: spin 1s linear infinite;">sync</span>
+                <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Loading profile data…</p>
             </div>
 
-            <div class="row g-4">
-                <div class="col-lg-4">
-                    <div class="gov-card p-4 text-center shadow-sm">
-                        <div class="flex justify-center mb-4">
-                            <div class="profile-avatar-boxy">RA</div>
-                        </div>
-                        <h2 class="text-xl font-black uppercase text-slate-900 mb-1">Cedric Admin</h2>
-                        <p class="text-[10px] font-bold text-blue-800 uppercase tracking-widest mb-4">Regional Administrator</p>
-                        
-                        <div class="bg-slate-50 border border-slate-200 p-3 mb-4 text-start">
-                            <p class="text-[9px] font-black text-slate-500 uppercase m-0">Access Status</p>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                                <p class="text-xs font-black text-slate-900 m-0 uppercase tracking-tighter">Authenticated - Full Control</p>
+            <!-- Profile Content -->
+            <div id="profileContent" class="hidden flex-col lg:flex-row gap-3 flex">
+
+                <!-- LEFT — Avatar + Quick Info -->
+                <div class="w-full lg:w-[260px] shrink-0 flex flex-col gap-2">
+
+                    <div class="gov-card p-4 flex flex-col items-center gap-3 border-t-4 border-t-blue-900">
+
+                        <!-- Avatar with upload -->
+                        <div class="relative">
+                            <div class="w-24 h-24 rounded-[2px] border-2 border-blue-900 overflow-hidden bg-slate-100">
+                                <img id="avatarImg" src="" alt="Profile Photo"
+                                     class="w-full h-full object-cover"
+                                     onerror="this.src='https://ui-avatars.com/api/?name=RA&background=1e3a8a&color=fff&size=96'">
                             </div>
+                            <label for="photoInput"
+                                   title="Change Profile Photo"
+                                   class="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-blue-900 hover:bg-blue-800 text-white rounded-[2px] flex items-center justify-center cursor-pointer shadow">
+                                <span class="material-icons-round text-[14px]">photo_camera</span>
+                            </label>
+                            <input type="file" id="photoInput" class="hidden" accept="image/*">
                         </div>
 
-                        <button class="btn btn-primary bg-blue-900 border-0 w-full btn-gov py-3 shadow-md hover:bg-blue-800">
-                            <span class="material-icons-round text-sm me-2">edit</span> Update Information
-                        </button>
-                    </div>
+                        <div class="text-center w-full">
+                            <h2 class="text-[13px] font-black uppercase text-slate-900 leading-tight m-0" id="displayName">—</h2>
+                            <p class="text-[9px] font-bold text-blue-800 uppercase tracking-widest mt-0.5 m-0" id="displayRole">Regional Administrator</p>
+                            <p class="text-[10px] font-bold text-slate-500 mt-1 m-0 break-all" id="displayEmail">—</p>
+                        </div>
 
-                    <div class="gov-card p-4 shadow-sm mt-4 border-t-emerald-600" style="border-top-color: #059669 !important;">
-                        <h3 class="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Duty Information</h3>
-                        <div class="space-y-3">
-                            <div>
-                                <p class="info-label">Current Office</p>
-                                <p class="text-xs font-bold m-0 uppercase">Regional Office IV-A, Calamba</p>
-                            </div>
-                            <div>
-                                <p class="info-label">Assigned Sector</p>
-                                <p class="text-xs font-bold m-0 uppercase">Environmental & Natural Resources</p>
-                            </div>
+                        <div class="w-full bg-emerald-50 border border-emerald-200 px-3 py-2 flex items-center gap-2 rounded-[2px]">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                            <p class="text-[9px] font-black text-emerald-700 uppercase tracking-widest m-0">Active — Full Control</p>
                         </div>
                     </div>
+
+                    <!-- Photo upload message -->
+                    <div id="photoMsg" class="hidden text-[9px] font-bold px-3 py-2 rounded-[2px]"></div>
                 </div>
 
-                <div class="col-lg-8">
-                    <div class="gov-card p-6 shadow-sm">
-                        <h3 class="text-xs font-black uppercase border-b pb-2 mb-4 text-blue-900 flex items-center gap-2">
-                            <span class="material-icons-round text-sm">badge</span> Personnel Details
-                        </h3>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p class="info-label">Full Name</p>
-                                <p class="info-value">Cedric Alquiza</p>
+                <!-- RIGHT — Details + Edit Form -->
+                <div class="flex-1 flex flex-col gap-2 min-w-0">
 
-                                <p class="info-label">Official Email</p>
-                                <p class="info-value lowercase">cedric.admin@denr.gov.ph</p>
+                    <!-- Edit Mode Banner -->
+                    <div id="editBanner" class="hidden bg-amber-50 border border-amber-200 px-3 py-2 flex items-center justify-between gap-3 rounded-[2px]">
+                        <div class="flex items-center gap-2">
+                            <span class="material-icons-round text-amber-600 text-[16px]">edit</span>
+                            <p class="text-[9px] font-black text-amber-700 uppercase tracking-widest m-0">Edit mode — unsaved changes</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="cancelEdit()" class="btn-gov bg-white border border-slate-300 text-slate-700 hover:bg-slate-50">
+                                <span class="material-icons-round text-[13px]">close</span> Cancel
+                            </button>
+                            <button id="saveBtn" onclick="saveProfile()" class="btn-gov bg-blue-900 text-white hover:bg-blue-800">
+                                <span class="material-icons-round text-[13px]">save</span> Save Changes
+                            </button>
+                        </div>
+                    </div>
 
-                                <p class="info-label">Account Type</p>
-                                <p class="info-value">Master Administrator</p>
-                            </div>
-                            <div class="col-md-6">
-                                <p class="info-label">Employee ID No.</p>
-                                <p class="info-value">2026-REG-04A-42</p>
-
-                                <p class="info-label">Official Contact</p>
-                                <p class="info-value">+63 912 345 6789</p>
-
-                                <p class="info-label">Date Appointed</p>
-                                <p class="info-value">January 15, 2026</p>
-                            </div>
+                    <!-- Personnel Details -->
+                    <div class="gov-card p-4 border-t-4 border-t-blue-900">
+                        <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
+                            <h3 class="text-[10px] font-black uppercase tracking-widest text-blue-900 flex items-center gap-2 m-0">
+                                <span class="material-icons-round text-[14px]">badge</span> Personnel Details
+                            </h3>
+                            <button id="editBtn" onclick="enterEditMode()" class="btn-gov bg-blue-900 text-white hover:bg-blue-800">
+                                <span class="material-icons-round text-[13px]">edit</span> Edit Profile
+                            </button>
                         </div>
 
-                        <h3 class="text-xs font-black uppercase border-b pb-2 mb-4 mt-2 text-blue-900 flex items-center gap-2">
-                            <span class="material-icons-round text-sm">security</span> Security Credentials
-                        </h3>
-                        
-                        <div class="row align-items-center">
-                            <div class="col-md-6">
-                                <p class="info-label">Last Login IP Address</p>
-                                <p class="info-value font-mono text-xs">192.168.1.104 (Encrypted)</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                            <div>
+                                <span class="label-text">First Name</span>
+                                <input class="gov-input" id="fFirstName" type="text" readonly>
                             </div>
-                            <div class="col-md-6 text-end">
-                                <button class="btn btn-outline-danger btn-gov py-2 px-4">
-                                    <span class="material-icons-round text-sm me-1">lock_reset</span> Change System Password
+                            <div>
+                                <span class="label-text">Last Name</span>
+                                <input class="gov-input" id="fLastName" type="text" readonly>
+                            </div>
+                            <div>
+                                <span class="label-text">Email Address</span>
+                                <input class="gov-input" id="fEmail" type="email" readonly>
+                            </div>
+                            <div>
+                                <span class="label-text">Contact Number</span>
+                                <input class="gov-input" id="fPhone" type="tel" readonly placeholder="—">
+                            </div>
+                            <div>
+                                <span class="label-text">Region Code</span>
+                                <input class="gov-input" id="fRegion" type="text" readonly>
+                            </div>
+                            <div>
+                                <span class="label-text">Region Name</span>
+                                <input class="gov-input" id="fRegionName" type="text" readonly>
+                            </div>
+                            <div class="sm:col-span-2">
+                                <span class="label-text">Assigned Provinces</span>
+                                <input class="gov-input" id="fProvinces" type="text" readonly>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Save feedback -->
+                    <div id="saveMsg" class="hidden text-[9px] font-bold px-3 py-2 rounded-[2px]"></div>
+
+                    <!-- Password Change -->
+                    <div class="gov-card p-4 border-t-4 border-t-rose-700">
+                        <h3 class="text-[10px] font-black uppercase tracking-widest text-rose-800 flex items-center gap-2 mb-3 pb-2 border-b border-slate-200 m-0">
+                            <span class="material-icons-round text-[14px]">lock_reset</span> Change Password
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                            <div>
+                                <span class="label-text">New Password</span>
+                                <input class="gov-input" id="fNewPass" type="password" placeholder="Min. 6 characters">
+                            </div>
+                            <div>
+                                <span class="label-text">Confirm Password</span>
+                                <input class="gov-input" id="fConfirmPass" type="password" placeholder="Repeat password">
+                            </div>
+                            <div>
+                                <button onclick="changePassword()" class="btn-gov bg-rose-700 text-white hover:bg-rose-800 w-full justify-center">
+                                    <span class="material-icons-round text-[13px]">lock_reset</span> Update Password
                                 </button>
                             </div>
                         </div>
+                        <div id="passMsg" class="hidden mt-2 text-[9px] font-bold px-3 py-2 rounded-[2px]"></div>
                     </div>
 
-                    <div class="gov-card p-6 shadow-sm mt-4 border-t-slate-800">
-                        <h3 class="text-xs font-black uppercase border-b pb-2 mb-4 text-slate-800 flex items-center gap-2">
-                            <span class="material-icons-round text-sm">history</span> Personal Activity Log
-                        </h3>
-                        <div class="table-responsive">
-                            <table class="table table-sm text-[11px] mb-0">
-                                <thead class="bg-slate-50">
-                                    <tr class="text-slate-500 font-black uppercase tracking-widest">
-                                        <th class="py-2 ps-3">Timestamp</th>
-                                        <th class="py-2">System Action</th>
-                                        <th class="py-2 pe-3 text-end">Network IP</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="font-bold text-slate-700">
-                                    <tr>
-                                        <td class="ps-3 py-3">2026-02-12 14:20:10</td>
-                                        <td class="py-3 uppercase text-blue-700">Downloaded Regional Revenue Summary (XLSX)</td>
-                                        <td class="pe-3 py-3 text-end font-mono">192.168.1.104</td>
-                                    </tr>
-                                    <tr class="border-top">
-                                        <td class="ps-3 py-3">2026-02-12 10:05:45</td>
-                                        <td class="py-3 uppercase text-emerald-700">Approved Application [APP-2026-011]</td>
-                                        <td class="pe-3 py-3 text-end font-mono">192.168.1.104</td>
-                                    </tr>
-                                    <tr class="border-top">
-                                        <td class="ps-3 py-3">2026-02-11 16:45:22</td>
-                                        <td class="py-3 uppercase text-red-600">Logged Transaction Violation - Batangas City</td>
-                                        <td class="pe-3 py-3 text-end font-mono">192.168.1.104</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                 </div>
             </div>
 
-            <div class="mt-10 py-5 border-top text-center opacity-50">
-                <p class="text-[9px] font-black text-slate-400 uppercase tracking-[0.5em] m-0 italic">Republic of the Philippines • DENR Regional Management System</p>
-            </div>
-        </div>
+        </main>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <style>
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        #profileContent { display: none; }
+        #profileContent.shown { display: flex; }
+    </style>
+
+    <script type="module">
+        import { auth, db } from '/static/js/firebase-config.js';
+        import { onAuthStateChanged, updatePassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+        import { doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+        let currentUser = null;
+        let userData    = {};
+
+        // ── Boot ─────────────────────────────────────────────────────
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) { window.location.href = '/login'; return; }
+            currentUser = user;
+            try {
+                const snap = await getDoc(doc(db, 'users', user.uid));
+                userData = snap.exists() ? snap.data() : {};
+                render();
+            } catch (err) {
+                console.error('Failed to load profile:', err);
+            }
+        });
+
+        function render() {
+            document.getElementById('loadingState').classList.add('hidden');
+            const profileEl = document.getElementById('profileContent');
+            profileEl.classList.add('shown');
+
+            const fullName   = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || '—';
+            const region     = userData.region     || '—';
+            const regionName = userData.regionName || '—';
+            const provinces  = Array.isArray(userData.provinces) ? userData.provinces.join(', ') : (userData.province || '—');
+            const email      = userData.email || currentUser.email || '—';
+            const photo      = userData.photoURL || userData.photoUrl || userData.profilePhoto || userData.profile_photo || userData.photo || '';
+            const fallback   = `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName || 'RA')}&background=1e3a8a&color=fff&size=96`;
+
+            document.getElementById('regionLabel').textContent = `Region ${region} — ${regionName}`;
+            document.getElementById('displayName').textContent  = fullName.toUpperCase();
+            document.getElementById('displayEmail').textContent = email;
+
+            const img = document.getElementById('avatarImg');
+            img.src = photo || fallback;
+            img.onerror = () => { img.src = fallback; };
+
+            // Fields
+            document.getElementById('fFirstName').value  = userData.firstName || '';
+            document.getElementById('fLastName').value   = userData.lastName  || '';
+            document.getElementById('fEmail').value      = email;
+            document.getElementById('fPhone').value      = userData.phone || userData.contactNumber || '';
+            document.getElementById('fRegion').value     = region;
+            document.getElementById('fRegionName').value = regionName;
+            document.getElementById('fProvinces').value  = provinces;
+        }
+
+        // ── Edit Mode ─────────────────────────────────────────────────
+        window.enterEditMode = function () {
+            ['fFirstName', 'fLastName', 'fPhone'].forEach(id => {
+                const el = document.getElementById(id);
+                el.removeAttribute('readonly');
+                el.style.borderColor = '#3b82f6';
+            });
+            document.getElementById('editBtn').classList.add('hidden');
+            document.getElementById('editBanner').classList.remove('hidden');
+            document.getElementById('saveMsg').classList.add('hidden');
+        };
+
+        window.cancelEdit = function () {
+            render();                                           // restore values
+            ['fFirstName', 'fLastName', 'fPhone'].forEach(id => {
+                const el = document.getElementById(id);
+                el.setAttribute('readonly', '');
+                el.style.borderColor = '';
+            });
+            document.getElementById('editBtn').classList.remove('hidden');
+            document.getElementById('editBanner').classList.add('hidden');
+            document.getElementById('saveMsg').classList.add('hidden');
+        };
+
+        // ── Save Profile ──────────────────────────────────────────────
+        window.saveProfile = async function () {
+            const btn = document.getElementById('saveBtn');
+            const msg = document.getElementById('saveMsg');
+            const toast = (text, ok) => {
+                msg.textContent = text;
+                msg.className = `text-[9px] font-bold px-3 py-2 rounded-[2px] ${ok
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'}`;
+                msg.classList.remove('hidden');
+            };
+
+            const firstName = document.getElementById('fFirstName').value.trim();
+            const lastName  = document.getElementById('fLastName').value.trim();
+            const phone     = document.getElementById('fPhone').value.trim();
+
+            if (!firstName || !lastName) {
+                toast('First name and last name cannot be empty.', false);
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Saving…';
+            try {
+                await updateDoc(doc(db, 'users', currentUser.uid), { firstName, lastName, phone });
+                userData.firstName = firstName;
+                userData.lastName  = lastName;
+                userData.phone     = phone;
+                toast('✓ Profile updated successfully.', true);
+                // Exit edit mode but keep success message visible
+                ['fFirstName', 'fLastName', 'fPhone'].forEach(id => {
+                    const el = document.getElementById(id);
+                    el.setAttribute('readonly', '');
+                    el.style.borderColor = '';
+                });
+                document.getElementById('editBtn').classList.remove('hidden');
+                document.getElementById('editBanner').classList.add('hidden');
+                // Refresh header display names
+                const fullName = `${firstName} ${lastName}`.trim();
+                document.getElementById('displayName').textContent = fullName.toUpperCase();
+            } catch (err) {
+                toast('Error saving profile: ' + err.message, false);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="material-icons-round text-[13px]">save</span> Save Changes';
+            }
+        };
+
+        // ── Change Password ───────────────────────────────────────────
+        window.changePassword = async function () {
+            const msg = document.getElementById('passMsg');
+            const toast = (text, ok) => {
+                msg.textContent = text;
+                msg.className = `text-[9px] font-bold px-3 py-2 rounded-[2px] ${ok
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'}`;
+                msg.classList.remove('hidden');
+            };
+
+            const np = document.getElementById('fNewPass').value;
+            const cp = document.getElementById('fConfirmPass').value;
+            if (!np || np.length < 6)  { toast('Password must be at least 6 characters.', false); return; }
+            if (np !== cp)             { toast('Passwords do not match.', false); return; }
+
+            try {
+                await updatePassword(currentUser, np);
+                toast('✓ Password updated. You may need to re-login on other devices.', true);
+                document.getElementById('fNewPass').value    = '';
+                document.getElementById('fConfirmPass').value = '';
+            } catch (err) {
+                if (err.code === 'auth/requires-recent-login') {
+                    toast('Session expired. Please log out and log back in before changing your password.', false);
+                } else {
+                    toast('Error: ' + err.message, false);
+                }
+            }
+        };
+
+        // ── Photo Upload ──────────────────────────────────────────────
+        document.getElementById('photoInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const msg = document.getElementById('photoMsg');
+            const toast = (text, ok) => {
+                msg.textContent = text;
+                msg.className = `text-[9px] font-bold px-3 py-2 rounded-[2px] ${ok
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'}`;
+                msg.classList.remove('hidden');
+            };
+
+            toast('Uploading photo…', true);
+            try {
+                const formData = new FormData();
+                formData.append('photo', file);
+                formData.append('userId', currentUser.uid);
+
+                const res    = await fetch('/api/upload-profile-photo', { method: 'POST', credentials: 'include', body: formData });
+                const result = await res.json();
+                if (!result.success) throw new Error(result.error || 'Upload failed');
+
+                await updateDoc(doc(db, 'users', currentUser.uid), { photoURL: result.photoURL });
+                userData.photoURL = result.photoURL;
+                localStorage.setItem('_navPhoto', result.photoURL);
+
+                document.getElementById('avatarImg').src = result.photoURL + '?t=' + Date.now();
+                toast('✓ Profile photo updated.', true);
+            } catch (err) {
+                toast('Upload error: ' + err.message, false);
+            }
+            e.target.value = '';
+        });
+    </script>
 
 </body>
 </html>
