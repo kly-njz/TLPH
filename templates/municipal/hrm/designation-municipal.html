@@ -7,14 +7,16 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   
-  <script type="module">
-    import { auth, db } from "{{ url_for('static', filename='js/firebase-config.js') }}";
-    import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  <script>
+    // @ts-ignore - Jinja2 template syntax
+    window.serverDesignations = {{ designations_data|default([])|tojson|safe }};
+    // @ts-ignore - Jinja2 template syntax
+    window.serverEmployees = {{ employees_data|default([])|tojson|safe }};
 
-    const serverDesignations = {{ designations_data|default([], true)|tojson|safe }};
-    const serverEmployees = {{ employees_data|default([], true)|tojson|safe }};
+    // Initialize Alpine.js component with server data
+    let firebaseImported = false;
+    let auth, db, collection, getDocs, query, where, orderBy;
 
-    // Notification component for header
     window.notificationData = function() {
       return {
         count: 0,
@@ -32,8 +34,8 @@
 
     window.designationPage = function() {
       return {
-        designations: serverDesignations,
-        employees: serverEmployees,
+        designations: window.serverDesignations,
+        employees: window.serverEmployees,
         selectedDesignation: { id: '', designation: '', Department_name: '', salary_grade: '', plantilla_item: '', status: '' },
         loading: true,
         loadingEmployees: false,
@@ -41,6 +43,11 @@
         filterStatus: '',
 
         async loadData() {
+          // Load Firebase if not already loaded
+          if (!firebaseImported) {
+            await loadFirebase();
+          }
+          
           if (this.designations.length > 0 && !this.selectedDesignation.id) {
             this.selectedDesignation = this.designations[0];
           }
@@ -156,6 +163,27 @@
         }
       }
     }
+
+    // Load Firebase modules dynamically
+    async function loadFirebase() {
+      try {
+        // @ts-ignore
+        const fbConfig = await import("{{ url_for('static', filename='js/firebase-config.js') }}");
+        auth = fbConfig.auth;
+        db = fbConfig.db;
+        
+        const fbModule = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        collection = fbModule.collection;
+        getDocs = fbModule.getDocs;
+        query = fbModule.query;
+        where = fbModule.where;
+        orderBy = fbModule.orderBy;
+        
+        firebaseImported = true;
+      } catch (error) {
+        console.error('Error loading Firebase modules:', error);
+      }
+    }
   </script>
 
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -220,115 +248,119 @@
         </div>
       </div>
 
-      <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <template x-if="loading">
+        <div class="text-center py-12">
+          <span class="material-icons-round text-4xl text-slate-400 animate-spin">refresh</span>
+          <p class="text-slate-500 mt-2">Loading designation data...</p>
+        </div>
+      </template>
+
+      <template x-if="!loading && designations.length === 0">
+        <div class="text-center py-12">
+          <span class="material-icons-round text-4xl text-slate-400">inbox</span>
+          <p class="text-slate-500 mt-2">No designations found</p>
+        </div>
+      </template>
+
+      <!-- Designation Specification - Full Width -->
+      <template x-if="!loading && selectedDesignation">
+        <section class="bg-white border border-gov-border rounded-[3px] shadow-sm overflow-hidden shrink-0">
+          <div class="bg-amber-900 px-3 py-2 text-white flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="material-icons-round text-sm">badge</span>
+                <span class="font-bold uppercase text-[10px] tracking-wider">Designation Specification</span>
+            </div>
+            <span class="text-[9px] font-mono opacity-70" x-text="'CODE: ' + (selectedDesignation.id || 'N/A').substring(0, 12).toUpperCase()"></span>
+          </div>
+          
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-y-5 gap-x-8">
+            <div>
+              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Official Title</label>
+              <p class="font-bold text-sm text-slate-900" x-text="(selectedDesignation.designation || 'N/A').toUpperCase()"></p>
+            </div>
+            <div>
+              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Department</label>
+              <p class="font-bold text-slate-900" x-text="selectedDesignation.Department_name || 'N/A'"></p>
+            </div>
+            <div>
+              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Division</label>
+              <p class="font-bold text-slate-900" x-text="selectedDesignation.division || 'N/A'"></p>
+            </div>
+            <div>
+              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Basic Pay Range</label>
+              <p class="font-bold text-slate-900" x-text="formatCurrency(selectedDesignation.basic_pay)"></p>
+            </div>
+            <div class="lg:col-span-2">
+              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Description / Responsibilities</label>
+              <p class="font-bold text-slate-900 leading-tight" x-text="selectedDesignation.description || 'No description provided'"></p>
+            </div>
+            <div class="lg:col-span-2" x-show="selectedDesignation.required_qualifications">
+              <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Required Qualifications</label>
+              <p class="font-bold text-slate-900 leading-tight" x-text="selectedDesignation.required_qualifications || 'N/A'"></p>
+            </div>
+            <div>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Duty Type</label>
+                <span class="inline-flex items-center gap-1 text-blue-700 font-bold">
+                    <span class="material-icons-round text-xs">schedule</span> 
+                    <span x-text="selectedDesignation.duty_type || 'N/A'"></span>
+                </span>
+            </div>
+            <div>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Overtime Status</label>
+                <span class="inline-flex items-center gap-1 text-blue-700 font-bold">
+                    <span class="material-icons-round text-xs">access_time</span> 
+                    <span x-text="selectedDesignation.overtime_status || 'N/A'"></span>
+                </span>
+            </div>
+            <div>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Authority Level</label>
+                <span class="inline-flex items-center gap-1 text-amber-700 font-bold">
+                    <span class="material-icons-round text-xs">verified_user</span> 
+                    <span x-text="selectedDesignation.authority_level || 'N/A'"></span>
+                </span>
+            </div>
+            <div>
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Employees Assigned</label>
+                <span class="inline-flex items-center gap-1 text-emerald-700 font-bold">
+                    <span class="material-icons-round text-xs">people</span> 
+                    <span x-text="employeeCount + ' personnel'"></span>
+                </span>
+            </div>
+            <div class="lg:col-span-4">
+                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-2">Additional Information</label>
+                <div class="grid grid-cols-3 gap-4 text-[11px]">
+                  <div>
+                    <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Field Service</label>
+                    <p class="font-bold text-slate-700" x-text="selectedDesignation.field_service || 'N/A'"></p>
+                  </div>
+                  <div>
+                    <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Work Arrangement</label>
+                    <p class="font-bold text-slate-700" x-text="selectedDesignation.work_arrangement || 'N/A'"></p>
+                  </div>
+                  <div>
+                    <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Created</label>
+                    <p class="font-bold text-slate-700" x-text="formatDate(selectedDesignation.time_Init)"></p>
+                  </div>
+                </div>
+            </div>
+          </div>
+        </section>
+      </template>
+
+      <!-- Two-Column Layout: Personnel and All Designations -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 overflow-hidden">
         
-        <template x-if="loading">
-          <div class="lg:col-span-3 text-center py-12">
-            <span class="material-icons-round text-4xl text-slate-400 animate-spin">refresh</span>
-            <p class="text-slate-500 mt-2">Loading designation data...</p>
-          </div>
-        </template>
-
-        <template x-if="!loading && designations.length === 0">
-          <div class="lg:col-span-3 text-center py-12">
-            <span class="material-icons-round text-4xl text-slate-400">inbox</span>
-            <p class="text-slate-500 mt-2">No designations found</p>
-          </div>
-        </template>
-
-        <template x-if="!loading && selectedDesignation">
-          <div class="lg:col-span-2 bg-white border border-gov-border rounded-[3px] shadow-sm overflow-hidden">
-            <div class="bg-amber-900 px-3 py-2 text-white flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                  <span class="material-icons-round text-sm">badge</span>
-                  <span class="font-bold uppercase text-[10px] tracking-wider">Designation Specification</span>
-              </div>
-              <span class="text-[9px] font-mono opacity-70" x-text="'CODE: ' + (selectedDesignation.id || 'N/A').substring(0, 12).toUpperCase()"></span>
+        <!-- Employees assigned to selected designation -->
+        <section class="bg-white border border-gov-border rounded-[3px] shadow-sm flex flex-col overflow-hidden" x-show="!loading && selectedDesignation">
+          <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-2">
+              <span class="material-icons-round text-slate-600 text-sm">people</span>
+              <span class="font-bold uppercase text-[11px] text-slate-700">Personnel with this Designation</span>
             </div>
-            
-            <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-y-5 gap-x-8">
-              <div>
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Official Title</label>
-                <p class="font-bold text-sm text-slate-900" x-text="(selectedDesignation.designation || 'N/A').toUpperCase()"></p>
-              </div>
-              <div>
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Department</label>
-                <p class="font-bold text-slate-900" x-text="selectedDesignation.Department_name || 'N/A'"></p>
-              </div>
-              <div>
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Division</label>
-                <p class="font-bold text-slate-900" x-text="selectedDesignation.division || 'N/A'"></p>
-              </div>
-              <div>
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Basic Pay Range</label>
-                <p class="font-bold text-slate-900" x-text="formatCurrency(selectedDesignation.basic_pay)"></p>
-              </div>
-              <div class="md:col-span-2">
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Description / Responsibilities</label>
-                <p class="font-bold text-slate-900 leading-tight" x-text="selectedDesignation.description || 'No description provided'"></p>
-              </div>
-              <div class="md:col-span-2" x-show="selectedDesignation.required_qualifications">
-                <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Required Qualifications</label>
-                <p class="font-bold text-slate-900 leading-tight" x-text="selectedDesignation.required_qualifications || 'N/A'"></p>
-              </div>
-              <div>
-                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Duty Type</label>
-                  <span class="inline-flex items-center gap-1 text-blue-700 font-bold">
-                      <span class="material-icons-round text-xs">schedule</span> 
-                      <span x-text="selectedDesignation.duty_type || 'N/A'"></span>
-                  </span>
-              </div>
-              <div>
-                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Overtime Status</label>
-                  <span class="inline-flex items-center gap-1 text-blue-700 font-bold">
-                      <span class="material-icons-round text-xs">access_time</span> 
-                      <span x-text="selectedDesignation.overtime_status || 'N/A'"></span>
-                  </span>
-              </div>
-              <div>
-                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Authority Level</label>
-                  <span class="inline-flex items-center gap-1 text-amber-700 font-bold">
-                      <span class="material-icons-round text-xs">verified_user</span> 
-                      <span x-text="selectedDesignation.authority_level || 'N/A'"></span>
-                  </span>
-              </div>
-              <div>
-                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter">Employees Assigned</label>
-                  <span class="inline-flex items-center gap-1 text-emerald-700 font-bold">
-                      <span class="material-icons-round text-xs">people</span> 
-                      <span x-text="employeeCount + ' personnel'"></span>
-                  </span>
-              </div>
-            </div>
+            <span class="bg-emerald-700 text-white text-[9px] font-black px-2 py-0.5 rounded-full" x-text="filteredEmployees.length + ' found'"></span>
           </div>
-
-          <div class="bg-white border border-gov-border rounded-[3px] p-4 shadow-sm">
-              <span class="text-[9px] font-bold text-slate-500 uppercase block border-b border-slate-100 pb-1 mb-3">Additional Information</span>
-              <div class="space-y-3 text-[11px]">
-                <div>
-                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Field Service</label>
-                  <p class="font-bold text-slate-700" x-text="selectedDesignation.field_service || 'N/A'"></p>
-                </div>
-                <div>
-                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Work Arrangement</label>
-                  <p class="font-bold text-slate-700" x-text="selectedDesignation.work_arrangement || 'N/A'"></p>
-                </div>
-                <div>
-                  <label class="block text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Created</label>
-                  <p class="font-bold text-slate-700" x-text="formatDate(selectedDesignation.time_Init)"></p>
-                </div>
-              </div>
-          </div>
-        </template>
-
-      <!-- Employees assigned to selected designation -->
-      <section class="bg-white border border-gov-border rounded-[3px] shadow-sm" x-show="!loading && selectedDesignation">
-        <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="material-icons-round text-slate-600 text-sm">people</span>
-            <span class="font-bold uppercase text-[11px] text-slate-700">Personnel with this Designation</span>
-          </div>
-          <div class="flex items-center gap-2">
+          
+          <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 gap-2 shrink-0 flex-wrap">
             <select x-model="filterDepartment" class="text-[10px] px-2 py-1 border border-slate-300 rounded-[2px]" aria-label="Filter by department">
               <option value="">All Departments</option>
               <template x-for="dept in departments" :key="dept">
@@ -341,109 +373,97 @@
               <option value="Inactive">Inactive</option>
               <option value="On Leave">On Leave</option>
             </select>
-            <span class="bg-emerald-700 text-white text-[9px] font-black px-2 py-0.5 rounded-full" x-text="filteredEmployees.length + ' found'"></span>
           </div>
-        </div>
-        
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
-                <th class="p-2">Employee ID</th>
-                <th class="p-2">Full Name</th>
-                <th class="p-2">Department</th>
-                <th class="p-2">Municipality</th>
-                <th class="p-2">Hire Date</th>
-                <th class="p-2">Basic Pay</th>
-                <th class="p-2 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 text-[12px]">
-              <template x-if="loadingEmployees">
-                <tr>
-                  <td colspan="7" class="p-4 text-center text-slate-400">
-                    <span class="material-icons-round text-2xl animate-spin">refresh</span>
-                    <p>Loading employees...</p>
-                  </td>
+          
+          <div class="overflow-auto flex-1">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 z-10">
+                <tr class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
+                  <th class="p-2">Employee ID</th>
+                  <th class="p-2">Full Name</th>
+                  <th class="p-2">Department</th>
+                  <th class="p-2">Hire Date</th>
+                  <th class="p-2">Status</th>
                 </tr>
-              </template>
-              <template x-if="!loadingEmployees && filteredEmployees.length === 0">
-                <tr>
-                  <td colspan="7" class="p-4 text-center text-slate-400">No employees with this designation</td>
-                </tr>
-              </template>
-              <template x-for="employee in filteredEmployees" :key="employee.id">
-                <tr class="hover:bg-slate-50">
-                  <td class="p-2 font-mono text-[11px]" x-text="employee.employee_id || 'N/A'"></td>
-                  <td class="p-2 font-bold text-gov-primary" x-text="getFullName(employee)"></td>
-                  <td class="p-2 text-slate-600" x-text="employee.department_name || 'N/A'"></td>
-                  <td class="p-2 text-slate-600" x-text="employee.municipality || 'N/A'"></td>
-                  <td class="p-2 font-mono text-[11px]" x-text="formatDate(employee.hire_date)"></td>
-                  <td class="p-2 font-mono" x-text="formatCurrency(employee.basic_pay)"></td>
-                  <td class="p-2 text-center">
-                    <span :class="{
-                      'bg-emerald-100 text-emerald-800 border-emerald-200': employee.status === 'Active',
-                      'bg-slate-100 text-slate-600 border-slate-200': employee.status === 'Inactive',
-                      'bg-amber-100 text-amber-800 border-amber-200': employee.status === 'On Leave'
-                    }" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="employee.status || 'N/A'"></span>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-[11px]">
+                <template x-if="loadingEmployees">
+                  <tr>
+                    <td colspan="5" class="p-4 text-center text-slate-400">
+                      <span class="material-icons-round text-2xl animate-spin">refresh</span>
+                      <p>Loading employees...</p>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="!loadingEmployees && filteredEmployees.length === 0">
+                  <tr>
+                    <td colspan="5" class="p-4 text-center text-slate-400">No employees with this designation</td>
+                  </tr>
+                </template>
+                <template x-for="employee in filteredEmployees" :key="employee.id">
+                  <tr class="hover:bg-slate-50">
+                    <td class="p-2 font-mono text-[10px]" x-text="employee.employee_id || 'N/A'"></td>
+                    <td class="p-2 font-bold text-gov-primary" x-text="getFullName(employee)"></td>
+                    <td class="p-2 text-slate-600 text-[10px]" x-text="employee.department_name || 'N/A'"></td>
+                    <td class="p-2 font-mono text-[10px]" x-text="formatDate(employee.hire_date)"></td>
+                    <td class="p-2 text-center">
+                      <span :class="{
+                        'bg-emerald-100 text-emerald-800 border-emerald-200': employee.status === 'Active',
+                        'bg-slate-100 text-slate-600 border-slate-200': employee.status === 'Inactive',
+                        'bg-amber-100 text-amber-800 border-amber-200': employee.status === 'On Leave'
+                      }" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="employee.status || 'N/A'"></span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-      <!-- All Designations List -->
-      <section class="bg-white border border-gov-border rounded-[3px] shadow-sm" x-show="!loading">
-        <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="material-icons-round text-slate-600 text-sm">list</span>
-            <span class="font-bold uppercase text-[11px] text-slate-700">All Designations</span>
+        <!-- All Designations List -->
+        <section class="bg-white border border-gov-border rounded-[3px] shadow-sm flex flex-col overflow-hidden" x-show="!loading">
+          <div class="bg-slate-50 px-3 py-2 border-b border-gov-border flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-2">
+              <span class="material-icons-round text-slate-600 text-sm">list</span>
+              <span class="font-bold uppercase text-[11px] text-slate-700">All Designations</span>
+            </div>
+            <span class="bg-amber-800 text-white text-[9px] font-black px-2 py-0.5 rounded-full" x-text="designations.length + ' total'"></span>
           </div>
-          <span class="bg-amber-800 text-white text-[9px] font-black px-2 py-0.5 rounded-full" x-text="designations.length + ' total'"></span>
-        </div>
-        
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
-                <th class="p-2">Designation</th>
-                <th class="p-2">Department</th>
-                <th class="p-2">Division</th>
-                <th class="p-2">Basic Pay</th>
-                <th class="p-2 text-center">Personnel</th>
-                <th class="p-2 text-center">Status</th>
-                <th class="p-2 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 text-[12px]">
-              <template x-if="designations.length === 0">
-                <tr>
-                  <td colspan="7" class="p-4 text-center text-slate-400">No designations available</td>
+          
+          <div class="overflow-auto flex-1">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 z-10">
+                <tr class="bg-slate-100 text-slate-500 border-b border-gov-border text-[9px] font-black uppercase tracking-widest">
+                  <th class="p-2">Designation</th>
+                  <th class="p-2">Department</th>
+                  <th class="p-2 text-center">Personnel</th>
+                  <th class="p-2 text-center">Action</th>
                 </tr>
-              </template>
-              <template x-for="designation in designations" :key="designation.id">
-                <tr :class="{ 'bg-amber-50': selectedDesignation && selectedDesignation.id === designation.id }">
-                  <td class="p-2 font-bold text-gov-primary" x-text="designation.designation || 'N/A'"></td>
-                  <td class="p-2 text-slate-600" x-text="designation.Department_name || 'N/A'"></td>
-                  <td class="p-2 text-slate-600" x-text="designation.division || 'N/A'"></td>
-                  <td class="p-2 font-mono text-[11px]" x-text="formatCurrency(designation.basic_pay)"></td>
-                  <td class="p-2 text-center font-bold" x-text="employees.filter(e => e.designation === designation.designation).length"></td>
-                  <td class="p-2 text-center">
-                    <span :class="designation.status === 'Active' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="designation.status || 'N/A'"></span>
-                  </td>
-                  <td class="p-2 text-center">
-                    <button @click="selectDesignation(designation)" class="text-blue-700 hover:text-blue-900 font-bold text-[10px] uppercase">
-                      <span class="material-icons-round text-sm align-middle">visibility</span> View
-                    </button>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-[11px]">
+                <template x-if="designations.length === 0">
+                  <tr>
+                    <td colspan="4" class="p-4 text-center text-slate-400">No designations available</td>
+                  </tr>
+                </template>
+                <template x-for="designation in designations" :key="designation.id">
+                  <tr :class="{ 'bg-amber-50': selectedDesignation && selectedDesignation.id === designation.id }" class="hover:bg-slate-50">
+                    <td class="p-2 font-bold text-gov-primary text-[11px]" x-text="designation.designation || 'N/A'"></td>
+                    <td class="p-2 text-slate-600 text-[10px]" x-text="designation.Department_name || 'N/A'"></td>
+                    <td class="p-2 text-center font-bold text-[11px]" x-text="employees.filter(e => e.designation === designation.designation).length"></td>
+                    <td class="p-2 text-center">
+                      <button @click="selectDesignation(designation)" class="text-blue-700 hover:text-blue-900 font-bold text-[9px] uppercase">
+                        <span class="material-icons-round text-sm align-middle">visibility</span> View
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
 
       <div class="mt-auto border-t border-slate-200 pt-3 flex justify-between items-center opacity-60">
         <div class="flex items-center gap-4 text-[9px] font-bold text-slate-500 uppercase">
