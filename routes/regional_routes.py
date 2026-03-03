@@ -109,6 +109,12 @@ def municipal_accounts_create():
 def audit_logs_view():
     return render_template('regional/audit-logs-regional-view.html')
 
+@bp.route('/system-logs')
+@bp.route('/system-logs-view')
+@role_required('regional','regional_admin')
+def system_logs_view():
+    return render_template('regional/logs/system-logs.html')
+
 @bp.route('/application-view/<application_id>')
 @role_required('regional','regional_admin')
 def application_view(application_id):
