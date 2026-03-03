@@ -236,23 +236,9 @@
   <script type="module">
     import { auth, db } from '/static/js/firebase-config.js';
     import { collection, getDocs, doc, getDoc, setDoc, updateDoc, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-    import { onAuthStateChanged, createUserWithEmailAndPassword, getAuth, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-    import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
     import { philippineLocations } from '/static/js/ph-locations.js';
 
-    // Secondary Firebase app — used for creating accounts without signing out the admin
-    const _SECONDARY_NAME = 'RegionalAdminSecondary';
-    const _firebaseConfig = {
-      apiKey: "AIzaSyCj3EnEG1XhF7_xWgt1vQK_VkT7288yd64",
-      authDomain: "denr-d02ae.firebaseapp.com",
-      projectId: "denr-d02ae",
-      storageBucket: "denr-d02ae.firebasestorage.app",
-      messagingSenderId: "499245517370",
-      appId: "1:499245517370:web:c66598d7c86d5567a64303"
-    };
-    const secondaryApp = getApps().find(a => a.name === _SECONDARY_NAME)
-                       || initializeApp(_firebaseConfig, _SECONDARY_NAME);
-    const secondaryAuth = getAuth(secondaryApp);
 
     // ─── state ───────────────────────────────────────────
     let adminProvinces  = [];
@@ -469,45 +455,33 @@
       btn.textContent = 'Creating…';
 
       try {
-        // secondaryAuth is a separate Firebase App instance — does not affect the admin's session
-        const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-        const newUid = credential.user.uid;
-
-        await setDoc(doc(db, 'users', newUid), {
-          firstName    : firstName,
-          lastName     : lastName,
-          email        : email,
-          phone        : phone,
-          municipality : municipality,
-          province     : province,
-          region       : adminRegion,
-          regionName   : adminRegionName,
-          role         : 'municipal_admin',
-          applicationType: 'municipal',
-          status       : 'active',
-          createdAt    : new Date().toISOString(),
-          createdByRegion: adminRegion
+        // POST to Flask server — uses Firebase Admin SDK server-side (no network-request-failed issue)
+        const resp = await fetch('/regional/municipal-accounts/create', {
+          method : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body   : JSON.stringify({
+            firstName, lastName, email, password, phone,
+            municipality, province,
+            region    : adminRegion,
+            regionName: adminRegionName
+          })
         });
-
-        // Sign out the newly created user from the secondary auth instance (does not affect admin)
-        await signOut(secondaryAuth);
+        const result = await resp.json();
+        if (!result.success) {
+          showMsg('Error: ' + result.error, 'err'); return;
+        }
         showMsg(`✓ Municipal account for ${municipality} created successfully!`, 'ok');
         allAccounts.push({
-          id: newUid, name: `${firstName} ${lastName}`.trim(), email,
+          id: result.uid, name: `${firstName} ${lastName}`.trim(), email,
           municipality, province: province.toUpperCase(), status: 'active', createdAt: new Date().toISOString()
         });
         renderTable();
-        // Reset form fields
         ['cFirstName','cLastName','cEmail','cPassword','cPhone'].forEach(id => {
           document.getElementById(id).value = '';
         });
       } catch (e) {
         console.error('Create account error:', e);
-        if (e.code === 'auth/email-already-in-use') {
-          showMsg('That email address is already in use.', 'err');
-        } else {
-          showMsg('Error: ' + e.message, 'err');
-        }
+        showMsg('Network error. Please try again.', 'err');
       } finally {
         btn.disabled = false;
         btn.innerHTML = '<span class="material-icons-round text-[14px]">save</span> Create Account';

@@ -49,7 +49,62 @@ def regional_account_management_view():
 def municipal_accounts_view():
     return render_template('regional/municipal-accounts.html')
 
-@bp.route('/audit-logs-view')
+@bp.route('/municipal-accounts/create', methods=['POST'])
+@role_required('regional','regional_admin')
+def municipal_accounts_create():
+    from flask import request, jsonify, session
+    from firebase_admin import auth as admin_auth, firestore
+    import datetime
+
+    data = request.get_json()
+    email        = (data.get('email')        or '').strip()
+    password     = (data.get('password')     or '').strip()
+    firstName    = (data.get('firstName')    or '').strip()
+    lastName     = (data.get('lastName')     or '').strip()
+    phone        = (data.get('phone')        or '').strip()
+    municipality = (data.get('municipality') or '').strip()
+    province     = (data.get('province')     or '').strip()
+    region       = (data.get('region')       or '').strip()
+    regionName   = (data.get('regionName')   or '').strip()
+
+    if not all([email, password, firstName, lastName, municipality, province]):
+        return jsonify({'success': False, 'error': 'All required fields must be filled.'}), 400
+    if len(password) < 6:
+        return jsonify({'success': False, 'error': 'Password must be at least 6 characters.'}), 400
+
+    try:
+        # Create user in Firebase Auth using Admin SDK (server-side, no network issue)
+        user_record = admin_auth.create_user(
+            email=email,
+            password=password,
+            display_name=f'{firstName} {lastName}'.strip()
+        )
+        uid = user_record.uid
+
+        # Write Firestore profile
+        db = firestore.client()
+        db.collection('users').document(uid).set({
+            'firstName'    : firstName,
+            'lastName'     : lastName,
+            'email'        : email,
+            'phone'        : phone,
+            'municipality' : municipality,
+            'province'     : province,
+            'region'       : region,
+            'regionName'   : regionName,
+            'role'         : 'municipal_admin',
+            'applicationType': 'municipal',
+            'status'       : 'active',
+            'createdAt'    : datetime.datetime.utcnow().isoformat(),
+            'createdByRegion': region
+        })
+
+        return jsonify({'success': True, 'uid': uid})
+
+    except admin_auth.EmailAlreadyExistsError:
+        return jsonify({'success': False, 'error': 'An account with that email already exists.'}), 409
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 @role_required('regional','regional_admin')
 def audit_logs_view():
     return render_template('regional/audit-logs-regional-view.html')
