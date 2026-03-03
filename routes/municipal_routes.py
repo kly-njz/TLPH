@@ -513,18 +513,46 @@ def accounting_deposit_category_municipal():
     return render_template('municipal/accounting/deposit-category-municipal.html')
 
 # --- Logs ---
+def _get_municipality_from_firestore():
+    """Resolve municipality/province/region for the current logged-in admin from Firestore."""
+    from flask import session
+    db = get_firestore_db()
+    municipality_name = None
+    region_name = None
+    province_name = None
+    user_id = session.get('user_id')
+    if user_id:
+        try:
+            user_doc = db.collection('users').document(user_id).get()
+            if user_doc.exists:
+                ud = user_doc.to_dict() or {}
+                municipality_name = ud.get('municipality') or ud.get('municipality_name')
+                region_name = ud.get('region') or ud.get('regionName')
+                province_name = ud.get('province')
+        except Exception as e:
+            print(f"[WARN] Could not fetch admin doc for log route: {e}")
+    if not municipality_name:
+        municipality_name = session.get('municipality') or session.get('user_municipality')
+    if not region_name:
+        region_name = session.get('region') or session.get('user_region')
+    if not province_name:
+        province_name = session.get('province') or session.get('user_province')
+    return municipality_name, region_name, province_name
+
 @bp.route('/logs/audit-logs-municipal')
 @role_required('municipal','municipal_admin')
 def logs_audit_logs_municipal():
-    return render_template('municipal/logs/audit-logs-municipal.html')
+    municipality_name, region_name, province_name = _get_municipality_from_firestore()
+    return render_template('municipal/logs/audit-logs-municipal.html',
+        municipality_name=municipality_name,
+        region_name=region_name,
+        province_name=province_name
+    )
 
 @bp.route('/logs/system-logs-municipal')
 @role_required('municipal','municipal_admin')
 def logs_system_logs_municipal():
-    from flask import session
-    municipality_name = session.get('municipality') or session.get('user_municipality')
-    region_name = session.get('region') or session.get('user_region')
-    province_name = session.get('province') or session.get('user_province')
+    municipality_name, region_name, province_name = _get_municipality_from_firestore()
     return render_template('municipal/logs/system-logs-municipal.html',
         municipality_name=municipality_name,
         region_name=region_name,
