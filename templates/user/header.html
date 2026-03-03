@@ -30,9 +30,10 @@
             <div class="dropdown relative z-[1100]">
                 <button class="flex items-center gap-2 bg-green-800/40 hover:bg-green-800 px-2 py-1 rounded-full border border-white/20 transition-all focus:outline-none" 
                         type="button" id="profileDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    <img src="https://ui-avatars.com/api/?name=User&background=fff&color=15803d&bold=true" 
+                    <img id="navProfilePic"
+                         src="https://ui-avatars.com/api/?name=User&background=fff&color=15803d&bold=true" 
                          alt="User" 
-                         class="h-7 w-7 rounded-full border border-white/40">
+                         class="h-7 w-7 rounded-full border border-white/40 object-cover">
                     <i class="fa-solid fa-chevron-down text-[9px] text-green-200"></i>
                 </button> 
                 
@@ -145,3 +146,35 @@
 </script>
 
 <script type="module" src="{{ url_for('static', filename='js/service-auto-handler.js') }}"></script>
+
+<script type="module">
+    // Load real profile photo into navbar avatar
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    onAuthStateChanged(auth, async (user) => {
+        if (!user) return;
+        const img = document.getElementById('navProfilePic');
+        if (!img) return;
+
+        try {
+            const snap = await getDoc(doc(db, 'users', user.uid));
+            const data = snap.exists() ? snap.data() : {};
+
+            // Cover all possible field names used across the codebase
+            const photoURL = data.photoURL || data.photoUrl || data.profilePhoto || data.profile_photo || data.photo || user.photoURL || '';
+            const name = `${data.firstName || ''} ${data.lastName || ''}`.trim() || user.displayName || 'User';
+            const fallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=fff&color=15803d&bold=true`;
+
+            if (photoURL) {
+                img.src = photoURL;
+                img.onerror = () => { img.src = fallback; };
+            } else {
+                img.src = fallback;
+            }
+        } catch (e) {
+            console.warn('Could not load nav profile pic:', e);
+        }
+    });
+</script>
