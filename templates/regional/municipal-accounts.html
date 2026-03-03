@@ -235,7 +235,7 @@
   <!-- ===================== SCRIPTS ===================== -->
   <script type="module">
     import { auth, db } from '/static/js/firebase-config.js';
-    import { collection, getDocs, doc, getDoc, setDoc, updateDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { collection, getDocs, doc, getDoc, setDoc, updateDoc, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
     import { onAuthStateChanged, createUserWithEmailAndPassword, getAuth, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
     import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 
@@ -302,12 +302,20 @@
     // ─── load accounts ───────────────────────────────────
     async function loadAccounts() {
       try {
-        const snap = await getDocs(query(collection(db, 'users'), where('role', '==', 'municipal')));
+        if (adminProvinces.length === 0) {
+          // No provinces configured — show nothing, not everything
+          document.getElementById('loadingRow').style.display = 'none';
+          document.getElementById('emptyState').classList.remove('hidden');
+          return;
+        }
+        // Query both 'municipal' and 'municipal_admin' role variants
+        const snap = await getDocs(query(collection(db, 'users'), where('role', 'in', ['municipal', 'municipal_admin'])));
         allAccounts = [];
         snap.forEach(d => {
           const u = d.data();
           const prov = (u.province || '').trim().toUpperCase();
-          if (adminProvinces.length > 0 && !adminProvinces.includes(prov)) return;
+          // STRICT: only include if province is within admin's scope
+          if (!adminProvinces.includes(prov)) return;
           allAccounts.push({
             id      : d.id,
             name    : `${u.firstName || ''} ${u.lastName || ''}`.trim() || '—',
@@ -476,7 +484,7 @@
           province     : province,
           region       : adminRegion,
           regionName   : adminRegionName,
-          role         : 'municipal',
+          role         : 'municipal_admin',
           applicationType: 'municipal',
           status       : 'active',
           createdAt    : new Date().toISOString(),
