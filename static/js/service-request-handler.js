@@ -5,7 +5,7 @@
  */
 
 import { auth, db } from '/static/js/firebase-config.js';
-import { collection, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, addDoc, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 /**
  * Submit a service request with payment
@@ -202,6 +202,20 @@ export async function submitFreeServiceRequest(config) {
         paymentStatus: 'free',
         createdAt: new Date().toISOString()
       };
+
+      // Enrich with user profile data (municipality, province, name) for proper routing
+      try {
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (userDoc.exists()) {
+          const ud = userDoc.data();
+          serviceData.municipality = ud.municipality || '';
+          serviceData.province = ud.province || '';
+          serviceData.userName = `${ud.firstName || ''} ${ud.lastName || ''}`.trim() || ud.email || '';
+          serviceData.region = ud.region || '';
+        }
+      } catch (profileErr) {
+        console.warn('Could not enrich service data with user profile:', profileErr);
+      }
 
       // Add form fields to serviceData (auto-capture if formData not provided)
       if (config.formData && Object.keys(config.formData).length > 0) {

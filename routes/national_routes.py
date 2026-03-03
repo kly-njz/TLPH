@@ -816,7 +816,7 @@ def service_requests_national_view():
                            .stream())
         raw_docs += list(db.collection('service_requests')
                            .where('status', '==', 'rejected')
-                           .where('approvedByLevel', '==', 'National')
+                           .where('rejectedByLevel', '==', 'National')
                            .stream())
 
         # Deduplicate by doc id
