@@ -908,3 +908,8 @@ def service_requests_national_view():
 @role_required('national', 'national_admin')
 def user_inventory_national():
     return render_template('national/logistics/user-inventory-national.html')
+
+@bp.route('/system-logs')
+@role_required('national', 'national_admin')
+def system_logs_national():
+    return render_template('national/system/system-logs.html')
