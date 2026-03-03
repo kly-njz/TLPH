@@ -166,20 +166,39 @@ def api_logs_audit_logs_municipal():
 @bp.route('/logs/financial-logs', methods=['GET'])
 @role_required('municipal','municipal_admin')
 def api_logs_financial_logs():
-    """Get financial logs for audit display"""
+    """Get financial logs for audit display — filtered by the admin's municipality"""
     try:
         db = firestore.client()
-        
-        print(f"[DEBUG] api_logs_financial_logs - fetching from transitions and transfers")
-        
+
+        # Resolve admin's municipality scope from Firestore
+        municipality_scope = _resolve_municipality_from_user_context()
+        print(f"[DEBUG] api_logs_financial_logs - municipality_scope: '{municipality_scope}'")
+
+        # Build a set of user emails that belong to this municipality (for payment filtering)
+        emails_in_scope = set()
+        if municipality_scope:
+            try:
+                users_snap = db.collection('users').where('municipality', '==', municipality_scope).stream()
+                for u in users_snap:
+                    email = (u.to_dict() or {}).get('email', '')
+                    if email:
+                        emails_in_scope.add(email.strip().lower())
+                print(f"[DEBUG] Found {len(emails_in_scope)} user emails in municipality '{municipality_scope}'")
+            except Exception as e:
+                print(f"[WARN] Could not build email scope set: {e}")
+
         logs = []
-        
-        # Fetch all transactions
+
+        # Fetch payment transactions — filter to current municipality's users
         try:
             all_transactions = get_all_transactions()
             print(f"[DEBUG] Found {len(all_transactions)} transactions total")
-            
+
             for t in all_transactions:
+                t_email = (t.get('user_email') or '').strip().lower()
+                # If we have a scope, only include transactions from users in this municipality
+                if municipality_scope and emails_in_scope and t_email not in emails_in_scope:
+                    continue
                 logs.append({
                     'id': t.get('id'),
                     'ts': t.get('created_at'),
@@ -197,10 +216,13 @@ def api_logs_financial_logs():
                 })
         except Exception as e:
             print(f"[ERROR] Fetching transactions: {e}")
-        
-        # Fetch fund transfers
+
+        # Fetch fund transfers — only include transfers targeted at this municipality
         try:
-            docs = db.collection('municipal_fund_distribution').stream()
+            fund_query = db.collection('municipal_fund_distribution')
+            if municipality_scope:
+                fund_query = fund_query.where('target_municipality', '==', municipality_scope)
+            docs = fund_query.stream()
             for doc in docs:
                 d = doc.to_dict()
                 d['id'] = doc.id
@@ -220,14 +242,14 @@ def api_logs_financial_logs():
                 })
         except Exception as e:
             print(f"[ERROR] Fetching fund transfers: {e}")
-        
-        print(f"[DEBUG] Final financial logs count: {len(logs)}")
-        
+
+        print(f"[DEBUG] Final financial logs count after municipality filter: {len(logs)}")
+
         # Sort by timestamp descending
         logs = [l for l in logs if l['ts']]
         logs.sort(key=lambda x: x['ts'], reverse=True)
-        
-        return jsonify({'logs': logs}), 200
+
+        return jsonify({'logs': logs, 'municipality': municipality_scope}), 200
     except Exception as e:
         print(f"[ERROR] Getting financial logs: {e}")
         import traceback
