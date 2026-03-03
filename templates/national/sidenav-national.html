@@ -122,9 +122,10 @@
             <span>Licensing / Permits</span>
         </a>
 
-        <a href="/national/service-requests" class="nsn-link nav-item">
+        <a href="/national/service-requests" class="nsn-link nav-item" id="natNavServiceLink">
             <span class="material-icons-round nsn-ico">support_agent</span>
             <span>Service Requests</span>
+            <span id="natNavServiceBadge" class="ml-auto hidden min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[8px] font-black flex items-center justify-center leading-none"></span>
         </a>
 
         <div class="mt-5 px-3 text-[10px] font-extrabold tracking-[0.15em] text-slate-400 uppercase">Human Resources</div>
@@ -301,4 +302,36 @@
         updateClock();
         setInterval(updateClock, 1000);
     })();
+</script>
+
+<script type="module">
+  // Live forwarded-to-national service request badge in national sidenav
+  import { auth, db } from '/static/js/firebase-config.js';
+  import { collection, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+  import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+  onAuthStateChanged(auth, (user) => {
+    if (!user) return;
+    try {
+      const badge = document.getElementById('natNavServiceBadge');
+      if (!badge) return;
+
+      const q = query(
+        collection(db, 'service_requests'),
+        where('status', '==', 'forwarded-national')
+      );
+
+      onSnapshot(q, (snapshot) => {
+        const count = snapshot.size;
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : count;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      });
+    } catch (e) {
+      console.warn('national sidenav badge error:', e);
+    }
+  });
 </script>
