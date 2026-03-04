@@ -50,8 +50,8 @@
     {% include 'regional/sidenav.html' %}
   </div>
 
-  <div class="content-area transition-all" 
-       x-data="{ reviewModalOpen: false, leaveStatus: 'Pending', selectedScope: 'REGIONWIDE', selectedMunicipality: 'Municipality A' }">
+    <div class="content-area transition-all" 
+      x-data="leaveRequestData()" x-init="loadLeaveRequests()">
     
     <main class="flex-1 flex flex-col min-w-0 p-3 gap-2 overflow-y-auto custom-scrollbar">
 
@@ -62,7 +62,7 @@
           </div>
           <div class="leading-tight">
             <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Leave Applications Registry</h1>
-            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0 mt-0.5">CSC Form No. 6 Processing • Regional & Municipal Oversight</p>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0 mt-0.5">CSC Form No. 6 Processing • {{ region_name }} & Municipal Oversight</p>
           </div>
         </div>
 
@@ -80,33 +80,35 @@
         <div class="gov-card p-2 px-3 border-l-4 border-l-blue-900 bg-blue-50/30">
           <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Active Scope Filter</p>
           <div class="mt-2 grid grid-cols-3 gap-1">
-            <button @click="selectedScope='REGIONWIDE'; filterTable()" class="px-1 py-1 rounded-[1px] border text-[8px] font-black uppercase transition" :class="selectedScope==='REGIONWIDE' ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-slate-600 border-slate-200'">RWIDE</button>
-            <button @click="selectedScope='REGIONAL'; filterTable()" class="px-1 py-1 rounded-[1px] border text-[8px] font-black uppercase transition" :class="selectedScope==='REGIONAL' ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-slate-600 border-slate-200'">REG</button>
-            <button @click="selectedScope='MUNICIPAL'; filterTable()" class="px-1 py-1 rounded-[1px] border text-[8px] font-black uppercase transition" :class="selectedScope==='MUNICIPAL' ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-slate-600 border-slate-200'">MUNI</button>
+            <button @click="selectedScope='REGIONWIDE'" class="px-1 py-1 rounded-[1px] border text-[8px] font-black uppercase transition" :class="selectedScope==='REGIONWIDE' ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-slate-600 border-slate-200'">RWIDE</button>
+            <button @click="selectedScope='REGIONAL'" class="px-1 py-1 rounded-[1px] border text-[8px] font-black uppercase transition" :class="selectedScope==='REGIONAL' ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-slate-600 border-slate-200'">REG</button>
+            <button @click="selectedScope='MUNICIPAL'" class="px-1 py-1 rounded-[1px] border text-[8px] font-black uppercase transition" :class="selectedScope==='MUNICIPAL' ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-slate-600 border-slate-200'">MUNI</button>
           </div>
           <div class="mt-2" x-show="selectedScope==='MUNICIPAL'" style="display:none;">
-            <select class="gov-input w-full text-[9px] h-7" x-model="selectedMunicipality" @change="filterTable()">
-              <option>Municipality A</option>
-              <option>Municipality B</option>
+            <select class="gov-input w-full text-[9px] h-7" x-model="selectedMunicipality" title="Filter by municipality">
+              <option value="">All Municipalities</option>
+              <template x-for="mun in municipalities" :key="mun">
+                <option :value="mun" x-text="mun"></option>
+              </template>
             </select>
           </div>
         </div>
 
         <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 bg-amber-50/30">
           <p class="text-[8px] font-black uppercase tracking-widest text-amber-800 m-0">Pending Review</p>
-          <div class="text-xl font-black text-amber-700 leading-none mt-1">14</div>
+          <div class="text-xl font-black text-amber-700 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'pending').length">0</div>
         </div>
         <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
           <p class="text-[8px] font-black uppercase tracking-widest text-emerald-800 m-0">Approved (MTD)</p>
-          <div class="text-xl font-black text-slate-900 leading-none mt-1">85</div>
+          <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'approved').length">0</div>
         </div>
         <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
           <p class="text-[8px] font-black uppercase tracking-widest text-blue-800 m-0">Current Leaves</p>
-          <div class="text-xl font-black text-slate-900 leading-none mt-1">42</div>
+          <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'approved').length">0</div>
         </div>
         <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600">
           <p class="text-[8px] font-black uppercase tracking-widest text-rose-800 m-0">Disapproved</p>
-          <div class="text-xl font-black text-slate-900 leading-none mt-1">03</div>
+          <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => ['disapproved','denied','rejected'].includes((r.status || '').toLowerCase())).length">0</div>
         </div>
       </section>
 
@@ -118,25 +120,26 @@
           </h2>
 
           <div class="flex flex-wrap gap-1.5 items-center">
-            <select id="typeFilter" class="gov-input cursor-pointer" onchange="filterTable()">
+            <select id="typeFilter" class="gov-input cursor-pointer" x-model="filters.type" title="Filter by leave type">
               <option value="">All Types</option>
               <option value="Vacation">Vacation</option>
               <option value="Sick">Sick</option>
               <option value="Forced">Forced</option>
             </select>
 
-            <select id="statusFilter" class="gov-input cursor-pointer" onchange="filterTable()">
+            <select id="statusFilter" class="gov-input cursor-pointer" x-model="filters.status" title="Filter by status">
               <option value="">All Status</option>
               <option value="Pending">Pending</option>
               <option value="Approved">Approved</option>
+              <option value="Disapproved">Disapproved</option>
             </select>
 
             <div class="relative min-w-[180px]">
               <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-              <input type="text" id="searchLeave" placeholder="Search applicant..." class="gov-input pl-6 w-full" oninput="filterTable()">
+              <input type="text" id="searchLeave" placeholder="Search applicant..." class="gov-input pl-6 w-full" x-model="filters.search">
             </div>
 
-            <button onclick="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-800 font-bold uppercase text-[9px] rounded-[2px] transition hover:bg-slate-300 shadow-sm">
+            <button @click="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-800 font-bold uppercase text-[9px] rounded-[2px] transition hover:bg-slate-300 shadow-sm">
               Reset
             </button>
           </div>
@@ -157,35 +160,49 @@
               </tr>
             </thead>
             <tbody id="leaveTable" class="text-[10px] divide-y divide-slate-100">
-              <tr class="hover:bg-blue-50 transition leave-row" data-type="Vacation" data-status="Pending" data-scope="REGIONWIDE" data-mun="">
-                <td class="px-3 py-2 font-mono text-slate-600 border-r border-slate-100 uppercase">2026-02-18</td>
-                <td class="px-3 py-2 border-r border-slate-100 leading-tight">
-                  <span class="font-black text-slate-900 uppercase block">Santos, Maria Clara P.</span>
-                  <span class="text-[8px] text-slate-400 font-bold uppercase italic">Chief Accountant • Regional RO</span>
-                </td>
-                <td class="px-3 py-2 border-r border-slate-100">
-                  <span class="font-bold text-blue-900 uppercase">Vacation Leave</span>
-                  <div class="text-[8px] text-slate-500 italic">Personal Travel</div>
-                </td>
-                <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100">Mar 02 - Mar 06, 2026</td>
-                <td class="px-3 py-2 text-center font-black border-r border-slate-100">5.0</td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-amber-50 text-amber-700 border border-amber-200 w-full animate-pulse">Pending</span>
-                </td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="text-indigo-800 font-black text-[8px]">REGION-WIDE</span>
-                </td>
-                <td class="px-3 py-2 text-center no-print">
-                  <button @click="reviewModalOpen = true" class="text-blue-700 hover:scale-125 transition-transform"><span class="material-icons-round text-sm">rate_review</span></button>
-                </td>
-              </tr>
+              <template x-if="loading">
+                <tr>
+                  <td colspan="8" class="px-3 py-4 text-center text-slate-400 italic">Loading leave applications...</td>
+                </tr>
+              </template>
+              <template x-if="!loading && filteredRequests.length === 0">
+                <tr>
+                  <td colspan="8" class="px-3 py-4 text-center text-slate-400 italic">No leave applications found.</td>
+                </tr>
+              </template>
+              <template x-for="req in filteredRequests" :key="req.id">
+                <tr class="hover:bg-blue-50 transition">
+                  <td class="px-3 py-2 font-mono text-slate-600 border-r border-slate-100 uppercase" x-text="req.date_filed || 'N/A'"></td>
+                  <td class="px-3 py-2 border-r border-slate-100 leading-tight">
+                    <span class="font-black text-slate-900 uppercase block" x-text="req.applicant_name || 'N/A'"></span>
+                    <span class="text-[8px] text-slate-400 font-bold uppercase italic" x-text="req.assignment || 'N/A'"></span>
+                  </td>
+                  <td class="px-3 py-2 border-r border-slate-100">
+                    <span class="font-bold text-blue-900 uppercase" x-text="req.leave_type || 'N/A'"></span>
+                    <div class="text-[8px] text-slate-500 italic" x-text="req.purpose || '-' "></div>
+                  </td>
+                  <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100" x-text="formatInclusive(req.from_date, req.to_date)"></td>
+                  <td class="px-3 py-2 text-center font-black border-r border-slate-100" x-text="req.days || 0"></td>
+                  <td class="px-3 py-2 text-center border-r border-slate-100">
+                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase border w-full"
+                          :class="statusClass(req.status)"
+                          x-text="req.status || 'Pending'"></span>
+                  </td>
+                  <td class="px-3 py-2 text-center border-r border-slate-100">
+                    <span class="text-indigo-800 font-black text-[8px]" x-text="(req.scope || 'REGIONWIDE').replace('_', '-')"></span>
+                  </td>
+                  <td class="px-3 py-2 text-center no-print">
+                    <button @click="openReview(req)" class="text-blue-700 hover:scale-125 transition-transform"><span class="material-icons-round text-sm">rate_review</span></button>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
 
         <div class="bg-slate-50 border-t border-slate-200 px-3 py-1 text-[9px] text-slate-500 flex justify-between items-center shrink-0 italic uppercase tracking-wider">
           <span>Official Regional Leave Registry • FY 2026</span>
-          <span>Visible Applications: <span id="recordCount" class="font-black text-slate-800">1</span></span>
+          <span>Visible Applications: <span id="recordCount" class="font-black text-slate-800" x-text="filteredRequests.length">0</span></span>
         </div>
       </section>
 
@@ -203,8 +220,8 @@
               <div class="bg-white border border-slate-200 p-3 rounded-[2px]">
                 <h4 class="text-[8px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Applicant Information</h4>
                 <div class="space-y-1 uppercase font-bold text-slate-700 text-[9px]">
-                  <p><span class="text-slate-400">Name:</span> Maria Clara P. Santos</p>
-                  <p><span class="text-slate-400">Assignment:</span> Accounting Div, Regional Office</p>
+                  <p><span class="text-slate-400">Name:</span> <span x-text="selectedRequest?.applicant_name || 'N/A'"></span></p>
+                  <p><span class="text-slate-400">Assignment:</span> <span x-text="selectedRequest?.assignment || 'N/A'"></span></p>
                 </div>
               </div>
               <div class="bg-white border border-slate-200 p-3 rounded-[2px]">
@@ -219,11 +236,11 @@
             <div class="bg-white border border-slate-300 p-4 rounded-[2px] space-y-4">
               <h4 class="text-[9px] font-black uppercase text-slate-800 border-b border-slate-100 pb-1">Application Details</h4>
               <div class="grid grid-cols-3 gap-3">
-                <div><label class="gov-label">Leave Type</label><span class="font-black text-blue-900 uppercase">Vacation Leave</span></div>
+                <div><label class="gov-label">Leave Type</label><span class="font-black text-blue-900 uppercase" x-text="selectedRequest?.leave_type || 'N/A'"></span></div>
                 <div><label class="gov-label">Commutation</label><span class="font-black text-amber-700 uppercase">Requested</span></div>
-                <div><label class="gov-label">Days Applied</label><span class="font-black text-slate-800 font-mono text-sm">5 Days</span></div>
+                <div><label class="gov-label">Days Applied</label><span class="font-black text-slate-800 font-mono text-sm" x-text="(selectedRequest?.days || 0) + ' Days'"></span></div>
               </div>
-              <div><label class="gov-label">Inclusive Dates</label><span class="font-black text-slate-800 uppercase font-mono tracking-tight">March 02 - March 06, 2026</span></div>
+              <div><label class="gov-label">Inclusive Dates</label><span class="font-black text-slate-800 uppercase font-mono tracking-tight" x-text="formatInclusive(selectedRequest?.from_date, selectedRequest?.to_date)"></span></div>
             </div>
 
             <div class="mt-4">
@@ -243,38 +260,91 @@
   </div>
 
   <script>
-    function filterTable() {
-      const q = document.getElementById('searchLeave').value.toLowerCase().trim();
-      const typeF = document.getElementById('typeFilter').value;
-      const statusF = document.getElementById('statusFilter').value;
-      const rows = document.querySelectorAll('.leave-row');
-      let visibleCount = 0;
+    const LEAVE_REQUESTS_API = '/regional/api/hrm/leave-requests';
 
-      rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        const type = row.getAttribute('data-type') || '';
-        const status = row.getAttribute('data-status') || '';
-        
-        const matchQ = text.includes(q);
-        const matchT = !typeF || type === typeF;
-        const matchS = !statusF || status === statusF;
+    window.leaveRequestData = function () {
+      return {
+        loading: false,
+        reviewModalOpen: false,
+        selectedScope: 'REGIONWIDE',
+        selectedMunicipality: '',
+        selectedRequest: null,
+        municipalities: [],
+        leaveRequests: [],
+        filters: {
+          search: '',
+          type: '',
+          status: ''
+        },
 
-        if (matchQ && matchT && matchS) {
-          row.style.display = '';
-          visibleCount++;
-        } else {
-          row.style.display = 'none';
+        async loadLeaveRequests() {
+          this.loading = true;
+          try {
+            const response = await fetch(LEAVE_REQUESTS_API, { credentials: 'same-origin' });
+            if (!response.ok) {
+              throw new Error(`Failed to load leave requests (${response.status})`);
+            }
+            const payload = await response.json();
+            this.leaveRequests = payload.leave_requests || [];
+            this.municipalities = [...new Set(this.leaveRequests.map(r => r.municipality).filter(Boolean))].sort();
+          } catch (error) {
+            console.error('[LEAVE] load failed:', error);
+            this.leaveRequests = [];
+            this.municipalities = [];
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        get filteredRequests() {
+          const search = (this.filters.search || '').toLowerCase().trim();
+          const normalizedType = (this.filters.type || '').toLowerCase();
+          const normalizedStatus = (this.filters.status || '').toLowerCase();
+
+          return this.leaveRequests.filter(req => {
+            const applicant = (req.applicant_name || '').toLowerCase();
+            const assignment = (req.assignment || '').toLowerCase();
+            const type = (req.leave_type || '').toLowerCase();
+            const status = (req.status || '').toLowerCase();
+            const scope = (req.scope || 'REGIONWIDE').toUpperCase();
+            const municipality = (req.municipality || '').toLowerCase();
+
+            const matchSearch = !search || applicant.includes(search) || assignment.includes(search);
+            const matchType = !normalizedType || type.includes(normalizedType);
+            const matchStatus = !normalizedStatus || status.includes(normalizedStatus);
+            const matchScope = !this.selectedScope || scope === this.selectedScope;
+            const matchMunicipality = this.selectedScope !== 'MUNICIPAL' || !this.selectedMunicipality || municipality === this.selectedMunicipality.toLowerCase();
+
+            return matchSearch && matchType && matchStatus && matchScope && matchMunicipality;
+          });
+        },
+
+        resetFilters() {
+          this.filters = { search: '', type: '', status: '' };
+          this.selectedScope = 'REGIONWIDE';
+          this.selectedMunicipality = '';
+        },
+
+        openReview(req) {
+          this.selectedRequest = req;
+          this.reviewModalOpen = true;
+        },
+
+        formatInclusive(fromDate, toDate) {
+          if (!fromDate && !toDate) return 'N/A';
+          if (fromDate && toDate) return `${fromDate} - ${toDate}`;
+          return fromDate || toDate;
+        },
+
+        statusClass(status) {
+          const normalized = (status || '').toLowerCase();
+          if (normalized === 'pending') return 'bg-amber-50 text-amber-700 border-amber-200';
+          if (normalized === 'approved') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+          if (['disapproved', 'denied', 'rejected'].includes(normalized)) return 'bg-rose-50 text-rose-700 border-rose-200';
+          return 'bg-slate-100 text-slate-700 border-slate-200';
         }
-      });
-      document.getElementById('recordCount').innerText = visibleCount;
-    }
-
-    function resetFilters() {
-      document.getElementById('searchLeave').value = '';
-      document.getElementById('typeFilter').value = '';
-      document.getElementById('statusFilter').value = '';
-      filterTable();
-    }
+      };
+    };
   </script>
 </body>
 </html>

@@ -399,7 +399,81 @@ def update_regional_holiday(holiday_id):
 @bp.route('/hrm/leave-requests')
 @role_required('regional','regional_admin')
 def leave_requests_view():
-    return render_template('regional/HR/leave-request-regional.html')
+    from firebase_admin import firestore
+
+    region_name = session.get('region') or session.get('user_region')
+
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    print(f"[DEBUG] leave_requests_view fetched region from Firestore: {region_name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch leave-request region from Firestore: {e}")
+
+    if not region_name:
+        region_name = 'Unknown Region'
+
+    return render_template('regional/HR/leave-request-regional.html', region_name=region_name)
+
+@bp.route('/api/hrm/leave-requests', methods=['GET'])
+@role_required('regional','regional_admin')
+def get_regional_leave_requests():
+    db = get_firestore_db()
+    leave_requests = []
+
+    try:
+        docs = db.collection('leave_requests').stream()
+    except Exception:
+        docs = []
+
+    for doc in docs:
+        item = doc.to_dict() or {}
+
+        def normalize_date(value):
+            if isinstance(value, str):
+                return value.split('T')[0]
+            if hasattr(value, 'strftime'):
+                return value.strftime('%Y-%m-%d')
+            if hasattr(value, 'isoformat'):
+                return value.isoformat().split('T')[0]
+            if hasattr(value, 'to_datetime'):
+                return value.to_datetime().strftime('%Y-%m-%d')
+            return ''
+
+        leave_requests.append({
+            'id': doc.id,
+            'date_filed': normalize_date(item.get('date_filed') or item.get('filed_date') or item.get('created_at')),
+            'applicant_name': item.get('applicant_name') or item.get('employee_name') or '',
+            'assignment': item.get('assignment') or item.get('designation') or '',
+            'leave_type': item.get('leave_type') or item.get('type') or '',
+            'purpose': item.get('purpose') or item.get('reason') or '',
+            'from_date': normalize_date(item.get('from_date') or item.get('start_date')),
+            'to_date': normalize_date(item.get('to_date') or item.get('end_date')),
+            'days': item.get('days') or item.get('total_days') or 0,
+            'status': item.get('status') or 'Pending',
+            'scope': (item.get('scope') or 'REGIONWIDE').upper(),
+            'municipality': item.get('municipality') or ''
+        })
+
+    leave_requests.sort(key=lambda item: item.get('date_filed') or '', reverse=True)
+    return jsonify({'success': True, 'leave_requests': leave_requests})
 
 @bp.route('/hrm/payroll-system')
 @role_required('regional','regional_admin')
