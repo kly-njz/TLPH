@@ -642,5 +642,33 @@
     entityFilter.addEventListener('change', applyFilters);
     dateFilter.addEventListener('change', applyFilters);
   </script>
+
+  <!-- Firebase: Commit 2 — entities count -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { collection, getDocs, query, where, orderBy, limit }
+      from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    window._acctData = { entities: [], finance: [], funds: [], logs: [], revMix: [] };
+
+    async function loadAccountingData() {
+      try {
+        // --- Entities ---
+        const entSnap = await getDocs(collection(db, 'entities'));
+        const entities = [];
+        entSnap.forEach(d => entities.push({ id: d.id, ...d.data() }));
+        window._acctData.entities = entities;
+
+        const activeCount = entities.filter(e => (e.status || '').toUpperCase() === 'ACTIVE').length;
+        const el = document.getElementById('kpiActiveEntities');
+        if (el) el.textContent = activeCount || entities.length || '—';
+      } catch (err) {
+        console.warn('[accounting-dashboard] entities fetch error:', err);
+      }
+    }
+
+    onAuthStateChanged(auth, user => { if (user) loadAccountingData(); });
+  </script>
 </body>
 </html>
