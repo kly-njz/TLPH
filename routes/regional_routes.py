@@ -156,7 +156,41 @@ def attendance_view():
 @role_required('regional','regional_admin')
 def holidays_view():
     from config import Config
-    return render_template('regional/HR/holiday-regional.html', firebase_config=Config.FIREBASE_CONFIG)
+    from flask import session
+    from firebase_admin import firestore
+    
+    # Try to get region from session first
+    region_name = session.get('region') or session.get('user_region')
+    
+    # If not in session, fetch from Firestore users collection
+    if not region_name or region_name == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+        
+        if user_id or user_email:
+            try:
+                db = firestore.client()
+                user_doc = None
+                
+                if user_id:
+                    user_doc = db.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+                
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    print(f"[DEBUG] holidays_view fetched region from Firestore: {region_name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch region from Firestore: {e}")
+    
+    if not region_name:
+        region_name = 'Unknown Region'
+    
+    return render_template('regional/HR/holiday-regional.html', firebase_config=Config.FIREBASE_CONFIG, region_name=region_name)
 
 @bp.route('/hrm/leave-requests')
 @role_required('regional','regional_admin')
