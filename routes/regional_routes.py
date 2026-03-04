@@ -475,6 +475,74 @@ def get_regional_leave_requests():
     leave_requests.sort(key=lambda item: item.get('date_filed') or '', reverse=True)
     return jsonify({'success': True, 'leave_requests': leave_requests})
 
+@bp.route('/api/hrm/leave-requests', methods=['POST'])
+@role_required('regional','regional_admin')
+def create_regional_leave_request():
+    from datetime import datetime
+
+    data = request.get_json(silent=True) or {}
+
+    applicant_name = (data.get('applicant_name') or '').strip()
+    leave_type = (data.get('leave_type') or '').strip()
+    from_date = (data.get('from_date') or '').strip()
+    to_date = (data.get('to_date') or '').strip()
+
+    if not applicant_name or not leave_type or not from_date or not to_date:
+        return jsonify({'success': False, 'error': 'Applicant, leave type, from date, and to date are required'}), 400
+
+    total_days = data.get('days')
+    if total_days in [None, '']:
+        try:
+            d_from = datetime.fromisoformat(from_date).date()
+            d_to = datetime.fromisoformat(to_date).date()
+            total_days = max((d_to - d_from).days + 1, 1)
+        except Exception:
+            total_days = 1
+
+    payload = {
+        'applicant_name': applicant_name,
+        'assignment': (data.get('assignment') or '').strip(),
+        'leave_type': leave_type,
+        'purpose': (data.get('purpose') or '').strip(),
+        'from_date': from_date,
+        'to_date': to_date,
+        'days': float(total_days) if str(total_days).strip() else 1,
+        'status': (data.get('status') or 'Pending').strip(),
+        'scope': (data.get('scope') or 'REGIONWIDE').strip().upper(),
+        'municipality': (data.get('municipality') or '').strip(),
+        'date_filed': datetime.utcnow().date().isoformat(),
+        'remarks': (data.get('remarks') or '').strip(),
+        'updated_by': session.get('user_email') or ''
+    }
+
+    db = get_firestore_db()
+    ref = db.collection('leave_requests').document()
+    ref.set(payload)
+
+    return jsonify({'success': True, 'id': ref.id})
+
+@bp.route('/api/hrm/leave-requests/<request_id>/status', methods=['PUT'])
+@role_required('regional','regional_admin')
+def update_regional_leave_request_status(request_id):
+    from datetime import datetime
+
+    data = request.get_json(silent=True) or {}
+    status = (data.get('status') or '').strip()
+    remarks = (data.get('remarks') or '').strip()
+
+    if not status:
+        return jsonify({'success': False, 'error': 'Status is required'}), 400
+
+    db = get_firestore_db()
+    db.collection('leave_requests').document(request_id).set({
+        'status': status,
+        'remarks': remarks,
+        'updated_at': datetime.utcnow().isoformat(),
+        'updated_by': session.get('user_email') or ''
+    }, merge=True)
+
+    return jsonify({'success': True})
+
 @bp.route('/hrm/payroll-system')
 @role_required('regional','regional_admin')
 def payroll_system_view():

@@ -67,10 +67,10 @@
         </div>
 
         <div class="flex gap-1.5 no-print">
-          <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+          <button @click="exportReport()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">assessment</span> Report
           </button>
-          <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+          <button @click="openCreateModal()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">add_task</span> File Behalf
           </button>
         </div>
@@ -245,14 +245,84 @@
 
             <div class="mt-4">
               <label class="gov-label">Regional Admin Remarks</label>
-              <textarea class="gov-input w-full text-[10px]" rows="2" placeholder="Enter notes or recommendation..."></textarea>
+              <textarea x-model="reviewRemarks" class="gov-input w-full text-[10px]" rows="2" placeholder="Enter notes or recommendation..."></textarea>
             </div>
           </div>
 
           <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
-            <button @click="reviewModalOpen = false" class="gov-btn border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100">Disapprove</button>
-            <button @click="reviewModalOpen = false" class="gov-btn bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Approve Form</button>
+            <button @click="updateStatus('Disapproved')" class="gov-btn border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100">Disapprove</button>
+            <button @click="updateStatus('Approved')" class="gov-btn bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Approve Form</button>
           </div>
+        </div>
+      </div>
+
+      <div x-show="createModalOpen" style="display:none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div @click.away="closeCreateModal()" class="bg-white rounded-[2px] shadow-2xl w-full max-w-xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
+          <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
+            <h3 class="text-[10px] font-black uppercase tracking-widest m-0">File Leave Request (On Behalf)</h3>
+            <button @click="closeCreateModal()" class="text-slate-400 hover:text-white transition-colors">
+              <span class="material-icons-round text-[16px]">close</span>
+            </button>
+          </div>
+
+          <form class="p-4 bg-slate-50 space-y-3" @submit.prevent="createLeaveRequest()">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="gov-label">Applicant Name</label>
+                <input required x-model="newRequest.applicant_name" type="text" class="gov-input w-full uppercase">
+              </div>
+              <div>
+                <label class="gov-label">Assignment</label>
+                <input x-model="newRequest.assignment" type="text" class="gov-input w-full uppercase">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="gov-label">Leave Type</label>
+                <select required x-model="newRequest.leave_type" class="gov-input w-full" title="Leave type">
+                  <option value="Vacation Leave">Vacation Leave</option>
+                  <option value="Sick Leave">Sick Leave</option>
+                  <option value="Forced Leave">Forced Leave</option>
+                </select>
+              </div>
+              <div>
+                <label class="gov-label">Scope</label>
+                <select x-model="newRequest.scope" class="gov-input w-full" title="Application scope">
+                  <option value="REGIONWIDE">Region-wide</option>
+                  <option value="REGIONAL">Regional</option>
+                  <option value="MUNICIPAL">Municipal</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="gov-label">From Date</label>
+                <input required x-model="newRequest.from_date" type="date" class="gov-input w-full">
+              </div>
+              <div>
+                <label class="gov-label">To Date</label>
+                <input required x-model="newRequest.to_date" type="date" class="gov-input w-full">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="gov-label">Municipality (if municipal)</label>
+                <input x-model="newRequest.municipality" type="text" class="gov-input w-full uppercase">
+              </div>
+              <div>
+                <label class="gov-label">Purpose</label>
+                <input x-model="newRequest.purpose" type="text" class="gov-input w-full">
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-200 flex justify-end gap-2">
+              <button type="button" @click="closeCreateModal()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-100">Cancel</button>
+              <button type="submit" class="gov-btn bg-blue-800 text-white hover:bg-blue-900">Submit</button>
+            </div>
+          </form>
         </div>
       </div>
 
@@ -266,11 +336,23 @@
       return {
         loading: false,
         reviewModalOpen: false,
+        createModalOpen: false,
         selectedScope: 'REGIONWIDE',
         selectedMunicipality: '',
         selectedRequest: null,
+        reviewRemarks: '',
         municipalities: [],
         leaveRequests: [],
+        newRequest: {
+          applicant_name: '',
+          assignment: '',
+          leave_type: 'Vacation Leave',
+          purpose: '',
+          from_date: '',
+          to_date: '',
+          scope: 'REGIONWIDE',
+          municipality: ''
+        },
         filters: {
           search: '',
           type: '',
@@ -327,7 +409,88 @@
 
         openReview(req) {
           this.selectedRequest = req;
+          this.reviewRemarks = req.remarks || '';
           this.reviewModalOpen = true;
+        },
+
+        openCreateModal() {
+          this.createModalOpen = true;
+        },
+
+        closeCreateModal() {
+          this.createModalOpen = false;
+          this.newRequest = {
+            applicant_name: '',
+            assignment: '',
+            leave_type: 'Vacation Leave',
+            purpose: '',
+            from_date: '',
+            to_date: '',
+            scope: 'REGIONWIDE',
+            municipality: ''
+          };
+        },
+
+        calculateDays(fromDate, toDate) {
+          if (!fromDate || !toDate) return 1;
+          const start = new Date(fromDate);
+          const end = new Date(toDate);
+          if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
+          return Math.max(Math.floor((end - start) / 86400000) + 1, 1);
+        },
+
+        async createLeaveRequest() {
+          try {
+            const payload = {
+              ...this.newRequest,
+              days: this.calculateDays(this.newRequest.from_date, this.newRequest.to_date),
+              status: 'Pending'
+            };
+
+            const response = await fetch(LEAVE_REQUESTS_API, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              const err = await response.json().catch(() => ({}));
+              throw new Error(err.error || `Create failed (${response.status})`);
+            }
+
+            this.closeCreateModal();
+            await this.loadLeaveRequests();
+          } catch (error) {
+            console.error('[LEAVE] create failed:', error);
+            alert(error.message || 'Failed to create leave request');
+          }
+        },
+
+        async updateStatus(status) {
+          if (!this.selectedRequest?.id) return;
+
+          try {
+            const response = await fetch(`${LEAVE_REQUESTS_API}/${this.selectedRequest.id}/status`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ status, remarks: this.reviewRemarks })
+            });
+
+            if (!response.ok) {
+              const err = await response.json().catch(() => ({}));
+              throw new Error(err.error || `Update failed (${response.status})`);
+            }
+
+            this.reviewModalOpen = false;
+            this.selectedRequest = null;
+            this.reviewRemarks = '';
+            await this.loadLeaveRequests();
+          } catch (error) {
+            console.error('[LEAVE] status update failed:', error);
+            alert(error.message || 'Failed to update request status');
+          }
         },
 
         formatInclusive(fromDate, toDate) {
@@ -342,6 +505,40 @@
           if (normalized === 'approved') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
           if (['disapproved', 'denied', 'rejected'].includes(normalized)) return 'bg-rose-50 text-rose-700 border-rose-200';
           return 'bg-slate-100 text-slate-700 border-slate-200';
+        },
+
+        exportReport() {
+          const rows = this.filteredRequests;
+          const headers = ['Date Filed', 'Applicant', 'Assignment', 'Leave Type', 'Purpose', 'From Date', 'To Date', 'Days', 'Status', 'Scope', 'Municipality'];
+          const lines = [headers.join(',')];
+
+          for (const row of rows) {
+            const values = [
+              row.date_filed || '',
+              row.applicant_name || '',
+              row.assignment || '',
+              row.leave_type || '',
+              row.purpose || '',
+              row.from_date || '',
+              row.to_date || '',
+              row.days || '',
+              row.status || '',
+              row.scope || '',
+              row.municipality || ''
+            ].map(v => `"${String(v).replace(/"/g, '""')}"`);
+
+            lines.push(values.join(','));
+          }
+
+          const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `regional_leave_requests_${new Date().toISOString().slice(0, 10)}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
         }
       };
     };
