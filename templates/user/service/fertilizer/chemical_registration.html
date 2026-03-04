@@ -46,9 +46,33 @@
                             </div>
 
                             <div>
-                                <label class="block text-[9px] font-black text-gray-700 uppercase mb-0.5">Distribution Area <span class="text-red-500">*</span></label>
-                                <input type="text" id="distributionArea" required placeholder="Regions / Provinces" 
-                                    class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-600 outline-none text-xs font-medium bg-gray-50">
+                                <label class="block text-[9px] font-black text-gray-700 uppercase mb-0.5">Distribution Region <span class="text-red-500">*</span></label>
+                                <select id="distributionRegion" required class="w-full border border-gray-300 rounded-lg px-2 py-2 focus:ring-2 focus:ring-green-600 outline-none bg-white text-xs font-medium transition-all">
+                                    <option value="" selected disabled>Select Region</option>
+                                    <option value="NCR">NCR – National Capital Region</option>
+                                    <option value="CAR">CAR – Cordillera Administrative Region</option>
+                                    <option value="Region I">Region I – Ilocos Region</option>
+                                    <option value="Region II">Region II – Cagayan Valley</option>
+                                    <option value="Region III">Region III – Central Luzon</option>
+                                    <option value="Region IV-A">Region IV-A – CALABARZON</option>
+                                    <option value="Region IV-B">Region IV-B – MIMAROPA</option>
+                                    <option value="Region V">Region V – Bicol Region</option>
+                                    <option value="Region VI">Region VI – Western Visayas</option>
+                                    <option value="Region VII">Region VII – Central Visayas</option>
+                                    <option value="Region VIII">Region VIII – Eastern Visayas</option>
+                                    <option value="Region IX">Region IX – Zamboanga Peninsula</option>
+                                    <option value="Region X">Region X – Northern Mindanao</option>
+                                    <option value="Region XI">Region XI – Davao Region</option>
+                                    <option value="Region XII">Region XII – SOCCSKSARGEN</option>
+                                    <option value="Region XIII">Region XIII – Caraga</option>
+                                    <option value="BARMM">BARMM – Bangsamoro</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-black text-gray-700 uppercase mb-0.5">Distribution Province <span class="text-red-500">*</span></label>
+                                <select id="distributionProvince" required disabled class="w-full border border-gray-300 rounded-lg px-2 py-2 focus:ring-2 focus:ring-green-600 outline-none bg-white text-xs font-medium transition-all disabled:opacity-50">
+                                    <option value="" selected disabled>Select Region first</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -107,22 +131,62 @@
 
     <script type="module">
         import { submitServiceRequest } from '/static/js/service-request-handler.js';
+
+        const regionProvinces = {
+            'NCR': ['Metro Manila'],
+            'CAR': ['Abra', 'Apayao', 'Benguet', 'Ifugao', 'Kalinga', 'Mountain Province'],
+            'Region I': ['Ilocos Norte', 'Ilocos Sur', 'La Union', 'Pangasinan'],
+            'Region II': ['Batanes', 'Cagayan', 'Isabela', 'Nueva Vizcaya', 'Quirino'],
+            'Region III': ['Aurora', 'Bataan', 'Bulacan', 'Nueva Ecija', 'Pampanga', 'Tarlac', 'Zambales'],
+            'Region IV-A': ['Batangas', 'Cavite', 'Laguna', 'Quezon', 'Rizal'],
+            'Region IV-B': ['Marinduque', 'Occidental Mindoro', 'Oriental Mindoro', 'Palawan', 'Romblon'],
+            'Region V': ['Albay', 'Camarines Norte', 'Camarines Sur', 'Catanduanes', 'Masbate', 'Sorsogon'],
+            'Region VI': ['Aklan', 'Antique', 'Capiz', 'Guimaras', 'Iloilo', 'Negros Occidental'],
+            'Region VII': ['Bohol', 'Cebu', 'Negros Oriental', 'Siquijor'],
+            'Region VIII': ['Biliran', 'Eastern Samar', 'Leyte', 'Northern Samar', 'Samar', 'Southern Leyte'],
+            'Region IX': ['Basilan', 'Zamboanga del Norte', 'Zamboanga del Sur', 'Zamboanga Sibugay'],
+            'Region X': ['Bukidnon', 'Camiguin', 'Lanao del Norte', 'Misamis Occidental', 'Misamis Oriental'],
+            'Region XI': ['Davao de Oro', 'Davao del Norte', 'Davao del Sur', 'Davao Occidental', 'Davao Oriental'],
+            'Region XII': ['Cotabato', 'Sarangani', 'South Cotabato', 'Sultan Kudarat'],
+            'Region XIII': ['Agusan del Norte', 'Agusan del Sur', 'Dinagat Islands', 'Surigao del Norte', 'Surigao del Sur'],
+            'BARMM': ['Basilan', 'Lanao del Sur', 'Maguindanao', 'Sulu', 'Tawi-Tawi']
+        };
+
         document.addEventListener("DOMContentLoaded", () => {
             const form = document.getElementById('chemicalForm');
             const submitBtn = document.getElementById('submitBtn');
             const productName = document.getElementById('productName');
             const supplierDetails = document.getElementById('supplierDetails');
-            const distributionArea = document.getElementById('distributionArea');
+            const distributionRegion = document.getElementById('distributionRegion');
+            const distributionProvince = document.getElementById('distributionProvince');
             const regDocs = document.getElementById('regDocs');
             const fileNameDisplay = document.getElementById('fileNameDisplay');
+
+            // Populate province dropdown based on selected region
+            distributionRegion.addEventListener('change', () => {
+                const provinces = regionProvinces[distributionRegion.value] || [];
+                distributionProvince.innerHTML = '<option value="" selected disabled>Select Province</option>';
+                provinces.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p;
+                    opt.textContent = p;
+                    distributionProvince.appendChild(opt);
+                });
+                distributionProvince.disabled = false;
+                distributionProvince.value = '';
+                checkValidation();
+            });
+
+            distributionProvince.addEventListener('change', checkValidation);
 
             function checkValidation() {
                 const isProductValid = productName.value.trim() !== "";
                 const isSupplierValid = supplierDetails.value.trim() !== "";
-                const isAreaValid = distributionArea.value.trim() !== "";
+                const isRegionValid = distributionRegion.value !== "";
+                const isProvinceValid = distributionProvince.value !== "";
                 const isDocsUploaded = regDocs.files.length > 0;
 
-                if (isProductValid && isSupplierValid && isAreaValid && isDocsUploaded) {
+                if (isProductValid && isSupplierValid && isRegionValid && isProvinceValid && isDocsUploaded) {
                     submitBtn.disabled = false;
                     submitBtn.className = "flex-1 px-2 py-2.5 bg-green-700 hover:bg-green-800 text-white font-black rounded-lg shadow-md transition-all transform active:scale-95 uppercase text-[9px] cursor-pointer";
                 } else {
@@ -131,8 +195,7 @@
                 }
             }
 
-            // Listeners
-            [productName, supplierDetails, distributionArea].forEach(input => {
+            [productName, supplierDetails].forEach(input => {
                 input.addEventListener('input', checkValidation);
             });
 
@@ -150,7 +213,8 @@
                 formData: {
                     'productName': 'productName',
                     'supplierDetails': 'supplierDetails',
-                    'distributionArea': 'distributionArea',
+                    'distributionRegion': 'distributionRegion',
+                    'distributionProvince': 'distributionProvince',
                     'regDocs': 'registrationDocuments'
                 },
                 amount: 850,
@@ -163,6 +227,8 @@
             document.getElementById('resetBtn').addEventListener('click', () => {
                 setTimeout(() => {
                     fileNameDisplay.textContent = "";
+                    distributionProvince.innerHTML = '<option value="" selected disabled>Select Region first</option>';
+                    distributionProvince.disabled = true;
                     checkValidation();
                 }, 10);
             });
