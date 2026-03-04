@@ -435,6 +435,32 @@
                 document.getElementById('kpi-txn').textContent = '₱' + totalRevenue.toLocaleString('en-PH', { maximumFractionDigits: 0 });
 
             } catch(e) { console.error('[SuperAdmin] SR fetch error:', e); }
+
+            // 2. Fetch users collection
+            try {
+                const usersSnap = await getDocs(collection(db, 'users'));
+                const userDocs = [];
+                usersSnap.forEach(doc => userDocs.push({ id: doc.id, ...doc.data() }));
+                DATA.users = userDocs.map(u => ({
+                    name: u.displayName || u.username || u.name || u.email || '—',
+                    email: u.email || '—',
+                    type: u.role || u.designation || '—',
+                    region: u.region || u.regionName || '—',
+                    lgu: u.municipality || u.lgu || '—',
+                    status: (u.status || (u.disabled ? 'DISABLED' : 'ACTIVE')).toUpperCase()
+                }));
+                document.getElementById('kpi-users').textContent = userDocs.length.toLocaleString();
+            } catch(e) { console.error('[SuperAdmin] Users fetch error:', e); }
+
+            // 3. Fetch entities collection for assets KPI
+            try {
+                const entSnap = await getDocs(collection(db, 'entities'));
+                document.getElementById('kpi-uinv').textContent = entSnap.size.toLocaleString();
+                document.getElementById('kpi-inv').textContent = entSnap.size.toLocaleString();
+            } catch(e) { console.error('[SuperAdmin] Entities fetch error:', e); }
+
+            // 4. Re-render current table with real data
+            if (typeof window.renderTable === 'function') window.renderTable();
         }
 
         auth.onAuthStateChanged(user => { if (user) fetchSuperAdminData(); });
