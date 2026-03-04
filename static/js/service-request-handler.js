@@ -115,7 +115,7 @@ export async function submitServiceRequest(config) {
         body: JSON.stringify({
           amount: amount,
           email: auth.currentUser.email,
-          external_id: `service-${config.serviceType.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')}-${auth.currentUser.uid}-${Date.now()}`,
+          external_id: `svc-${config.serviceType.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toLowerCase()}-${Date.now()}`,
           description: config.description,
           item_name: config.itemName,
           success_url: config.successUrl,

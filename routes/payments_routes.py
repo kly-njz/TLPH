@@ -12,6 +12,8 @@ from firebase_auth_middleware import firebase_auth_required
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 
+import uuid
+
 bp = Blueprint('payments', __name__, url_prefix='/api/payments')
 
 # Xendit API Base URL
@@ -58,8 +60,8 @@ def create_invoice():
                 'message': 'Invalid payer email'
             }), 400
 
-        # Invoice parameters for Xendit API
-        external_id = f"{data.get('external_id', 'invoice')}-{int(datetime.now().timestamp())}"
+        # Generate short unique external_id (Xendit limit: 40 chars)
+        external_id = f"svc-{uuid.uuid4().hex[:16]}"
         
         invoice_payload = {
             'external_id': external_id,
