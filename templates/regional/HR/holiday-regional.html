@@ -260,20 +260,40 @@
     </main>
   </div>
 
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-firestore-compat.js"></script>
   
   <script>
+    // Use template variables if available, otherwise fall back to hardcoded config
     const firebaseConfig = {
-      apiKey: "{{ firebase_config.apiKey }}",
-      authDomain: "{{ firebase_config.authDomain }}",
-      projectId: "{{ firebase_config.projectId }}",
-      storageBucket: "{{ firebase_config.storageBucket }}",
-      messagingSenderId: "{{ firebase_config.messagingSenderId }}",
-      appId: "{{ firebase_config.appId }}"
+      apiKey: "{{ firebase_config.apiKey or 'AIzaSyCj3EnEG1XhF7_xWgt1vQK_VkT7288yd64' }}",
+      authDomain: "{{ firebase_config.authDomain or 'denr-d02ae.firebaseapp.com' }}",
+      projectId: "{{ firebase_config.projectId or 'denr-d02ae' }}",
+      storageBucket: "{{ firebase_config.storageBucket or 'denr-d02ae.firebasestorage.app' }}",
+      messagingSenderId: "{{ firebase_config.messagingSenderId or '499245517370' }}",
+      appId: "{{ firebase_config.appId or '1:499245517370:web:c66598d7c86d5567a64303' }}"
     };
+    
+    console.log('[HOLIDAY] Firebase config:', firebaseConfig);
 
     let db = null;
+
+    // Initialize Firebase once when scripts are loaded
+    function initFirebase() {
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+          console.log('Firebase initialized');
+        }
+        db = firebase.firestore();
+        console.log('Firestore reference obtained');
+      } catch (error) {
+        console.error('Error initializing Firebase:', error);
+      }
+    }
+
+    // Initialize immediately
+    initFirebase();
 
     window.holidayData = function() {
       return {
@@ -284,21 +304,20 @@
 
         async loadHolidays() {
           try {
+            console.log('[HOLIDAY] Starting loadHolidays...');
             if (!db) {
-              const existingApps = firebase.getApps ? firebase.getApps() : [];
-              if (existingApps.length > 0) {
-                db = firebase.firestore();
-              } else {
-                firebase.initializeApp(firebaseConfig);
-                db = firebase.firestore();
-              }
+              console.log('[HOLIDAY] DB not initialized, re-initializing...');
+              initFirebase();
             }
 
-            const snapshot = await db.collection('holidays').orderBy('date').get().catch(() => {
-              console.warn('Ordered query failed, trying without order');
+            console.log('[HOLIDAY] Querying holidays collection...');
+            const snapshot = await db.collection('holidays').orderBy('date').get().catch(err => {
+              console.warn('[HOLIDAY] Ordered query failed:', err.message);
               return db.collection('holidays').get();
             });
 
+            console.log('[HOLIDAY] Got snapshot with', snapshot.docs.length, 'documents');
+            
             const allHolidays = snapshot.docs.map(docItem => {
               const data = docItem.data();
               return {
@@ -312,14 +331,16 @@
               };
             });
 
+            console.log('[HOLIDAY] Normalized holidays:', allHolidays);
+
             const filtered = allHolidays
               .filter(h => !this.selectedYear || (h.date || '').startsWith(this.selectedYear))
               .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
             this.holidays = filtered.length > 0 ? filtered : allHolidays;
-            console.log('Holidays loaded:', this.holidays);
+            console.log('[HOLIDAY] Final holidays list:', this.holidays);
           } catch (error) {
-            console.error('Error loading holidays:', error);
+            console.error('[HOLIDAY] Error loading holidays:', error);
             this.holidays = [];
           }
         },
@@ -327,7 +348,7 @@
         normalizeDate(dateInput) {
           if (!dateInput) return '';
           if (typeof dateInput === 'string') return dateInput;
-          if (dateInput.toDate) {
+          if (dateInput.toDate && typeof dateInput.toDate === 'function') {
             // Firestore timestamp
             const date = dateInput.toDate();
             return date.toISOString().split('T')[0];
@@ -399,14 +420,9 @@
 
         async saveHoliday() {
           try {
+            console.log('[HOLIDAY] Saving holiday:', this.editingHoliday);
             if (!db) {
-              const existingApps = firebase.getApps ? firebase.getApps() : [];
-              if (existingApps.length > 0) {
-                db = firebase.firestore();
-              } else {
-                firebase.initializeApp(firebaseConfig);
-                db = firebase.firestore();
-              }
+              initFirebase();
             }
 
             const holidayData = {
@@ -421,18 +437,18 @@
             if (this.editingHoliday.id) {
               // Update existing
               await db.collection('holidays').doc(this.editingHoliday.id).update(holidayData);
-              console.log('Holiday updated:', this.editingHoliday.id);
+              console.log('[HOLIDAY] Holiday updated:', this.editingHoliday.id);
             } else {
               // Create new
-              await db.collection('holidays').add(holidayData);
-              console.log('Holiday created');
+              const ref = await db.collection('holidays').add(holidayData);
+              console.log('[HOLIDAY] Holiday created with ID:', ref.id);
             }
 
             this.holidayModalOpen = false;
             this.editingHoliday = { name: '', date: '', type: 'Regular Holiday', basis: '', description: '', scope: 'REGIONAL', id: null };
             await this.loadHolidays();
           } catch (error) {
-            console.error('Error saving holiday:', error);
+            console.error('[HOLIDAY] Error saving holiday:', error);
             alert('Error saving holiday: ' + error.message);
           }
         }
