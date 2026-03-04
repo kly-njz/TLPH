@@ -661,10 +661,59 @@
         window._acctData.entities = entities;
 
         const activeCount = entities.filter(e => (e.status || '').toUpperCase() === 'ACTIVE').length;
-        const el = document.getElementById('kpiActiveEntities');
-        if (el) el.textContent = activeCount || entities.length || '—';
+        const elEnt = document.getElementById('kpiActiveEntities');
+        if (elEnt) elEnt.textContent = activeCount || entities.length || '—';
       } catch (err) {
         console.warn('[accounting-dashboard] entities fetch error:', err);
+      }
+
+      // --- Commit 3: Finance KPI cards ---
+      try {
+        const finSnap = await getDocs(collection(db, 'finance'));
+        const finDocs = [];
+        finSnap.forEach(d => finDocs.push({ id: d.id, ...d.data() }));
+        window._acctData.finance = finDocs;
+
+        let totalDeposits = 0, totalExpenses = 0, totalGenFund = 0;
+        let nationalDoc = null;
+
+        finDocs.forEach(doc => {
+          // Finance docs may be flat or have a nested department key
+          const data = doc[doc.id] || doc;
+          const dep = parseFloat(data.total_deposit  || 0);
+          const exp = parseFloat(data.total_expenses || 0);
+          const gf  = parseFloat(data.general_fund   || 0);
+          totalDeposits  += isNaN(dep) ? 0 : dep;
+          totalExpenses  += isNaN(exp) ? 0 : exp;
+          totalGenFund   += isNaN(gf)  ? 0 : gf;
+          if (doc.id === 'national') nationalDoc = data;
+        });
+
+        const netMov = totalDeposits - totalExpenses;
+
+        const fmt = v => '₱ ' + v.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const elDep = document.getElementById('kpiTotalDeposits');
+        if (elDep && totalDeposits > 0) elDep.textContent = fmt(totalDeposits);
+
+        const elExp = document.getElementById('kpiTotalExpenses');
+        if (elExp && totalExpenses > 0) elExp.textContent = fmt(totalExpenses);
+
+        const elNet = document.getElementById('kpiNetMovement');
+        if (elNet && (totalDeposits > 0 || totalExpenses > 0)) elNet.textContent = fmt(netMov);
+
+        const elGF = document.getElementById('kpiGeneralFund');
+        if (elGF && totalGenFund > 0) elGF.textContent = fmt(totalGenFund);
+
+        if (nationalDoc) {
+          const gr = nationalDoc.growth_rate;
+          const elGR = document.getElementById('kpiGrowthRate');
+          if (elGR && gr != null) elGR.textContent = gr;
+          const budget = nationalDoc.budget;
+          // Optionally update budget display in the section header
+        }
+      } catch (err) {
+        console.warn('[accounting-dashboard] finance fetch error:', err);
       }
     }
 
