@@ -758,6 +758,65 @@
       } catch (err) {
         console.warn('[accounting-dashboard] cashflow fetch error:', err);
       }
+
+      // --- Commit 5a: Usage per Entity bar chart (finance docs by region) ---
+      try {
+        const finDocs = window._acctData.finance || [];
+        const regOrder = ['NCR','CAR','Region I','Region II','Region III','Region IV-A','Region IV-B','Region V'];
+        const usageMap = Object.fromEntries(regOrder.map(r => [r, 0]));
+
+        // Count finance docs per region (use doc.id as region proxy, or doc.region field)
+        finDocs.forEach(doc => {
+          const reg = doc.region || doc.id || '';
+          const matchedKey = Object.keys(usageMap).find(k =>
+            reg.toLowerCase().includes(k.toLowerCase().replace('region ', 'region '))
+          );
+          const entries = parseInt(doc.entry_count || doc.total_entries || 1);
+          if (matchedKey) usageMap[matchedKey] += isNaN(entries) ? 1 : entries;
+          else usageMap['NCR'] += 1; // fallback
+        });
+
+        // Also count fund records per region as proxy for activity
+        (window._acctData.funds || []).forEach(rec => {
+          const reg = (rec.region || '').replace(/^REGION\s*/i, 'Region ').replace(/^NCR$/i, 'NCR');
+          const mk = Object.keys(usageMap).find(k => k.toLowerCase() === reg.toLowerCase());
+          if (mk) usageMap[mk]++;
+        });
+
+        if (window.usageBarChart) {
+          window.usageBarChart.data.labels = regOrder;
+          window.usageBarChart.data.datasets[0].data = regOrder.map(r => usageMap[r]);
+          window.usageBarChart.update();
+        }
+      } catch (err) {
+        console.warn('[accounting-dashboard] usageBar fetch error:', err);
+      }
+
+      // --- Commit 5b: Revenue Mix pie from revenue_mix collection ---
+      try {
+        const revSnap = await getDocs(query(collection(db, 'revenue_mix'), limit(300)));
+        const revDocs = [];
+        revSnap.forEach(d => revDocs.push({ id: d.id, ...d.data() }));
+        window._acctData.revMix = revDocs;
+
+        const catMap = { 'Service Revenue': 0, 'Permit Fees': 0, 'Grants': 0, 'Other Income': 0 };
+        revDocs.forEach(rec => {
+          const cat = (rec.category || rec.details || '').toLowerCase();
+          const amt = parseFloat(rec.amount || 1);
+          if (cat.includes('service') || cat.includes('service revenue')) catMap['Service Revenue'] += amt;
+          else if (cat.includes('permit')) catMap['Permit Fees'] += amt;
+          else if (cat.includes('grant')) catMap['Grants'] += amt;
+          else catMap['Other Income'] += amt;
+        });
+
+        const total = Object.values(catMap).reduce((a, b) => a + b, 0);
+        if (window.categoryPieChart && total > 0) {
+          window.categoryPieChart.data.datasets[0].data = Object.values(catMap);
+          window.categoryPieChart.update();
+        }
+      } catch (err) {
+        console.warn('[accounting-dashboard] revMix fetch error:', err);
+      }
     }
 
     onAuthStateChanged(auth, user => { if (user) loadAccountingData(); });
