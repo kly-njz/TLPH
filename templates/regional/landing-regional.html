@@ -668,6 +668,39 @@
         });
     </script>
 
+  <!-- Commit 5: Regional Monthly Trend bar chart — SR counts per month from Firestore -->
+  <script>
+    window.addEventListener('regionalDataReady', function(e) {
+      const docs = e.detail.docs || [];
+      const labels = window._trendLabels;
+      if (!labels || !window.regionalTrendChart) return;
+
+      const now = new Date();
+      const monthKeys = labels.map(function(_, i) {
+        const d = new Date(now.getFullYear(), now.getMonth() - (labels.length - 1 - i), 1);
+        return d.getFullYear() + '-' + d.getMonth();
+      });
+      const countMap = {};
+      monthKeys.forEach(function(k) { countMap[k] = 0; });
+
+      docs.forEach(function(d) {
+        let ts = d.createdAt;
+        let dt;
+        if (ts && ts.toDate) dt = ts.toDate();
+        else if (ts) dt = new Date(ts);
+        if (!dt || isNaN(dt)) return;
+        const key = dt.getFullYear() + '-' + dt.getMonth();
+        if (key in countMap) countMap[key]++;
+      });
+
+      const data = monthKeys.map(function(k) { return countMap[k]; });
+      if (data.some(function(v) { return v > 0; })) {
+        window.regionalTrendChart.data.datasets[0].data = data;
+        window.regionalTrendChart.update();
+      }
+    });
+  </script>
+
   <!-- Commit 4: KPI — Forest Permits, Wildlife Licenses, Audit Alerts from SR categories + system_logs -->
   <script type="module">
     import { auth, db } from '/static/js/firebase-config.js';
