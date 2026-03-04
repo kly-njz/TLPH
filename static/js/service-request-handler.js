@@ -5,7 +5,7 @@
  */
 
 import { auth, db } from '/static/js/firebase-config.js';
-import { collection, addDoc, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, addDoc, doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 /**
  * Submit a service request with payment
@@ -104,54 +104,65 @@ export async function submitServiceRequest(config) {
         captureAllFields(form, serviceData);
       }
 
-      // Create Xendit invoice
       const amount = parseInt(document.getElementById('xendit_raw_amount')?.value || config.amount) || config.amount;
-      
-      const invoiceResponse = await fetch('/api/payments/create-invoice', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          amount: amount,
-          email: auth.currentUser.email,
-          external_id: `svc-${config.serviceType.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toLowerCase()}-${Date.now()}`,
-          description: config.description,
-          item_name: config.itemName,
-          success_url: config.successUrl,
-          failure_url: config.failureUrl
-        })
-      });
 
-      const invoiceData = await invoiceResponse.json();
-
-      if (invoiceData.status !== 'success') {
-        throw new Error(invoiceData.message || 'Failed to create invoice');
-      }
-
-      // Store service request in Firebase
+      // Save to Firestore FIRST so it always appears in history
       const serviceRequestData = {
         ...serviceData,
-        invoiceId: invoiceData.invoice_id,
-        externalId: invoiceData.external_id,
-        amount: amount
+        amount: amount,
+        invoiceId: '',
+        externalId: '',
+        paymentUrl: ''
       };
-      
-      const docRef = await addDoc(collection(db, 'service_requests'), serviceRequestData);
 
+      const docRef = await addDoc(collection(db, 'service_requests'), serviceRequestData);
       console.log('Service request saved with ID:', docRef.id);
 
+      // Now create Xendit invoice
+      let invoiceUrl = null;
+      try {
+        const invoiceResponse = await fetch('/api/payments/create-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: amount,
+            email: auth.currentUser.email,
+            external_id: `svc-${config.serviceType.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toLowerCase()}-${Date.now()}`,
+            description: config.description,
+            item_name: config.itemName,
+            success_url: config.successUrl,
+            failure_url: config.failureUrl
+          })
+        });
+
+        const invoiceData = await invoiceResponse.json();
+
+        if (invoiceData.status === 'success') {
+          invoiceUrl = invoiceData.invoice_url;
+          // Update Firestore record with invoice info
+          await updateDoc(doc(db, 'service_requests', docRef.id), {
+            invoiceId: invoiceData.invoice_id || '',
+            externalId: invoiceData.external_id || '',
+            paymentUrl: invoiceData.invoice_url || ''
+          });
+        } else {
+          console.warn('Xendit invoice failed:', invoiceData.message);
+        }
+      } catch (xenditErr) {
+        console.warn('Xendit invoice error (record still saved):', xenditErr);
+      }
+
       // Store data in localStorage for confirmation page
-      localStorage.setItem('pendingServiceRequest', JSON.stringify(serviceRequestData));
-      localStorage.setItem('servicePaymentUrl', invoiceData.invoice_url);
+      localStorage.setItem('pendingServiceRequest', JSON.stringify({ ...serviceRequestData, id: docRef.id }));
+      localStorage.setItem('servicePaymentUrl', invoiceUrl || '');
 
       // Call success callback if provided
       if (config.onSuccess) {
-        await config.onSuccess(invoiceData);
+        await config.onSuccess({ invoice_url: invoiceUrl });
       }
 
-      // Redirect to confirmation page
-      window.location.href = '/user/service-confirmation';
+      // Redirect to payment if available, otherwise confirmation page
+      window.location.href = invoiceUrl || '/user/service-confirmation';
 
     } catch (error) {
       console.error('Error processing service request:', error);
