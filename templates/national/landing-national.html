@@ -635,6 +635,79 @@
     }
   </script>
 
+  <!-- Commit 4: update trend, status, category, regional charts from Firestore data -->
+  <script>
+    window.updateChartsFromFirestore = function(docs, counts) {
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const now = new Date();
+
+      // --- Status Doughnut ---
+      if (window.myStatusChart) {
+        window.myStatusChart.data.datasets[0].data = [counts.approved, counts.pending, counts.rejected];
+        window.myStatusChart.update();
+      }
+
+      // --- Trend Line (last 6 calendar months) ---
+      if (window.myTrendChart) {
+        const trendMap = {};
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          trendMap[d.getFullYear() + '-' + d.getMonth()] = 0;
+        }
+        docs.forEach(d => {
+          let ts = d.createdAt;
+          let dt;
+          if (ts && ts.toDate) dt = ts.toDate();
+          else if (ts) dt = new Date(ts);
+          if (dt) {
+            const key = dt.getFullYear() + '-' + dt.getMonth();
+            if (key in trendMap) trendMap[key]++;
+          }
+        });
+        window.myTrendChart.data.datasets[0].data = Object.values(trendMap);
+        window.myTrendChart.update();
+      }
+
+      // --- Category Bar ---
+      if (window.myCategoryChart) {
+        const catMap = { 'Farm Visit': 0, 'Chemical/Fert.': 0, 'Financial Aid': 0, 'Seminar': 0, 'Wildlife': 0, 'Fisheries': 0, 'Forestry': 0 };
+        const catKeywords = {
+          'Farm Visit': ['farm visit', 'crop', 'pest'],
+          'Chemical/Fert.': ['chemical', 'fertilizer', 'pesticide'],
+          'Financial Aid': ['subsidy', 'grant', 'loan', 'startup', 'financial'],
+          'Seminar': ['seminar', 'training', 'workshop'],
+          'Wildlife': ['wildlife', 'animal'],
+          'Fisheries': ['fish', 'aqua'],
+          'Forestry': ['forest', 'timber', 'tree']
+        };
+        docs.forEach(d => {
+          const t = ((d.serviceType || d.type || d.category || '')).toLowerCase();
+          let matched = false;
+          for (const [cat, kws] of Object.entries(catKeywords)) {
+            if (kws.some(k => t.includes(k))) { catMap[cat]++; matched = true; break; }
+          }
+          if (!matched) catMap['Farm Visit']++;
+        });
+        window.myCategoryChart.data.datasets[0].data = Object.values(catMap);
+        window.myCategoryChart.update();
+      }
+
+      // --- Regional Bar ---
+      if (window.myRegionalChart) {
+        const regLabels = ['NCR','Region I','Region II','Region III','Region IV-A','Region V','Region VI','Region VII'];
+        const regMap = {};
+        regLabels.forEach(r => regMap[r] = 0);
+        docs.forEach(d => {
+          const r = (d.region || d.province || '').trim();
+          if (r in regMap) regMap[r]++;
+          else regMap['NCR']++; // fallback
+        });
+        window.myRegionalChart.data.datasets[0].data = regLabels.map(r => regMap[r]);
+        window.myRegionalChart.update();
+      }
+    };
+  </script>
+
   <!-- Commit 3: Firebase fetch for KPI cards -->
   <script type="module">
     import { auth, db } from '/static/js/firebase-config.js';
