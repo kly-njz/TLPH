@@ -10,6 +10,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
 </head>
 
 <body class="bg-gray-50 min-h-screen text-slate-900 text-sm font-sans">
@@ -40,6 +41,12 @@
                                         class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-600 outline-none text-xs font-bold uppercase bg-gray-50 transition-all">
                                     <i class="fa-solid fa-hashtag absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-[10px]"></i>
                                 </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-[9px] font-black text-gray-700 uppercase mb-0.5">Barangay <span class="text-red-500">*</span></label>
+                                <input type="text" id="farmBarangay" required placeholder="e.g. Barangay Poblacion"
+                                    class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-600 outline-none text-xs font-medium bg-gray-50">
                             </div>
                             
                             <div class="bg-blue-50 border-l-4 border-blue-500 p-2 rounded-r-lg">
@@ -93,7 +100,7 @@
                             Clear
                         </button>
                         <button type="submit" id="submitBtn" disabled class="flex-1 px-2 py-2.5 bg-gray-200 text-gray-400 font-black rounded-lg shadow-sm transition-all uppercase text-[9px] cursor-not-allowed">
-                            Apply
+                            <span id="btnText">Apply</span>
                         </button>
                     </div>
                 </div>
@@ -103,15 +110,7 @@
     </div>
 
     <script type="module">
-        import { auth, db } from "{{ url_for('static', filename='js/firebase-config.js') }}";
-        import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-        let currentUser = null;
-
-        onAuthStateChanged(auth, (user) => {
-            currentUser = user;
-        });
+        import { submitServiceRequest } from '/static/js/service-request-handler.js';
 
         document.addEventListener("DOMContentLoaded", () => {
             const form = document.getElementById('followUpForm');
@@ -127,8 +126,9 @@
                 const isRefValid = refNum.value.trim().length > 0;
                 const isDocUploaded = attachDocs.files.length > 0;
                 const isPhotoUploaded = sitePhoto.files.length > 0;
+                const isBarangayFilled = document.getElementById('farmBarangay').value.trim() !== "";
 
-                if (isRefValid && isDocUploaded && isPhotoUploaded) {
+                if (isRefValid && isDocUploaded && isPhotoUploaded && isBarangayFilled) {
                     submitBtn.disabled = false;
                     submitBtn.className = "flex-1 px-2 py-2.5 bg-green-700 hover:bg-green-800 text-white font-black rounded-lg shadow-md transition-all transform active:scale-95 uppercase text-[9px] cursor-pointer";
                 } else {
@@ -138,6 +138,7 @@
             }
 
             refNum.addEventListener('input', checkValidation);
+            document.getElementById('farmBarangay').addEventListener('input', checkValidation);
             
             attachDocs.addEventListener('change', (e) => {
                 docFileName.textContent = e.target.files.length > 0 ? "✔ Selected" : "";
@@ -149,49 +150,30 @@
                 checkValidation();
             });
 
-            // Form submission with Firebase
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                
-                if (!currentUser) {
-                    alert('Please log in first');
-                    window.location.href = '/login';
-                    return;
-                }
-
-                try {
-                    // Create service request document
-                    const serviceData = {
-                        userId: currentUser.uid,
-                        serviceType: 'Follow-up / Visit',
-                        referenceNumber: refNum.value.trim(),
-                        status: 'submitted',
-                        paymentStatus: 'free',
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp(),
-                        fee: 200,
-                        description: 'Farm follow-up / compliance visit request'
-                    };
-
-                    const docRef = await addDoc(collection(db, 'service_requests'), serviceData);
-                    console.log('Service request created:', docRef.id);
-                    
-                    // Redirect to dashboard after successful submission
-                    setTimeout(() => {
-                        window.location.href = '/user/dashboard';
-                    }, 500);
-                } catch (error) {
-                    console.error('Error submitting service request:', error);
-                    alert('Failed to submit service request: ' + error.message);
-                }
-            });
-
             document.getElementById('resetBtn').addEventListener('click', () => {
                 setTimeout(() => {
                     docFileName.textContent = "";
                     photoFileName.textContent = "";
                     checkValidation();
                 }, 10);
+            });
+
+            // Setup service request submission with Firebase + Xendit payment
+            submitServiceRequest({
+                formId: 'followUpForm',
+                submitBtnId: 'submitBtn',
+                serviceType: 'Follow-up / Visit',
+                formData: {
+                    'refNum': 'referenceNumber',
+                    'farmBarangay': 'barangay',
+                    'attachDocs': 'revisedDocuments',
+                    'sitePhoto': 'latestSitePhoto'
+                },
+                amount: 200,
+                itemName: 'Follow-up Farm Visit Service',
+                description: 'Follow-up / Compliance Visit Service Fee',
+                successUrl: `${window.location.origin}/user/service/service?payment=success`,
+                failureUrl: `${window.location.origin}/user/service/farm/visit?payment=failed`
             });
         });
     </script>

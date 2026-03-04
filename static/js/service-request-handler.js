@@ -68,6 +68,21 @@ export async function submitServiceRequest(config) {
         createdAt: new Date().toISOString()
       };
 
+      // Enrich with user profile data (municipality, province, barangay, name) for proper routing
+      try {
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (userDoc.exists()) {
+          const ud = userDoc.data();
+          serviceData.municipality = ud.municipality || '';
+          serviceData.province = ud.province || '';
+          serviceData.barangay = ud.barangay || ud.address || '';
+          serviceData.userName = `${ud.firstName || ''} ${ud.lastName || ''}`.trim() || auth.currentUser.email || '';
+          serviceData.region = ud.region || '';
+        }
+      } catch (profileErr) {
+        console.warn('Could not enrich service data with user profile:', profileErr);
+      }
+
       // Add form fields to serviceData (auto-capture if formData not provided)
       if (config.formData && Object.keys(config.formData).length > 0) {
         for (const [fieldId, fieldName] of Object.entries(config.formData)) {
@@ -210,6 +225,7 @@ export async function submitFreeServiceRequest(config) {
           const ud = userDoc.data();
           serviceData.municipality = ud.municipality || '';
           serviceData.province = ud.province || '';
+          serviceData.barangay = ud.barangay || ud.address || '';
           serviceData.userName = `${ud.firstName || ''} ${ud.lastName || ''}`.trim() || ud.email || '';
           serviceData.region = ud.region || '';
         }
