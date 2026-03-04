@@ -31,6 +31,11 @@ def get_user_municipality(user_id: str = None, user_email: str = None) -> str:
             user_doc = db.collection('users').document(user_id).get()
             if user_doc.exists:
                 user_data = user_doc.to_dict() or {}
+                # For regional admins, use 'regional' as municipality
+                user_role = user_data.get('role', '')
+                if user_role in ['regional', 'regional_admin']:
+                    print(f"[DEBUG] get_user_municipality(user_id={user_id}) -> 'regional' (regional admin)")
+                    return 'regional'
                 municipality = user_data.get('municipality') or user_data.get('municipality_name')
                 if municipality:
                     normalized = _normalize_municipality(municipality)
@@ -41,6 +46,11 @@ def get_user_municipality(user_id: str = None, user_email: str = None) -> str:
             docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
             for doc in docs:
                 user_data = doc.to_dict() or {}
+                # For regional admins, use 'regional' as municipality
+                user_role = user_data.get('role', '')
+                if user_role in ['regional', 'regional_admin']:
+                    print(f"[DEBUG] get_user_municipality(user_email={user_email}) -> 'regional' (regional admin)")
+                    return 'regional'
                 municipality = user_data.get('municipality') or user_data.get('municipality_name')
                 if municipality:
                     normalized = _normalize_municipality(municipality)
