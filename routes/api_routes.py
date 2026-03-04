@@ -53,6 +53,36 @@ def get_user_municipality(user_id: str = None, user_email: str = None) -> str:
         print(f'[ERROR] Getting user municipality: {e}')
         return 'unknown'
 
+def get_user_region(user_id: str = None, user_email: str = None) -> str:
+    """Get region from user document in Firestore"""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        if user_id:
+            user_doc = db.collection('users').document(user_id).get()
+            if user_doc.exists:
+                user_data = user_doc.to_dict() or {}
+                region = user_data.get('region') or user_data.get('region_name') or user_data.get('regionName')
+                if region:
+                    print(f"[DEBUG] get_user_region(user_id={user_id}) -> '{region}'")
+                    return region
+
+        if user_email:
+            docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+            for doc in docs:
+                user_data = doc.to_dict() or {}
+                region = user_data.get('region') or user_data.get('region_name') or user_data.get('regionName')
+                if region:
+                    print(f"[DEBUG] get_user_region(user_email={user_email}) -> '{region}'")
+                    return region
+
+        print(f"[DEBUG] get_user_region - no region found for user_id={user_id}, user_email={user_email}")
+        return 'unknown'
+    except Exception as e:
+        print(f'[ERROR] Getting user region: {e}')
+        return 'unknown'
+
 # Store users temporarily (in production, use database)
 users_db = {
     'municipal@gmail.com': {
@@ -408,6 +438,11 @@ def set_session():
         municipality = get_user_municipality(user_id=user_id, user_email=user_email)
         session['municipality'] = municipality
         session['user_municipality'] = municipality
+
+        # Get region from user document
+        region = get_user_region(user_id=user_id, user_email=user_email)
+        session['region'] = region
+        session['user_region'] = region
 
         print(f'Session set for {user_email} with role {user_role} and user_id {user_id}')
 

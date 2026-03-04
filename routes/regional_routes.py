@@ -156,7 +156,9 @@ def attendance_view():
 @role_required('regional','regional_admin')
 def holidays_view():
     from config import Config
-    return render_template('regional/HR/holiday-regional.html', firebase_config=Config.FIREBASE_CONFIG)
+    from flask import session
+    region_name = session.get('region') or session.get('user_region') or 'Unknown Region'
+    return render_template('regional/HR/holiday-regional.html', firebase_config=Config.FIREBASE_CONFIG, region_name=region_name)
 
 @bp.route('/hrm/leave-requests')
 @role_required('regional','regional_admin')
