@@ -334,7 +334,39 @@
         const db = getFirestore();
 
         async function fetchSuperAdminData() {
-            // placeholder — data fetches will be added progressively
+            try {
+                // 1. Fetch service_requests (latest 300)
+                const srSnap = await getDocs(query(collection(db, 'service_requests'), orderBy('createdAt', 'desc'), limit(300)));
+                const srDocs = [];
+                srSnap.forEach(doc => srDocs.push({ id: doc.id, ...doc.data() }));
+
+                // Populate applications tab (all SRs)
+                DATA.applications = srDocs.map(r => ({
+                    date: r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString('en-CA') : (r.createdAt || '—'),
+                    ref: r.id.slice(0, 14).toUpperCase(),
+                    entity: r.fullName || r.applicantName || r.name || '—',
+                    sector: r.serviceType || '—',
+                    region: r.region || '—',
+                    lgu: r.municipality || r.lgu || '—',
+                    status: (r.status || 'PENDING').toUpperCase()
+                }));
+
+                // Populate requests tab (service/inspection types)
+                DATA.requests = srDocs.filter(r => {
+                    const t = (r.serviceType || '').toLowerCase();
+                    return t.includes('inspection') || t.includes('audit') || t.includes('clearance') ||
+                           t.includes('certification') || t.includes('farm') || t.includes('visit') ||
+                           t.includes('recommendation') || t.includes('registration');
+                }).map(r => ({
+                    date: r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString('en-CA') : (r.createdAt || '—'),
+                    ref: r.id.slice(0, 14).toUpperCase(),
+                    entity: r.fullName || r.applicantName || r.name || '—',
+                    sector: r.serviceType || '—',
+                    region: r.region || '—',
+                    lgu: r.municipality || '—',
+                    status: (r.status || 'PENDING').toUpperCase()
+                }));
+            } catch(e) { console.error('[SuperAdmin] SR fetch error:', e); }
         }
 
         auth.onAuthStateChanged(user => { if (user) fetchSuperAdminData(); });
