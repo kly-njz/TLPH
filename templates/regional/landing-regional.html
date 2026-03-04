@@ -626,15 +626,38 @@
                         if (provinceSet.size > 0) self.userProvinces = Array.from(provinceSet);
                     });
 
+                    // Commit 8: listen for regionalLogsReady — populate Audit Trail table from system_logs
+                    window.addEventListener('regionalLogsReady', function(e) {
+                        const logs = e.detail.logs || [];
+                        self.auditLogs = logs.map(function(log, idx) {
+                            let ts = log.timestamp;
+                            let dt;
+                            if (ts && ts.toDate) dt = ts.toDate();
+                            else if (ts) dt = new Date(ts);
+                            const timeStr = (dt && !isNaN(dt))
+                                ? dt.toLocaleString('en-PH', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                                : 'N/A';
+                            // Map action/outcome to badge types
+                            const action = (log.action || '').toUpperCase();
+                            let logType = 'UPDATE';
+                            if (action.includes('LOGIN') || action.includes('ACCESS')) logType = 'LOGIN';
+                            else if (action.includes('DELETE') || action.includes('REMOVE')) logType = 'DELETE';
+                            return {
+                                id: idx + 1,
+                                time: timeStr,
+                                admin: log.user || 'System',
+                                location: log.municipality || log.module || 'REGIONAL',
+                                type: logType,
+                                detail: (log.action || '') + (log.target ? ' — ' + log.target : '') + (log.message ? ': ' + log.message : '')
+                            };
+                        });
+                    });
+
                     this.loading = false;
                 },
                 
                 data: [],
-                auditLogs: [
-                    { id: 1, time: '2026-02-12 14:22', admin: 'R. Ramos', location: 'REGIONAL', type: 'LOGIN', detail: 'System access via main portal' },
-                    { id: 2, time: '2026-02-12 13:05', admin: 'J. Dela Cruz', location: 'CALAMBA', type: 'UPDATE', detail: 'Approved Permit #FP-2026-01' },
-                    { id: 3, time: '2026-02-12 11:40', admin: 'M. Santos', location: 'TAGAYTAY', type: 'DELETE', detail: 'Removed entry #WL-098' }
-                ],
+                auditLogs: [],
                 get filteredData() {
                     return this.data.filter(i => {
                         const s = this.searchQuery.toLowerCase();
