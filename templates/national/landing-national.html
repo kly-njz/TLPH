@@ -747,6 +747,57 @@
           window.updateChartsFromFirestore(docs, { approved, pending, rejected });
         }
 
+        // --- Commit 5: Populate Service Requests table ---
+        const tbody = document.querySelector('#table-services tbody');
+        if (tbody) {
+          // Remove existing data rows (keep empty-state-row)
+          tbody.querySelectorAll('tr.data-row').forEach(r => r.remove());
+
+          const statusClass = s => {
+            const sl = (s || '').toLowerCase();
+            if (sl === 'approved') return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+            if (sl === 'rejected') return 'bg-rose-50 text-rose-800 border-rose-200';
+            return 'bg-amber-50 text-amber-800 border-amber-200';
+          };
+          const fmtDate = ts => {
+            if (!ts) return 'N/A';
+            let dt = ts.toDate ? ts.toDate() : new Date(ts);
+            if (isNaN(dt)) return 'N/A';
+            return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          };
+
+          const emptyRow = tbody.querySelector('.empty-state-row');
+          const topDocs = docs.slice(0, 15);
+          topDocs.forEach(d => {
+            const region = (d.region || d.province || d.municipality || 'N/A');
+            const status = d.status || 'pending';
+            const refId = (d.id || '').slice(-6).toUpperCase();
+            const type = d.serviceType || d.type || d.category || 'Service Request';
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-blue-50 transition data-row';
+            row.setAttribute('data-region', region.toLowerCase());
+            row.innerHTML = `
+              <td class="font-mono text-slate-500 uppercase border-r border-slate-100 date-cell">${fmtDate(d.createdAt)}</td>
+              <td class="leading-tight border-r border-slate-100">
+                <span class="font-black text-blue-900 uppercase font-mono">SR-${refId}</span><br>
+                <span class="text-[9px] text-slate-500 font-bold uppercase truncate max-w-[120px] inline-block">${type}</span>
+              </td>
+              <td class="border-r border-slate-100">
+                <span class="font-bold text-slate-700 uppercase text-[9px] block mb-1">${region}</span>
+                <span class="status-badge ${statusClass(status)}">${status.slice(0,3).toUpperCase()}</span>
+              </td>
+              <td class="text-center"><button class="text-blue-700 hover:text-blue-900 font-black text-[9px] uppercase tracking-wider">View</button></td>`;
+            if (emptyRow) tbody.insertBefore(row, emptyRow);
+            else tbody.appendChild(row);
+          });
+
+          if (emptyRow) emptyRow.style.display = topDocs.length > 0 ? 'none' : '';
+
+          // Update row count and re-run filter
+          window.totalInitialRows = docs.length;
+          if (typeof applyLiveFilter === 'function') applyLiveFilter();
+        }
+
       } catch (err) {
         console.warn('[Dashboard] Firestore fetch error:', err);
       }
