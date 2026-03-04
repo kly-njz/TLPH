@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, jsonify, request, session
+from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required
 
 bp = Blueprint('regional', __name__, url_prefix='/regional')
@@ -156,7 +157,6 @@ def attendance_view():
 @role_required('regional','regional_admin')
 def holidays_view():
     from config import Config
-    from flask import session
     from firebase_admin import firestore
     
     # Try to get region from session first
@@ -191,6 +191,93 @@ def holidays_view():
         region_name = 'Unknown Region'
     
     return render_template('regional/HR/holiday-regional.html', firebase_config=Config.FIREBASE_CONFIG, region_name=region_name)
+
+@bp.route('/api/hrm/holidays', methods=['GET'])
+@role_required('regional','regional_admin')
+def get_regional_holidays():
+    db = get_firestore_db()
+    holidays = []
+
+    try:
+        docs = db.collection('holidays').order_by('date').stream()
+    except Exception:
+        docs = db.collection('holidays').stream()
+
+    for doc in docs:
+        item = doc.to_dict() or {}
+        date_value = item.get('date')
+
+        if isinstance(date_value, str):
+            item['date'] = date_value.split('T')[0]
+        elif hasattr(date_value, 'strftime'):
+            item['date'] = date_value.strftime('%Y-%m-%d')
+        elif hasattr(date_value, 'isoformat'):
+            item['date'] = date_value.isoformat().split('T')[0]
+        elif hasattr(date_value, 'to_datetime'):
+            item['date'] = date_value.to_datetime().strftime('%Y-%m-%d')
+        else:
+            item['date'] = ''
+
+        holidays.append({
+            'id': doc.id,
+            'name': item.get('name', ''),
+            'date': item.get('date', ''),
+            'type': item.get('type', 'Regular Holiday'),
+            'basis': item.get('basis', ''),
+            'description': item.get('description', ''),
+            'scope': item.get('scope', 'REGIONAL')
+        })
+
+    return jsonify({'success': True, 'holidays': holidays})
+
+@bp.route('/api/hrm/holidays', methods=['POST'])
+@role_required('regional','regional_admin')
+def create_regional_holiday():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    date = (data.get('date') or '').strip()
+
+    if not name or not date:
+        return jsonify({'success': False, 'error': 'Name and date are required'}), 400
+
+    payload = {
+        'name': name,
+        'date': date,
+        'type': (data.get('type') or 'Regular Holiday').strip(),
+        'basis': (data.get('basis') or '').strip(),
+        'description': (data.get('description') or '').strip(),
+        'scope': (data.get('scope') or 'REGIONAL').strip().upper(),
+    }
+
+    db = get_firestore_db()
+    ref = db.collection('holidays').document()
+    ref.set(payload)
+
+    return jsonify({'success': True, 'id': ref.id})
+
+@bp.route('/api/hrm/holidays/<holiday_id>', methods=['PUT'])
+@role_required('regional','regional_admin')
+def update_regional_holiday(holiday_id):
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    date = (data.get('date') or '').strip()
+
+    if not name or not date:
+        return jsonify({'success': False, 'error': 'Name and date are required'}), 400
+
+    payload = {
+        'name': name,
+        'date': date,
+        'type': (data.get('type') or 'Regular Holiday').strip(),
+        'basis': (data.get('basis') or '').strip(),
+        'description': (data.get('description') or '').strip(),
+        'scope': (data.get('scope') or 'REGIONAL').strip().upper(),
+    }
+
+    db = get_firestore_db()
+    db.collection('holidays').document(holiday_id).set(payload, merge=True)
+
+    return jsonify({'success': True})
 
 @bp.route('/hrm/leave-requests')
 @role_required('regional','regional_admin')

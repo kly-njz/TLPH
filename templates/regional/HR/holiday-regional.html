@@ -262,40 +262,8 @@
     </main>
   </div>
 
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.5.2/firebase-firestore-compat.js"></script>
-  
   <script>
-    // Use template variables if available, otherwise fall back to hardcoded config
-    const firebaseConfig = {
-      apiKey: "{{ firebase_config.apiKey or 'AIzaSyCj3EnEG1XhF7_xWgt1vQK_VkT7288yd64' }}",
-      authDomain: "{{ firebase_config.authDomain or 'denr-d02ae.firebaseapp.com' }}",
-      projectId: "{{ firebase_config.projectId or 'denr-d02ae' }}",
-      storageBucket: "{{ firebase_config.storageBucket or 'denr-d02ae.firebasestorage.app' }}",
-      messagingSenderId: "{{ firebase_config.messagingSenderId or '499245517370' }}",
-      appId: "{{ firebase_config.appId or '1:499245517370:web:c66598d7c86d5567a64303' }}"
-    };
-    
-    console.log('[HOLIDAY] Firebase config:', firebaseConfig);
-
-    let db = null;
-
-    // Initialize Firebase once when scripts are loaded
-    function initFirebase() {
-      try {
-        if (!firebase.apps.length) {
-          firebase.initializeApp(firebaseConfig);
-          console.log('Firebase initialized');
-        }
-        db = firebase.firestore();
-        console.log('Firestore reference obtained');
-      } catch (error) {
-        console.error('Error initializing Firebase:', error);
-      }
-    }
-
-    // Initialize immediately
-    initFirebase();
+    const HOLIDAYS_API = '/regional/api/hrm/holidays';
 
     window.holidayData = function() {
       return {
@@ -306,32 +274,21 @@
 
         async loadHolidays() {
           try {
-            console.log('[HOLIDAY] Starting loadHolidays...');
-            if (!db) {
-              console.log('[HOLIDAY] DB not initialized, re-initializing...');
-              initFirebase();
+            const response = await fetch(HOLIDAYS_API, { credentials: 'same-origin' });
+            if (!response.ok) {
+              throw new Error(`Failed to load holidays (${response.status})`);
             }
 
-            console.log('[HOLIDAY] Querying holidays collection...');
-            const snapshot = await db.collection('holidays').orderBy('date').get().catch(err => {
-              console.warn('[HOLIDAY] Ordered query failed:', err.message);
-              return db.collection('holidays').get();
-            });
-
-            console.log('[HOLIDAY] Got snapshot with', snapshot.docs.length, 'documents');
-            
-            const allHolidays = snapshot.docs.map(docItem => {
-              const data = docItem.data();
-              return {
-                id: docItem.id,
-                date: this.normalizeDate(data.date),
-                name: data.name || '',
-                type: data.type || 'Regular Holiday',
-                basis: data.basis || '',
-                description: data.description || '',
-                scope: data.scope || 'REGIONAL'
-              };
-            });
+            const payload = await response.json();
+            const allHolidays = (payload.holidays || []).map(item => ({
+              id: item.id,
+              date: this.normalizeDate(item.date),
+              name: item.name || '',
+              type: item.type || 'Regular Holiday',
+              basis: item.basis || '',
+              description: item.description || '',
+              scope: item.scope || 'REGIONAL'
+            }));
 
             console.log('[HOLIDAY] Normalized holidays:', allHolidays);
 
@@ -422,11 +379,6 @@
 
         async saveHoliday() {
           try {
-            console.log('[HOLIDAY] Saving holiday:', this.editingHoliday);
-            if (!db) {
-              initFirebase();
-            }
-
             const holidayData = {
               date: this.editingHoliday.date,
               name: this.editingHoliday.name,
@@ -437,13 +389,27 @@
             };
 
             if (this.editingHoliday.id) {
-              // Update existing
-              await db.collection('holidays').doc(this.editingHoliday.id).update(holidayData);
-              console.log('[HOLIDAY] Holiday updated:', this.editingHoliday.id);
+              const response = await fetch(`${HOLIDAYS_API}/${this.editingHoliday.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(holidayData)
+              });
+              if (!response.ok) {
+                const errPayload = await response.json().catch(() => ({}));
+                throw new Error(errPayload.error || `Update failed (${response.status})`);
+              }
             } else {
-              // Create new
-              const ref = await db.collection('holidays').add(holidayData);
-              console.log('[HOLIDAY] Holiday created with ID:', ref.id);
+              const response = await fetch(HOLIDAYS_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(holidayData)
+              });
+              if (!response.ok) {
+                const errPayload = await response.json().catch(() => ({}));
+                throw new Error(errPayload.error || `Create failed (${response.status})`);
+              }
             }
 
             this.holidayModalOpen = false;
@@ -457,6 +423,5 @@
       };
     };
   </script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
 </html>
