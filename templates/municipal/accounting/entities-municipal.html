@@ -6,6 +6,7 @@
 <title>Entities Registry | Municipal Admin</title>
 
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
@@ -330,7 +331,19 @@
       },
 
       async init() {
-        this.initCharts();
+        // Wait longer to ensure DOM is fully rendered
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('[ENTITIES] Initializing page');
+        
+        const typeCanvas = document.getElementById('typeChart');
+        const statusCanvas = document.getElementById('statusChart');
+        console.log('[ENTITIES] Canvas check - typeChart:', typeCanvas ? 'found' : 'NOT FOUND', 'statusChart:', statusCanvas ? 'found' : 'NOT FOUND');
+        
+        if (typeCanvas && statusCanvas) {
+          this.initCharts();
+        } else {
+          console.error('[ENTITIES] Cannot find chart canvases - skipping chart initialization');
+        }
         await this.loadEntities();
       },
 
@@ -432,6 +445,8 @@
       statusChartInstance: null,
 
       initCharts() {
+        console.log('[ENTITIES] initCharts starting');
+        
         // Destroy existing charts if they exist
         if (this.typeChartInstance) {
           this.typeChartInstance.destroy();
@@ -442,89 +457,185 @@
           this.statusChartInstance = null;
         }
 
-        Chart.defaults.font.family = "Verdana, Arial, sans-serif";
-        Chart.defaults.font.size = 9;
-        Chart.defaults.color = "#64748b";
-
-        const chartConfig = {
-          responsive: true,
-          maintainAspectRatio: false,
-          layout: { padding: 0 }
-        };
-
         const typeCanvas = document.getElementById('typeChart');
         const statusCanvas = document.getElementById('statusChart');
 
         if (!typeCanvas || !statusCanvas) {
-          console.error('Chart canvases not found');
+          console.error('[ENTITIES] Chart canvases not found in DOM');
           return;
         }
 
-        this.typeChartInstance = new Chart(typeCanvas, {
-          type: 'doughnut',
-          data: {
-            labels: ['Offices', 'Bank Accounts', 'Local Units'],
-            datasets: [{
-              data: [0, 0, 0],
-              backgroundColor: ['#1e3a8a', '#10b981', '#cbd5e1'],
-              borderWidth: 0
-            }]
-          },
-          options: {
-            ...chartConfig,
-            cutout: '70%',
-            plugins: {
-              legend: {
-                position: 'right',
-                labels: { boxWidth: 8, font: { size: 8 }, padding: 10 }
+        try {
+          console.log('[ENTITIES] Creating type chart');
+          this.typeChartInstance = new Chart(typeCanvas, {
+            type: 'doughnut',
+            data: {
+              labels: ['Offices', 'Bank Accounts', 'Local Units'],
+              datasets: [{
+                label: 'Entity Types',
+                data: [0, 0, 0],
+                backgroundColor: ['#1e3a8a', '#10b981', '#cbd5e1'],
+                borderWidth: 0
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: '70%',
+              plugins: {
+                legend: {
+                  position: 'right',
+                  labels: { 
+                    padding: 15,
+                    font: { size: 11 }
+                  }
+                }
               }
             }
-          }
-        });
+          });
+          console.log('[ENTITIES] Type chart created successfully');
 
-        this.statusChartInstance = new Chart(statusCanvas, {
-          type: 'bar',
-          data: {
-            labels: ['Active', 'Suspended', 'Pending'],
-            datasets: [{
-              data: [0, 0, 0],
-              backgroundColor: ['#10b981', '#f43f5e', '#f59e0b'],
-              borderRadius: 2,
-              barPercentage: 0.6
-            }]
-          },
-          options: {
-            ...chartConfig,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { grid: { display: false } },
-              y: { display: false }
+          console.log('[ENTITIES] Creating status chart');
+          this.statusChartInstance = new Chart(statusCanvas, {
+            type: 'bar',
+            data: {
+              labels: ['Active', 'Suspended', 'Pending'],
+              datasets: [{
+                label: 'Entity Status',
+                data: [0, 0, 0],
+                backgroundColor: ['#10b981', '#f43f5e', '#f59e0b'],
+                borderRadius: 2
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { 
+                  display: false 
+                }
+              },
+              scales: {
+                y: { 
+                  beginAtZero: true,
+                  grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                x: {
+                  grid: { display: false }
+                }
+              }
             }
-          }
-        });
+          });
+          console.log('[ENTITIES] Status chart created successfully');
+        } catch (error) {
+          console.error('[ENTITIES] Error initializing charts:', error);
+        }
       },
 
       updateCharts() {
         try {
+          console.log('[ENTITIES] updateCharts called with stats:', this.stats);
+          
+          // Destroy and recreate charts instead of trying to update
           if (this.typeChartInstance) {
-            this.typeChartInstance.data.datasets[0].data = [
-              this.stats.offices || 0,
-              this.stats.banks || 0,
-              this.stats.units || 0
-            ];
-            this.typeChartInstance.update();
+            this.typeChartInstance.destroy();
+            this.typeChartInstance = null;
+          }
+          if (this.statusChartInstance) {
+            this.statusChartInstance.destroy();
+            this.statusChartInstance = null;
           }
 
-          if (this.statusChartInstance) {
-            this.statusChartInstance.data.datasets[0].data = [
-              this.stats.by_status?.ACTIVE || 0,
-              this.stats.by_status?.SUSPENDED || 0,
-              this.stats.by_status?.PENDING || 0
-            ];
-            this.statusChartInstance.update();
+          // Recreate with new data
+          const typeCanvas = document.getElementById('typeChart');
+          const statusCanvas = document.getElementById('statusChart');
+
+          if (!typeCanvas || !statusCanvas) {
+            console.error('[ENTITIES] Chart canvases not found');
+            return;
+          }
+
+          try {
+            console.log('[ENTITIES] Recreating type chart with data:', {
+              offices: this.stats.offices || 0,
+              banks: this.stats.banks || 0,
+              units: this.stats.units || 0
+            });
+            this.typeChartInstance = new Chart(typeCanvas, {
+              type: 'doughnut',
+              data: {
+                labels: ['Offices', 'Bank Accounts', 'Local Units'],
+                datasets: [{
+                  label: 'Entity Types',
+                  data: [
+                    this.stats.offices || 0,
+                    this.stats.banks || 0,
+                    this.stats.units || 0
+                  ],
+                  backgroundColor: ['#1e3a8a', '#10b981', '#cbd5e1'],
+                  borderWidth: 0
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: {
+                  legend: {
+                    position: 'right',
+                    labels: { 
+                      padding: 15,
+                      font: { size: 11 }
+                    }
+                  }
+                }
+              }
+            });
+            console.log('[ENTITIES] Type chart recreated successfully');
+
+            console.log('[ENTITIES] Recreating status chart with data:', {
+              active: this.stats.by_status?.ACTIVE || 0,
+              suspended: this.stats.by_status?.SUSPENDED || 0,
+              pending: this.stats.by_status?.PENDING || 0
+            });
+            this.statusChartInstance = new Chart(statusCanvas, {
+              type: 'bar',
+              data: {
+                labels: ['Active', 'Suspended', 'Pending'],
+                datasets: [{
+                  label: 'Entity Status',
+                  data: [
+                    this.stats.by_status?.ACTIVE || 0,
+                    this.stats.by_status?.SUSPENDED || 0,
+                    this.stats.by_status?.PENDING || 0
+                  ],
+                  backgroundColor: ['#10b981', '#f43f5e', '#f59e0b'],
+                  borderRadius: 2
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false }
+                },
+                scales: {
+                  y: { 
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                  },
+                  x: {
+                    grid: { display: false }
+                  }
+                }
+              }
+            });
+            console.log('[ENTITIES] Status chart recreated successfully');
+          } catch (error) {
+            console.error('[ENTITIES] Error recreating charts:', error);
           }
         } catch (error) {
-          console.error('Error updating charts:', error);
+          console.error('[ENTITIES] Error in updateCharts:', error);
         }
       }
     };

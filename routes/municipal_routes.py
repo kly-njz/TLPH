@@ -422,24 +422,64 @@ def accounting_dashboard_municipal():
                 region_name = user_data.get('region') or user_data.get('region_name')
                 province_name = user_data.get('province') or user_data.get('province_name')
     # Fetch finance data for this municipality only
+    doc_id = None
     try:
         if municipality_name and province_name:
             doc_id = f"{municipality_name.upper().replace(' ', '_')}_{province_name.upper().replace(' ', '_')}"
             doc = db.collection('finance').document(doc_id).get()
             if doc.exists:
                 finance_data = doc.to_dict()
+            else:
+                # Initialize with default structure if document doesn't exist
+                finance_data = {
+                    'general_fund': 0,
+                    'treasury': {
+                        'special_fund': 0,
+                        'total_deposit': 0,
+                        'total_expenses': 0
+                    },
+                    'accounting': {
+                        'general_fund': 0
+                    }
+                }
+                db.collection('finance').document(doc_id).set(finance_data, merge=True)
         elif municipality_name:
             # fallback: try old style (just municipality name)
             doc = db.collection('finance').document(municipality_name).get()
             if doc.exists:
                 finance_data = doc.to_dict()
+            else:
+                # Initialize with default structure
+                finance_data = {
+                    'general_fund': 0,
+                    'treasury': {
+                        'special_fund': 0,
+                        'total_deposit': 0,
+                        'total_expenses': 0
+                    },
+                    'accounting': {
+                        'general_fund': 0
+                    }
+                }
+                db.collection('finance').document(municipality_name).set(finance_data, merge=True)
         else:
             # fallback: fetch all (should not happen)
             docs = db.collection('finance').stream()
             for doc in docs:
                 finance_data.update(doc.to_dict())
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[ERROR] Error fetching/initializing finance data: {e}")
+        finance_data = {
+            'general_fund': 0,
+            'treasury': {
+                'special_fund': 0,
+                'total_deposit': 0,
+                'total_expenses': 0
+            },
+            'accounting': {
+                'general_fund': 0
+            }
+        }
     revenue_mix = []
     try:
         if municipality_name:
