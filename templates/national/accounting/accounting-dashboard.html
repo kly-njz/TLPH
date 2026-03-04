@@ -91,7 +91,7 @@
               <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Entities</p>
               <span class="material-icons-round text-blue-800 text-[14px]">corporate_fare</span>
             </div>
-            <div class="mt-1 text-lg font-black text-slate-900 leading-none">47</div>
+            <div id="kpiActiveEntities" class="mt-1 text-lg font-black text-slate-900 leading-none">47</div>
             <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Reporting enabled</p>
           </div>
 
@@ -100,7 +100,7 @@
               <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">General Fund (All Municipalities)</p>
               <span class="material-icons-round text-emerald-700 text-[14px]">account_balance</span>
             </div>
-            <div class="mt-1 text-lg font-black text-emerald-700 leading-none">₱ {{ finance['national']['municipal_general_fund_total'] | float | round(2) }}</div>
+            <div id="kpiGeneralFund" class="mt-1 text-lg font-black text-emerald-700 leading-none">₱ {{ finance['national']['municipal_general_fund_total'] | float | round(2) }}</div>
             <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Sum of all municipal general funds</p>
           </div>
         </section>
@@ -108,25 +108,25 @@
         <section class="grid grid-cols-1 md:grid-cols-4 gap-2 shrink-0">
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deposits</p>
-            <div class="mt-1 text-lg font-black text-emerald-700 leading-none">₱ {{ finance['national']['total_deposit'] if finance['national'] else 'N/A' }}</div>
+            <div id="kpiTotalDeposits" class="mt-1 text-lg font-black text-emerald-700 leading-none">₱ {{ finance['national']['total_deposit'] if finance['national'] else '—' }}</div>
             <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Current period</p>
           </div>
 
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Expenses</p>
-            <div class="mt-1 text-lg font-black text-rose-700 leading-none">₱ {{ finance['national']['total_expenses'] if finance['national'] else 'N/A' }}</div>
+            <div id="kpiTotalExpenses" class="mt-1 text-lg font-black text-rose-700 leading-none">₱ {{ finance['national']['total_expenses'] if finance['national'] else '—' }}</div>
             <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Current period</p>
           </div>
 
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Net Movement</p>
-            <div class="mt-1 text-lg font-black text-slate-900 leading-none">₱ {{ finance['national']['net_movement'] if finance['national'] else 'N/A' }}</div>
+            <div id="kpiNetMovement" class="mt-1 text-lg font-black text-slate-900 leading-none">₱ {{ finance['national']['net_movement'] if finance['national'] else '—' }}</div>
             <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Deposits - Expenses</p>
           </div>
 
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Growth Rate</p>
-            <div class="mt-1 text-lg font-black text-amber-700 leading-none">{{ finance['national']['growth_rate'] if finance['national'] else 'N/A' }}</div>
+            <div id="kpiGrowthRate" class="mt-1 text-lg font-black text-amber-700 leading-none">{{ finance['national']['growth_rate'] if finance['national'] else '—' }}</div>
             <p class="text-[9px] text-slate-500 mt-0.5 font-medium">vs previous</p>
           </div>
         </section>
@@ -477,15 +477,26 @@
     Chart.defaults.font.family = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
     Chart.defaults.color = "#475569";
 
+    // Dynamic last-7-month labels
+    const _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    window._cashflowLabels = (function() {
+      const now = new Date(); const out = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        out.push(_months[d.getMonth()] + ' \'' + String(d.getFullYear()).slice(2));
+      }
+      return out;
+    })();
+
     // Cashflow (Deposits vs Expenses)
-    new Chart(document.getElementById('cashflowLineChart'), {
+    window.cashflowChart = new Chart(document.getElementById('cashflowLineChart'), {
       type: 'line',
       data: {
-        labels: ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],
+        labels: window._cashflowLabels,
         datasets: [
           {
             label: 'Deposits',
-            data: [120000,130000,125000,140000,135000,150000,155000,160000],
+            data: window._cashflowLabels.map(function(){ return 0; }),
             borderColor: '#10b981',
             backgroundColor: 'rgba(16,185,129,0.10)',
             fill: true,
@@ -494,7 +505,7 @@
           },
           {
             label: 'Expenses',
-            data: [90000,95000,92000,98000,100000,110000,120000,130000],
+            data: window._cashflowLabels.map(function(){ return 0; }),
             borderColor: '#f43f5e',
             backgroundColor: 'rgba(244,63,94,0.08)',
             fill: true,
@@ -510,7 +521,7 @@
     });
 
     // Revenue mix
-    new Chart(document.getElementById('categoryPieChart'), {
+    window.categoryPieChart = new Chart(document.getElementById('categoryPieChart'), {
       type: 'pie',
       data: {
         labels: ['Service Revenue','Permit Fees','Grants','Other Income'],
@@ -523,7 +534,7 @@
     });
 
     // Usage per entity
-    new Chart(document.getElementById('usageBarChart'), {
+    window.usageBarChart = new Chart(document.getElementById('usageBarChart'), {
       type: 'bar',
       data: {
         labels: ['NCR','Region I','Region II','Region III','Region IV-A','Region IV-B','Region V','CAR'],
@@ -537,13 +548,13 @@
     });
 
     // Approval latency
-    new Chart(document.getElementById('latencyLineChart'), {
+    window.latencyLineChart = new Chart(document.getElementById('latencyLineChart'), {
       type: 'line',
       data: {
-        labels: ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],
+        labels: window._cashflowLabels,
         datasets: [{
           label: 'Avg Days',
-          data: [2.1,2.4,2.2,2.5,2.3,2.0,2.1,2.3],
+          data: window._cashflowLabels.map(function(){ return 0; }),
           borderColor: '#8b5cf6',
           backgroundColor: 'rgba(139,92,246,0.10)',
           fill: true,
