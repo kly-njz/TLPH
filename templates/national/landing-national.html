@@ -634,5 +634,54 @@
         applyLiveFilter();
     }
   </script>
+
+  <!-- Commit 3: Firebase fetch for KPI cards -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { collection, getDocs, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    async function loadDashboardData() {
+      try {
+        const q = query(collection(db, 'service_requests'), orderBy('createdAt', 'desc'), limit(200));
+        const snapshot = await getDocs(q);
+        const docs = [];
+        snapshot.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+
+        // --- KPI cards ---
+        const totalSR = docs.length;
+        document.getElementById('kpi-services').innerText = totalSR;
+        document.getElementById('badge-services').innerText = totalSR + ' Total';
+
+        let approved = 0, pending = 0, rejected = 0;
+        docs.forEach(d => {
+          const s = (d.status || '').toLowerCase();
+          if (s === 'approved') approved++;
+          else if (s === 'rejected') rejected++;
+          else pending++;
+        });
+
+        const complianceTotal = approved + pending + rejected;
+        document.getElementById('kpi-compliance').innerText = complianceTotal;
+        document.getElementById('kpi-chart-total').innerText = complianceTotal;
+
+        // Expose for commit 4
+        window._dashboardDocs = docs;
+        window._dashboardCounts = { approved, pending, rejected };
+
+        // Fire commit4 update if available
+        if (typeof window.updateChartsFromFirestore === 'function') {
+          window.updateChartsFromFirestore(docs, { approved, pending, rejected });
+        }
+
+      } catch (err) {
+        console.warn('[Dashboard] Firestore fetch error:', err);
+      }
+    }
+
+    onAuthStateChanged(auth, user => {
+      if (user) loadDashboardData();
+    });
+  </script>
 </body> 
 </html>
