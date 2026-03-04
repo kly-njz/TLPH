@@ -589,15 +589,47 @@
                     } catch (e) {
                         console.error("Failed loading Firebase modules in Alpine:", e);
                     }
+
+                    // Commit 7: listen for regionalDataReady — populate Revenue Breakdown table
+                    const self = this;
+                    window.addEventListener('regionalDataReady', function(e) {
+                        const docs = e.detail.docs || [];
+                        // Aggregate SR counts + estimate revenue per municipality
+                        const muniMap = {};
+                        docs.forEach(function(d) {
+                            const muni = (d.municipality || 'Unknown').trim().toUpperCase();
+                            const prov = (d.province || 'Unknown').trim().toUpperCase();
+                            if (!muniMap[muni]) muniMap[muni] = { province: prov, permits: 0, serviceRevenue: 0, srCount: 0 };
+                            muniMap[muni].srCount++;
+                            // Use serviceFee if present, else estimate
+                            const fee = parseFloat(d.serviceFee || d.amount || d.fee || 0);
+                            muniMap[muni].serviceRevenue += isNaN(fee) ? 0 : fee;
+                            // Count forest/wildlife types as "permits"
+                            const t = ((d.serviceType || d.type || d.category || '')).toLowerCase();
+                            if (t.includes('forest') || t.includes('wildlife') || t.includes('permit')) muniMap[muni].permits++;
+                        });
+                        const entries = Object.entries(muniMap).sort(function(a, b) { return b[1].srCount - a[1].srCount; }).slice(0, 20);
+                        const maxCount = entries.length > 0 ? entries[0][1].srCount : 1;
+                        self.data = entries.map(function(entry, idx) {
+                            const m = entry[1];
+                            return {
+                                id: idx + 1,
+                                province: m.province,
+                                name: entry[0],
+                                permits: m.permits || m.srCount,
+                                revenue: m.serviceRevenue || m.srCount * 500,
+                                activity: Math.round((m.srCount / maxCount) * 100)
+                            };
+                        });
+                        // Update province filter options from real data
+                        const provinceSet = new Set(entries.map(function(e) { return e[1].province; }).filter(Boolean));
+                        if (provinceSet.size > 0) self.userProvinces = Array.from(provinceSet);
+                    });
+
                     this.loading = false;
                 },
                 
-                data: [
-                    { id: 1, province: 'CAVITE', name: 'Dasmarinas City', permits: 142, revenue: 850000, activity: 85 },
-                    { id: 2, province: 'CAVITE', name: 'Tagaytay City', permits: 98, revenue: 1200000, activity: 60 },
-                    { id: 3, province: 'LAGUNA', name: 'Calamba City', permits: 210, revenue: 1540000, activity: 90 },
-                    { id: 5, province: 'BATANGAS', name: 'Batangas City', permits: 340, revenue: 2100000, activity: 95 }
-                ],
+                data: [],
                 auditLogs: [
                     { id: 1, time: '2026-02-12 14:22', admin: 'R. Ramos', location: 'REGIONAL', type: 'LOGIN', detail: 'System access via main portal' },
                     { id: 2, time: '2026-02-12 13:05', admin: 'J. Dela Cruz', location: 'CALAMBA', type: 'UPDATE', detail: 'Approved Permit #FP-2026-01' },
