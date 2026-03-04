@@ -75,7 +75,7 @@ export async function submitServiceRequest(config) {
           const ud = userDoc.data();
           serviceData.municipality = ud.municipality || '';
           serviceData.province = ud.province || '';
-          serviceData.barangay = ud.barangay || '';
+          serviceData.barangay = ud.barangay || ud.address || '';
           serviceData.userName = `${ud.firstName || ''} ${ud.lastName || ''}`.trim() || auth.currentUser.email || '';
           serviceData.region = ud.region || '';
         }
@@ -225,7 +225,7 @@ export async function submitFreeServiceRequest(config) {
           const ud = userDoc.data();
           serviceData.municipality = ud.municipality || '';
           serviceData.province = ud.province || '';
-          serviceData.barangay = ud.barangay || '';
+          serviceData.barangay = ud.barangay || ud.address || '';
           serviceData.userName = `${ud.firstName || ''} ${ud.lastName || ''}`.trim() || ud.email || '';
           serviceData.region = ud.region || '';
         }
