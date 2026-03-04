@@ -146,7 +146,124 @@ def office_shifts_view():
 @bp.route('/hrm/employees')
 @role_required('regional','regional_admin')
 def employees_view():
-    return render_template('regional/HR/employee-regional.html')
+    from firebase_admin import firestore
+
+    # Try to get region from session first
+    region_name = session.get('region') or session.get('user_region')
+
+    # If not in session, fetch from Firestore users collection
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    print(f"[DEBUG] employees_view fetched region from Firestore: {region_name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch employee region from Firestore: {e}")
+
+    if not region_name:
+        region_name = 'Unknown Region'
+
+    return render_template('regional/HR/employee-regional.html', region_name=region_name)
+
+@bp.route('/api/hrm/employees', methods=['GET'])
+@role_required('regional','regional_admin')
+def get_regional_employees():
+    db = get_firestore_db()
+    employees = []
+
+    for doc in db.collection('employees').stream():
+        item = doc.to_dict() or {}
+        hire_date = item.get('hire_date')
+
+        if isinstance(hire_date, str):
+            item['hire_date'] = hire_date.split('T')[0]
+        elif hasattr(hire_date, 'strftime'):
+            item['hire_date'] = hire_date.strftime('%Y-%m-%d')
+        elif hasattr(hire_date, 'isoformat'):
+            item['hire_date'] = hire_date.isoformat().split('T')[0]
+        elif hasattr(hire_date, 'to_datetime'):
+            item['hire_date'] = hire_date.to_datetime().strftime('%Y-%m-%d')
+        else:
+            item['hire_date'] = ''
+
+        employees.append({
+            'id': doc.id,
+            'employee_id': item.get('employee_id', ''),
+            'first_name': item.get('first_name', ''),
+            'middle_name': item.get('middle_name', ''),
+            'last_name': item.get('last_name', ''),
+            'email': item.get('email', ''),
+            'designation': item.get('designation', ''),
+            'department_name': item.get('department_name', ''),
+            'division': item.get('division', ''),
+            'scope': (item.get('scope') or 'REGIONAL').upper(),
+            'employment_type': item.get('employment_type') or item.get('employmentType') or '',
+            'status': item.get('status', 'Active'),
+            'municipality': item.get('municipality', ''),
+            'province': item.get('province', ''),
+            'region': item.get('region') or item.get('regionName') or item.get('region_name') or '',
+            'hire_date': item.get('hire_date', '')
+        })
+
+    employees.sort(key=lambda item: item.get('employee_id') or '')
+    return jsonify({'success': True, 'employees': employees})
+
+@bp.route('/api/hrm/employees', methods=['POST'])
+@role_required('regional','regional_admin')
+def create_regional_employee():
+    data = request.get_json(silent=True) or {}
+
+    employee_id = (data.get('employee_id') or '').strip()
+    first_name = (data.get('first_name') or '').strip()
+    last_name = (data.get('last_name') or '').strip()
+
+    if not employee_id or not first_name or not last_name:
+        return jsonify({'success': False, 'error': 'Employee ID, First Name, and Last Name are required'}), 400
+
+    db = get_firestore_db()
+    duplicate = db.collection('employees').where('employee_id', '==', employee_id).limit(1).stream()
+    if any(True for _ in duplicate):
+        return jsonify({'success': False, 'error': 'Employee ID already exists'}), 409
+
+    region_name = session.get('region') or session.get('user_region') or ''
+
+    payload = {
+        'employee_id': employee_id,
+        'first_name': first_name,
+        'middle_name': (data.get('middle_name') or '').strip(),
+        'last_name': last_name,
+        'email': (data.get('email') or '').strip().lower(),
+        'designation': (data.get('designation') or '').strip(),
+        'department_name': (data.get('department_name') or '').strip(),
+        'division': (data.get('division') or '').strip(),
+        'scope': ((data.get('scope') or 'REGIONAL').strip().upper()),
+        'employment_type': (data.get('employment_type') or '').strip(),
+        'status': (data.get('status') or 'Active').strip(),
+        'municipality': (data.get('municipality') or '').strip(),
+        'province': (data.get('province') or '').strip(),
+        'region': (data.get('region') or region_name or '').strip(),
+        'hire_date': (data.get('hire_date') or '').strip(),
+    }
+
+    ref = db.collection('employees').document()
+    ref.set(payload)
+    return jsonify({'success': True, 'id': ref.id})
 
 @bp.route('/hrm/attendance')
 @role_required('regional','regional_admin')
