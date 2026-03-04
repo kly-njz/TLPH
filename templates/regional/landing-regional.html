@@ -85,6 +85,7 @@
                     <div class="leading-tight">
                         <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Regional Administrative Analytics</h1>
                         <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0" x-text="`Region ${userRegion} (${userRegionName}) • Official Portal`"></p>
+                        <p id="srTotalBadge" class="text-[8px] font-bold text-blue-700 m-0 hidden">Loading service requests...</p>
                     </div>
                 </div>
 
@@ -103,7 +104,7 @@
                     <div class="flex justify-between items-start">
                         <div>
                             <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Municipalities</div>
-                            <div class="text-xl font-black text-slate-900 leading-none mt-1">142</div>
+                            <div id="kpiMunicipalities" class="text-xl font-black text-slate-900 leading-none mt-1">142</div>
                         </div>
                         <span class="material-icons-round text-slate-300 text-[20px]">location_city</span>
                     </div>
@@ -113,7 +114,7 @@
                     <div class="flex justify-between items-start">
                         <div>
                             <div class="text-[9px] font-black uppercase text-emerald-800 tracking-widest">Forest Permits</div>
-                            <div class="text-xl font-black text-emerald-700 leading-none mt-1">1,240</div>
+                            <div id="kpiForestPermits" class="text-xl font-black text-emerald-700 leading-none mt-1">1,240</div>
                         </div>
                         <span class="material-icons-round text-emerald-200 text-[20px]">description</span>
                     </div>
@@ -123,7 +124,7 @@
                     <div class="flex justify-between items-start">
                         <div>
                             <div class="text-[9px] font-black uppercase text-amber-800 tracking-widest">Wildlife Licenses</div>
-                            <div class="text-xl font-black text-amber-700 leading-none mt-1">856</div>
+                            <div id="kpiWildlifeLicenses" class="text-xl font-black text-amber-700 leading-none mt-1">856</div>
                         </div>
                         <span class="material-icons-round text-amber-200 text-[20px]">pets</span>
                     </div>
@@ -133,11 +134,34 @@
                     <div class="flex justify-between items-start">
                         <div>
                             <div class="text-[9px] font-black uppercase text-rose-800 tracking-widest">Audit Alerts</div>
-                            <div class="text-xl font-black text-rose-700 leading-none mt-1">12</div>
+                            <div id="kpiAuditAlerts" class="text-xl font-black text-rose-700 leading-none mt-1">12</div>
                         </div>
                         <span class="material-icons-round text-rose-200 text-[20px]">warning</span>
                     </div>
                 </div>
+            </section>
+
+            <!-- Commit 9: SR Status summary row -->
+            <section class="flex flex-wrap gap-2 items-center shrink-0 no-print mb-1">
+              <div class="flex items-center gap-1.5 bg-white border border-slate-200 rounded-sm px-2 py-1 shadow-sm">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                <span class="text-[9px] font-black uppercase text-slate-500">Approved</span>
+                <span id="srApproved" class="text-[10px] font-black text-emerald-700 ml-1">—</span>
+              </div>
+              <div class="flex items-center gap-1.5 bg-white border border-slate-200 rounded-sm px-2 py-1 shadow-sm">
+                <span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                <span class="text-[9px] font-black uppercase text-slate-500">Pending</span>
+                <span id="srPending" class="text-[10px] font-black text-amber-700 ml-1">—</span>
+              </div>
+              <div class="flex items-center gap-1.5 bg-white border border-slate-200 rounded-sm px-2 py-1 shadow-sm">
+                <span class="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>
+                <span class="text-[9px] font-black uppercase text-slate-500">Rejected</span>
+                <span id="srRejected" class="text-[10px] font-black text-rose-700 ml-1">—</span>
+              </div>
+              <div class="ml-auto flex items-center gap-1 text-[9px] text-slate-500 font-bold">
+                <span class="material-icons-round text-[11px]">sync</span>
+                Last synced: <b id="lastSyncedRegional" class="text-slate-700 ml-0.5">—</b>
+              </div>
             </section>
 
             <section class="grid grid-cols-1 lg:grid-cols-12 gap-2 shrink-0 h-[170px]">
@@ -588,20 +612,75 @@
                     } catch (e) {
                         console.error("Failed loading Firebase modules in Alpine:", e);
                     }
+
+                    // Commit 7: listen for regionalDataReady — populate Revenue Breakdown table
+                    const self = this;
+                    window.addEventListener('regionalDataReady', function(e) {
+                        const docs = e.detail.docs || [];
+                        // Aggregate SR counts + estimate revenue per municipality
+                        const muniMap = {};
+                        docs.forEach(function(d) {
+                            const muni = (d.municipality || 'Unknown').trim().toUpperCase();
+                            const prov = (d.province || 'Unknown').trim().toUpperCase();
+                            if (!muniMap[muni]) muniMap[muni] = { province: prov, permits: 0, serviceRevenue: 0, srCount: 0 };
+                            muniMap[muni].srCount++;
+                            // Use serviceFee if present, else estimate
+                            const fee = parseFloat(d.serviceFee || d.amount || d.fee || 0);
+                            muniMap[muni].serviceRevenue += isNaN(fee) ? 0 : fee;
+                            // Count forest/wildlife types as "permits"
+                            const t = ((d.serviceType || d.type || d.category || '')).toLowerCase();
+                            if (t.includes('forest') || t.includes('wildlife') || t.includes('permit')) muniMap[muni].permits++;
+                        });
+                        const entries = Object.entries(muniMap).sort(function(a, b) { return b[1].srCount - a[1].srCount; }).slice(0, 20);
+                        const maxCount = entries.length > 0 ? entries[0][1].srCount : 1;
+                        self.data = entries.map(function(entry, idx) {
+                            const m = entry[1];
+                            return {
+                                id: idx + 1,
+                                province: m.province,
+                                name: entry[0],
+                                permits: m.permits || m.srCount,
+                                revenue: m.serviceRevenue || m.srCount * 500,
+                                activity: Math.round((m.srCount / maxCount) * 100)
+                            };
+                        });
+                        // Update province filter options from real data
+                        const provinceSet = new Set(entries.map(function(e) { return e[1].province; }).filter(Boolean));
+                        if (provinceSet.size > 0) self.userProvinces = Array.from(provinceSet);
+                    });
+
+                    // Commit 8: listen for regionalLogsReady — populate Audit Trail table from system_logs
+                    window.addEventListener('regionalLogsReady', function(e) {
+                        const logs = e.detail.logs || [];
+                        self.auditLogs = logs.map(function(log, idx) {
+                            let ts = log.timestamp;
+                            let dt;
+                            if (ts && ts.toDate) dt = ts.toDate();
+                            else if (ts) dt = new Date(ts);
+                            const timeStr = (dt && !isNaN(dt))
+                                ? dt.toLocaleString('en-PH', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                                : 'N/A';
+                            // Map action/outcome to badge types
+                            const action = (log.action || '').toUpperCase();
+                            let logType = 'UPDATE';
+                            if (action.includes('LOGIN') || action.includes('ACCESS')) logType = 'LOGIN';
+                            else if (action.includes('DELETE') || action.includes('REMOVE')) logType = 'DELETE';
+                            return {
+                                id: idx + 1,
+                                time: timeStr,
+                                admin: log.user || 'System',
+                                location: log.municipality || log.module || 'REGIONAL',
+                                type: logType,
+                                detail: (log.action || '') + (log.target ? ' — ' + log.target : '') + (log.message ? ': ' + log.message : '')
+                            };
+                        });
+                    });
+
                     this.loading = false;
                 },
                 
-                data: [
-                    { id: 1, province: 'CAVITE', name: 'Dasmarinas City', permits: 142, revenue: 850000, activity: 85 },
-                    { id: 2, province: 'CAVITE', name: 'Tagaytay City', permits: 98, revenue: 1200000, activity: 60 },
-                    { id: 3, province: 'LAGUNA', name: 'Calamba City', permits: 210, revenue: 1540000, activity: 90 },
-                    { id: 5, province: 'BATANGAS', name: 'Batangas City', permits: 340, revenue: 2100000, activity: 95 }
-                ],
-                auditLogs: [
-                    { id: 1, time: '2026-02-12 14:22', admin: 'R. Ramos', location: 'REGIONAL', type: 'LOGIN', detail: 'System access via main portal' },
-                    { id: 2, time: '2026-02-12 13:05', admin: 'J. Dela Cruz', location: 'CALAMBA', type: 'UPDATE', detail: 'Approved Permit #FP-2026-01' },
-                    { id: 3, time: '2026-02-12 11:40', admin: 'M. Santos', location: 'TAGAYTAY', type: 'DELETE', detail: 'Removed entry #WL-098' }
-                ],
+                data: [],
+                auditLogs: [],
                 get filteredData() {
                     return this.data.filter(i => {
                         const s = this.searchQuery.toLowerCase();
@@ -621,13 +700,24 @@
             Chart.defaults.font.size = 9;
             Chart.defaults.color = "#64748b";
 
+            // Dynamic last-6-month labels
+            const _mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            window._trendLabels = (function() {
+                const now = new Date(); const out = [];
+                for (let i = 5; i >= 0; i--) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    out.push(_mo[d.getMonth()] + ' \'' + String(d.getFullYear()).slice(2));
+                }
+                return out;
+            })();
+
             const trendCtx = document.getElementById('regionalTrendChart');
             if (trendCtx) {
-                new Chart(trendCtx.getContext('2d'), { 
+                window.regionalTrendChart = new Chart(trendCtx.getContext('2d'), { 
                     type: 'bar', 
                     data: { 
-                        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'], 
-                        datasets: [{ label: 'Issuance', data: [450, 520, 610, 580, 720, 800], backgroundColor: '#1e3a8a', borderRadius: 2 }] 
+                        labels: window._trendLabels, 
+                        datasets: [{ label: 'Service Requests', data: window._trendLabels.map(function(){ return 0; }), backgroundColor: '#1e3a8a', borderRadius: 2 }] 
                     }, 
                     options: { 
                         responsive: true, maintainAspectRatio: false,
@@ -640,11 +730,11 @@
 
             const distCtx = document.getElementById('provinceDistributionChart');
             if (distCtx) {
-                new Chart(distCtx.getContext('2d'), { 
+                window.provinceDistributionChart = new Chart(distCtx.getContext('2d'), { 
                     type: 'doughnut', 
                     data: { 
-                        labels: ['Cavite', 'Laguna', 'Batangas', 'Rizal', 'Quezon'], 
-                        datasets: [{ data: [342, 289, 410, 150, 50], backgroundColor: ['#1e3a8a', '#ce1126', '#f97316', '#059669', '#64748b'], borderWidth: 0 }] 
+                        labels: ['—'], 
+                        datasets: [{ data: [1], backgroundColor: ['#cbd5e1'], borderWidth: 0 }] 
                     }, 
                     options: { 
                         responsive: true, maintainAspectRatio: false, cutout: '65%',
@@ -655,5 +745,225 @@
             }
         });
     </script>
+
+  <!-- Commit 9: SR status badge row + last-synced timestamp -->
+  <script>
+    window.addEventListener('regionalDataReady', function(e) {
+      const docs = e.detail.docs || [];
+      let approved = 0, pending = 0, rejected = 0;
+      docs.forEach(function(d) {
+        const s = (d.status || '').toLowerCase();
+        if (s === 'approved' || s === 'completed') approved++;
+        else if (s === 'rejected' || s === 'denied') rejected++;
+        else pending++;
+      });
+      const elA = document.getElementById('srApproved'); if (elA) elA.textContent = approved;
+      const elP = document.getElementById('srPending');  if (elP) elP.textContent = pending;
+      const elR = document.getElementById('srRejected'); if (elR) elR.textContent = rejected;
+
+      const ls = document.getElementById('lastSyncedRegional');
+      if (ls) ls.textContent = new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+    });
+  </script>
+
+  <!-- Commit 6: Provincial Distribution doughnut — SR counts grouped by province from Firestore -->
+  <script>
+    window.addEventListener('regionalDataReady', function(e) {
+      const docs = e.detail.docs || [];
+      if (!window.provinceDistributionChart) return;
+
+      const provinceMap = {};
+      docs.forEach(function(d) {
+        const prov = (d.province || d.region || 'Unknown').trim();
+        if (!prov || prov === 'undefined') return;
+        provinceMap[prov] = (provinceMap[prov] || 0) + 1;
+      });
+
+      const sorted = Object.entries(provinceMap).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 8);
+      if (sorted.length === 0) return;
+
+      const labels = sorted.map(function(x) { return x[0]; });
+      const data   = sorted.map(function(x) { return x[1]; });
+      const palette = ['#1e3a8a','#ce1126','#f97316','#059669','#64748b','#7c3aed','#0e7490','#b45309'];
+
+      window.provinceDistributionChart.data.labels   = labels;
+      window.provinceDistributionChart.data.datasets[0].data            = data;
+      window.provinceDistributionChart.data.datasets[0].backgroundColor = palette.slice(0, labels.length);
+      window.provinceDistributionChart.update();
+    });
+  </script>
+
+  <!-- Commit 5: Regional Monthly Trend bar chart — SR counts per month from Firestore -->
+  <script>
+    window.addEventListener('regionalDataReady', function(e) {
+      const docs = e.detail.docs || [];
+      const labels = window._trendLabels;
+      if (!labels || !window.regionalTrendChart) return;
+
+      const now = new Date();
+      const monthKeys = labels.map(function(_, i) {
+        const d = new Date(now.getFullYear(), now.getMonth() - (labels.length - 1 - i), 1);
+        return d.getFullYear() + '-' + d.getMonth();
+      });
+      const countMap = {};
+      monthKeys.forEach(function(k) { countMap[k] = 0; });
+
+      docs.forEach(function(d) {
+        let ts = d.createdAt;
+        let dt;
+        if (ts && ts.toDate) dt = ts.toDate();
+        else if (ts) dt = new Date(ts);
+        if (!dt || isNaN(dt)) return;
+        const key = dt.getFullYear() + '-' + dt.getMonth();
+        if (key in countMap) countMap[key]++;
+      });
+
+      const data = monthKeys.map(function(k) { return countMap[k]; });
+      if (data.some(function(v) { return v > 0; })) {
+        window.regionalTrendChart.data.datasets[0].data = data;
+        window.regionalTrendChart.update();
+      }
+    });
+  </script>
+
+  <!-- Commit 4: KPI — Forest Permits, Wildlife Licenses, Audit Alerts from SR categories + system_logs -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { collection, getDocs, query, orderBy, limit }
+      from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const forestKws  = ['forest','timber','chainsaw','tree','cutting','log','lumber'];
+    const wildlifeKws = ['wildlife','animal','fauna','bird','reptile','mammal'];
+
+    function categorize(doc) {
+      const t = ((doc.serviceType || doc.type || doc.category || '')).toLowerCase();
+      if (forestKws.some(k => t.includes(k)))   return 'forest';
+      if (wildlifeKws.some(k => t.includes(k))) return 'wildlife';
+      return 'other';
+    }
+
+    window.addEventListener('regionalDataReady', function(e) {
+      const docs = e.detail.docs || [];
+      let forestCount = 0, wildlifeCount = 0;
+      docs.forEach(d => {
+        const cat = categorize(d);
+        if (cat === 'forest')   forestCount++;
+        if (cat === 'wildlife') wildlifeCount++;
+      });
+      const kpiFP = document.getElementById('kpiForestPermits');
+      if (kpiFP && forestCount > 0) kpiFP.textContent = forestCount.toLocaleString();
+      const kpiWL = document.getElementById('kpiWildlifeLicenses');
+      if (kpiWL && wildlifeCount > 0) kpiWL.textContent = wildlifeCount.toLocaleString();
+    });
+
+    // Fetch system_logs for Audit Alerts count (FAILED outcomes)
+    onAuthStateChanged(auth, async user => {
+      if (!user) return;
+      try {
+        const snap = await getDocs(query(collection(db, 'system_logs'), orderBy('timestamp', 'desc'), limit(200)));
+        let failedCount = 0;
+        const logs = [];
+        snap.forEach(d => {
+          const log = { id: d.id, ...d.data() };
+          logs.push(log);
+          if ((log.outcome || '').toUpperCase() === 'FAILED') failedCount++;
+        });
+        window._regionalData.logs = logs;
+
+        const kpiAA = document.getElementById('kpiAuditAlerts');
+        if (kpiAA) kpiAA.textContent = failedCount || 0;
+
+        window.dispatchEvent(new CustomEvent('regionalLogsReady', { detail: { logs } }));
+      } catch(err) {
+        console.warn('[regional] system_logs fetch error:', err);
+      }
+    });
+  </script>
+
+  <!-- Commit 3: KPI — unique municipalities + total SR count -->
+  <script>
+    window.addEventListener('regionalDataReady', function(e) {
+      const docs = e.detail.docs || [];
+
+      // Unique municipalities
+      const muniSet = new Set(docs.map(d => (d.municipality || '').trim().toUpperCase()).filter(Boolean));
+      const kpiMuni = document.getElementById('kpiMunicipalities');
+      if (kpiMuni && muniSet.size > 0) kpiMuni.textContent = muniSet.size;
+
+      // Total service requests badge in header
+      const badge = document.getElementById('srTotalBadge');
+      if (badge) {
+        badge.textContent = docs.length + ' Total Service Requests This Period';
+        badge.classList.remove('hidden');
+      }
+    });
+  </script>
+
+  <!-- Firebase: Commit 2 — fetch service_requests for the logged-in user's region -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { collection, getDocs, doc, getDoc, query, where, orderBy, limit }
+      from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    window._regionalData = { docs: [], region: null, regionName: null, logs: [] };
+
+    async function loadRegionalDashboard() {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        // Resolve current user's region
+        let userRegion = null;
+        try {
+          const userSnap = await getDoc(doc(db, 'users', user.uid));
+          if (userSnap.exists()) {
+            const ud = userSnap.data();
+            userRegion = ud.region || ud.regionCode || null;
+            window._regionalData.region = userRegion;
+            window._regionalData.regionName = ud.regionName || userRegion;
+          }
+        } catch(e) { console.warn('[regional] user doc error', e); }
+
+        // Fetch service_requests — optionally filtered by region
+        let srQuery = query(collection(db, 'service_requests'), orderBy('createdAt', 'desc'), limit(500));
+        if (userRegion) {
+          try {
+            const filtered = query(collection(db, 'service_requests'),
+              where('region', '==', userRegion), orderBy('createdAt', 'desc'), limit(500));
+            const snap = await getDocs(filtered);
+            if (!snap.empty) {
+              snap.forEach(d => window._regionalData.docs.push({ id: d.id, ...d.data() }));
+            } else {
+              // Fallback: fetch all and filter client-side (region stored differently)
+              const fallSnap = await getDocs(srQuery);
+              fallSnap.forEach(d => window._regionalData.docs.push({ id: d.id, ...d.data() }));
+              if (userRegion) {
+                window._regionalData.docs = window._regionalData.docs.filter(r => {
+                  const r2 = (r.region || r.province || '').toLowerCase();
+                  return r2.includes((userRegion || '').toLowerCase());
+                });
+              }
+            }
+          } catch(e) {
+            const fallSnap = await getDocs(srQuery);
+            fallSnap.forEach(d => window._regionalData.docs.push({ id: d.id, ...d.data() }));
+          }
+        } else {
+          const snap = await getDocs(srQuery);
+          snap.forEach(d => window._regionalData.docs.push({ id: d.id, ...d.data() }));
+        }
+
+        console.log(`[regional] loaded ${window._regionalData.docs.length} service_requests`);
+        // Dispatch event so subsequent commits can react
+        window.dispatchEvent(new CustomEvent('regionalDataReady', { detail: window._regionalData }));
+      } catch(err) {
+        console.error('[regional] loadRegionalDashboard error:', err);
+      }
+    }
+
+    onAuthStateChanged(auth, user => { if (user) loadRegionalDashboard(); });
+  </script>
 </body>
 </html>
