@@ -87,7 +87,7 @@
           </div>
         </div>
         <div class="flex items-center gap-1.5 mt-2 sm:mt-0">
-            <span class="text-[9px] font-black text-slate-400 italic mr-2 uppercase">As of Feb 23, 2026</span>
+            <span id="asOfDate" class="text-[9px] font-black text-slate-400 italic mr-2 uppercase">Loading...</span>
             <button onclick="window.print()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-sm">
               <span class="material-icons-round text-[14px]">print</span> Print
             </button>
@@ -207,6 +207,17 @@
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-3 shrink-0 h-auto lg:h-[220px] no-print">
+        <div class="gov-card lg:col-span-1 flex flex-col overflow-hidden p-2 transition-all">
+          <h3 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-2 shrink-0">Service Requests by Category</h3>
+          <div class="flex-1 relative w-full min-h-[150px]"><canvas id="categoryChart"></canvas></div>
+        </div>
+        <div class="gov-card lg:col-span-1 flex flex-col overflow-hidden p-2 transition-all">
+          <h3 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-2 shrink-0">Activity by Region</h3>
+          <div class="flex-1 relative w-full min-h-[150px]"><canvas id="regionalChart"></canvas></div>
         </div>
       </section>
 
@@ -341,10 +352,33 @@
 
   <script>
     // --- Global Chart Instances & Base Data ---
-    let myTrendChart = null;
-    let myStatusChart = null;
+    window.myTrendChart = null;
+    window.myStatusChart = null;
+    window.myCategoryChart = null;
+    window.myRegionalChart = null;
     let totalInitialRows = 0;
-    const baseTrendData = [120, 190, 150, 210, 180, 240];
+
+    // Dynamic "As of" date
+    (function() {
+        const el = document.getElementById('asOfDate');
+        if (el) {
+            const now = new Date();
+            el.textContent = 'As of ' + now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        }
+    })();
+
+    // Compute last 6 month labels dynamically
+    const baseTrendLabels = (function() {
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const now = new Date();
+        const labels = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            labels.push(months[d.getMonth()] + ' ' + d.getFullYear());
+        }
+        return labels;
+    })();
+    const baseTrendData = [38, 55, 72, 61, 89, 104];
 
     // --- Chart Initialization ---
     window.addEventListener('load', function() {
@@ -355,10 +389,10 @@
 
         const trendCtx = document.getElementById('trendChart');
         if (trendCtx) {
-            myTrendChart = new Chart(trendCtx, {
+            window.myTrendChart = new Chart(trendCtx, {
                 type: 'line',
                 data: {
-                    labels: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'],
+                    labels: baseTrendLabels,
                     datasets: [{
                         label: 'National Activity',
                         data: [...baseTrendData],
@@ -384,7 +418,7 @@
 
         const statusCtx = document.getElementById('statusChart');
         if (statusCtx) {
-            myStatusChart = new Chart(statusCtx, {
+            window.myStatusChart = new Chart(statusCtx, {
                 type: 'doughnut',
                 data: {
                     labels: ['Approved', 'Pending', 'Rejected'],
@@ -404,6 +438,61 @@
             });
         }
         
+        // Initial run to sync DOM numbers to any existing filters
+        // Category Bar Chart
+        const categoryCtx = document.getElementById('categoryChart');
+        if (categoryCtx) {
+            window.myCategoryChart = new Chart(categoryCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Farm Visit', 'Chemical/Fert.', 'Financial Aid', 'Seminar', 'Wildlife', 'Fisheries', 'Forestry'],
+                    datasets: [{
+                        label: 'Requests',
+                        data: [42, 31, 27, 19, 14, 11, 8],
+                        backgroundColor: ['#047857','#0369a1','#b45309','#7c3aed','#065f46','#0e7490','#6b7280'],
+                        borderRadius: 3,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { font: { size: 8 }, color: '#64748b' }, grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { font: { size: 8 }, color: '#64748b' }, grid: { color: '#f1f5f9' } }
+                    },
+                    animation: { duration: 400 }
+                }
+            });
+        }
+
+        // Regional Bar Chart
+        const regionalCtx = document.getElementById('regionalChart');
+        if (regionalCtx) {
+            window.myRegionalChart = new Chart(regionalCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['NCR', 'Region I', 'Region II', 'Region III', 'Region IV-A', 'Region V', 'Region VI', 'Region VII'],
+                    datasets: [{
+                        label: 'Activity',
+                        data: [58, 34, 28, 47, 62, 21, 39, 30],
+                        backgroundColor: '#1e40af',
+                        borderRadius: 3,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { font: { size: 8 }, color: '#64748b' }, grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { font: { size: 8 }, color: '#64748b' }, grid: { color: '#f1f5f9' } }
+                    },
+                    animation: { duration: 400 }
+                }
+            });
+        }
+
         // Initial run to sync DOM numbers to any existing filters
         applyLiveFilter();
     });
@@ -512,18 +601,18 @@
         document.getElementById('kpi-collections').innerText = `₱ ${financeMillions}M`;
 
         // 4. Update Charts
-        if (myStatusChart) {
-            myStatusChart.data.datasets[0].data = [statusCounts.approved, statusCounts.pending, statusCounts.rejected];
-            myStatusChart.update();
+        if (window.myStatusChart) {
+            window.myStatusChart.data.datasets[0].data = [statusCounts.approved, statusCounts.pending, statusCounts.rejected];
+            window.myStatusChart.update();
         }
 
-        if (myTrendChart && totalInitialRows > 0) {
+        if (window.myTrendChart && totalInitialRows > 0) {
             // Mock trend scaling based on visibility ratio to visually reflect filtering
             let ratio = totalVisibleRows / totalInitialRows;
             if (isNaN(ratio)) ratio = 0;
             let newData = baseTrendData.map(v => Math.round(v * ratio));
-            myTrendChart.data.datasets[0].data = newData;
-            myTrendChart.update();
+            window.myTrendChart.data.datasets[0].data = newData;
+            window.myTrendChart.update();
         }
     }
 
@@ -544,6 +633,179 @@
         document.getElementById('globalToDate').value = '';
         applyLiveFilter();
     }
+  </script>
+
+  <!-- Commit 4: update trend, status, category, regional charts from Firestore data -->
+  <script>
+    window.updateChartsFromFirestore = function(docs, counts) {
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const now = new Date();
+
+      // --- Status Doughnut ---
+      if (window.myStatusChart) {
+        window.myStatusChart.data.datasets[0].data = [counts.approved, counts.pending, counts.rejected];
+        window.myStatusChart.update();
+      }
+
+      // --- Trend Line (last 6 calendar months) ---
+      if (window.myTrendChart) {
+        const trendMap = {};
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          trendMap[d.getFullYear() + '-' + d.getMonth()] = 0;
+        }
+        docs.forEach(d => {
+          let ts = d.createdAt;
+          let dt;
+          if (ts && ts.toDate) dt = ts.toDate();
+          else if (ts) dt = new Date(ts);
+          if (dt) {
+            const key = dt.getFullYear() + '-' + dt.getMonth();
+            if (key in trendMap) trendMap[key]++;
+          }
+        });
+        window.myTrendChart.data.datasets[0].data = Object.values(trendMap);
+        window.myTrendChart.update();
+      }
+
+      // --- Category Bar ---
+      if (window.myCategoryChart) {
+        const catMap = { 'Farm Visit': 0, 'Chemical/Fert.': 0, 'Financial Aid': 0, 'Seminar': 0, 'Wildlife': 0, 'Fisheries': 0, 'Forestry': 0 };
+        const catKeywords = {
+          'Farm Visit': ['farm visit', 'crop', 'pest'],
+          'Chemical/Fert.': ['chemical', 'fertilizer', 'pesticide'],
+          'Financial Aid': ['subsidy', 'grant', 'loan', 'startup', 'financial'],
+          'Seminar': ['seminar', 'training', 'workshop'],
+          'Wildlife': ['wildlife', 'animal'],
+          'Fisheries': ['fish', 'aqua'],
+          'Forestry': ['forest', 'timber', 'tree']
+        };
+        docs.forEach(d => {
+          const t = ((d.serviceType || d.type || d.category || '')).toLowerCase();
+          let matched = false;
+          for (const [cat, kws] of Object.entries(catKeywords)) {
+            if (kws.some(k => t.includes(k))) { catMap[cat]++; matched = true; break; }
+          }
+          if (!matched) catMap['Farm Visit']++;
+        });
+        window.myCategoryChart.data.datasets[0].data = Object.values(catMap);
+        window.myCategoryChart.update();
+      }
+
+      // --- Regional Bar ---
+      if (window.myRegionalChart) {
+        const regLabels = ['NCR','Region I','Region II','Region III','Region IV-A','Region V','Region VI','Region VII'];
+        const regMap = {};
+        regLabels.forEach(r => regMap[r] = 0);
+        docs.forEach(d => {
+          const r = (d.region || d.province || '').trim();
+          if (r in regMap) regMap[r]++;
+          else regMap['NCR']++; // fallback
+        });
+        window.myRegionalChart.data.datasets[0].data = regLabels.map(r => regMap[r]);
+        window.myRegionalChart.update();
+      }
+    };
+  </script>
+
+  <!-- Commit 3: Firebase fetch for KPI cards -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { collection, getDocs, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    async function loadDashboardData() {
+      try {
+        const q = query(collection(db, 'service_requests'), orderBy('createdAt', 'desc'), limit(200));
+        const snapshot = await getDocs(q);
+        const docs = [];
+        snapshot.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+
+        // --- KPI cards ---
+        const totalSR = docs.length;
+        document.getElementById('kpi-services').innerText = totalSR;
+        document.getElementById('badge-services').innerText = totalSR + ' Total';
+
+        let approved = 0, pending = 0, rejected = 0;
+        docs.forEach(d => {
+          const s = (d.status || '').toLowerCase();
+          if (s === 'approved') approved++;
+          else if (s === 'rejected') rejected++;
+          else pending++;
+        });
+
+        const complianceTotal = approved + pending + rejected;
+        document.getElementById('kpi-compliance').innerText = complianceTotal;
+        document.getElementById('kpi-chart-total').innerText = complianceTotal;
+
+        // Expose for commit 4
+        window._dashboardDocs = docs;
+        window._dashboardCounts = { approved, pending, rejected };
+
+        // Fire commit4 update if available
+        if (typeof window.updateChartsFromFirestore === 'function') {
+          window.updateChartsFromFirestore(docs, { approved, pending, rejected });
+        }
+
+        // --- Commit 5: Populate Service Requests table ---
+        const tbody = document.querySelector('#table-services tbody');
+        if (tbody) {
+          // Remove existing data rows (keep empty-state-row)
+          tbody.querySelectorAll('tr.data-row').forEach(r => r.remove());
+
+          const statusClass = s => {
+            const sl = (s || '').toLowerCase();
+            if (sl === 'approved') return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+            if (sl === 'rejected') return 'bg-rose-50 text-rose-800 border-rose-200';
+            return 'bg-amber-50 text-amber-800 border-amber-200';
+          };
+          const fmtDate = ts => {
+            if (!ts) return 'N/A';
+            let dt = ts.toDate ? ts.toDate() : new Date(ts);
+            if (isNaN(dt)) return 'N/A';
+            return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          };
+
+          const emptyRow = tbody.querySelector('.empty-state-row');
+          const topDocs = docs.slice(0, 15);
+          topDocs.forEach(d => {
+            const region = (d.region || d.province || d.municipality || 'N/A');
+            const status = d.status || 'pending';
+            const refId = (d.id || '').slice(-6).toUpperCase();
+            const type = d.serviceType || d.type || d.category || 'Service Request';
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-blue-50 transition data-row';
+            row.setAttribute('data-region', region.toLowerCase());
+            row.innerHTML = `
+              <td class="font-mono text-slate-500 uppercase border-r border-slate-100 date-cell">${fmtDate(d.createdAt)}</td>
+              <td class="leading-tight border-r border-slate-100">
+                <span class="font-black text-blue-900 uppercase font-mono">SR-${refId}</span><br>
+                <span class="text-[9px] text-slate-500 font-bold uppercase truncate max-w-[120px] inline-block">${type}</span>
+              </td>
+              <td class="border-r border-slate-100">
+                <span class="font-bold text-slate-700 uppercase text-[9px] block mb-1">${region}</span>
+                <span class="status-badge ${statusClass(status)}">${status.slice(0,3).toUpperCase()}</span>
+              </td>
+              <td class="text-center"><button class="text-blue-700 hover:text-blue-900 font-black text-[9px] uppercase tracking-wider">View</button></td>`;
+            if (emptyRow) tbody.insertBefore(row, emptyRow);
+            else tbody.appendChild(row);
+          });
+
+          if (emptyRow) emptyRow.style.display = topDocs.length > 0 ? 'none' : '';
+
+          // Update row count and re-run filter
+          window.totalInitialRows = docs.length;
+          if (typeof applyLiveFilter === 'function') applyLiveFilter();
+        }
+
+      } catch (err) {
+        console.warn('[Dashboard] Firestore fetch error:', err);
+      }
+    }
+
+    onAuthStateChanged(auth, user => {
+      if (user) loadDashboardData();
+    });
   </script>
 </body> 
 </html>
