@@ -666,5 +666,71 @@
             }
         });
     </script>
+
+  <!-- Firebase: Commit 2 — fetch service_requests for the logged-in user's region -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { collection, getDocs, doc, getDoc, query, where, orderBy, limit }
+      from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    window._regionalData = { docs: [], region: null, regionName: null, logs: [] };
+
+    async function loadRegionalDashboard() {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        // Resolve current user's region
+        let userRegion = null;
+        try {
+          const userSnap = await getDoc(doc(db, 'users', user.uid));
+          if (userSnap.exists()) {
+            const ud = userSnap.data();
+            userRegion = ud.region || ud.regionCode || null;
+            window._regionalData.region = userRegion;
+            window._regionalData.regionName = ud.regionName || userRegion;
+          }
+        } catch(e) { console.warn('[regional] user doc error', e); }
+
+        // Fetch service_requests — optionally filtered by region
+        let srQuery = query(collection(db, 'service_requests'), orderBy('createdAt', 'desc'), limit(500));
+        if (userRegion) {
+          try {
+            const filtered = query(collection(db, 'service_requests'),
+              where('region', '==', userRegion), orderBy('createdAt', 'desc'), limit(500));
+            const snap = await getDocs(filtered);
+            if (!snap.empty) {
+              snap.forEach(d => window._regionalData.docs.push({ id: d.id, ...d.data() }));
+            } else {
+              // Fallback: fetch all and filter client-side (region stored differently)
+              const fallSnap = await getDocs(srQuery);
+              fallSnap.forEach(d => window._regionalData.docs.push({ id: d.id, ...d.data() }));
+              if (userRegion) {
+                window._regionalData.docs = window._regionalData.docs.filter(r => {
+                  const r2 = (r.region || r.province || '').toLowerCase();
+                  return r2.includes((userRegion || '').toLowerCase());
+                });
+              }
+            }
+          } catch(e) {
+            const fallSnap = await getDocs(srQuery);
+            fallSnap.forEach(d => window._regionalData.docs.push({ id: d.id, ...d.data() }));
+          }
+        } else {
+          const snap = await getDocs(srQuery);
+          snap.forEach(d => window._regionalData.docs.push({ id: d.id, ...d.data() }));
+        }
+
+        console.log(`[regional] loaded ${window._regionalData.docs.length} service_requests`);
+        // Dispatch event so subsequent commits can react
+        window.dispatchEvent(new CustomEvent('regionalDataReady', { detail: window._regionalData }));
+      } catch(err) {
+        console.error('[regional] loadRegionalDashboard error:', err);
+      }
+    }
+
+    onAuthStateChanged(auth, user => { if (user) loadRegionalDashboard(); });
+  </script>
 </body>
 </html>
