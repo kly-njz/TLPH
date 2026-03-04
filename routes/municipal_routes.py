@@ -411,25 +411,30 @@ def accounting_dashboard_municipal():
     municipality_name = session.get('municipality') or session.get('user_municipality')
     region_name = session.get('region') or session.get('user_region')
     province_name = session.get('province') or session.get('user_province')
-    # If not in session, try to get from user document
-    if not municipality_name:
-        user_id = session.get('user_id')
-        if user_id:
-            user_doc = db.collection('users').document(user_id).get()
-            if user_doc.exists:
-                user_data = user_doc.to_dict()
+    # If missing any info, try to get from user document
+    user_id = session.get('user_id')
+    if user_id and (not municipality_name or not province_name or not region_name):
+        user_doc = db.collection('users').document(user_id).get()
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            if not municipality_name:
                 municipality_name = user_data.get('municipality') or user_data.get('municipality_name')
-                region_name = user_data.get('region') or user_data.get('region_name')
+            if not province_name:
                 province_name = user_data.get('province') or user_data.get('province_name')
+            if not region_name:
+                region_name = user_data.get('region') or user_data.get('region_name')
     # Fetch finance data for this municipality only
     doc_id = None
     try:
         if municipality_name and province_name:
             doc_id = f"{municipality_name.upper().replace(' ', '_')}_{province_name.upper().replace(' ', '_')}"
+            print(f"[DEBUG] Fetching finance for doc_id: {doc_id}")
             doc = db.collection('finance').document(doc_id).get()
             if doc.exists:
                 finance_data = doc.to_dict()
+                print(f"[DEBUG] Finance data found: {finance_data}")
             else:
+                print(f"[DEBUG] Finance document not found for {doc_id}, initializing...")
                 # Initialize with default structure if document doesn't exist
                 finance_data = {
                     'general_fund': 0,
@@ -445,10 +450,13 @@ def accounting_dashboard_municipal():
                 db.collection('finance').document(doc_id).set(finance_data, merge=True)
         elif municipality_name:
             # fallback: try old style (just municipality name)
+            print(f"[DEBUG] Trying fallback fetch for municipality: {municipality_name}")
             doc = db.collection('finance').document(municipality_name).get()
             if doc.exists:
                 finance_data = doc.to_dict()
+                print(f"[DEBUG] Finance data found (fallback): {finance_data}")
             else:
+                print(f"[DEBUG] Finance document not found for {municipality_name}, initializing...")
                 # Initialize with default structure
                 finance_data = {
                     'general_fund': 0,
@@ -463,6 +471,7 @@ def accounting_dashboard_municipal():
                 }
                 db.collection('finance').document(municipality_name).set(finance_data, merge=True)
         else:
+            print(f"[DEBUG] No municipality found, skipping finance fetch")
             # fallback: fetch all (should not happen)
             docs = db.collection('finance').stream()
             for doc in docs:
@@ -506,6 +515,9 @@ def accounting_dashboard_municipal():
     except Exception as e:
         print(f"[DEBUG] Error fetching fund_activity: {e}")
 
+    print(f"[DEBUG] Rendering dashboard with municipality_name={municipality_name}, province_name={province_name}")
+    print(f"[DEBUG] Finance data being passed to template: {finance_data}")
+    
     return render_template(
         'municipal/accounting/dashboard-municipal.html',
         finance=finance_data,
