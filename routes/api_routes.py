@@ -63,7 +63,8 @@ def get_user_region(user_id: str = None, user_email: str = None) -> str:
             user_doc = db.collection('users').document(user_id).get()
             if user_doc.exists:
                 user_data = user_doc.to_dict() or {}
-                region = user_data.get('region') or user_data.get('region_name') or user_data.get('regionName')
+                # Prioritize regionName (full name like MIMAROPA) over region code (like 4B)
+                region = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
                 if region:
                     print(f"[DEBUG] get_user_region(user_id={user_id}) -> '{region}'")
                     return region
@@ -72,7 +73,8 @@ def get_user_region(user_id: str = None, user_email: str = None) -> str:
             docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
             for doc in docs:
                 user_data = doc.to_dict() or {}
-                region = user_data.get('region') or user_data.get('region_name') or user_data.get('regionName')
+                # Prioritize regionName (full name like MIMAROPA) over region code (like 4B)
+                region = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
                 if region:
                     print(f"[DEBUG] get_user_region(user_email={user_email}) -> '{region}'")
                     return region
