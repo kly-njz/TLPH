@@ -1,179 +1,213 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DENR | Financial Transaction Ledger</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DENR | Financial Transaction Ledger</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            denr: '#006400',
-            'fin-emerald': '#059669',
-            'fin-slate': '#1e293b',
-            'gov-blue': '#0038a8',
-            'gov-red': '#ce1126',
-            'gov-navy': '#002e5f'
-          },
-          fontFamily: {
-            'serif': ['Georgia', 'serif'],
-            'sans': ['Inter', 'sans-serif'],
-          }
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'gov-navy': '#1e3a8a',
+                        'gov-red': '#be123c',
+                        'denr-green': '#15803d',
+                        'fin-emerald': '#059669',
+                    }
+                }
+            }
         }
-      }
-    }
-  </script>
-  <style>
-    .gov-strip { background: linear-gradient(to right, #0038a8 50%, #ce1126 50%); height: 3px; width: 100%; position: fixed; top: 0; left: 0; z-index: 5000; }
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-    html, body { height: 100vh; overflow: hidden; background-color: #f1f5f9; }
-    .executive-border { border: 1px solid #cbd5e1; }
-    .table-header-gov { background-color: #f8fafc; border-bottom: 2px solid #059669; position: sticky; top: 0; z-index: 10; }
-    .custom-scroll::-webkit-scrollbar { width: 4px; }
-  </style>
+    </script>
+    <style>
+        /* Government Standard Typography & Layout (STRICT COMPACT) */
+        body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; margin: 0; color: #1e293b; }
+        
+        .gov-strip { background: linear-gradient(to right, #1e3a8a 50%, #be123c 50%); height: 3px; width: 100%; position: fixed; top: 0; z-index: 5000; }
+        
+        /* Compact Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Gov UI Utilities */
+        .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; margin-bottom: 0; }
+        .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; color: #1e293b; box-sizing: border-box; }
+        .gov-input:focus { border-color: #059669; }
+        
+        .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: none; }
+        
+        /* Dense Table Formatting */
+        th { font-size: 9px !important; font-weight: 800 !important; text-transform: uppercase !important; color: #475569 !important; background: #f8fafc !important; border-bottom: 2px solid #cbd5e1 !important; padding: 6px 12px !important; position: sticky; top: 0; z-index: 10; text-align: left; }
+        td { padding: 6px 12px !important; border-bottom: 1px solid #f1f5f9 !important; vertical-align: middle !important; text-align: left; }
+
+        .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; }
+
+        .chart-container { position: relative; height: 100%; width: 100%; }
+
+        @media print {
+            .no-print { display: none !important; }
+            main { margin: 0 !important; padding: 0 !important; height: auto !important; position: static !important; overflow: visible !important; left: 0 !important; top: 0 !important; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .gov-card { box-shadow: none !important; border: 1px solid #000 !important; break-inside: avoid; }
+        }
+    </style>
 </head>
 
-<body class="font-sans text-slate-900 flex flex-col">
-    <div class="gov-strip"></div>
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50 relative">
+    
+    <div class="gov-strip no-print"></div>
 
-    <div class="fixed top-1 w-full z-[4000] no-print">{% include 'super-admin/header-superadmin.html' %}</div>
-    <div class="fixed left-0 h-full z-[3000] no-print">{% include 'super-admin/sidenav-superadmin.html' %}</div>
+    <div class="fixed top-[3px] w-full lg:w-[calc(100%-260px)] lg:left-[260px] z-[4000] no-print">
+        {% include 'super-admin/header-superadmin.html' %}
+    </div>
+    
+    <div class="fixed left-0 top-0 h-full z-[3000] hidden lg:block w-[260px] no-print">
+        {% include 'super-admin/sidenav-superadmin.html' %}
+    </div>
 
-    <main class="lg:ml-64 pt-24 h-screen flex flex-col transition-all duration-300">
-        <div class="max-w-[1800px] mx-auto w-full px-4 flex flex-col flex-1 min-h-0 space-y-3"> 
+    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar flex flex-col z-10">
+        
+        <div class="max-w-[1800px] w-full mx-auto flex flex-col gap-2 h-full min-h-0">
             
-            <header class="bg-white executive-border p-3 flex items-center justify-between shadow-sm shrink-0">
-                <div class="flex items-center gap-4">
-                    <div class="bg-fin-slate p-2 rounded">
-                        <span class="material-icons-round text-white text-2xl">payments</span>
+            <header class="gov-card p-2 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 border-b-4 border-b-gov-navy no-print">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-[2px] bg-slate-800 flex items-center justify-center text-white shrink-0 shadow-sm">
+                        <span class="material-icons-round text-[18px]">payments</span>
                     </div>
-                    <div class="border-l-2 border-slate-200 pl-4">
-                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] leading-tight">Republic of the Philippines</p>
-                        <h1 class="font-serif text-xl font-black text-gov-navy uppercase tracking-tight leading-none">Financial Transaction Ledger</h1>
-                        <p class="text-[10px] font-bold text-fin-emerald uppercase tracking-widest mt-1">National Revenue Tracking & Government Fee Intelligence Console</p>
+                    <div class="leading-tight border-l border-slate-300 pl-3">
+                        <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0 leading-none">Financial Transaction Ledger</h1>
+                        <p class="text-[9px] font-bold text-fin-emerald uppercase tracking-widest mt-1 m-0">National Revenue Tracking & Government Fee Intelligence</p>
                     </div>
                 </div>
-                <div class="flex gap-2 no-print">
-                    <button class="bg-white executive-border px-4 py-2 text-[10px] font-black uppercase hover:bg-slate-50 transition flex items-center gap-2">
+                <div class="flex flex-wrap gap-1.5 mt-2 sm:mt-0">
+                    <button class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">
                         <i class="fa-solid fa-file-invoice-dollar"></i> Financial Export
                     </button>
-                    <button class="bg-fin-emerald text-white px-4 py-2 text-[10px] font-black uppercase shadow hover:bg-emerald-800 transition">Reconcile Ledger</button>
+                    <button class="gov-btn bg-fin-emerald text-white hover:bg-emerald-800 shadow-sm">
+                        Reconcile Ledger
+                    </button>
                 </div>
             </header>
 
-            <div class="grid grid-cols-5 gap-3 shrink-0">
-                <div class="bg-white executive-border border-t-4 border-t-fin-slate p-3 shadow-sm text-center">
-                    <p class="text-[9px] font-black text-slate-400 uppercase">Gross Revenue (MTD)</p>
-                    <h3 class="text-2xl font-black text-fin-slate">₱1.24M</h3>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-2 shrink-0">
+                <div class="gov-card border-t-2 border-t-slate-800 p-2 transition-colors hover:bg-slate-50 text-center">
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 leading-none">Gross Revenue (MTD)</p>
+                    <h3 class="text-[16px] font-black text-slate-900 m-0 mt-1 leading-none font-mono">₱1.24M</h3>
                 </div>
-                <div class="bg-white executive-border border-t-4 border-t-fin-emerald p-3 shadow-sm text-center">
-                    <p class="text-[9px] font-black text-slate-400 uppercase">Paid Transactions</p>
-                    <h3 class="text-2xl font-black text-fin-emerald">842</h3>
+                <div class="gov-card border-t-2 border-t-fin-emerald p-2 transition-colors hover:bg-emerald-50 text-center">
+                    <p class="text-[8px] font-black text-fin-emerald uppercase tracking-widest m-0 leading-none">Paid Transactions</p>
+                    <h3 class="text-[16px] font-black text-fin-emerald m-0 mt-1 leading-none">842</h3>
                 </div>
-                <div class="bg-white executive-border border-t-4 border-t-amber-500 p-3 shadow-sm text-center">
-                    <p class="text-[9px] font-black text-slate-400 uppercase">Refunded Fees</p>
-                    <h3 class="text-2xl font-black text-amber-600">12</h3>
+                <div class="gov-card border-t-2 border-t-amber-500 p-2 transition-colors hover:bg-amber-50 text-center">
+                    <p class="text-[8px] font-black text-amber-800 uppercase tracking-widest m-0 leading-none">Refunded Fees</p>
+                    <h3 class="text-[16px] font-black text-amber-600 m-0 mt-1 leading-none">12</h3>
                 </div>
-                <div class="bg-white executive-border border-t-4 border-t-blue-600 p-3 shadow-sm text-center">
-                    <p class="text-[9px] font-black text-slate-400 uppercase">Avg. Transaction</p>
-                    <h3 class="text-2xl font-black text-blue-600">₱1,450</h3>
+                <div class="gov-card border-t-2 border-t-blue-600 p-2 transition-colors hover:bg-blue-50 text-center">
+                    <p class="text-[8px] font-black text-blue-800 uppercase tracking-widest m-0 leading-none">Avg. Transaction</p>
+                    <h3 class="text-[16px] font-black text-blue-600 m-0 mt-1 leading-none font-mono">₱1,450</h3>
                 </div>
-                <div class="bg-white executive-border border-t-4 border-t-rose-600 p-3 shadow-sm text-center animate-pulse">
-                    <p class="text-[9px] font-black text-slate-400 uppercase">Failed Attempts</p>
-                    <h3 class="text-2xl font-black text-rose-600">08</h3>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-12 gap-3 h-40 shrink-0">
-                <div class="col-span-8 bg-white executive-border p-3 shadow-sm">
-                    <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest border-l-4 border-fin-emerald pl-3 mb-2">Daily Revenue Stream (National Intake)</h4>
-                    <div class="h-24"><canvas id="revenueTrendChart"></canvas></div>
-                </div>
-                <div class="col-span-4 bg-white executive-border p-3 shadow-sm">
-                    <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest border-l-4 border-fin-slate pl-3 mb-2">Revenue Module Distribution</h4>
-                    <div class="h-24"><canvas id="typeDistributionChart"></canvas></div>
+                <div class="gov-card border-t-2 border-t-gov-red p-2 bg-red-50 transition-colors hover:bg-red-100 text-center animate-pulse">
+                    <p class="text-[8px] font-black text-gov-red uppercase tracking-widest m-0 leading-none">Failed Attempts</p>
+                    <h3 class="text-[16px] font-black text-gov-red m-0 mt-1 leading-none">08</h3>
                 </div>
             </div>
 
-            <div class="bg-white executive-border shadow-md flex flex-col flex-1 min-h-0 overflow-hidden">
-                <div class="p-3 bg-slate-50 border-b grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0 no-print">
-                    <div class="relative">
-                        <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-400 text-[10px]"></i>
-                        <input id="tableSearch" oninput="renderTable()" class="w-full pl-9 pr-4 py-2 text-xs executive-border outline-none focus:ring-1 focus:ring-fin-emerald" placeholder="Search Reference or Payor...">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-2 shrink-0 h-[140px] no-print">
+                <div class="md:col-span-8 gov-card p-2 flex flex-col">
+                    <h4 class="text-[9px] font-black text-slate-500 uppercase tracking-widest border-l-4 border-fin-emerald pl-2 mb-2 leading-none">Daily Revenue Stream (National Intake)</h4>
+                    <div class="flex-1 min-h-0"><canvas id="revenueTrendChart"></canvas></div>
+                </div>
+                <div class="md:col-span-4 gov-card p-2 flex flex-col">
+                    <h4 class="text-[9px] font-black text-slate-500 uppercase tracking-widest border-l-4 border-slate-800 pl-2 mb-2 leading-none">Revenue Module Distribution</h4>
+                    <div class="flex-1 min-h-0"><canvas id="typeDistributionChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="gov-card flex-1 flex flex-col min-h-[300px] w-full overflow-hidden">
+                <div class="bg-slate-50 border-b border-slate-200 p-2 flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0 no-print">
+                    <div class="flex flex-wrap items-center gap-2 w-full max-w-6xl">
+                        <div class="relative flex-1 sm:flex-none sm:w-48">
+                            <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                            <input id="tableSearch" oninput="renderTable()" type="text" placeholder="Reference or Payor..." class="gov-input w-full pl-6 h-7">
+                        </div>
+                        
+                        <select id="typeFilter" onchange="renderTable()" class="gov-input h-7 cursor-pointer uppercase min-w-[150px]">
+                            <option value="all">-- ALL CATEGORIES --</option>
+                            <option value="Application Fee">Application Fee</option>
+                            <option value="Service Request">Service Request</option>
+                            <option value="Licensing/Permit">Licensing/Permit</option>
+                        </select>
+
+                        <select id="regFilter" onchange="renderTable()" class="gov-input h-7 cursor-pointer uppercase min-w-[200px]">
+                            <option value="all">-- NATIONAL (ALL REGIONS) --</option>
+                            <option value="NCR">NCR - National Capital Region</option>
+                            <option value="CAR">CAR - Cordillera Administrative Region</option>
+                            <option value="I">Region I - Ilocos Region</option>
+                            <option value="II">Region II - Cagayan Valley</option>
+                            <option value="III">Region III - Central Luzon</option>
+                            <option value="IV-A">Region IV-A - CALABARZON</option>
+                            <option value="IV-B">Region IV-B - MIMAROPA</option>
+                            <option value="V">Region V - Bicol Region</option>
+                            <option value="VI">Region VI - Western Visayas</option>
+                            <option value="VII">Region VII - Central Visayas</option>
+                            <option value="VIII">Region VIII - Eastern Visayas</option>
+                            <option value="IX">Region IX - Zamboanga Peninsula</option>
+                            <option value="X">Region X - Northern Mindanao</option>
+                            <option value="XI">Region XI - Davao Region</option>
+                            <option value="XII">Region XII - SOCCSKSARGEN</option>
+                            <option value="XIII">Region XIII - Caraga</option>
+                            <option value="BARMM">BARMM - Bangsamoro Autonomous Region</option>
+                        </select>
                     </div>
-                    
-                    <select id="typeFilter" onchange="renderTable()" class="px-4 py-2 text-xs executive-border bg-white font-bold uppercase outline-none focus:ring-1 focus:ring-fin-emerald">
-                        <option value="all">-- ALL CATEGORIES --</option>
-                        <option value="Application Fee">Application Fee</option>
-                        <option value="Service Request">Service Request</option>
-                        <option value="Licensing/Permit">Licensing/Permit</option>
-                    </select>
-
-                    <select id="regFilter" onchange="renderTable()" class="px-4 py-2 text-xs executive-border bg-white font-bold uppercase outline-none focus:ring-1 focus:ring-fin-emerald">
-                        <option value="all">-- NATIONAL (ALL REGIONS) --</option>
-                        <option value="NCR">NCR - National Capital</option>
-                        <option value="CAR">CAR - Cordillera</option>
-                        <option value="I">Region I - Ilocos</option>
-                        <option value="II">Region II - Cagayan</option>
-                        <option value="III">Region III - Central Luzon</option>
-                        <option value="IV-A">Region IV-A - CALABARZON</option>
-                        <option value="IV-B">Region IV-B - MIMAROPA</option>
-                        <option value="V">Region V - Bicol</option>
-                        <option value="VI">Region VI - W. Visayas</option>
-                        <option value="VII">Region VII - C. Visayas</option>
-                        <option value="VIII">Region VIII - E. Visayas</option>
-                        <option value="IX">Region IX - Zamboanga</option>
-                        <option value="X">Region X - N. Mindanao</option>
-                        <option value="XI">Region XI - Davao</option>
-                        <option value="XII">Region XII - SOCCSKSARGEN</option>
-                        <option value="XIII">Region XIII - Caraga</option>
-                        <option value="BARMM">BARMM - Bangsamoro</option>
-                    </select>
-
-                    <button onclick="location.reload()" class="bg-slate-800 text-white text-[10px] font-black uppercase py-2 hover:bg-black transition tracking-widest">Refresh Ledger</button>
+                    <button onclick="location.reload()" class="gov-btn bg-slate-800 text-white h-7 shadow-sm">
+                        <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                    </button>
                 </div>
 
-                <div class="overflow-y-auto flex-1 custom-scroll">
-                  <table id="masterTable" class="w-full text-left border-collapse">
-                      <thead class="table-header-gov">
-                          <tr class="text-[9px] uppercase font-black text-slate-600">
-                              <th class="px-6 py-3">Reference ID</th>
-                              <th class="px-6 py-3">Payor & Module</th>
-                              <th class="px-6 py-3">System Date</th>
-                              <th class="px-6 py-3">Administrative Scope</th>
-                              <th class="px-6 py-3 text-center">Status</th>
-                              <th class="px-6 py-3 text-right">Total Amount</th>
-                          </tr>
-                      </thead>
-                      <tbody id="txnTableBody" class="divide-y divide-slate-100 text-[11px] text-slate-700"></tbody>
-                  </table>
+                <div class="flex-1 overflow-auto custom-scrollbar table-wrapper bg-white relative">
+                    <table id="masterTable" class="w-full text-left border-collapse m-0">
+                        <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th class="border-r border-slate-200">Reference ID</th>
+                                <th class="border-r border-slate-200">Payor & Module</th>
+                                <th class="border-r border-slate-200 text-center">System Date</th>
+                                <th class="border-r border-slate-200">Administrative Scope</th>
+                                <th class="border-r border-slate-200 text-center">Status</th>
+                                <th class="text-right">Total Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody id="txnTableBody" class="text-[10px] divide-y divide-slate-100">
+                            </tbody>
+                    </table>
                 </div>
-                
-                <div class="p-2 bg-slate-800 text-white flex justify-between items-center text-[9px] font-black uppercase tracking-widest shrink-0 no-print">
-                    <div>Consolidated Matches: <span id="resCount" class="text-amber-400">0</span> Transactions</div>
-                    <div class="flex items-center gap-2">
-                        <i class="fa-solid fa-shield-halved text-fin-emerald"></i>
-                        Authorized Super Admin Financial Session • 2026
+
+                <div class="bg-slate-800 p-2 flex justify-between items-center shrink-0 no-print text-white">
+                    <span class="text-[9px] font-bold uppercase tracking-widest italic">Matches: <span id="resCount" class="text-amber-400">0</span> Transactions</span>
+                    <div class="flex items-center gap-1.5 italic text-slate-300 text-[9px] font-black uppercase tracking-widest">
+                        <span class="w-1.5 h-1.5 bg-fin-emerald rounded-full animate-pulse shadow-[0_0_4px_#059669]"></span>
+                        Financial Record Integrity Verified
                     </div>
                 </div>
             </div>
+
         </div>
     </main>
 
     <script>
+        // Updated Mock Data to test multiple regions
         const MOCK_DATA = [
             { ref: "TXN-2026-001", name: "Alqz Dave", type: "Licensing/Permit", date: "2026-02-13", reg: "IV-B", status: "Paid", amount: 2500.00 },
             { ref: "TXN-2026-002", name: "Oriental Mindoro Coop", type: "Service Request", date: "2026-02-13", reg: "IV-B", status: "Paid", amount: 1200.00 },
             { ref: "TXN-2026-003", name: "EcoGreen Solutions", type: "Application Fee", date: "2026-02-12", reg: "NCR", status: "Refunded", amount: 5000.00 },
-            { ref: "TXN-2026-004", name: "BuildCorp Phil", type: "Application Fee", date: "2026-02-11", reg: "III", status: "Paid", amount: 15000.00 }
+            { ref: "TXN-2026-004", name: "BuildCorp Phil", type: "Application Fee", date: "2026-02-11", reg: "III", status: "Paid", amount: 15000.00 },
+            { ref: "TXN-2026-005", name: "Baguio Mining", type: "Licensing/Permit", date: "2026-02-10", reg: "CAR", status: "Paid", amount: 8400.00 }
         ];
 
         function renderTable() {
@@ -192,30 +226,45 @@
             body.innerHTML = '';
             document.getElementById('resCount').textContent = filtered.length;
 
+            if(filtered.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No transactions match your criteria.</td></tr>';
+                return;
+            }
+
             filtered.forEach(row => {
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition-colors border-b";
-                let sClass = row.status === 'Paid' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200';
+                tr.className = "hover:bg-slate-50 transition-colors data-row";
+                let sClass = row.status === 'Paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200';
                 
                 tr.innerHTML = `
-                    <td class="px-6 py-2.5 font-black text-gov-navy tracking-tighter uppercase">${row.ref}</td>
-                    <td class="px-6 py-2.5">
-                        <div class="font-bold text-slate-800 uppercase tracking-tight leading-none">${row.name}</div>
-                        <div class="text-[8px] text-slate-400 font-black uppercase mt-1">${row.type}</div>
+                    <td class="border-r border-slate-100 font-black text-slate-700 font-mono uppercase tracking-tighter">${row.ref}</td>
+                    <td class="border-r border-slate-100">
+                        <div class="font-black text-slate-900 uppercase tracking-tight leading-none">${row.name}</div>
+                        <div class="text-[8px] text-slate-500 font-bold uppercase mt-1 tracking-widest">${row.type}</div>
                     </td>
-                    <td class="px-6 py-2.5 font-bold text-slate-400">${row.date}</td>
-                    <td class="px-6 py-2.5 font-bold text-slate-600 uppercase">Region ${row.reg}</td>
-                    <td class="px-6 py-2.5 text-center">
-                        <span class="px-2 py-0.5 rounded border text-[9px] font-black uppercase ${sClass}">${row.status}</span>
+                    <td class="border-r border-slate-100 text-center font-bold text-slate-400 font-mono">${row.date}</td>
+                    <td class="border-r border-slate-100 font-black text-slate-700 uppercase tracking-widest">Region ${row.reg}</td>
+                    <td class="border-r border-slate-100 text-center">
+                        <span class="status-badge ${sClass}">${row.status}</span>
                     </td>
-                    <td class="px-6 py-2.5 text-right font-black text-slate-900">₱${row.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                    <td class="text-right font-black text-slate-900 font-mono bg-slate-50/50">₱${row.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 `;
                 body.appendChild(tr);
             });
         }
 
         function initCharts() {
-            const opt = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 8 } }, grid: { display: false } }, y: { ticks: { font: { size: 8 } }, grid: { color: '#f1f5f9' } } } };
+            const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+            const opt = { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { legend: { display: false } }, 
+                scales: { 
+                    x: { ticks: { font: chartFont, color: '#64748b' }, grid: { display: false } }, 
+                    y: { ticks: { font: chartFont, color: '#64748b' }, grid: { color: '#f1f5f9' } } 
+                } 
+            };
+
             new Chart(document.getElementById('revenueTrendChart'), {
                 type: 'line',
                 data: {
@@ -229,7 +278,7 @@
                 type: 'bar',
                 data: {
                     labels: ['Apps', 'Srvc', 'Prmt'],
-                    datasets: [{ data: [450000, 320000, 480000], backgroundColor: ['#1e293b', '#059669', '#d97706'], borderRadius: 4 }]
+                    datasets: [{ data: [450000, 320000, 480000], backgroundColor: ['#1e293b', '#059669', '#d97706'], borderRadius: 2 }]
                 },
                 options: { ...opt, indexAxis: 'y' }
             });

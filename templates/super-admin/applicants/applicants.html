@@ -4,105 +4,215 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Applicants — Super Admin</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'gov-blue': '#1e3a8a',
+                        'denr-green': '#15803d',
+                    }
+                }
+            }
+        }
+    </script>
+
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        /* Government Standard Typography & Layout (STRICT COMPACT) */
+        body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; margin: 0; color: #1e293b; }
+        
+        .gov-strip { background: linear-gradient(to right, #1e3a8a 50%, #be123c 50%); height: 3px; width: 100%; position: fixed; top: 0; z-index: 3000; }
+        
+        /* Compact Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Gov UI Utilities */
+        .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; margin-bottom: 0; }
+        .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; color: #1e293b; box-sizing: border-box; }
+        .gov-input:focus { border-color: #15803d; } /* Green focus for Applicants */
+        
+        .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: none; }
+        
+        /* Dense Table Formatting */
+        th { font-size: 9px !important; font-weight: 800 !important; text-transform: uppercase !important; color: #475569 !important; background: #f8fafc !important; border-bottom: 2px solid #cbd5e1 !important; padding: 6px 12px !important; position: sticky; top: 0; z-index: 10; text-align: left; }
+        td { padding: 6px 12px !important; border-bottom: 1px solid #f1f5f9 !important; vertical-align: middle !important; text-align: left; }
+
+        .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; }
+
+        /* Modal */
+        .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 2050; backdrop-filter: blur(2px); padding: 16px; }
+        .gov-modal.flex { display: flex !important; animation: fadeIn 0.15s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        @media print {
+            .no-print { display: none !important; }
+            main { margin: 0 !important; padding: 0 !important; height: auto !important; position: static !important; overflow: visible !important; left: 0 !important; top: 0 !important; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .gov-card { box-shadow: none !important; border: 1px solid #000 !important; break-inside: avoid; }
+        }
     </style>
 </head>
-<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50">
     
-    {% include 'super-admin/header-superadmin.html' %}
-    {% include 'super-admin/sidenav-superadmin.html' %}
+    <div class="gov-strip no-print"></div>
+
+    <div class="fixed left-0 top-0 h-full z-[1060] hidden lg:block w-[260px] no-print">
+        {% include 'super-admin/sidenav-superadmin.html' %}
+    </div>
+
+    <div class="fixed top-[3px] w-full lg:w-[calc(100%-260px)] lg:left-[260px] z-[1050] no-print">
+        {% include 'super-admin/header-superadmin.html' %}
+    </div>
     
-    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar flex flex-col">
         
-        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
-            <div class="flex items-center gap-4">
-                <div class="bg-emerald-700 p-2.5 rounded-sm hidden sm:block">
-                    <span class="material-icons-round text-white text-xl">person_add</span>
+        <div class="max-w-[1700px] w-full mx-auto flex flex-col gap-2 h-full min-h-0">
+            
+            <header class="gov-card p-2 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 border-b-4 border-b-denr-green no-print">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-[2px] bg-denr-green flex items-center justify-center text-white shrink-0 shadow-sm">
+                        <span class="material-icons-round text-[18px]">person_add</span>
+                    </div>
+                    <div class="leading-tight border-l border-slate-300 pl-3">
+                        <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Applicants & Trainees</h1>
+                        <p class="text-[9px] font-bold text-denr-green uppercase tracking-widest m-0 mt-0.5">OJT & Human Resource Pipeline</p>
+                    </div>
                 </div>
-                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
-                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">Applicants & Trainees</h1>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">OJT & Human Resource Pipeline</p>
+                <div class="flex flex-wrap gap-1.5 mt-2 sm:mt-0">
+                    <button class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm" onclick="window.print()">
+                        <i class="fa-solid fa-download"></i> Export CSV
+                    </button>
+                    <button onclick="openAppDrawer()" class="gov-btn bg-denr-green text-white hover:bg-green-800 shadow-sm">
+                        <i class="fa-solid fa-plus"></i> Add Applicant
+                    </button>
+                </div>
+            </header>
+          
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 shrink-0">
+                <div class="gov-card border-t-2 border-t-slate-800 p-2 transition-colors hover:bg-slate-50">
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 leading-none">Total Applicants</p>
+                    <h3 id="statTotal" class="text-[14px] font-black text-slate-900 m-0 mt-1 leading-none">145</h3>
+                </div>
+                <div class="gov-card border-t-2 border-t-denr-green p-2 transition-colors hover:bg-slate-50">
+                    <p class="text-[8px] font-black text-denr-green uppercase tracking-widest m-0 leading-none">Hired</p>
+                    <h3 id="statHired" class="text-[14px] font-black text-denr-green m-0 mt-1 leading-none">48</h3>
+                </div>
+                <div class="gov-card border-t-2 border-t-amber-500 p-2 transition-colors hover:bg-slate-50">
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 leading-none">Interview Phase</p>
+                    <h3 id="statInterview" class="text-[14px] font-black text-amber-600 m-0 mt-1 leading-none">23</h3>
+                </div>
+                <div class="gov-card border-t-2 border-t-gov-blue p-2 transition-colors hover:bg-slate-50">
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 leading-none">Pending Review</p>
+                    <h3 id="statPending" class="text-[14px] font-black text-gov-blue m-0 mt-1 leading-none">74</h3>
                 </div>
             </div>
-            <div class="flex gap-2 no-print">
-                <button class="bg-white border border-slate-300 px-3 py-1.5 text-[10px] font-bold text-slate-700 uppercase hover:bg-slate-50 transition flex items-center gap-1.5 rounded-sm shadow-sm" onclick="window.print()">
-                    <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Export CSV</span>
-                </button>
-                <button onclick="openAppDrawer()" class="bg-emerald-700 text-white px-4 py-1.5 text-[10px] font-black uppercase hover:bg-emerald-800 transition rounded-sm shadow-sm flex items-center gap-1">
-                    <i class="fa-solid fa-plus text-[10px]"></i> Add Applicant
-                </button>
-            </div>
-        </header>
+          
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 no-print">
+                <section onclick="openChartModal('hiring')" class="gov-card p-2 cursor-pointer hover:border-denr-green transition-all relative">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-1 mb-1 shrink-0">
+                        <h3 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-denr-green pl-1.5">Application Success Trend</h3>
+                        <span class="material-icons-round text-[12px] text-slate-400">open_in_full</span>
+                    </div>
+                    <div class="relative h-[110px] w-full pointer-events-none"><canvas id="hiringChart"></canvas></div>
+                </section>
 
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 shrink-0">
-            <div class="bg-white border border-slate-200 border-l-4 border-l-slate-800 p-3 shadow-sm rounded-sm">
-                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Total Applicants</p>
-                <h3 id="statTotal" class="text-xl font-black text-slate-900 leading-none mt-1">145</h3>
+                <section onclick="openChartModal('type')" class="gov-card p-2 cursor-pointer hover:border-denr-green transition-all relative">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-1 mb-1 shrink-0">
+                        <h3 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-gov-blue pl-1.5">Applicant Composition</h3>
+                        <span class="material-icons-round text-[12px] text-slate-400">open_in_full</span>
+                    </div>
+                    <div class="relative h-[110px] w-full pointer-events-none"><canvas id="typeChart"></canvas></div>
+                </section>
             </div>
-            <div class="bg-white border border-slate-200 border-l-4 border-l-emerald-600 p-3 shadow-sm rounded-sm">
-                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Hired</p>
-                <h3 id="statHired" class="text-xl font-black text-emerald-600 leading-none mt-1">48</h3>
-            </div>
-            <div class="bg-white border border-slate-200 border-l-4 border-l-yellow-600 p-3 shadow-sm rounded-sm">
-                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Interview Phase</p>
-                <h3 id="statInterview" class="text-xl font-black text-yellow-600 leading-none mt-1">23</h3>
-            </div>
-            <div class="bg-white border border-slate-200 border-l-4 border-l-blue-600 p-3 shadow-sm rounded-sm">
-                <p class="text-[9px] font-black text-slate-500 uppercase tracking-wider">Pending Review</p>
-                <h3 id="statPending" class="text-xl font-black text-blue-600 leading-none mt-1">74</h3>
+
+            <div class="gov-card flex-1 flex flex-col min-h-[250px] w-full overflow-hidden">
+                <div class="bg-slate-50 border-b border-slate-200 p-2 flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0 no-print">
+                    <div class="flex flex-wrap items-center gap-2 w-full max-w-2xl">
+                        <div class="relative flex-1 sm:flex-none sm:w-48">
+                            <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                            <input id="appSearch" type="text" placeholder="Search name, candidate type..." class="gov-input w-full pl-6 h-7">
+                        </div>
+                        <select id="statusFilter" class="gov-input w-32 cursor-pointer h-7 uppercase">
+                            <option value="">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="interview">Interview</option>
+                            <option value="hired">Hired</option>
+                        </select>
+                        <select id="regionFilter" class="gov-input w-40 cursor-pointer h-7 uppercase">
+                            <option value="">All Regions</option>
+                            <option value="NCR">NCR</option><option value="CAR">CAR</option>
+                            <option value="Region I">Region I</option><option value="Region II">Region II</option>
+                            <option value="Region III">Region III</option><option value="Region IV-A">Region IV-A</option>
+                            <option value="Region IV-B">Region IV-B</option><option value="Region V">Region V</option>
+                            <option value="Region VI">Region VI</option><option value="Region VII">Region VII</option>
+                            <option value="Region VIII">Region VIII</option><option value="Region IX">Region IX</option>
+                            <option value="Region X">Region X</option><option value="Region XI">Region XI</option>
+                            <option value="Region XII">Region XII</option><option value="Region XIII">Region XIII</option>
+                            <option value="BARMM">BARMM</option>
+                        </select>
+                        <button onclick="resetFilters()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 h-7 shadow-sm">
+                            <i class="fa-solid fa-eraser"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-auto custom-scrollbar table-wrapper bg-white relative">
+                    <table class="w-full text-left border-collapse m-0">
+                        <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th class="border-r border-slate-200">Full Name</th>
+                                <th class="border-r border-slate-200 text-center">Candidate Type</th>
+                                <th class="border-r border-slate-200 text-center">Region Office</th>
+                                <th class="border-r border-slate-200 text-center">Status</th>
+                                <th class="text-center no-print">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appTable" class="text-[10px] divide-y divide-slate-100">
+                            </tbody>
+                    </table>
+                </div>
             </div>
         </div>
+    </main>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 shrink-0">
-            <section onclick="openChartModal('hiring')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-emerald-600 hover:shadow-md transition-all relative overflow-hidden">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
-                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Application Success Trend</h3>
-                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
-                </div>
-                <div class="relative flex-1 w-full mt-2">
-                    <div class="absolute inset-0 pointer-events-none"><canvas id="hiringChart"></canvas></div>
-                </div>
-            </section>
-
-            <section onclick="openChartModal('type')" class="group bg-white rounded-sm border border-slate-200 shadow-sm p-3 flex flex-col h-[150px] cursor-pointer hover:border-emerald-600 hover:shadow-md transition-all relative overflow-hidden">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
-                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Applicant Composition</h3>
-                    <span class="material-icons-round text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">open_in_full</span>
-                </div>
-                <div class="relative flex-1 w-full flex justify-center mt-2">
-                    <div class="absolute inset-0 pointer-events-none"><canvas id="typeChart"></canvas></div>
-                </div>
-            </section>
+    <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[2040] hidden opacity-0 transition-opacity duration-300 no-print" onclick="closeAppDrawer()"></div>
+    
+    <div id="appDrawer" class="fixed inset-y-0 right-0 z-[2050] w-full max-w-sm bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-400 no-print">
+        <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
+            <h2 class="text-[11px] font-black uppercase tracking-widest leading-none flex items-center gap-2 m-0">
+                <i class="fa-solid fa-user-plus text-denr-green"></i> Add New Applicant
+            </h2>
+            <button onclick="closeAppDrawer()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                <span class="material-icons-round text-sm">close</span>
+            </button>
         </div>
-
-        <section class="flex-1 min-h-0 flex flex-col bg-white rounded-sm border border-slate-200 shadow-sm relative">
-            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0 relative z-20">
-                
-                <div class="relative w-full md:max-w-md">
-                    <span class="material-icons-round absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">search</span>
-                    <input id="appSearch" type="text" placeholder="Search name, candidate type, or region..." class="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 outline-none focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-sm transition bg-white text-slate-800">
+        
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-4 bg-slate-50">
+            <form id="newAppForm" class="space-y-3">
+                <div>
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Full Name *</label>
+                    <input type="text" id="newName" placeholder="Last Name, First Name" class="gov-input w-full h-8" required>
                 </div>
-                
-                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                    <select id="statusFilter" class="flex-1 md:w-32 px-3 py-2 text-xs border border-slate-300 bg-white outline-none focus:border-emerald-700 rounded-sm text-slate-700 font-bold uppercase">
-                        <option value="">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="interview">Interview</option>
-                        <option value="hired">Hired</option>
+                <div>
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Application Type *</label>
+                    <select id="newType" class="gov-input w-full h-8 cursor-pointer" required>
+                        <option value="OJT">OJT / Trainee</option>
+                        <option value="Employee">Employee Applicant</option>
+                        <option value="Contractor">Contractor</option>
                     </select>
-                    
-                    <select id="regionFilter" class="flex-1 md:w-40 px-3 py-2 text-xs border border-slate-300 bg-white outline-none focus:border-emerald-700 rounded-sm text-slate-700 font-bold uppercase tracking-tighter">
-                        <option value="">All Regions</option>
+                </div>
+                <div>
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Region *</label>
+                    <select id="newRegion" class="gov-input w-full h-8 cursor-pointer uppercase font-bold" required>
                         <option value="NCR">NCR</option><option value="CAR">CAR</option>
                         <option value="Region I">Region I</option><option value="Region II">Region II</option>
                         <option value="Region III">Region III</option><option value="Region IV-A">Region IV-A</option>
@@ -113,73 +223,26 @@
                         <option value="Region XII">Region XII</option><option value="Region XIII">Region XIII</option>
                         <option value="BARMM">BARMM</option>
                     </select>
-
-                    <button onclick="resetFilters()" class="bg-white border border-slate-300 text-slate-400 p-2 hover:text-emerald-700 hover:border-emerald-700 transition rounded-sm flex items-center justify-center">
-                        <span class="material-icons-round text-sm">refresh</span>
-                    </button>
                 </div>
-            </div>
-            
-            <div class="flex-1 overflow-auto custom-scrollbar z-10">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
-                        <tr>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Full Name</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Candidate Type</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Region Office</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600 text-center">Status</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="appTable" class="text-xs">
-                        </tbody>
-                </table>
-            </div>
-        </section>
-    </main>
-
-    <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-300" onclick="closeAppDrawer()"></div>
-    <div id="appDrawer" class="fixed inset-y-0 right-0 z-[100] w-full max-w-md bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-300">
-        <div class="bg-slate-900 px-5 py-4 flex justify-between items-center text-white shrink-0">
-            <h2 class="text-sm font-black uppercase tracking-widest leading-none">Add New Applicant</h2>
-            <button onclick="closeAppDrawer()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded-sm"><span class="material-icons-round text-sm">close</span></button>
-        </div>
-        <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-slate-50">
-            <form id="newAppForm" class="space-y-4 bg-white border border-slate-200 p-5 rounded-sm shadow-sm">
-                <div>
-                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Full Name</label>
-                    <input type="text" id="newName" placeholder="Last Name, First Name" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
+                <div class="pt-3 mt-2 border-t border-slate-200">
+                    <button type="submit" class="gov-btn bg-denr-green text-white hover:bg-green-800 w-full py-2">Record Application</button>
                 </div>
-                <div>
-                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Application Type</label>
-                    <select id="newType" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm" required>
-                        <option value="OJT">OJT / Trainee</option>
-                        <option value="Employee">Employee Applicant</option>
-                        <option value="Contractor">Contractor</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Region</label>
-                    <select id="newRegion" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-sm uppercase font-bold" required>
-                        <option value="NCR">NCR</option>
-                        <option value="Region IV-A">Region IV-A</option>
-                        <option value="Region VII">Region VII</option>
-                        <option value="BARMM">BARMM</option>
-                    </select>
-                </div>
-                <button type="submit" class="w-full bg-emerald-700 text-white py-2.5 text-[10px] font-black uppercase hover:bg-emerald-800 transition rounded-sm shadow-sm mt-4">Record Application</button>
             </form>
         </div>
     </div>
 
-    <div id="chartModal" class="hidden fixed inset-0 z-[110] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+    <div id="chartModal" class="gov-modal no-print">
         <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
-        <div id="modalBody" class="bg-white rounded-sm shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden">
-            <div class="flex justify-between items-center border-b border-slate-200 px-5 py-3 bg-slate-50">
-                <h3 id="modalTitle" class="text-[11px] font-black uppercase tracking-widest text-slate-800">Detail View</h3>
-                <button onclick="closeChartModal()" class="text-slate-400 hover:text-red-600"><span class="material-icons-round">close</span></button>
+        <div id="modalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-3xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 id="modalTitle" class="text-[11px] font-black uppercase tracking-widest m-0">Detail View Analysis</h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
             </div>
-            <div class="p-8 h-[450px] relative"><canvas id="modalCanvas"></canvas></div>
+            <div class="p-6 bg-slate-50 flex-1 h-[400px] relative">
+                <canvas id="modalCanvas"></canvas>
+            </div>
         </div>
     </div>
 
@@ -194,6 +257,7 @@
 
         const statusMap = {pending:'Pending', interview:'Interview', hired:'Hired'};
 
+        // 2. LIVE SEARCH & FILTERING
         function filterApplicants() {
             const query = document.getElementById('appSearch').value.toLowerCase();
             const status = document.getElementById('statusFilter').value;
@@ -212,18 +276,20 @@
         function renderTable(data) {
             const tbody = document.getElementById('appTable');
             tbody.innerHTML = data.length ? data.map(a => `
-                <tr class="border-b border-slate-200 hover:bg-slate-50 transition-colors">
-                    <td class="py-2.5 px-4 font-black text-slate-900">${a.name}</td>
-                    <td class="py-2.5 px-4"><span class="px-2 py-0.5 border border-indigo-200 bg-indigo-50 text-indigo-700 text-[9px] font-black rounded-sm uppercase tracking-widest">${a.type}</span></td>
-                    <td class="py-2.5 px-4 text-slate-600 font-bold uppercase text-[10px]">${a.region}</td>
-                    <td class="py-2.5 px-4 text-center">
-                        <span class="px-2 py-0.5 border rounded-sm font-black text-[9px] uppercase tracking-widest ${getStatusColor(a.status)}">
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="px-4 py-2 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight">${a.name}</td>
+                    <td class="px-4 py-2 text-center border-r border-slate-100"><span class="status-badge bg-indigo-50 text-indigo-700 border-indigo-200">${a.type}</span></td>
+                    <td class="px-4 py-2 text-slate-700 font-bold uppercase tracking-widest text-center border-r border-slate-100">${a.region}</td>
+                    <td class="px-4 py-2 text-center border-r border-slate-100">
+                        <span class="status-badge ${getStatusColor(a.status)}">
                             ${statusMap[a.status]}
                         </span>
                     </td>
-                    <td class="py-2.5 px-4"><button class="text-emerald-700 font-bold hover:underline">Review</button></td>
+                    <td class="px-4 py-2 text-center no-print">
+                        <button class="text-[9px] font-bold uppercase text-denr-green hover:underline tracking-widest cursor-pointer">Review</button>
+                    </td>
                 </tr>
-            `).join('') : '<tr><td colspan="5" class="py-10 text-center text-slate-400 font-bold">No results found.</td></tr>';
+            `).join('') : '<tr><td colspan="5" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No results found.</td></tr>';
         }
 
         function getStatusColor(s) {
@@ -246,6 +312,7 @@
             filterApplicants();
         }
 
+        // 3. UI CONTROLS
         function openAppDrawer() {
             document.getElementById('drawerOverlay').classList.remove('hidden');
             setTimeout(() => document.getElementById('drawerOverlay').classList.add('opacity-100'), 10);
@@ -271,36 +338,42 @@
             document.getElementById('newAppForm').reset();
         });
 
+        // 4. CHARTS
         let modalChart;
-        const trendData = { labels:['Sep','Oct','Nov','Dec','Jan','Feb'], datasets:[{label:'Hired', data:[5, 12, 8, 15, 11, 48], borderColor:'#059669', backgroundColor:'rgba(5,150,105,0.1)', fill:true, tension:0.4}]};
-        const typeDist = { labels:['OJT','Employee','Contractor'], datasets:[{data:[65, 55, 25], backgroundColor:['#059669','#0ea5e9','#6366f1']}]};
+        const trendData = { labels:['Sep','Oct','Nov','Dec','Jan','Feb'], datasets:[{label:'Hired', data:[5, 12, 8, 15, 11, 48], borderColor:'#15803d', backgroundColor:'rgba(21, 128, 61, 0.1)', fill:true, tension:0.4, borderWidth: 2}]};
+        const typeDist = { labels:['OJT','Employee','Contractor'], datasets:[{data:[65, 55, 25], backgroundColor:['#15803d','#0ea5e9','#6366f1'], borderWidth: 0}]};
 
         window.onload = () => {
             filterApplicants();
-            new Chart(document.getElementById('hiringChart').getContext('2d'), { type:'line', data:trendData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{display:false}, x:{grid:{display:false}, ticks:{font:{size:9}}}}} });
-            new Chart(document.getElementById('typeChart').getContext('2d'), { type:'doughnut', data:typeDist, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right', labels:{boxWidth:10, font:{size:9}}}}, cutout:'75%'} });
+            const chartFont = { size: 9, weight: 'bold' };
+
+            new Chart(document.getElementById('hiringChart').getContext('2d'), { type:'line', data:trendData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{display:false}, x:{grid:{display:false}, ticks:{font:chartFont}}}} });
+            new Chart(document.getElementById('typeChart').getContext('2d'), { type:'doughnut', data:typeDist, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right', labels:{boxWidth:10, font:chartFont}}}, cutout:'75%'} });
         };
 
         function openChartModal(type) {
             const m = document.getElementById('chartModal');
             const b = document.getElementById('modalBody');
             m.classList.remove('hidden');
-            setTimeout(() => { m.classList.add('opacity-100'); b.classList.replace('scale-95', 'scale-100'); }, 10);
+            setTimeout(() => { m.classList.add('flex'); b.classList.replace('scale-95', 'scale-100'); }, 10);
+            
             if (modalChart) modalChart.destroy();
             const ctx = document.getElementById('modalCanvas').getContext('2d');
+            const chartFont = { size: 10, weight: 'bold' };
+
             if(type === 'hiring') {
-                document.getElementById('modalTitle').innerText = 'Hiring Success Trend';
-                modalChart = new Chart(ctx, { type:'line', data:trendData, options:{responsive:true, maintainAspectRatio:false}});
+                document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-chart-line text-denr-green mr-2"></i> Hiring Success Trend';
+                modalChart = new Chart(ctx, { type:'line', data:trendData, options:{responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{font:chartFont}}, y:{ticks:{font:chartFont}}}}});
             } else {
-                document.getElementById('modalTitle').innerText = 'Applicant Composition';
-                modalChart = new Chart(ctx, { type:'doughnut', data:typeDist, options:{responsive:true, maintainAspectRatio:false}});
+                document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-chart-pie text-gov-blue mr-2"></i> Applicant Composition';
+                modalChart = new Chart(ctx, { type:'doughnut', data:typeDist, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{font:chartFont}}}}});
             }
         }
 
         function closeChartModal() {
             const m = document.getElementById('chartModal');
             const b = document.getElementById('modalBody');
-            m.classList.remove('opacity-100');
+            m.classList.remove('flex');
             b.classList.replace('scale-100', 'scale-95');
             setTimeout(() => m.classList.add('hidden'), 300);
         }

@@ -7,193 +7,227 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
+  <script>
+      tailwind.config = {
+          theme: {
+              extend: {
+                  colors: {
+                      'gov-blue': '#1e3a8a',
+                      'gov-red': '#be123c',
+                  }
+              }
+          }
+      }
+  </script>
+
   <style>
-    body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; }
+    /* Government Standard Typography & Layout (STRICT COMPACT) */
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; margin: 0; color: #1e293b; }
     
+    .gov-strip { background: linear-gradient(to right, #1e3a8a 50%, #be123c 50%); height: 3px; width: 100%; position: fixed; top: 0; z-index: 3000; }
+    
+    /* Compact Scrollbar */
     .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
-    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
-    .gov-input:focus { border-color: #1e40af; }
-    .gov-input:disabled { background-color: #f8fafc; cursor: not-allowed; color: #94a3b8; }
-    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
-
-    th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 6px 8px !important; }
-    td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    /* Gov UI Utilities */
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; margin-bottom: 0; }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; color: #1e293b; box-sizing: border-box; }
+    .gov-input:focus { border-color: #1e3a8a; } /* Gov Blue focus */
+    .gov-input:disabled { background-color: #f8fafc; cursor: not-allowed; color: #94a3b8; border-color: #e2e8f0; }
     
-    .btn-action { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; color: #94a3b8; cursor: pointer; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: none; }
+    
+    /* Dense Table Formatting */
+    th { font-size: 9px !important; font-weight: 800 !important; text-transform: uppercase !important; color: #475569 !important; background: #f8fafc !important; border-bottom: 2px solid #cbd5e1 !important; padding: 6px 12px !important; position: sticky; top: 0; z-index: 10; text-align: left; }
+    td { padding: 6px 12px !important; border-bottom: 1px solid #f1f5f9 !important; vertical-align: middle !important; text-align: left; }
+
+    /* Action Buttons (Compact) */
+    .btn-action { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #cbd5e1; background: white; color: #64748b; cursor: pointer; padding: 0; }
     .btn-edit:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
-    .btn-delete:hover { color: white; background: #ef4444; border-color: #dc2626; }
+    .btn-delete:hover { color: white; background: #be123c; border-color: #be123c; }
+
+    /* Charts */
+    .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; margin-top: 4px; }
+    .chart-container { position: absolute; inset: 0; }
+
+    /* Modal */
+    .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 2050; backdrop-filter: blur(2px); padding: 16px; }
+    .gov-modal.flex { display: flex !important; animation: fadeIn 0.15s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    @media print {
+        .no-print { display: none !important; }
+        main { margin: 0 !important; padding: 0 !important; height: auto !important; position: static !important; overflow: visible !important; left: 0 !important; top: 0 !important; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        .gov-card { box-shadow: none !important; border: 1px solid #000 !important; break-inside: avoid; }
+    }
   </style>
 </head>
 
-<body class="text-slate-800 bg-slate-100 h-screen overflow-hidden flex flex-col">
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50">
 
-  {% include 'super-admin/header-superadmin.html' %}
-  {% include 'super-admin/sidenav-superadmin.html' %}
+  <div class="gov-strip no-print"></div>
 
-  <div class="h-screen flex flex-col lg:ml-[260px] pt-[92px]">
-    
-    <main class="flex-1 flex flex-col min-w-0 p-3 gap-2 overflow-y-auto custom-scrollbar">
+  <div class="fixed left-0 top-0 h-full z-[1060] hidden lg:block w-[260px] no-print">
+      {% include 'super-admin/sidenav-superadmin.html' %}
+  </div>
 
-        <div class="gov-card p-2 flex flex-wrap xl:flex-nowrap items-center gap-3 shrink-0 bg-white border-l-4 border-l-slate-800">
-            
-            <div class="shrink-0 leading-tight">
-                <div class="text-[10px] font-black uppercase text-slate-800 tracking-widest flex items-center gap-1"><span class="material-icons-round text-[14px]">calculate</span> Calculator Tools</div>
-            </div>
-            
-            <div class="w-px h-5 bg-slate-200 hidden xl:block"></div>
+  <div class="fixed top-[3px] w-full lg:w-[calc(100%-260px)] lg:left-[260px] z-[1050] no-print">
+      {% include 'super-admin/header-superadmin.html' %}
+  </div>
 
-            <div class="flex items-center gap-1.5 shrink-0">
-                <select id="wdMonth" class="gov-input cursor-pointer min-w-[90px]"></select>
-                <select id="wdRegion" class="gov-input cursor-pointer min-w-[120px]"><option value="">(All Regions)</option></select>
-                <select id="wdMuni" class="gov-input cursor-pointer min-w-[120px]" disabled><option value="">(All Municipalities)</option></select>
-                <button id="btnCalcWD" class="px-2 py-1 bg-slate-800 hover:bg-slate-900 text-white font-bold text-[9px] uppercase rounded-[2px] transition shadow-sm">Calc WD</button>
-                <div class="px-2 text-center bg-slate-100 border border-slate-200 rounded-[2px] min-w-[40px]" title="Working Days Result">
-                    <span id="wdOut" class="text-[12px] font-black text-slate-900 leading-none">—</span>
+  <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar flex flex-col">
+      <div class="max-w-[1800px] w-full mx-auto flex flex-col gap-2 h-full min-h-0"> 
+        
+        <header class="gov-card p-2 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 border-b-4 border-b-gov-blue no-print">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-[2px] bg-gov-blue flex items-center justify-center text-white shrink-0 shadow-sm">
+                    <span class="material-icons-round text-[18px]">event</span>
+                </div>
+                <div class="leading-tight border-l border-slate-300 pl-3">
+                    <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">National Holiday Management</h1>
+                    <p class="text-[9px] font-bold text-gov-blue uppercase tracking-widest m-0 mt-0.5">Create, validate, & apply holidays by Scope</p>
                 </div>
             </div>
-
-            <div class="w-px h-5 bg-slate-200 hidden xl:block"></div>
-
-            <div class="flex items-center gap-1.5 shrink-0">
-                <input id="payDaily" type="number" min="0" step="0.01" placeholder="Daily Rate" class="gov-input w-24">
-                <input id="payHrs" type="number" min="1" step="0.5" placeholder="Hrs/Day" class="gov-input w-20">
-                <button id="btnCalcPay" class="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[9px] uppercase rounded-[2px] transition shadow-sm">Est Pay</button>
-                <div class="px-2 text-center bg-emerald-50 border border-emerald-200 rounded-[2px] min-w-[60px] text-emerald-800" title="Estimated Payroll">
-                    <span id="payOut" class="text-[12px] font-black leading-none">—</span>
-                </div>
+            <div class="flex flex-wrap gap-1.5 mt-2 sm:mt-0 items-center">
+                <button id="btnToggleView" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">
+                    <i class="fa-solid fa-calendar-days"></i> Calendar
+                </button>
+                <button id="btnImport" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">
+                    <i class="fa-solid fa-upload"></i> Import
+                </button>
+                <button id="btnExport" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">
+                    <i class="fa-solid fa-download"></i> Export
+                </button>
+                <button id="btnOpenCreate" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 shadow-sm">
+                    <i class="fa-solid fa-plus"></i> New Holiday
+                </button>
             </div>
-            
-            <div class="w-px h-5 bg-slate-200 hidden xl:block"></div>
-            
-            <div class="flex-1 min-w-[150px]">
-                <div id="wdExplain" class="text-[8px] text-slate-500 font-bold leading-tight truncate"></div>
-                <div id="payExplain" class="text-[8px] text-emerald-700 font-bold leading-tight truncate"></div>
+        </header>
+
+        <div class="gov-card border-l-4 border-l-slate-800 no-print overflow-x-auto custom-scrollbar shrink-0">
+            <div class="p-2 flex flex-row flex-nowrap items-center gap-3 w-max min-w-full">
+                
+                <div class="shrink-0 leading-tight pr-3 border-r border-slate-200 flex items-center">
+                    <div class="text-[10px] font-black uppercase text-slate-800 tracking-widest flex items-center gap-1 whitespace-nowrap">
+                        <i class="fa-solid fa-calculator text-slate-600"></i> Calculator Tools
+                    </div>
+                </div>
+
+                <div class="flex flex-row flex-nowrap items-center gap-1.5 shrink-0 pr-3 border-r border-slate-200">
+                    <select id="wdMonth" class="gov-input cursor-pointer min-w-[90px] h-7 shrink-0"></select>
+                    <select id="wdRegion" class="gov-input cursor-pointer min-w-[120px] h-7 shrink-0"><option value="">(All Regions)</option></select>
+                    <select id="wdMuni" class="gov-input cursor-pointer min-w-[120px] h-7 shrink-0" disabled><option value="">(All Municipalities)</option></select>
+                    <button id="btnCalcWD" class="gov-btn bg-slate-800 text-white hover:bg-slate-900 shadow-sm h-7 shrink-0 whitespace-nowrap">Calc WD</button>
+                    <div class="px-2 h-7 flex items-center justify-center bg-slate-100 border border-slate-200 rounded-[2px] min-w-[40px] shrink-0 whitespace-nowrap" title="Working Days Result">
+                        <span id="wdOut" class="text-[12px] font-black text-slate-900 leading-none">—</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-row flex-nowrap items-center gap-1.5 shrink-0 pr-3 border-r border-slate-200">
+                    <input id="payDaily" type="number" min="0" step="0.01" placeholder="Daily Rate" class="gov-input w-24 h-7 shrink-0">
+                    <input id="payHrs" type="number" min="1" step="0.5" placeholder="Hrs/Day" class="gov-input w-20 h-7 shrink-0">
+                    <button id="btnCalcPay" class="gov-btn bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm h-7 shrink-0 whitespace-nowrap">Est Pay</button>
+                    <div class="px-2 h-7 flex items-center justify-center bg-emerald-50 border border-emerald-200 rounded-[2px] min-w-[60px] shrink-0 text-emerald-800 whitespace-nowrap" title="Estimated Payroll">
+                        <span id="payOut" class="text-[12px] font-black leading-none">—</span>
+                    </div>
+                </div>
+                
+                <div class="shrink-0 flex items-center gap-2 min-w-[150px]">
+                    <span id="wdExplain" class="text-[9px] text-slate-500 font-bold leading-tight whitespace-nowrap"></span>
+                    <span id="payExplain" class="text-[9px] text-emerald-700 font-black leading-tight whitespace-nowrap"></span>
+                </div>
+
             </div>
         </div>
 
-        <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900">
-          <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white">
-              <span class="material-icons-round text-[18px]">event</span>
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-2 shrink-0">
+            <div class="gov-card border-t-2 border-t-slate-800 p-2 transition-colors hover:bg-slate-50">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-[8px] font-black uppercase text-slate-500 tracking-widest m-0 leading-none">Total Holidays</p>
+                        <h3 id="stAll" class="text-[16px] font-black text-slate-900 m-0 mt-1 leading-none">0</h3>
+                    </div>
+                    <span class="material-icons-round text-slate-300 text-[18px]">event_note</span>
+                </div>
             </div>
-            <div class="leading-tight">
-              <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">National Holiday Management</h1>
-              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Create, validate, & apply holidays by Scope</p>
-            </div>
-          </div>
-          <div class="flex gap-1.5">
-            <button id="btnToggleView" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
-              <span class="material-icons-round text-[14px]">calendar_month</span> Calendar
-            </button>
-            <button id="btnImport" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
-              <span class="material-icons-round text-[14px]">upload</span> Import
-            </button>
-            <button id="btnExport" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
-              <span class="material-icons-round text-[14px]">download</span> Export
-            </button>
-            <button id="btnOpenCreate" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
-              <span class="material-icons-round text-[14px]">add</span> New Holiday
-            </button>
-          </div>
-        </header>
 
-        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
-          <div class="gov-card p-2 px-3 border-l-4 border-l-slate-800 flex flex-col justify-between">
-            <div class="flex justify-between items-start">
-              <div>
-                <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Holidays</div>
-                <div id="stAll" class="text-xl font-black text-slate-900 leading-none mt-1">0</div>
-              </div>
-              <span class="material-icons-round text-slate-300 text-[20px]">event_note</span>
+            <div class="gov-card border-t-2 border-t-emerald-600 p-2 bg-emerald-50/30 transition-colors hover:bg-emerald-50">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-[8px] font-black uppercase text-emerald-800 tracking-widest m-0 leading-none">Regular</p>
+                        <h3 id="stReg" class="text-[16px] font-black text-emerald-700 m-0 mt-1 leading-none">0</h3>
+                    </div>
+                    <span class="material-icons-round text-emerald-300 text-[18px]">verified</span>
+                </div>
             </div>
-          </div>
 
-          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 bg-emerald-50/30 flex flex-col justify-between">
-            <div class="flex justify-between items-start">
-              <div>
-                <div class="text-[9px] font-black uppercase text-emerald-800 tracking-widest">Regular</div>
-                <div id="stReg" class="text-xl font-black text-emerald-700 leading-none mt-1">0</div>
-              </div>
-              <span class="material-icons-round text-emerald-200 text-[20px]">verified</span>
+            <div class="gov-card border-t-2 border-t-sky-600 p-2 bg-sky-50/30 transition-colors hover:bg-sky-50">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-[8px] font-black uppercase text-sky-800 tracking-widest m-0 leading-none">Special / Local</p>
+                        <h3 id="stSpec" class="text-[16px] font-black text-sky-700 m-0 mt-1 leading-none">0</h3>
+                    </div>
+                    <span class="material-icons-round text-sky-300 text-[18px]">stars</span>
+                </div>
             </div>
-          </div>
 
-          <div class="gov-card p-2 px-3 border-l-4 border-l-sky-600 bg-sky-50/30 flex flex-col justify-between">
-            <div class="flex justify-between items-start">
-              <div>
-                <div class="text-[9px] font-black uppercase text-sky-800 tracking-widest">Special / Local</div>
-                <div id="stSpec" class="text-xl font-black text-sky-700 leading-none mt-1">0</div>
-              </div>
-              <span class="material-icons-round text-sky-200 text-[20px]">stars</span>
+            <div class="gov-card border-t-2 border-t-indigo-600 p-2 flex flex-col justify-center gap-1.5">
+                <button id="btnCopyNationalToRegion" class="gov-btn border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center justify-center gap-1 w-full shadow-none text-[8px] py-1">
+                    <span class="material-icons-round text-[12px]">content_copy</span> Copy Nat'l → Reg
+                </button>
+                <button id="btnCloneRegionToMunicipalities" class="gov-btn border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 flex items-center justify-center gap-1 w-full shadow-none text-[8px] py-1">
+                    <span class="material-icons-round text-[12px]">hub</span> Clone Reg → Muni
+                </button>
             </div>
-          </div>
-
-          <div class="gov-card p-2 px-3 border-l-4 border-l-indigo-600 flex flex-col justify-center gap-1.5">
-             <button id="btnCopyNationalToRegion" class="gov-btn border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center justify-center gap-1 w-full shadow-none text-[8px]">
-               <span class="material-icons-round text-[12px]">content_copy</span> Copy Nat'l → Region
-             </button>
-             <button id="btnCloneRegionToMunicipalities" class="gov-btn border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 flex items-center justify-center gap-1 w-full shadow-none text-[8px]">
-               <span class="material-icons-round text-[12px]">hub</span> Clone Reg → Muni
-             </button>
-          </div>
         </section>
 
         <div class="flex-1 flex flex-col xl:flex-row gap-2 min-h-0">
             
-            <aside class="w-full xl:w-[260px] flex flex-col gap-2 shrink-0 overflow-y-auto custom-scrollbar pb-2">
-                
-                <div class="gov-card p-3 flex flex-col shrink-0">
-                    <h2 class="text-[9px] font-black uppercase text-slate-600 border-b border-slate-100 pb-1 mb-2">Holidays by Type</h2>
-                    <div class="relative w-full h-[180px]">
-                        <canvas id="chType"></canvas>
-                    </div>
+            <aside class="w-full xl:w-[260px] flex flex-col gap-2 shrink-0 overflow-y-auto custom-scrollbar no-print">
+                <div class="gov-card p-2 flex flex-col shrink-0 h-[180px]">
+                    <h2 class="text-[9px] font-black uppercase text-slate-700 border-l-2 border-gov-blue pl-1.5 mb-1 shrink-0">Holidays by Type</h2>
+                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="chType"></canvas></div></div>
                 </div>
-
-                <div class="gov-card p-3 flex flex-col shrink-0">
-                    <h2 class="text-[9px] font-black uppercase text-slate-600 border-b border-slate-100 pb-1 mb-2">Distribution by Scope</h2>
-                    <div class="relative w-full h-[200px]">
-                        <canvas id="chScope"></canvas>
-                    </div>
+                <div class="gov-card p-2 flex flex-col shrink-0 h-[180px]">
+                    <h2 class="text-[9px] font-black uppercase text-slate-700 border-l-2 border-gov-blue pl-1.5 mb-1 shrink-0">Distribution by Scope</h2>
+                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="chScope"></canvas></div></div>
                 </div>
-
-                <div class="gov-card p-3 flex flex-col shrink-0">
-                    <h2 class="text-[9px] font-black uppercase text-slate-600 border-b border-slate-100 pb-1 mb-2">Top Regions</h2>
-                    <div class="relative w-full h-[180px]">
-                        <canvas id="chRegion"></canvas>
-                    </div>
+                <div class="gov-card p-2 flex flex-col shrink-0 h-[180px]">
+                    <h2 class="text-[9px] font-black uppercase text-slate-700 border-l-2 border-gov-blue pl-1.5 mb-1 shrink-0">Top Regions</h2>
+                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="chRegion"></canvas></div></div>
                 </div>
-
             </aside>
 
-            <section class="gov-card flex-1 flex flex-col min-h-[400px] overflow-hidden bg-white">
+            <section class="gov-card flex-1 flex flex-col min-h-[400px] xl:min-h-0 overflow-hidden bg-white">
                 
-                <div class="p-2 border-b border-slate-200 shrink-0 flex flex-wrap gap-1.5 items-center bg-slate-50 justify-between">
-                    <div class="flex flex-wrap items-center gap-1.5">
-                        <select id="fy" class="gov-input cursor-pointer min-w-[70px]"></select>
-                        <div class="relative min-w-[140px]">
+                <div class="bg-slate-50 border-b border-slate-200 p-2 shrink-0 flex flex-wrap gap-2 items-center justify-between no-print">
+                    <div class="flex flex-wrap items-center gap-1.5 flex-1">
+                        <select id="fy" class="gov-input cursor-pointer min-w-[70px] h-7"></select>
+                        <div class="relative min-w-[140px] flex-1 sm:flex-none">
                             <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-                            <input id="fs" type="text" class="gov-input pl-6 w-full" placeholder="Holiday, Type, Notes...">
+                            <input id="fs" type="text" class="gov-input pl-6 w-full h-7" placeholder="Holiday, Type, Notes...">
                         </div>
-                        <select id="fscope" class="gov-input cursor-pointer min-w-[100px]">
+                        <select id="fscope" class="gov-input cursor-pointer min-w-[100px] h-7">
                             <option value="ALL">All Scopes</option>
                             <option value="NATIONAL">National</option>
                             <option value="REGIONAL">Regional</option>
                             <option value="MUNICIPALITY">Municipality</option>
                         </select>
-                        <select id="fr" class="gov-input cursor-pointer min-w-[110px]">
+                        <select id="fr" class="gov-input cursor-pointer min-w-[110px] h-7">
                             <option value="ALL" data-code="ALL">All Regions</option>
                         </select>
-                        <select id="fm" class="gov-input cursor-pointer min-w-[120px]" disabled>
+                        <select id="fm" class="gov-input cursor-pointer min-w-[120px] h-7 disabled:opacity-50" disabled>
                             <option value="ALL">All Municipalities</option>
                         </select>
-                        <select id="ft" class="gov-input cursor-pointer min-w-[100px]">
+                        <select id="ft" class="gov-input cursor-pointer min-w-[100px] h-7">
                             <option value="ALL">All Types</option>
                             <option value="REGULAR">Regular</option>
                             <option value="SPECIAL_NON_WORKING">Special (NW)</option>
@@ -201,17 +235,17 @@
                             <option value="LOCAL">Local</option>
                         </select>
                     </div>
-                    <div class="flex items-center gap-1 border-l border-slate-300 pl-2">
-                        <button id="btnClear" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[9px] uppercase rounded-[2px] transition border border-slate-300">Reset</button>
-                        <button id="btnBulkDelete" class="gov-btn bg-white border border-slate-300 text-rose-700 hover:bg-rose-50 flex items-center gap-1" title="Delete Selected">
-                            <span class="material-icons-round text-[12px]">delete</span>
+                    <div class="flex items-center gap-1.5 border-l border-slate-300 pl-2 h-7">
+                        <button id="btnClear" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm" title="Clear Filters"><i class="fa-solid fa-eraser"></i></button>
+                        <button id="btnBulkDelete" class="gov-btn bg-gov-red text-white hover:bg-rose-800 shadow-sm px-2" title="Delete Selected">
+                            <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
                 </div>
 
-                <div id="tableView" class="flex-1 overflow-auto custom-scrollbar flex flex-col">
-                    <table class="w-full text-left border-collapse">
-                        <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
+                <div id="tableView" class="flex-1 overflow-auto custom-scrollbar flex flex-col relative">
+                    <table class="w-full text-left border-collapse m-0">
+                        <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th class="border-r border-slate-200 text-center w-8">
                                     <input id="sa" type="checkbox" class="cursor-pointer" />
@@ -222,7 +256,7 @@
                                 <th class="border-r border-slate-200 text-center">Scope</th>
                                 <th class="border-r border-slate-200 text-center">Region</th>
                                 <th class="border-r border-slate-200 text-center">Municipality</th>
-                                <th class="text-center">Actions</th>
+                                <th class="text-center no-print w-[60px]">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="tb" class="text-[10px] divide-y divide-slate-100">
@@ -231,123 +265,129 @@
                 </div>
 
                 <div id="calendarView" class="hidden flex-1 flex flex-col overflow-hidden bg-slate-50">
-                    <div class="flex items-center justify-between p-2 border-b border-slate-200 bg-white shrink-0">
-                        <button id="calPrev" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[9px] uppercase rounded-[2px] transition border border-slate-300 flex items-center"><span class="material-icons-round text-[12px]">chevron_left</span> Prev</button>
+                    <div class="flex items-center justify-between p-2 border-b border-slate-200 bg-white shrink-0 shadow-sm">
+                        <button id="calPrev" class="gov-btn border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 shadow-sm"><i class="fa-solid fa-chevron-left"></i> Prev</button>
                         <span id="calLabel" class="text-[11px] font-black uppercase tracking-widest text-slate-800">—</span>
-                        <button id="calNext" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[9px] uppercase rounded-[2px] transition border border-slate-300 flex items-center">Next <span class="material-icons-round text-[12px]">chevron_right</span></button>
+                        <button id="calNext" class="gov-btn border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 shadow-sm">Next <i class="fa-solid fa-chevron-right"></i></button>
                     </div>
                     <div class="p-2 flex-1 overflow-auto custom-scrollbar">
-                        <div class="grid grid-cols-7 gap-1 text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 text-center">
+                        <div class="grid grid-cols-7 gap-1 text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 text-center bg-white border border-slate-200 p-1 rounded-[2px] shadow-sm">
                             <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
                         </div>
                         <div id="calGrid" class="grid grid-cols-7 gap-1"></div>
                     </div>
                 </div>
 
-                <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
-                    <span id="cnt" class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">Showing 0 holidays</span>
+                <div class="bg-slate-800 p-2 flex justify-between items-center shrink-0 no-print text-white">
+                    <span id="cnt" class="text-[9px] font-bold uppercase tracking-widest italic text-amber-400">Showing 0 holidays</span>
                 </div>
 
             </section>
         </div>
+      </div>
+  </main>
 
-    </main>
-  </div>
-
-  <div id="mb" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-    <div class="w-full max-w-lg rounded-[2px] border border-slate-400 bg-white shadow-2xl overflow-hidden">
+  <div id="mb" class="gov-modal no-print">
+    <div class="w-full max-w-lg rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden max-h-[95vh]" onclick="event.stopPropagation()">
       
-      <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white">
-        <h3 id="mt" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-1">
-            <span class="material-icons-round text-[14px]">event</span> New Holiday
+      <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
+        <h3 id="mt" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+            <i class="fa-solid fa-calendar-plus text-gov-blue"></i> New Holiday
         </h3>
-        <button id="mx" class="text-slate-400 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
+        <button id="mx" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+            <span class="material-icons-round text-sm">close</span>
+        </button>
       </div>
 
-      <form id="f" class="p-4 bg-slate-50 space-y-3">
-        <input type="hidden" id="eid" value="" />
+      <div class="flex-1 overflow-y-auto custom-scrollbar p-4 bg-slate-50">
+        <form id="f" class="space-y-4">
+            <input type="hidden" id="eid" value="" />
 
-        <div class="grid grid-cols-2 gap-3">
-          <div class="col-span-2 sm:col-span-1">
-            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Date</label>
-            <input id="d" required type="date" class="gov-input w-full" />
-          </div>
-          <div class="col-span-2 sm:col-span-1">
-            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Type</label>
-            <select id="t" required class="gov-input w-full cursor-pointer">
-              <option value="REGULAR">Regular Holiday</option>
-              <option value="SPECIAL_NON_WORKING">Special (Non-working)</option>
-              <option value="SPECIAL_WORKING">Special (Working)</option>
-              <option value="LOCAL">Local Holiday</option>
-            </select>
-          </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="col-span-2 sm:col-span-1">
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Date *</label>
+                    <input id="d" required type="date" class="gov-input w-full h-8 cursor-pointer font-mono" />
+                </div>
+                <div class="col-span-2 sm:col-span-1">
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Type *</label>
+                    <select id="t" required class="gov-input w-full h-8 cursor-pointer">
+                        <option value="REGULAR">Regular Holiday</option>
+                        <option value="SPECIAL_NON_WORKING">Special (Non-working)</option>
+                        <option value="SPECIAL_WORKING">Special (Working)</option>
+                        <option value="LOCAL">Local Holiday</option>
+                    </select>
+                </div>
 
-          <div class="col-span-2">
-            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Holiday Name</label>
-            <input id="nm" required type="text" class="gov-input w-full" placeholder="e.g., Araw ng Kagitingan" />
-          </div>
+                <div class="col-span-2">
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Holiday Name *</label>
+                    <input id="nm" required type="text" class="gov-input w-full h-8" placeholder="e.g., Araw ng Kagitingan" />
+                </div>
 
-          <div class="col-span-2">
-            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Scope</label>
-            <select id="scope" required class="gov-input w-full cursor-pointer">
-              <option value="NATIONAL">National</option>
-              <option value="REGIONAL">Regional</option>
-              <option value="MUNICIPALITY">Municipality</option>
-            </select>
-          </div>
+                <div class="col-span-2 border-t border-slate-300 mt-1 mb-1"></div>
 
-          <div class="col-span-2 sm:col-span-1">
-            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Region</label>
-            <select id="r" class="gov-input w-full cursor-pointer">
-                <option value="" disabled selected>Loading Regions...</option>
-            </select>
-          </div>
-          <div class="col-span-2 sm:col-span-1">
-            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Municipality / City</label>
-            <select id="m" class="gov-input w-full cursor-pointer" disabled>
-                <option value="">Select Region First</option>
-            </select>
-          </div>
+                <div class="col-span-2">
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Scope *</label>
+                    <select id="scope" required class="gov-input w-full h-8 cursor-pointer">
+                        <option value="NATIONAL">National</option>
+                        <option value="REGIONAL">Regional</option>
+                        <option value="MUNICIPALITY">Municipality</option>
+                    </select>
+                </div>
 
-          <div class="col-span-2">
-            <label class="text-[9px] font-bold text-slate-600 uppercase mb-1 block">Notes (Optional)</label>
-            <input id="nt" type="text" class="gov-input w-full" placeholder="Proclamation / Ordinance Reference" />
-          </div>
-        </div>
+                <div class="col-span-2 sm:col-span-1">
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Region</label>
+                    <select id="r" class="gov-input w-full h-8 cursor-pointer">
+                        <option value="" disabled selected>Loading Regions...</option>
+                    </select>
+                </div>
+                <div class="col-span-2 sm:col-span-1">
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Municipality / City</label>
+                    <select id="m" class="gov-input w-full h-8 cursor-pointer disabled:opacity-50" disabled>
+                        <option value="">Select Region First</option>
+                    </select>
+                </div>
 
-        <div class="flex justify-end gap-2 pt-3 border-t border-slate-200 mt-2">
-          <button type="button" id="mc" class="gov-btn bg-white border border-slate-300 text-slate-600 hover:bg-slate-100">Cancel</button>
-          <button type="submit" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Save Record</button>
-        </div>
-      </form>
+                <div class="col-span-2">
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Notes <span class="text-slate-400 lowercase normal-case tracking-normal">(Optional)</span></label>
+                    <input id="nt" type="text" class="gov-input w-full h-8" placeholder="Proclamation / Ordinance Reference" />
+                </div>
+            </div>
+
+            <div class="pt-4 mt-2 border-t border-slate-200 flex gap-2">
+                <button type="submit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 flex-1 py-2">Save Record</button>
+                <button type="button" id="mc" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
+            </div>
+        </form>
+      </div>
     </div>
   </div>
 
-  <div id="imb" class="fixed inset-0 z-[3000] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-    <div class="w-full max-w-2xl rounded-[2px] border border-slate-400 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-      
-      <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white shrink-0">
-        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-1">
-            <span class="material-icons-round text-[14px]">upload_file</span> Import Excel/CSV
+  <div id="imb" class="gov-modal no-print">
+    <div class="w-full max-w-4xl rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden max-h-[90vh]" onclick="event.stopPropagation()">
+      <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+            <i class="fa-solid fa-file-import text-gov-blue"></i> Import Excel/CSV
         </h3>
-        <button id="imx" class="text-slate-400 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
+        <button id="imx" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+            <span class="material-icons-round text-sm">close</span>
+        </button>
       </div>
 
       <div class="p-3 bg-slate-50 shrink-0 border-b border-slate-200">
           <div class="flex flex-col sm:flex-row items-center justify-between gap-2">
-              <input id="importFile" type="file" accept=".xlsx,.xls,.csv" class="text-[10px] w-full sm:w-auto" />
-              <div class="flex items-center gap-2">
-                <label class="inline-flex items-center gap-1 text-[9px] font-bold text-slate-700 cursor-pointer">
+              <input id="importFile" type="file" accept=".xlsx,.xls,.csv" class="gov-input w-full sm:w-auto h-8 cursor-pointer" />
+              <div class="flex items-center gap-3">
+                <label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-700 cursor-pointer">
                     <input id="skipConflicts" type="checkbox" checked class="cursor-pointer" /> Skip conflicts
                 </label>
-                <button id="btnParse" class="gov-btn bg-slate-800 text-white hover:bg-slate-900 shadow-sm">Parse Data</button>
+                <button id="btnParse" class="gov-btn bg-slate-800 text-white hover:bg-slate-900 shadow-sm h-8">Parse Data</button>
               </div>
           </div>
-          <p class="text-[8px] font-bold text-slate-500 uppercase mt-2">Required Columns: Date, Holiday Name, Type, Scope, Region, Municipality, Notes</p>
+          <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-2">Required Columns: Date, Holiday Name, Type, Scope, Region, Municipality, Notes</p>
       </div>
 
-      <div class="flex-1 overflow-auto custom-scrollbar bg-white">
-        <table class="w-full text-left border-collapse">
+      <div class="flex-1 overflow-auto custom-scrollbar table-wrapper bg-white relative">
+        <table class="w-full text-left border-collapse m-0">
             <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
                 <tr>
                     <th class="border-r border-slate-200">Date</th>
@@ -362,11 +402,11 @@
         </table>
       </div>
 
-      <div class="bg-slate-50 border-t border-slate-200 px-3 py-2 flex justify-between items-center shrink-0">
-          <div id="impSummary" class="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Awaiting File... <span id="impCount" class="text-slate-400"></span></div>
+      <div class="bg-slate-800 px-3 py-2 flex justify-between items-center shrink-0 border-t border-slate-400">
+          <div id="impSummary" class="text-[9px] text-white font-bold uppercase tracking-widest">Awaiting File... <span id="impCount" class="text-slate-400"></span></div>
           <div class="flex gap-2">
-            <button id="btnImportCancel" class="gov-btn bg-white border border-slate-300 text-slate-600 hover:bg-slate-100">Cancel</button>
-            <button id="btnImportApply" class="gov-btn bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm">Apply Import</button>
+            <button id="btnImportApply" class="gov-btn bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Apply Import</button>
+            <button id="btnImportCancel" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100">Cancel</button>
           </div>
       </div>
     </div>
@@ -376,8 +416,8 @@
     <div class="rounded-[2px] border border-emerald-300 bg-emerald-50 shadow-lg px-4 py-3 flex items-center gap-3">
         <span class="material-icons-round text-emerald-700 text-[18px]">check_circle</span>
         <div>
-          <div id="tt" class="text-[10px] font-black text-slate-900 uppercase">Saved</div>
-          <div id="tm" class="text-[9px] text-slate-600 font-bold">Holiday updated.</div>
+          <div id="tt" class="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">Saved</div>
+          <div id="tm" class="text-[9px] text-slate-600 font-bold mt-1">Action completed successfully.</div>
         </div>
     </div>
   </div>
@@ -540,28 +580,28 @@
       $("cnt").textContent = `Showing ${rows.length} holidays`;
       $("sa").checked = false;
 
-      $("tb").innerHTML = rows.map(x=>`
-        <tr class="hover:bg-blue-50 transition border-b border-slate-100">
-          <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
+      $("tb").innerHTML = rows.length ? rows.map(x=>`
+        <tr class="hover:bg-slate-50 transition-colors data-row">
+          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">
             <input type="checkbox" class="rc cursor-pointer" data-id="${x.id}">
           </td>
-          <td class="px-4 py-3 align-middle border-r border-slate-100 font-mono text-slate-500 font-bold">${esc(x.date)}</td>
-          <td class="px-4 py-3 align-middle border-r border-slate-100">
-            <div class="text-[10px] font-black text-slate-900 uppercase">${esc(x.name)}</div>
-            <div class="text-[9px] text-slate-500 mt-0.5 font-bold">${esc(x.notes||"")}</div>
+          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100 font-mono text-slate-800 font-bold">${esc(x.date)}</td>
+          <td class="px-3 py-1.5 align-middle border-r border-slate-100">
+            <div class="font-black text-slate-900 uppercase tracking-tight">${esc(x.name)}</div>
+            ${x.notes ? `<div class="text-[9px] text-slate-500 mt-0.5 tracking-widest font-bold">${esc(x.notes)}</div>` : ''}
           </td>
-          <td class="px-4 py-3 align-middle text-center border-r border-slate-100">${chipType(x.type)}</td>
-          <td class="px-4 py-3 align-middle text-center border-r border-slate-100">${chipScope(x.scope)}</td>
-          <td class="px-4 py-3 align-middle text-center border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase">${esc(x.reg||"—")}</td>
-          <td class="px-4 py-3 align-middle text-center border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase">${esc(x.mun||"—")}</td>
-          <td class="px-4 py-3 align-middle text-center">
-            <div class="flex justify-center gap-1">
-              <button class="ed btn-action btn-edit" title="Edit" data-id="${x.id}"><span class="material-icons-round text-[14px]">edit</span></button>
-              <button class="rm btn-action btn-delete" title="Delete" data-id="${x.id}"><span class="material-icons-round text-[14px]">delete</span></button>
+          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${chipType(x.type)}</td>
+          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${chipScope(x.scope)}</td>
+          <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase tracking-widest text-center">${esc(x.reg||"—")}</td>
+          <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase tracking-widest text-center">${esc(x.mun||"—")}</td>
+          <td class="px-3 py-1.5 align-middle text-center no-print w-[60px]">
+            <div class="flex justify-center gap-1 flex-nowrap">
+              <button class="ed btn-action btn-edit" title="Edit" data-id="${x.id}"><span class="material-icons-round text-[12px]">edit</span></button>
+              <button class="rm btn-action btn-delete" title="Delete" data-id="${x.id}"><span class="material-icons-round text-[12px]">delete</span></button>
             </div>
           </td>
         </tr>
-      `).join("");
+      `).join("") : '<tr><td colspan="8" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No holiday records found.</td></tr>';
     };
 
     let calMonth = 0; 
@@ -581,13 +621,13 @@
         const weekend = (new Date(year, month, day).getDay() % 6 === 0);
 
         let cellHTML = `
-          <div class="h-16 rounded-[2px] border border-slate-200 bg-white p-1 overflow-hidden flex flex-col hover:border-blue-400 transition">
-            <div class="flex justify-between items-start shrink-0">
+          <div class="h-16 rounded-[2px] border border-slate-200 bg-white p-1 overflow-hidden flex flex-col hover:border-gov-blue transition cursor-default shadow-sm">
+            <div class="flex justify-between items-start shrink-0 border-b border-slate-100 pb-0.5">
                 <span class="text-[10px] font-black ${weekend ? 'text-slate-400' : 'text-slate-800'}">${day}</span>
                 ${list.length ? `<span class="bg-emerald-100 text-emerald-800 text-[8px] font-black px-1 rounded-[2px]">${list.length}</span>` : ''}
             </div>
             <div class="flex-1 overflow-hidden mt-1 space-y-0.5">
-                ${list.map(h => `<div class="text-[8px] font-bold text-slate-600 truncate bg-slate-100 px-1 rounded-[1px] uppercase" title="${esc(h.name)}">${esc(h.name)}</div>`).join("")}
+                ${list.map(h => `<div class="text-[8px] font-bold text-slate-600 truncate bg-slate-100 px-1 rounded-[1px] uppercase cursor-default" title="${esc(h.name)}">${esc(h.name)}</div>`).join("")}
             </div>
           </div>`;
         $("calGrid").innerHTML += cellHTML;
@@ -609,11 +649,12 @@
 
       [chType,chScope,chRegion].forEach(c=>{ if(c) c.destroy(); });
 
-      const barColors = ['#1e40af', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#475569', '#ec4899', '#14b8a6'];
+      const barColors = ['#1e3a8a', '#15803d', '#d97706', '#be123c', '#8b5cf6', '#06b6d4', '#475569', '#ec4899', '#14b8a6'];
+      const chartFont = { size: 9, weight: 'bold' };
 
       chType = new Chart($("chType"), { type: "bar", data: { labels: byType.map(x=>x[0].replace('SPECIAL_','S_').substring(0,8)), datasets: [{ data: byType.map(x=>x[1]), backgroundColor: barColors, borderRadius:2, borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{ display:false, beginAtZero:true } } } });
-      chScope = new Chart($("chScope"), { type: "doughnut", data: { labels: byScope.map(x=>x[0]), datasets: [{ data: byScope.map(x=>x[1]), backgroundColor:['#64748b','#10b981','#f59e0b'], borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, cutout:'65%', layout:{padding:{bottom:10}}, plugins:{ legend:{ position:"bottom", labels:{boxWidth:6} } } } });
-      chRegion = new Chart($("chRegion"), { type: "bar", data: { labels: byRegion.map(x=>x[0].substring(0,8)), datasets: [{ data: byRegion.map(x=>x[1]), backgroundColor: barColors, borderRadius:2, borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{ grid:{display:false} } } } });
+      chScope = new Chart($("chScope"), { type: "doughnut", data: { labels: byScope.map(x=>x[0]), datasets: [{ data: byScope.map(x=>x[1]), backgroundColor:['#64748b','#15803d','#f59e0b'], borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, cutout:'65%', layout:{padding:{bottom:10}}, plugins:{ legend:{ position:"bottom", labels:{boxWidth:6, font:chartFont} } } } });
+      chRegion = new Chart($("chRegion"), { type: "bar", data: { labels: byRegion.map(x=>x[0].substring(0,8)), datasets: [{ data: byRegion.map(x=>x[1]), backgroundColor: barColors, borderRadius:2, borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{ grid:{display:false}, ticks:{font:chartFont} } } } });
     };
 
     const calcWorkingDays = ({year, month, region, muni}) => {
@@ -643,7 +684,7 @@
     async function openM(mode, id) {
       $("mb").classList.replace("hidden", "flex");
       $("eid").value = ""; $("f").reset();
-      $("mt").innerHTML = mode === "edit" ? '<span class="material-icons-round text-[14px]">edit</span> Edit Holiday' : '<span class="material-icons-round text-[14px]">event</span> New Holiday';
+      $("mt").innerHTML = mode === "edit" ? '<i class="fa-solid fa-pen-to-square text-gov-blue"></i> Edit Holiday' : '<i class="fa-solid fa-calendar-plus text-gov-blue"></i> New Holiday';
       $("m").innerHTML = '<option value="">Select Region First</option>'; $("m").disabled = true;
 
       if(mode === "edit"){
@@ -668,7 +709,7 @@
 
       $("btnToggleView").onclick = ()=>{
         $("tableView").classList.toggle("hidden"); $("calendarView").classList.toggle("hidden");
-        $("btnToggleView").innerHTML = !$("calendarView").classList.contains("hidden") ? `<span class="material-icons-round text-[14px]">table_rows</span> Table` : `<span class="material-icons-round text-[14px]">calendar_month</span> Calendar`;
+        $("btnToggleView").innerHTML = !$("calendarView").classList.contains("hidden") ? `<i class="fa-solid fa-list"></i> Table` : `<i class="fa-solid fa-calendar-days"></i> Calendar`;
         renderCalendar();
       };
 
@@ -747,6 +788,7 @@
       let importRows = [];
       $("btnImport").onclick = () => { $("imb").classList.replace("hidden", "flex"); $("importFile").value=""; $("impTb").innerHTML=""; $("impCount").textContent="(0 rows)"; importRows=[]; };
       $("imx").onclick = $("btnImportCancel").onclick = () => $("imb").classList.replace("flex", "hidden");
+      $("imb").onclick = (e)=>{ if(e.target === $("imb")) $("imb").classList.replace("flex", "hidden"); };
       $("btnParse").onclick = async () => {
         const file = $("importFile").files?.[0]; if(!file) return toast("Error", "Choose file.");
         const json = XLSX.utils.sheet_to_json(XLSX.read(await file.arrayBuffer(), {type:"array"}).Sheets[XLSX.read(await file.arrayBuffer(), {type:"array"}).SheetNames[0]], {defval:""});
@@ -766,8 +808,8 @@
           ok++; return {idx, payload, status:"OK", note:"Ready"};
         });
 
-        $("impCount").textContent = `(${importRows.length} rows)`; $("impSummary").innerHTML = `Ready: <b class="text-emerald-700">${ok}</b> • Conflicts: <b class="text-amber-700">${conflicts}</b> • Invalid: <b class="text-rose-700">${bad}</b>`;
-        $("impTb").innerHTML = importRows.slice(0, 200).map(r=>`<tr><td class="px-4 py-2">${esc(r.payload.date)}</td><td class="px-4 py-2 font-black">${esc(r.payload.name)}</td><td class="px-4 py-2">${esc(r.payload.type)}</td><td class="px-4 py-2">${esc(r.payload.scope)}</td><td class="px-4 py-2">${esc(r.payload.reg)}</td><td class="px-4 py-2 text-[9px] ${r.status==="OK"?"text-emerald-700":r.status==="CONFLICT"?"text-amber-700":"text-rose-700"}">${esc(r.status)}</td></tr>`).join("");
+        $("impCount").textContent = `(${importRows.length} rows)`; $("impSummary").innerHTML = `Ready: <b class="text-emerald-400">${ok}</b> • Conflicts: <b class="text-amber-400">${conflicts}</b> • Invalid: <b class="text-rose-400">${bad}</b>`;
+        $("impTb").innerHTML = importRows.slice(0, 200).map(r=>`<tr class="hover:bg-slate-50 transition-colors"><td class="px-4 py-2 font-mono font-bold">${esc(r.payload.date)}</td><td class="px-4 py-2 font-black uppercase tracking-tight">${esc(r.payload.name)}</td><td class="px-4 py-2 text-[9px] font-bold text-slate-700 tracking-widest uppercase">${esc(r.payload.type)}</td><td class="px-4 py-2 text-[9px] font-bold tracking-widest uppercase">${esc(r.payload.scope)}</td><td class="px-4 py-2 text-[9px] font-bold uppercase tracking-widest">${esc(r.payload.reg)}</td><td class="px-4 py-2 text-center text-[9px] font-black uppercase tracking-widest ${r.status==="OK"?"text-emerald-700":r.status==="CONFLICT"?"text-amber-700":"text-rose-700"}">${esc(r.status)}</td></tr>`).join("");
       };
 
       $("btnImportApply").onclick = () => {

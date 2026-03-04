@@ -4,218 +4,365 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Audit Logs — Super Admin</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        /* Government Standard Typography & Layout (STRICT COMPACT) */
+        body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; margin: 0; color: #1e293b; }
+        
+        .gov-strip { background: linear-gradient(to right, #1e3a8a 50%, #be123c 50%); height: 3px; width: 100%; position: fixed; top: 0; z-index: 2000; }
+        
+        /* Compact Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Gov UI Utilities */
+        .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; margin-bottom: 0; }
+        .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; color: #1e293b; box-sizing: border-box; }
+        .gov-input:focus { border-color: #1e293b; } /* Slate 800 focus */
+        
+        .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: none; }
+        
+        /* Dense Table Formatting */
+        th { font-size: 9px !important; font-weight: 800 !important; text-transform: uppercase !important; color: #475569 !important; background: #f8fafc !important; border-bottom: 2px solid #cbd5e1 !important; padding: 6px 8px !important; position: sticky; top: 0; z-index: 10; text-align: left; }
+        td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9 !important; vertical-align: middle !important; border-top: none !important; }
+
+        .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; }
+
+        @media print { 
+            .no-print { display: none !important; } 
+            main { margin-left: 0 !important; padding-top: 0 !important; position: static !important; overflow: visible !important; } 
+            .gov-card { box-shadow: none !important; border: 1px solid #000 !important; break-inside: avoid; }
+        }
     </style>
 </head>
-<body class="text-slate-800 h-screen overflow-hidden flex flex-col relative">
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50">
 
-    {% include 'super-admin/header-superadmin.html' %}
-    {% include 'super-admin/sidenav-superadmin.html' %}
+    <div class="gov-strip no-print"></div>
 
-    <main class="p-3 pt-[84px] sm:p-5 sm:pt-[92px] lg:ml-64 h-screen flex flex-col pb-3 relative z-10">
+    <div class="fixed left-0 top-0 h-full z-[1060] hidden lg:block w-[260px] no-print">
+        {% include 'super-admin/sidenav-superadmin.html' %}
+    </div>
 
-        <header class="bg-white border border-slate-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm mb-3 rounded-sm shrink-0 gap-3">
-            <div class="flex items-center gap-4">
-                <div class="bg-slate-700 p-2.5 rounded-sm hidden sm:block">
-                    <span class="material-icons-round text-white text-xl">history</span>
-                </div>
-                <div class="sm:border-l-2 sm:border-slate-200 sm:pl-4">
-                    <h1 class="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-none">Audit Logs</h1>
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Complete accounting activity trail</p>
-                </div>
-            </div>
-            <button onclick="exportLogs()" class="bg-slate-700 text-white px-4 py-1.5 text-[10px] font-black uppercase hover:bg-slate-800 transition rounded-sm shadow-sm flex items-center gap-1">
-                <i class="fa-solid fa-download text-[10px]"></i> Export Logs
-            </button>
-        </header>
+    <div class="fixed top-[3px] w-full lg:w-[calc(100%-260px)] lg:left-[260px] z-[1050] no-print">
+        {% include 'super-admin/header-superadmin.html' %}
+    </div>
 
-        <section class="bg-white border border-slate-200 rounded-sm shadow-sm p-3 mb-3 shrink-0">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                <div>
-                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">User</label>
-                    <select id="filterUser" class="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-sm">
-                        <option value="">All Users</option>
-                        <option value="maria-santos">Maria Santos</option>
-                        <option value="juan-cruz">Juan Cruz</option>
-                        <option value="anna-reyes">Anna Reyes</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Entity</label>
-                    <select id="filterEntity" class="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-sm">
-                        <option value="">All Entities</option>
-                        <option value="ncr">NCR</option>
-                        <option value="region-1">Region I - Ilocos</option>
-                        <option value="region-4a">Region IV-A - CALABARZON</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">Action Type</label>
-                    <select id="filterAction" class="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-sm">
-                        <option value="">All Actions</option>
-                        <option value="create">Create</option>
-                        <option value="edit">Edit</option>
-                        <option value="submit">Submit</option>
-                        <option value="approve">Approve</option>
-                        <option value="reverse">Reverse</option>
-                        <option value="export">Export</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">From Date</label>
-                    <input type="date" id="dateFrom" class="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-sm">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">To Date</label>
-                    <input type="date" id="dateTo" class="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-sm">
-                </div>
-            </div>
-            <div class="flex gap-2 mt-3">
-                <button onclick="applyFilters()" class="bg-slate-700 text-white px-4 py-1.5 text-[10px] font-black uppercase hover:bg-slate-800 transition rounded-sm shadow-sm">
-                    Apply Filters
-                </button>
-                <button onclick="clearFilters()" class="bg-white border border-slate-300 text-slate-700 px-4 py-1.5 text-[10px] font-bold uppercase hover:bg-slate-50 transition rounded-sm shadow-sm">
-                    Clear
-                </button>
-            </div>
-        </section>
+    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar transition-all duration-300 flex flex-col">
+        
+        <div class="max-w-[1700px] w-full mx-auto flex flex-col gap-2 h-full min-h-0">
 
-        <section class="flex-1 min-h-0 bg-white rounded-sm border border-slate-200 shadow-sm flex flex-col">
-            <div class="bg-slate-50 border-b border-slate-200 p-2.5 flex justify-between items-center shrink-0">
-                <h2 class="text-xs font-black uppercase tracking-widest text-slate-600">Activity Log</h2>
-                <span class="text-[10px] font-bold text-slate-500">Showing 247 entries</span>
-            </div>
-            <div class="flex-1 overflow-auto custom-scrollbar">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
-                        <tr>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Timestamp</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">User</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Entity</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Action</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">Details</th>
-                            <th class="px-4 py-2.5 uppercase tracking-widest text-[10px] font-black text-slate-600">IP Address</th>
-                        </tr>
-                    </thead>
-                    <tbody class="text-xs" id="auditTableBody">
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">2024-01-15 14:23:45</td>
-                            <td class="py-2.5 px-4 font-bold text-slate-900">Maria Santos</td>
-                            <td class="py-2.5 px-4 text-slate-700">NCR - Quezon City</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-sm font-black text-[9px] uppercase">Approve</span></td>
-                            <td class="py-2.5 px-4 text-slate-600">Approved JE-2024-00235 (₱125,450.00)</td>
-                            <td class="py-2.5 px-4 font-mono text-slate-500 text-[10px]">192.168.1.45</td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">2024-01-15 14:18:12</td>
-                            <td class="py-2.5 px-4 font-bold text-slate-900">Juan Cruz</td>
-                            <td class="py-2.5 px-4 text-slate-700">NCR - Quezon City</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-sm font-black text-[9px] uppercase">Submit</span></td>
-                            <td class="py-2.5 px-4 text-slate-600">Submitted JE-2024-00235 for approval</td>
-                            <td class="py-2.5 px-4 font-mono text-slate-500 text-[10px]">192.168.1.67</td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">2024-01-15 13:45:23</td>
-                            <td class="py-2.5 px-4 font-bold text-slate-900">Anna Reyes</td>
-                            <td class="py-2.5 px-4 text-slate-700">Region I - Ilocos Norte</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-sm font-black text-[9px] uppercase">Create</span></td>
-                            <td class="py-2.5 px-4 text-slate-600">Created new journal entry JE-2024-00236</td>
-                            <td class="py-2.5 px-4 font-mono text-slate-500 text-[10px]">192.168.2.12</td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">2024-01-15 12:30:55</td>
-                            <td class="py-2.5 px-4 font-bold text-slate-900">Pedro Villanueva</td>
-                            <td class="py-2.5 px-4 text-slate-700">Region IV-A - Batangas</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-sm font-black text-[9px] uppercase">Edit</span></td>
-                            <td class="py-2.5 px-4 text-slate-600">Modified JE-2024-00234 (changed amount)</td>
-                            <td class="py-2.5 px-4 font-mono text-slate-500 text-[10px]">192.168.3.89</td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">2024-01-15 11:15:42</td>
-                            <td class="py-2.5 px-4 font-bold text-slate-900">Carmen Aquino</td>
-                            <td class="py-2.5 px-4 text-slate-700">Region IV-A - Regional Office</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded-sm font-black text-[9px] uppercase">Export</span></td>
-                            <td class="py-2.5 px-4 text-slate-600">Exported General Ledger Report (Jan 1-15)</td>
-                            <td class="py-2.5 px-4 font-mono text-slate-500 text-[10px]">192.168.3.21</td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">2024-01-15 10:48:19</td>
-                            <td class="py-2.5 px-4 font-bold text-slate-900">Maria Santos</td>
-                            <td class="py-2.5 px-4 text-slate-700">NCR - Quezon City</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-sm font-black text-[9px] uppercase">Reverse</span></td>
-                            <td class="py-2.5 px-4 text-slate-600">Reversed JE-2024-00210 (duplicate entry)</td>
-                            <td class="py-2.5 px-4 font-mono text-slate-500 text-[10px]">192.168.1.45</td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">2024-01-15 09:22:38</td>
-                            <td class="py-2.5 px-4 font-bold text-slate-900">Luis Garcia</td>
-                            <td class="py-2.5 px-4 text-slate-700">Region I - Regional Office</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-sm font-black text-[9px] uppercase">Approve</span></td>
-                            <td class="py-2.5 px-4 text-slate-600">Approved JE-2024-00233 (₱89,750.50)</td>
-                            <td class="py-2.5 px-4 font-mono text-slate-500 text-[10px]">192.168.2.34</td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">2024-01-15 08:55:17</td>
-                            <td class="py-2.5 px-4 font-bold text-slate-900">Juan Cruz</td>
-                            <td class="py-2.5 px-4 text-slate-700">NCR - Manila</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-sm font-black text-[9px] uppercase">Create</span></td>
-                            <td class="py-2.5 px-4 text-slate-600">Created new expense category mapping</td>
-                            <td class="py-2.5 px-4 font-mono text-slate-500 text-[10px]">192.168.1.67</td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">2024-01-14 16:40:22</td>
-                            <td class="py-2.5 px-4 font-bold text-slate-900">Anna Reyes</td>
-                            <td class="py-2.5 px-4 text-slate-700">Region I - Ilocos Norte</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded-sm font-black text-[9px] uppercase">Export</span></td>
-                            <td class="py-2.5 px-4 text-slate-600">Exported Trial Balance Report</td>
-                            <td class="py-2.5 px-4 font-mono text-slate-500 text-[10px]">192.168.2.12</td>
-                        </tr>
-                        <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">2024-01-14 15:12:44</td>
-                            <td class="py-2.5 px-4 font-bold text-slate-900">Super Admin</td>
-                            <td class="py-2.5 px-4 text-slate-700">System-wide</td>
-                            <td class="py-2.5 px-4"><span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-sm font-black text-[9px] uppercase">Config</span></td>
-                            <td class="py-2.5 px-4 text-slate-600">Pushed COA updates to Region IV-A entities</td>
-                            <td class="py-2.5 px-4 font-mono text-slate-500 text-[10px]">192.168.0.10</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
+            <header class="gov-card p-2 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 border-b-4 border-b-slate-800 no-print">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-[2px] bg-slate-800 flex items-center justify-center text-white shrink-0">
+                        <span class="material-icons-round text-[18px]">history</span>
+                    </div>
+                    <div class="leading-tight">
+                        <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Audit Logs</h1>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0 mt-0.5">Complete accounting activity trail</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-1.5 mt-2 sm:mt-0">
+                    <button onclick="exportLogs()" class="gov-btn bg-slate-800 text-white hover:bg-slate-900 shadow-sm">
+                        <i class="fa-solid fa-download"></i> Export Logs
+                    </button>
+                </div>
+            </header>
 
+            <section class="gov-card p-2 shrink-0 no-print">
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 items-end">
+                    
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Keyword Search</label>
+                        <div class="relative">
+                            <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+                            <input type="text" id="searchKeyword" placeholder="IP, Details, Name..." class="gov-input w-full pl-6 h-7">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">User</label>
+                        <select id="filterUser" class="gov-input w-full h-7 cursor-pointer">
+                            <option value="">All Users</option>
+                            <option value="maria-santos">Maria Santos</option>
+                            <option value="juan-cruz">Juan Cruz</option>
+                            <option value="anna-reyes">Anna Reyes</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Entity / Region</label>
+                        <select id="filterEntity" class="gov-input w-full h-7 cursor-pointer">
+                            <option value="">All Entities / Regions</option>
+                            <option value="NCR">NCR - National Capital Region</option>
+                            <option value="CAR">CAR - Cordillera Administrative Region</option>
+                            <option value="Region I">Region I - Ilocos Region</option>
+                            <option value="Region II">Region II - Cagayan Valley</option>
+                            <option value="Region III">Region III - Central Luzon</option>
+                            <option value="Region IV-A">Region IV-A - CALABARZON</option>
+                            <option value="Region IV-B">Region IV-B - MIMAROPA</option>
+                            <option value="Region V">Region V - Bicol Region</option>
+                            <option value="Region VI">Region VI - Western Visayas</option>
+                            <option value="Region VII">Region VII - Central Visayas</option>
+                            <option value="Region VIII">Region VIII - Eastern Visayas</option>
+                            <option value="Region IX">Region IX - Zamboanga Peninsula</option>
+                            <option value="Region X">Region X - Northern Mindanao</option>
+                            <option value="Region XI">Region XI - Davao Region</option>
+                            <option value="Region XII">Region XII - SOCCSKSARGEN</option>
+                            <option value="Region XIII">Region XIII - Caraga</option>
+                            <option value="BARMM">BARMM - Bangsamoro Autonomous Region</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Action Type</label>
+                        <select id="filterAction" class="gov-input w-full h-7 cursor-pointer">
+                            <option value="">All Actions</option>
+                            <option value="create">Create</option>
+                            <option value="edit">Edit</option>
+                            <option value="submit">Submit</option>
+                            <option value="approve">Approve</option>
+                            <option value="reverse">Reverse</option>
+                            <option value="export">Export</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">From Date</label>
+                        <input type="date" id="dateFrom" class="gov-input w-full h-7 cursor-pointer">
+                    </div>
+
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">To Date</label>
+                        <input type="date" id="dateTo" class="gov-input w-full h-7 cursor-pointer">
+                    </div>
+
+                    <div class="h-7 flex items-end">
+                        <button onclick="clearFilters()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm w-full h-full flex items-center justify-center">
+                            <i class="fa-solid fa-eraser"></i> Clear
+                        </button>
+                    </div>
+                    
+                </div>
+            </section>
+
+            <section class="gov-card flex-1 flex flex-col min-h-[300px] w-full">
+                
+                <div class="bg-slate-50 border-b border-slate-200 p-2 flex justify-between items-center shrink-0">
+                    <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 m-0 flex items-center gap-1">
+                        <i class="fa-solid fa-list text-slate-400"></i> Activity Log
+                    </h2>
+                    <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                        Showing <span id="resultCount" class="text-slate-900 font-black">0</span> entries
+                    </span>
+                </div>
+
+                <div class="flex-1 overflow-auto custom-scrollbar table-wrapper bg-white relative">
+                    <table class="w-full text-left border-collapse m-0">
+                        <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th class="border-r border-slate-200">Timestamp</th>
+                                <th class="border-r border-slate-200">User Identity</th>
+                                <th class="border-r border-slate-200">Entity / Jurisdiction</th>
+                                <th class="border-r border-slate-200 text-center">Action</th>
+                                <th class="border-r border-slate-200">Details</th>
+                                <th class="text-right">IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-[10px] divide-y divide-slate-100" id="auditTableBody">
+                            <tr class="hover:bg-slate-50 transition data-row">
+                                <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">2024-01-15 14:23:45</td>
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase">Maria Santos</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">NCR - Quezon City</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200 w-16 text-center">Approve</span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Approved JE-2024-00235 (₱125,450.00)</td>
+                                <td class="px-3 py-1.5 font-mono text-slate-400 text-right text-[9px] whitespace-nowrap">192.168.1.45</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition data-row">
+                                <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">2024-01-15 14:18:12</td>
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase">Juan Cruz</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">NCR - Quezon City</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-blue-50 text-blue-800 border-blue-200 w-16 text-center">Submit</span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Submitted JE-2024-00235 for approval</td>
+                                <td class="px-3 py-1.5 font-mono text-slate-400 text-right text-[9px] whitespace-nowrap">192.168.1.67</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition data-row">
+                                <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">2024-01-15 13:45:23</td>
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase">Anna Reyes</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">Region I - Ilocos Norte</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-indigo-50 text-indigo-800 border-indigo-200 w-16 text-center">Create</span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Created new journal entry JE-2024-00236</td>
+                                <td class="px-3 py-1.5 font-mono text-slate-400 text-right text-[9px] whitespace-nowrap">192.168.2.12</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition data-row">
+                                <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">2024-01-15 12:30:55</td>
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase">Pedro Villanueva</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">Region IV-A - Batangas</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-amber-50 text-amber-800 border-amber-200 w-16 text-center">Edit</span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Modified JE-2024-00234 (changed amount)</td>
+                                <td class="px-3 py-1.5 font-mono text-slate-400 text-right text-[9px] whitespace-nowrap">192.168.3.89</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition data-row">
+                                <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">2024-01-15 11:15:42</td>
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase">Carmen Aquino</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">Region IV-A - Regional Office</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-violet-50 text-violet-800 border-violet-200 w-16 text-center">Export</span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Exported General Ledger Report (Jan 1-15)</td>
+                                <td class="px-3 py-1.5 font-mono text-slate-400 text-right text-[9px] whitespace-nowrap">192.168.3.21</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition data-row">
+                                <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">2024-01-15 10:48:19</td>
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase">Maria Santos</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">NCR - Quezon City</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-rose-50 text-rose-800 border-rose-200 w-16 text-center">Reverse</span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Reversed JE-2024-00210 (duplicate entry)</td>
+                                <td class="px-3 py-1.5 font-mono text-slate-400 text-right text-[9px] whitespace-nowrap">192.168.1.45</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition data-row">
+                                <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">2024-01-15 09:22:38</td>
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase">Luis Garcia</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">Region I - Regional Office</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200 w-16 text-center">Approve</span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Approved JE-2024-00233 (₱89,750.50)</td>
+                                <td class="px-3 py-1.5 font-mono text-slate-400 text-right text-[9px] whitespace-nowrap">192.168.2.34</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition data-row">
+                                <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">2024-01-15 08:55:17</td>
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase">Juan Cruz</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">NCR - Manila</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-indigo-50 text-indigo-800 border-indigo-200 w-16 text-center">Create</span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Created new expense category mapping</td>
+                                <td class="px-3 py-1.5 font-mono text-slate-400 text-right text-[9px] whitespace-nowrap">192.168.1.67</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition data-row">
+                                <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">2024-01-14 16:40:22</td>
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase">Anna Reyes</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">Region I - Ilocos Norte</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-violet-50 text-violet-800 border-violet-200 w-16 text-center">Export</span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Exported Trial Balance Report</td>
+                                <td class="px-3 py-1.5 font-mono text-slate-400 text-right text-[9px] whitespace-nowrap">192.168.2.12</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50 transition data-row">
+                                <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">2024-01-14 15:12:44</td>
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase">Super Admin</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">System-wide</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-slate-100 text-slate-700 border-slate-300 w-16 text-center">Config</span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">Pushed COA updates to Region IV-A entities</td>
+                                <td class="px-3 py-1.5 font-mono text-slate-400 text-right text-[9px] whitespace-nowrap">192.168.0.10</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
     </main>
 
     <script>
         function applyFilters() {
-            const user = document.getElementById('filterUser').value;
-            const entity = document.getElementById('filterEntity').value;
-            const action = document.getElementById('filterAction').value;
+            // Get filter values
+            const searchVal = document.getElementById('searchKeyword').value.toLowerCase();
+            const userVal = document.getElementById('filterUser').value.toLowerCase().replace('-', ' ');
+            const entityVal = document.getElementById('filterEntity').value.toLowerCase();
+            const actionVal = document.getElementById('filterAction').value.toLowerCase();
             const dateFrom = document.getElementById('dateFrom').value;
             const dateTo = document.getElementById('dateTo').value;
-            
-            console.log('Applying filters:', { user, entity, action, dateFrom, dateTo });
+
+            const rows = document.querySelectorAll('#auditTableBody .data-row');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                // Extract row data
+                const tdDateText = row.cells[0].textContent.trim();
+                const rowDateOnly = tdDateText.split(' ')[0]; // Gets YYYY-MM-DD
+                
+                const tdUser = row.cells[1].textContent.trim().toLowerCase();
+                const tdEntity = row.cells[2].textContent.trim().toLowerCase();
+                const tdAction = row.cells[3].textContent.trim().toLowerCase();
+                const tdDetails = row.cells[4].textContent.trim().toLowerCase();
+                const tdIp = row.cells[5].textContent.trim().toLowerCase();
+
+                // Check matches
+                const matchSearch = searchVal === '' || 
+                    tdUser.includes(searchVal) || 
+                    tdEntity.includes(searchVal) || 
+                    tdDetails.includes(searchVal) || 
+                    tdIp.includes(searchVal);
+                    
+                const matchUser = userVal === '' || tdUser.includes(userVal);
+                const matchEntity = entityVal === '' || tdEntity.includes(entityVal);
+                const matchAction = actionVal === '' || tdAction === actionVal;
+                const matchDateFrom = dateFrom === '' || rowDateOnly >= dateFrom;
+                const matchDateTo = dateTo === '' || rowDateOnly <= dateTo;
+
+                // Toggle visibility
+                if (matchSearch && matchUser && matchEntity && matchAction && matchDateFrom && matchDateTo) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update counter UI
+            document.getElementById('resultCount').textContent = visibleCount;
         }
 
         function clearFilters() {
+            document.getElementById('searchKeyword').value = '';
             document.getElementById('filterUser').value = '';
             document.getElementById('filterEntity').value = '';
             document.getElementById('filterAction').value = '';
             document.getElementById('dateFrom').value = '';
             document.getElementById('dateTo').value = '';
+            
+            // Re-run filter to reset view
+            applyFilters(); 
         }
 
         function exportLogs() {
-            alert('Export audit logs to CSV/Excel');
+            alert('Exporting currently filtered audit logs to CSV...');
         }
+
+        // Attach event listeners for LIVE filtering (triggers immediately on typing/changing)
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputs = ['searchKeyword', 'filterUser', 'filterEntity', 'filterAction', 'dateFrom', 'dateTo'];
+            inputs.forEach(id => {
+                const el = document.getElementById(id);
+                if(el) {
+                    el.addEventListener('input', applyFilters);
+                    el.addEventListener('change', applyFilters);
+                }
+            });
+
+            // Initial count setup
+            applyFilters();
+        });
     </script>
 
 </body>
