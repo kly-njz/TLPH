@@ -155,7 +155,8 @@ def attendance_view():
 @bp.route('/hrm/holidays')
 @role_required('regional','regional_admin')
 def holidays_view():
-    return render_template('regional/HR/holiday-regional.html')
+    from config import Config
+    return render_template('regional/HR/holiday-regional.html', firebase_config=Config.FIREBASE_CONFIG)
 
 @bp.route('/hrm/leave-requests')
 @role_required('regional','regional_admin')
