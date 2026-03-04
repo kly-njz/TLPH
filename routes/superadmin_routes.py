@@ -28,7 +28,7 @@ def user_inventory_view():
 def permits_view():
     return render_template('super-admin/permits-license-superadmin/permits-license-superadmin.html')
 
-@bp.route('/transaction')
+@bp.route('/accounting/transaction')
 @role_required('super-admin','superadmin')
 def transaction_permits_view():
     return render_template('super-admin/transaction-permit-superadmin/transaction-permit-superadmin.html')
