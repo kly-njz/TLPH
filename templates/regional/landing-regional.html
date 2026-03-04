@@ -668,6 +668,61 @@
         });
     </script>
 
+  <!-- Commit 4: KPI — Forest Permits, Wildlife Licenses, Audit Alerts from SR categories + system_logs -->
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { collection, getDocs, query, orderBy, limit }
+      from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const forestKws  = ['forest','timber','chainsaw','tree','cutting','log','lumber'];
+    const wildlifeKws = ['wildlife','animal','fauna','bird','reptile','mammal'];
+
+    function categorize(doc) {
+      const t = ((doc.serviceType || doc.type || doc.category || '')).toLowerCase();
+      if (forestKws.some(k => t.includes(k)))   return 'forest';
+      if (wildlifeKws.some(k => t.includes(k))) return 'wildlife';
+      return 'other';
+    }
+
+    window.addEventListener('regionalDataReady', function(e) {
+      const docs = e.detail.docs || [];
+      let forestCount = 0, wildlifeCount = 0;
+      docs.forEach(d => {
+        const cat = categorize(d);
+        if (cat === 'forest')   forestCount++;
+        if (cat === 'wildlife') wildlifeCount++;
+      });
+      const kpiFP = document.getElementById('kpiForestPermits');
+      if (kpiFP && forestCount > 0) kpiFP.textContent = forestCount.toLocaleString();
+      const kpiWL = document.getElementById('kpiWildlifeLicenses');
+      if (kpiWL && wildlifeCount > 0) kpiWL.textContent = wildlifeCount.toLocaleString();
+    });
+
+    // Fetch system_logs for Audit Alerts count (FAILED outcomes)
+    onAuthStateChanged(auth, async user => {
+      if (!user) return;
+      try {
+        const snap = await getDocs(query(collection(db, 'system_logs'), orderBy('timestamp', 'desc'), limit(200)));
+        let failedCount = 0;
+        const logs = [];
+        snap.forEach(d => {
+          const log = { id: d.id, ...d.data() };
+          logs.push(log);
+          if ((log.outcome || '').toUpperCase() === 'FAILED') failedCount++;
+        });
+        window._regionalData.logs = logs;
+
+        const kpiAA = document.getElementById('kpiAuditAlerts');
+        if (kpiAA) kpiAA.textContent = failedCount || 0;
+
+        window.dispatchEvent(new CustomEvent('regionalLogsReady', { detail: { logs } }));
+      } catch(err) {
+        console.warn('[regional] system_logs fetch error:', err);
+      }
+    });
+  </script>
+
   <!-- Commit 3: KPI — unique municipalities + total SR count -->
   <script>
     window.addEventListener('regionalDataReady', function(e) {
