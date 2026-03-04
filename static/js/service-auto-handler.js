@@ -5,9 +5,11 @@ function getServiceType(form) {
     return form.dataset.serviceType.trim();
   }
 
-  const heading = document.querySelector('h1, h2');
-  if (heading && heading.textContent) {
-    return heading.textContent.trim();
+  // Skip the header h1 (which just says "DENR") — look for the page content heading
+  const headings = Array.from(document.querySelectorAll('h1, h2'));
+  const contentHeading = headings.find(h => h.textContent.trim().toUpperCase() !== 'DENR' && h.textContent.trim().length > 4);
+  if (contentHeading) {
+    return contentHeading.textContent.trim();
   }
 
   return document.title.replace(/\s*-\s*DENR.*$/i, '').trim() || 'Service Request';
