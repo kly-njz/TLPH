@@ -94,7 +94,7 @@
         <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 h-[160px]">
           <div class="gov-card p-2 flex flex-col overflow-hidden">
             <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">
-              Expenses by Type
+              Transactions by Type
             </h2>
             <div class="chart-safe-zone">
               <div class="chart-container"><canvas id="typeChart"></canvas></div>
@@ -103,7 +103,7 @@
 
           <div class="gov-card p-2 flex flex-col overflow-hidden">
             <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">
-              Expenses by Category
+              Direct Expense Categories
             </h2>
             <div class="chart-safe-zone">
               <div class="chart-container"><canvas id="categoryChart"></canvas></div>
@@ -116,25 +116,22 @@
           <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
             <div class="flex items-center gap-2">
               <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
-                <span class="material-icons-round text-[14px]">table_chart</span> Recorded Expenses
+                <span class="material-icons-round text-[14px]">table_chart</span> All Transactions
               </h2>
-              <span class="badge bg-slate-100 text-slate-700 border-slate-200">REGION SCOPED</span>
+              <span class="badge bg-slate-100 text-slate-700 border-slate-200">EXPENSES + FUND TRANSFERS</span>
             </div>
 
             <div class="flex items-center gap-1.5 flex-wrap">
               <select class="gov-input cursor-pointer" @change="filterCategory = $event.target.value">
-                <option value="">All Categories</option>
-                <option value="Office Supplies">Office Supplies</option>
-                <option value="Travel">Travel & Transportation</option>
-                <option value="Equipment">Equipment & Maintenance</option>
-                <option value="Personnel">Personnel & Payroll</option>
-                <option value="Project">Project & Program</option>
-                <option value="Other">Other</option>
+                <option value="">All Types</option>
+                <option value="Expense">Recorded Expenses</option>
+                <option value="Fund Transfer to Municipality">Fund Transfers (to Municipalities)</option>
+                <option value="Fund Received">Fund Received (from National)</option>
               </select>
 
               <div class="relative">
                 <span class="material-icons-round text-slate-400 absolute left-1.5 top-1/2 -translate-y-1/2 text-[12px]">search</span>
-                <input type="text" placeholder="Search expense..." @keyup="filterSearch = $event.target.value"
+                <input type="text" placeholder="Search transaction..." @keyup="filterSearch = $event.target.value"
                   class="gov-input pl-6 w-48 focus:border-rose-700">
               </div>
 
@@ -150,40 +147,44 @@
               <thead class="sticky top-0 z-10 shadow-sm">
                 <tr>
                   <th class="border-r border-slate-200 w-32">Date</th>
-                  <th class="border-r border-slate-200">Expense Type</th>
-                  <th class="border-r border-slate-200">Category</th>
+                  <th class="border-r border-slate-200">Transaction Type</th>
                   <th class="border-r border-slate-200">Description</th>
                   <th class="border-r border-slate-200 text-right w-24">Amount</th>
                   <th class="border-r border-slate-200 text-center w-20">Method</th>
+                  <th class="border-r border-slate-200 text-center w-24">Status</th>
                   <th class="text-center w-20">Action</th>
                 </tr>
               </thead>
               <tbody id="expenseTable" class="text-[10px] divide-y divide-slate-100">
                 <template x-for="expense in filteredExpenses" :key="expense.id">
                   <tr class="hover:bg-slate-50 transition">
-                    <td class="font-bold text-slate-900 border-r border-slate-100" x-text="expense.expense_date"></td>
-                    <td class="font-bold text-slate-700 border-r border-slate-100" x-text="expense.expense_type"></td>
-                    <td class="border-r border-slate-100">
-                      <span class="px-1 py-0.5 rounded-[2px] font-bold text-[8px] uppercase border"
-                        :class="getCategoryClass(expense.category)">
-                        <span x-text="expense.category"></span>
+                    <td class="font-bold text-slate-900 border-r border-slate-100" x-text="expense.transaction_date || expense.expense_date || ''"></td>
+                    <td class="font-bold text-slate-700 border-r border-slate-100">
+                      <span :class="getTransactionTypeBadge(expense.transaction_type)">
+                        <span x-text="expense.transaction_type"></span>
                       </span>
                     </td>
-                    <td class="border-r border-slate-100 text-slate-600" x-text="expense.description || '-'"></td>
+                    <td class="border-r border-slate-100 text-slate-600" x-text="expense.description || expense.expense_type || '-'"></td>
                     <td class="text-right font-black text-slate-700 border-r border-slate-100">
                       ₱ <span x-text="formatCurrency(expense.amount)">0</span>
                     </td>
                     <td class="text-center border-r border-slate-100">
                       <span class="text-[9px] font-bold uppercase text-slate-600" x-text="expense.payment_method"></span>
                     </td>
+                    <td class="text-center border-r border-slate-100">
+                      <span class="px-1 py-0.5 rounded-[2px] font-bold text-[8px] uppercase border"
+                        :class="getStatusBadge(expense.status)">
+                        <span x-text="expense.status"></span>
+                      </span>
+                    </td>
                     <td class="text-center">
                       <div class="flex justify-center gap-1">
                         <button @click="editExpense(expense)" class="btn-action btn-edit text-blue-700"
-                          title="Edit expense">
+                          title="Edit transaction">
                           <span class="material-icons-round text-[14px]">edit</span>
                         </button>
                         <button @click="deleteExpense(expense.id)" class="btn-action btn-delete text-rose-700"
-                          title="Delete expense">
+                          title="Delete transaction">
                           <span class="material-icons-round text-[14px]">delete</span>
                         </button>
                       </div>
@@ -193,13 +194,13 @@
               </tbody>
             </table>
             <div x-show="expenses.length === 0" class="p-4 text-center text-slate-500">
-              <p class="text-[10px] font-bold uppercase">No expenses recorded yet</p>
+              <p class="text-[10px] font-bold uppercase">No transactions recorded yet</p>
             </div>
           </div>
 
           <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
             <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">
-              Showing <span x-text="filteredExpenses.length"></span> of <span x-text="expenses.length"></span> expenses
+              Showing <span x-text="filteredExpenses.length"></span> of <span x-text="expenses.length"></span> total transactions (Expenses + Fund Transfers)
             </span>
           </div>
         </section>
@@ -315,10 +316,11 @@
         get filteredExpenses() {
           return this.expenses.filter(exp => {
             const matchSearch = !this.filterSearch || 
-              exp.expense_type.toLowerCase().includes(this.filterSearch.toLowerCase()) ||
-              exp.description.toLowerCase().includes(this.filterSearch.toLowerCase());
-            const matchCategory = !this.filterCategory || exp.category === this.filterCategory;
-            return matchSearch && matchCategory;
+              (exp.expense_type || '').toLowerCase().includes(this.filterSearch.toLowerCase()) ||
+              (exp.description || '').toLowerCase().includes(this.filterSearch.toLowerCase()) ||
+              (exp.transaction_type || '').toLowerCase().includes(this.filterSearch.toLowerCase());
+            const matchType = !this.filterCategory || exp.transaction_type === this.filterCategory;
+            return matchSearch && matchType;
           });
         },
 
@@ -331,7 +333,8 @@
           const currentMonth = now.getMonth();
           const currentYear = now.getFullYear();
           return this.expenses.filter(e => {
-            const date = new Date(e.expense_date);
+            const dateStr = e.transaction_date || e.expense_date || '';
+            const date = new Date(dateStr);
             return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
           }).reduce((sum, e) => sum + (e.amount || 0), 0);
         },
@@ -344,16 +347,24 @@
           return typeof val === 'number' ? val.toLocaleString('en-PH', { maximumFractionDigits: 2 }) : '0';
         },
 
-        getCategoryClass(category) {
+        getTransactionTypeBadge(type) {
           const classes = {
-            'Office Supplies': 'bg-blue-50 text-blue-800 border-blue-200',
-            'Travel': 'bg-amber-50 text-amber-800 border-amber-200',
-            'Equipment': 'bg-rose-50 text-rose-800 border-rose-200',
-            'Personnel': 'bg-emerald-50 text-emerald-800 border-emerald-200',
-            'Project': 'bg-purple-50 text-purple-800 border-purple-200',
-            'Other': 'bg-slate-100 text-slate-700 border-slate-300'
+            'Expense': 'bg-rose-50 text-rose-800 border-rose-200',
+            'Fund Transfer to Municipality': 'bg-blue-50 text-blue-800 border-blue-200',
+            'Fund Received': 'bg-emerald-50 text-emerald-800 border-emerald-200'
           };
-          return classes[category] || classes['Other'];
+          return `px-1 py-0.5 rounded-[2px] font-bold text-[8px] uppercase border ${classes[type] || classes['Expense']}`;
+        },
+
+        getStatusBadge(status) {
+          const classes = {
+            'Recorded': 'bg-slate-100 text-slate-700 border-slate-300',
+            'Released': 'bg-amber-50 text-amber-800 border-amber-200',
+            'Received': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+            'Approved': 'bg-blue-50 text-blue-800 border-blue-200',
+            'Pending': 'bg-yellow-50 text-yellow-800 border-yellow-200'
+          };
+          return classes[status] || classes['Recorded'];
         },
 
         openModal() {
@@ -387,6 +398,7 @@
             const data = await res.json();
             if (data.success) {
               this.expenses = data.expenses;
+              console.log(`[DEBUG] Loaded ${this.expenses.length} total transactions (expenses + fund transfers)`);
               this.updateCharts();
             }
           } catch (e) {
@@ -421,13 +433,18 @@
         },
 
         editExpense(expense) {
+          // Only allow editing of direct expenses, not fund transfers
+          if (expense.transaction_type !== 'Expense') {
+            alert('Fund transfers can only be edited through the accounting dashboard');
+            return;
+          }
           this.editingId = expense.id;
           this.formData = { ...expense };
           this.modalOpen = true;
         },
 
         async deleteExpense(id) {
-          if (!confirm('Delete this expense?')) return;
+          if (!confirm('Delete this transaction?')) return;
           try {
             const res = await fetch(`/regional/api/accounting/expenses/${id}`, { method: 'DELETE' });
             const data = await res.json();
@@ -440,16 +457,19 @@
         },
 
         updateCharts() {
-          // Group by expense type
+          // Group by transaction type
           const typeData = {};
           this.expenses.forEach(exp => {
-            typeData[exp.expense_type] = (typeData[exp.expense_type] || 0) + exp.amount;
+            const type = exp.transaction_type || 'Other';
+            typeData[type] = (typeData[type] || 0) + exp.amount;
           });
 
-          // Group by category
+          // Group by category (for regular expenses)
           const catData = {};
           this.expenses.forEach(exp => {
-            catData[exp.category] = (catData[exp.category] || 0) + exp.amount;
+            if (exp.category) {
+              catData[exp.category] = (catData[exp.category] || 0) + exp.amount;
+            }
           });
 
           // Type chart
@@ -462,7 +482,7 @@
                 labels: Object.keys(typeData),
                 datasets: [{
                   data: Object.values(typeData),
-                  backgroundColor: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'],
+                  backgroundColor: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'],
                   borderWidth: 0
                 }]
               },
@@ -484,10 +504,10 @@
             window.catChartInstance = new Chart(catCtx, {
               type: 'bar',
               data: {
-                labels: Object.keys(catData),
+                labels: Object.keys(catData).length > 0 ? Object.keys(catData) : ['No data'],
                 datasets: [{
                   label: 'Amount',
-                  data: Object.values(catData),
+                  data: Object.values(catData).length > 0 ? Object.values(catData) : [0],
                   backgroundColor: '#be123c',
                   borderColor: '#be123c',
                   borderWidth: 0
