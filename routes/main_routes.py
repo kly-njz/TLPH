@@ -247,7 +247,9 @@ def national_dashboard():
         region_data = [r[1] for r in top_regions] if top_regions else [0]
 
         # ── 9. Totals ─────────────────────────────────────────────────────
-        total_count = len(applications) + len(service_requests)
+        total_applications = len(applications)
+        total_service_requests = len(service_requests)
+        total_count = total_applications + total_service_requests
         approved_count = app_approved + sr_approved
         pending_count = app_pending + sr_pending
         rejected_count = app_rejected + sr_rejected
@@ -257,6 +259,7 @@ def national_dashboard():
         import traceback; traceback.print_exc()
         applications = service_requests = transactions = permits = inventory_items = []
         total_collections = total_count = approved_count = pending_count = rejected_count = 0
+        total_applications = total_service_requests = 0
         trend_labels = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar']
         trend_data = category_data = region_data = [0] * 6
         category_labels = ['Farm Visit', 'Chemical/Fert.', 'Financial Aid', 'Seminar', 'Wildlife', 'Fisheries', 'Forestry']
@@ -271,6 +274,8 @@ def national_dashboard():
         inventory_items=inventory_items,
         total_collections=total_collections,
         total_count=total_count,
+        total_applications=total_applications,
+        total_service_requests=total_service_requests,
         approved_count=approved_count,
         pending_count=pending_count,
         rejected_count=rejected_count,
