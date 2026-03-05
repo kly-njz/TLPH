@@ -2125,6 +2125,7 @@ def accounting_deposits_view():
     municipality_set = set(str(m).strip().lower() for m in municipalities if m)
 
     scoped_users = {}
+    scoped_user_ids = set()
     try:
         users_docs = db.collection('users').limit(4000).stream()
         normalized_region = str(user_region or '').strip().upper()
@@ -2145,52 +2146,188 @@ def accounting_deposits_view():
                 'municipality': municipality_val,
                 'region': str(region_val or '').strip().upper()
             }
+            scoped_user_ids.add(str(user_doc.id).strip())
+
+            possible_ids = [
+                ud.get('uid'),
+                ud.get('user_id'),
+                ud.get('userId'),
+                ud.get('id')
+            ]
+            for pid in possible_ids:
+                if pid:
+                    scoped_user_ids.add(str(pid).strip())
     except Exception as e:
         print(f"[WARN] Unable to resolve scoped users for accounting deposits view: {e}")
 
+    paid_status_markers = {
+        'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'
+    }
+
+    def parse_amount(raw_value):
+        try:
+            return float(raw_value or 0)
+        except (ValueError, TypeError):
+            return 0.0
+
+    def is_paid_status(value):
+        normalized = str(value or '').strip().lower()
+        if not normalized:
+            return False
+        return normalized in paid_status_markers
+
+    def user_in_scope(email_value=None, user_id_value=None):
+        normalized_email = str(email_value or '').strip().lower()
+        normalized_user_id = str(user_id_value or '').strip()
+        return (
+            (normalized_email and normalized_email in scoped_users)
+            or (normalized_user_id and normalized_user_id in scoped_user_ids)
+        )
+
+    def municipality_region_match(record_municipality=None, record_region=None):
+        rec_muni = str(record_municipality or '').strip().lower()
+        rec_region = str(record_region or '').strip().upper()
+        if municipality_set and rec_muni and rec_muni not in municipality_set:
+            return False
+        if user_region and rec_region and rec_region != str(user_region or '').strip().upper():
+            return False
+        return bool(rec_muni or rec_region)
+
+    def append_record(target, record_id, invoice_id, description, amount, status, payment_method, municipality, payer_email, created_at):
+        target.append({
+            'id': record_id,
+            'invoice_id': invoice_id,
+            'description': description,
+            'amount': amount,
+            'status': str(status or '').strip().upper(),
+            'payment_method': payment_method or 'Online Payment',
+            'municipality': municipality or 'UNKNOWN',
+            'payer_email': payer_email or '-',
+            'created_at': str(created_at or ''),
+        })
+
     payment_deposits = []
     try:
+        # Source 1: transactions collection
         tx_docs = db.collection('transactions').limit(5000).stream()
         for tx_doc in tx_docs:
             tx = tx_doc.to_dict() or {}
             payer_email = str(tx.get('user_email') or '').strip().lower()
+            tx_user_id = tx.get('userId') or tx.get('user_id') or tx.get('uid')
             tx_municipality = str(tx.get('municipality') or tx.get('municipality_name') or '').strip()
             tx_region = get_firestore_region_name(tx.get('region') or tx.get('region_name') or tx.get('regionName'))
 
-            in_scope_by_user = payer_email in scoped_users
-            in_scope_by_fields = (
-                (not municipality_set or (tx_municipality and tx_municipality.lower() in municipality_set))
-                and (not user_region or str(tx_region or '').strip().upper() == str(user_region or '').strip().upper())
-            )
+            in_scope_by_user = user_in_scope(payer_email, tx_user_id)
+            in_scope_by_fields = municipality_region_match(tx_municipality, tx_region)
 
             if not (in_scope_by_user or in_scope_by_fields):
                 continue
 
-            status = str(tx.get('status') or 'PENDING').strip().upper()
-            if status not in ('PAID', 'COMPLETED', 'SETTLED'):
+            status = tx.get('status') or tx.get('paymentStatus') or tx.get('payment_status')
+            paid_by_status = is_paid_status(status)
+            paid_by_method = bool(tx.get('payment_method')) and str(status or '').strip().lower() not in {'pending', 'failed', 'expired', 'cancelled'}
+            if not (paid_by_status or paid_by_method):
                 continue
 
-            try:
-                amount = float(tx.get('amount', 0) or 0)
-            except (ValueError, TypeError):
-                amount = 0.0
+            amount = parse_amount(tx.get('amount'))
+            if amount <= 0:
+                continue
 
             scoped_user = scoped_users.get(payer_email, {})
             municipality_name = tx_municipality or scoped_user.get('municipality') or 'UNKNOWN'
 
-            payment_deposits.append({
-                'id': tx_doc.id,
-                'invoice_id': tx.get('invoice_id') or tx.get('external_id') or tx_doc.id,
-                'description': tx.get('description') or tx.get('transaction_name') or 'User Payment',
-                'amount': amount,
-                'status': status,
-                'payment_method': tx.get('payment_method') or 'Online Payment',
-                'municipality': municipality_name,
-                'payer_email': payer_email or '-',
-                'created_at': str(tx.get('created_at') or ''),
-            })
+            append_record(
+                payment_deposits,
+                tx_doc.id,
+                tx.get('invoice_id') or tx.get('external_id') or tx_doc.id,
+                tx.get('description') or tx.get('transaction_name') or 'User Payment',
+                amount,
+                status or 'PAID',
+                tx.get('payment_method') or 'Online Payment',
+                municipality_name,
+                payer_email,
+                tx.get('paid_at') or tx.get('created_at')
+            )
+
+        # Source 2: applications collection with payment fields
+        app_docs = db.collection('applications').limit(5000).stream()
+        for app_doc in app_docs:
+            app = app_doc.to_dict() or {}
+            payer_email = str(app.get('userEmail') or app.get('user_email') or app.get('email') or '').strip().lower()
+            app_user_id = app.get('userId') or app.get('user_id') or app.get('uid')
+            app_municipality = str(app.get('municipality') or app.get('municipality_name') or '').strip()
+            app_region = get_firestore_region_name(app.get('region') or app.get('region_name') or app.get('regionName'))
+
+            if not (user_in_scope(payer_email, app_user_id) or municipality_region_match(app_municipality, app_region)):
+                continue
+
+            payment_status = app.get('paymentStatus') or app.get('payment_status') or app.get('status')
+            if not is_paid_status(payment_status):
+                continue
+
+            amount = parse_amount(app.get('amount') or app.get('paymentAmount') or app.get('serviceFee') or app.get('processingFee'))
+            if amount <= 0:
+                continue
+
+            scoped_user = scoped_users.get(payer_email, {})
+            municipality_name = app_municipality or scoped_user.get('municipality') or 'UNKNOWN'
+
+            append_record(
+                payment_deposits,
+                app_doc.id,
+                app.get('invoiceId') or app.get('invoice_id') or app.get('externalId') or app.get('external_id') or app_doc.id,
+                app.get('description') or app.get('applicationType') or app.get('permitType') or 'Application Payment',
+                amount,
+                payment_status,
+                app.get('paymentMethod') or app.get('payment_method') or 'Online Payment',
+                municipality_name,
+                payer_email,
+                app.get('updatedAt') or app.get('createdAt') or app.get('created_at') or app.get('dateFiled')
+            )
+
+        # Source 3: service_requests collection with payment fields
+        service_docs = db.collection('service_requests').limit(5000).stream()
+        for service_doc in service_docs:
+            service = service_doc.to_dict() or {}
+            payer_email = str(service.get('userEmail') or service.get('user_email') or service.get('email') or '').strip().lower()
+            service_user_id = service.get('userId') or service.get('user_id') or service.get('uid')
+            service_municipality = str(service.get('municipality') or service.get('municipality_name') or '').strip()
+            service_region = get_firestore_region_name(service.get('region') or service.get('region_name') or service.get('regionName'))
+
+            if not (user_in_scope(payer_email, service_user_id) or municipality_region_match(service_municipality, service_region)):
+                continue
+
+            payment_status = service.get('paymentStatus') or service.get('payment_status') or service.get('status')
+            if not is_paid_status(payment_status):
+                continue
+
+            amount = parse_amount(service.get('amount') or service.get('paymentAmount') or service.get('serviceFee') or service.get('fee'))
+            if amount <= 0:
+                continue
+
+            scoped_user = scoped_users.get(payer_email, {})
+            municipality_name = service_municipality or scoped_user.get('municipality') or 'UNKNOWN'
+
+            append_record(
+                payment_deposits,
+                service_doc.id,
+                service.get('invoiceId') or service.get('invoice_id') or service.get('externalId') or service.get('external_id') or service_doc.id,
+                service.get('serviceType') or service.get('description') or 'Service Payment',
+                amount,
+                payment_status,
+                service.get('paymentMethod') or service.get('payment_method') or 'Online Payment',
+                municipality_name,
+                payer_email,
+                service.get('updatedAt') or service.get('createdAt') or service.get('created_at') or service.get('submittedAt')
+            )
     except Exception as e:
         print(f"[WARN] Unable to load transactions for accounting deposits view: {e}")
+
+    deduped = {}
+    for row in payment_deposits:
+        dedupe_key = str(row.get('invoice_id') or row.get('id'))
+        deduped[dedupe_key] = row
+    payment_deposits = list(deduped.values())
 
     payment_deposits.sort(key=lambda x: x.get('created_at', ''), reverse=True)
 

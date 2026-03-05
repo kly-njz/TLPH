@@ -114,10 +114,12 @@
             <div class="flex gap-1.5">
               <input x-model="searchTerm" @input="applyFilters()" type="text" placeholder="Search..." 
                 class="gov-input w-40" />
-              <select x-model="statusFilter" @change="applyFilters()" class="gov-input cursor-pointer">
+              <select x-model="statusFilter" @change="applyFilters()" class="gov-input cursor-pointer" title="Status Filter">
                 <option value="">All Status</option>
-                <option value="Completed">Completed</option>
-                <option value="Pending">Pending</option>
+                <option value="PAID">Paid</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="SETTLED">Settled</option>
+                <option value="PENDING">Pending</option>
               </select>
               <button @click="resetFilters()" class="gov-btn border border-slate-300 bg-slate-100 hover:bg-slate-200">Reset</button>
             </div>
@@ -197,7 +199,7 @@
               (dep.description || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
               (dep.invoice_id || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
               (dep.payer_email || '').toLowerCase().includes(this.searchTerm.toLowerCase());
-            const matchStatus = !this.statusFilter || dep.status === this.statusFilter;
+            const matchStatus = !this.statusFilter || String(dep.status || '').toUpperCase() === this.statusFilter;
             return matchSearch && matchStatus;
           });
         },
@@ -207,12 +209,12 @@
         },
 
         get completedCount() {
-          return this.deposits.filter(d => d.status === 'Completed' || d.status === 'Paid').length;
+          return this.deposits.filter(d => ['PAID', 'COMPLETED', 'SETTLED'].includes(String(d.status || '').toUpperCase())).length;
         },
 
         get pendingAmount() {
           return this.deposits
-            .filter(d => d.status === 'Pending')
+            .filter(d => String(d.status || '').toUpperCase() === 'PENDING')
             .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
         },
 
@@ -231,13 +233,17 @@
         },
 
         getStatusBadge(status) {
+          const normalized = String(status || '').toUpperCase();
           const classes = {
-            'Completed': 'bg-emerald-50 text-emerald-800 border-emerald-200',
-            'Paid': 'bg-emerald-50 text-emerald-800 border-emerald-200',
-            'Pending': 'bg-amber-50 text-amber-800 border-amber-200',
-            'Failed': 'bg-red-50 text-red-800 border-red-200',
+            'COMPLETED': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+            'PAID': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+            'SETTLED': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+            'PENDING': 'bg-amber-50 text-amber-800 border-amber-200',
+            'FAILED': 'bg-red-50 text-red-800 border-red-200',
+            'EXPIRED': 'bg-red-50 text-red-800 border-red-200',
+            'CANCELLED': 'bg-slate-100 text-slate-700 border-slate-300'
           };
-          return `px-1 py-0.5 rounded-[2px] font-bold text-[8px] uppercase border ${classes[status] || classes['Pending']}`;
+          return `px-1 py-0.5 rounded-[2px] font-bold text-[8px] uppercase border ${classes[normalized] || classes['PENDING']}`;
         },
 
         applyFilters() {

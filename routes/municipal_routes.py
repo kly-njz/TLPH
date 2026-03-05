@@ -562,7 +562,13 @@ def accounting_expense_category_municipal():
 @bp.route('/accounting/deposit-category-municipal')
 @role_required('municipal','municipal_admin')
 def accounting_deposit_category_municipal():
-    return render_template('municipal/accounting/deposit-category-municipal.html')
+    municipality_name, region_name, province_name = _get_municipality_from_firestore()
+    return render_template(
+        'municipal/accounting/payment-deposits-municipal.html',
+        municipality_name=municipality_name,
+        region_name=region_name,
+        province_name=province_name
+    )
 
 # --- Logs ---
 def _get_municipality_from_firestore():

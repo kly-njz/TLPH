@@ -395,6 +395,7 @@ def api_get_municipal_payment_deposits():
         
         # Step 1: Get all users that belong to this municipality
         user_emails = set()
+        user_ids = set()
         try:
             users_docs = db.collection('users').limit(1000).stream()
             
@@ -413,12 +414,57 @@ def api_get_municipal_payment_deposits():
                 email = user_data.get('email')
                 if email:
                     user_emails.add(email.lower())
+
+                user_ids.add(str(user_doc.id))
+                for uid in [user_data.get('uid'), user_data.get('user_id'), user_data.get('userId'), user_data.get('id')]:
+                    if uid:
+                        user_ids.add(str(uid))
             
             print(f"[DEBUG] Found {len(user_emails)} users for municipality '{municipality_scope}' under region '{region_scope}'")
         except Exception as e:
             print(f"[WARNING] Failed to fetch municipality users: {e}")
         
         deposits = []
+        paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
+
+        def parse_amount(raw_value):
+            try:
+                return float(raw_value or 0)
+            except (ValueError, TypeError):
+                return 0.0
+
+        def is_paid(status_value):
+            return str(status_value or '').strip().lower() in paid_markers
+
+        def in_scope(email_value=None, user_id_value=None, muni_value=None, region_value=None):
+            normalized_email = str(email_value or '').strip().lower()
+            normalized_uid = str(user_id_value or '').strip()
+            normalized_muni = _normalize_scope(muni_value)
+            normalized_region = _normalize_scope(_canonical_region_name(region_value))
+
+            by_user = (normalized_email in user_emails) or (normalized_uid and normalized_uid in user_ids)
+            by_fields = (
+                normalized_muni == normalized_municipality_scope
+                and (not normalized_region_scope or not normalized_region or normalized_region == normalized_region_scope)
+            )
+            return by_user or by_fields
+
+        def append_deposit(record_id, invoice_id, external_id, amount, description, payer_email, payment_method, status, created_at, paid_at, reference):
+            deposits.append({
+                'id': record_id,
+                'transaction_type': 'Payment Deposit',
+                'payment_type': 'Online Payment',
+                'invoice_id': invoice_id,
+                'external_id': external_id,
+                'amount': amount,
+                'description': description,
+                'payer_email': payer_email,
+                'payment_method': payment_method,
+                'status': str(status or '').strip().upper(),
+                'created_at': created_at,
+                'paid_at': paid_at,
+                'reference': reference,
+            })
         
         # Step 2: Fetch all transactions from 'transactions' collection
         try:
@@ -428,39 +474,33 @@ def api_get_municipal_payment_deposits():
             for doc in all_transactions:
                 trans = doc.to_dict()
                 user_email = (trans.get('user_email') or '').lower()
-                trans_municipality = _normalize_scope(trans.get('municipality') or trans.get('municipality_name'))
-                trans_region = _normalize_scope(_canonical_region_name(
+                user_id = trans.get('userId') or trans.get('user_id') or trans.get('uid')
+
+                if in_scope(
+                    user_email,
+                    user_id,
+                    trans.get('municipality') or trans.get('municipality_name'),
                     trans.get('region') or trans.get('region_name') or trans.get('regionName')
-                ))
-                
-                matches_user_scope = user_email in user_emails
-                matches_transaction_scope = (
-                    trans_municipality == normalized_municipality_scope
-                    and (not normalized_region_scope or not trans_region or trans_region == normalized_region_scope)
-                )
+                ):
+                    status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status')
+                    paid_by_status = is_paid(status)
+                    paid_by_method = bool(trans.get('payment_method')) and str(status or '').strip().lower() not in {'pending', 'failed', 'expired', 'cancelled'}
+                    amount = parse_amount(trans.get('amount'))
 
-                if matches_user_scope or matches_transaction_scope:
-                    try:
-                        amount = float(trans.get('amount', 0) or 0)
-                    except (ValueError, TypeError):
-                        amount = 0.0
-
-                    deposit_record = {
-                        'id': doc.id,
-                        'transaction_type': 'Payment Deposit',
-                        'payment_type': 'Online Payment',
-                        'invoice_id': trans.get('invoice_id', ''),
-                        'external_id': trans.get('external_id', ''),
-                        'amount': amount,
-                        'description': trans.get('description', trans.get('transaction_name', 'Payment')),
-                        'payer_email': user_email,
-                        'payment_method': trans.get('payment_method', 'Online Payment'),
-                        'status': trans.get('status', 'Pending'),
-                        'created_at': trans.get('created_at'),
-                        'paid_at': trans.get('paid_at'),
-                        'reference': trans.get('reference', trans.get('external_id', '')),
-                    }
-                    deposits.append(deposit_record)
+                    if amount > 0 and (paid_by_status or paid_by_method):
+                        append_deposit(
+                            doc.id,
+                            trans.get('invoice_id', ''),
+                            trans.get('external_id', ''),
+                            amount,
+                            trans.get('description', trans.get('transaction_name', 'Payment')),
+                            user_email,
+                            trans.get('payment_method', 'Online Payment'),
+                            status or 'PAID',
+                            trans.get('created_at'),
+                            trans.get('paid_at'),
+                            trans.get('reference', trans.get('external_id', ''))
+                        )
                     transaction_count += 1
             
             print(f"[DEBUG] Loaded {transaction_count} payment deposits for municipality '{municipality_scope}'")
@@ -468,6 +508,86 @@ def api_get_municipal_payment_deposits():
             print(f"[ERROR] Failed to fetch transactions: {e}")
             import traceback
             traceback.print_exc()
+
+        # Step 3: Merge paid applications and service requests that may not exist in transactions collection
+        try:
+            application_docs = db.collection('applications').limit(3000).stream()
+            for doc in application_docs:
+                app = doc.to_dict() or {}
+                payer_email = (app.get('userEmail') or app.get('user_email') or app.get('email') or '').lower()
+                app_user_id = app.get('userId') or app.get('user_id') or app.get('uid')
+
+                if not in_scope(
+                    payer_email,
+                    app_user_id,
+                    app.get('municipality') or app.get('municipality_name'),
+                    app.get('region') or app.get('region_name') or app.get('regionName')
+                ):
+                    continue
+
+                status = app.get('paymentStatus') or app.get('payment_status') or app.get('status')
+                amount = parse_amount(app.get('amount') or app.get('paymentAmount') or app.get('serviceFee') or app.get('processingFee'))
+                if amount <= 0 or not is_paid(status):
+                    continue
+
+                append_deposit(
+                    doc.id,
+                    app.get('invoiceId') or app.get('invoice_id') or app.get('externalId') or app.get('external_id') or doc.id,
+                    app.get('externalId') or app.get('external_id') or '',
+                    amount,
+                    app.get('description') or app.get('applicationType') or app.get('permitType') or 'Application Payment',
+                    payer_email,
+                    app.get('paymentMethod') or app.get('payment_method') or 'Online Payment',
+                    status,
+                    app.get('createdAt') or app.get('created_at') or app.get('dateFiled'),
+                    app.get('updatedAt') or app.get('updated_at'),
+                    app.get('reference') or ''
+                )
+        except Exception as e:
+            print(f"[WARNING] Failed to merge applications payment records: {e}")
+
+        try:
+            service_docs = db.collection('service_requests').limit(3000).stream()
+            for doc in service_docs:
+                service = doc.to_dict() or {}
+                payer_email = (service.get('userEmail') or service.get('user_email') or service.get('email') or '').lower()
+                service_user_id = service.get('userId') or service.get('user_id') or service.get('uid')
+
+                if not in_scope(
+                    payer_email,
+                    service_user_id,
+                    service.get('municipality') or service.get('municipality_name'),
+                    service.get('region') or service.get('region_name') or service.get('regionName')
+                ):
+                    continue
+
+                status = service.get('paymentStatus') or service.get('payment_status') or service.get('status')
+                amount = parse_amount(service.get('amount') or service.get('paymentAmount') or service.get('serviceFee') or service.get('fee'))
+                if amount <= 0 or not is_paid(status):
+                    continue
+
+                append_deposit(
+                    doc.id,
+                    service.get('invoiceId') or service.get('invoice_id') or service.get('externalId') or service.get('external_id') or doc.id,
+                    service.get('externalId') or service.get('external_id') or '',
+                    amount,
+                    service.get('serviceType') or service.get('description') or 'Service Payment',
+                    payer_email,
+                    service.get('paymentMethod') or service.get('payment_method') or 'Online Payment',
+                    status,
+                    service.get('createdAt') or service.get('created_at') or service.get('submittedAt'),
+                    service.get('updatedAt') or service.get('updated_at'),
+                    service.get('reference') or ''
+                )
+        except Exception as e:
+            print(f"[WARNING] Failed to merge service payment records: {e}")
+
+        # Deduplicate by invoice/reference/id
+        deduped = {}
+        for row in deposits:
+            dedupe_key = str(row.get('invoice_id') or row.get('reference') or row.get('id'))
+            deduped[dedupe_key] = row
+        deposits = list(deduped.values())
         
         # Sort by date (most recent first)
         try:
