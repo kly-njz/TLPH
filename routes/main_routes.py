@@ -97,13 +97,14 @@ def national_dashboard():
             applications.append({
                 'id': doc.id,
                 'created_at': date_str,
+                '_sort_key': date_obj.isoformat() if date_obj else '',
                 'reference_id': doc.id[:10].upper(),
                 'applicant_name': data.get('applicantName') or data.get('fullName') or data.get('name') or 'N/A',
                 'category': data.get('category') or data.get('applicantCategory') or 'N/A',
                 'region': region,
                 'status': nat_status,
             })
-        applications.sort(key=lambda x: x['created_at'], reverse=True)
+        applications.sort(key=lambda x: x['_sort_key'], reverse=True)
 
         # ── 2. Service Requests ───────────────────────────────────────────
         service_requests = []
@@ -135,12 +136,13 @@ def national_dashboard():
             service_requests.append({
                 'id': doc.id,
                 'date_filed': date_str,
+                '_sort_key': date_obj.isoformat() if date_obj else '',
                 'reference_id': doc.id[-6:].upper(),
                 'service_type': stype,
                 'region': region,
                 'status': nat_status,
             })
-        service_requests.sort(key=lambda x: x['date_filed'], reverse=True)
+        service_requests.sort(key=lambda x: x['_sort_key'], reverse=True)
 
         # ── 3. Transactions / Collections ────────────────────────────────
         transactions = []
