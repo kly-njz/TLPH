@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, jsonify, request, session
 from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 bp = Blueprint('regional', __name__, url_prefix='/regional')
 
@@ -157,7 +158,7 @@ def office_shifts_view():
                 if user_id:
                     user_doc = db.collection('users').document(user_id).get()
                 elif user_email:
-                    docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
                     for doc in docs:
                         user_doc = doc
                         break
@@ -299,7 +300,7 @@ def get_regional_office_shifts():
                 }, merge=True)
 
             for seed in generated_shifts.values():
-                existing = db.collection('office_shifts').where('shift_code', '==', seed['shift_code']).limit(1).stream()
+                existing = db.collection('office_shifts').where(filter=FieldFilter('shift_code', '==', seed['shift_code'])).limit(1).stream()
                 if not any(True for _ in existing):
                     db.collection('office_shifts').document().set(seed)
 
@@ -392,7 +393,7 @@ def create_regional_office_shift():
         return jsonify({'success': False, 'error': 'Shift code and shift name are required'}), 400
 
     db = get_firestore_db()
-    duplicate = db.collection('office_shifts').where('shift_code', '==', shift_code).limit(1).stream()
+    duplicate = db.collection('office_shifts').where(filter=FieldFilter('shift_code', '==', shift_code)).limit(1).stream()
     if any(True for _ in duplicate):
         return jsonify({'success': False, 'error': 'Shift code already exists'}), 409
 
@@ -467,7 +468,7 @@ def employees_view():
                 if user_id:
                     user_doc = db.collection('users').document(user_id).get()
                 elif user_email:
-                    docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
                     for doc in docs:
                         user_doc = doc
                         break
@@ -540,7 +541,7 @@ def create_regional_employee():
         return jsonify({'success': False, 'error': 'Employee ID, First Name, and Last Name are required'}), 400
 
     db = get_firestore_db()
-    duplicate = db.collection('employees').where('employee_id', '==', employee_id).limit(1).stream()
+    duplicate = db.collection('employees').where(filter=FieldFilter('employee_id', '==', employee_id)).limit(1).stream()
     if any(True for _ in duplicate):
         return jsonify({'success': False, 'error': 'Employee ID already exists'}), 409
 
@@ -571,7 +572,150 @@ def create_regional_employee():
 @bp.route('/hrm/attendance')
 @role_required('regional','regional_admin')
 def attendance_view():
-    return render_template('regional/HR/attendance-regional.html')
+    from firebase_admin import firestore
+
+    region_name = session.get('region') or session.get('user_region')
+
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    print(f"[DEBUG] attendance_view fetched region from Firestore: {region_name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch attendance region from Firestore: {e}")
+
+    if not region_name:
+        region_name = 'Unknown Region'
+
+    return render_template('regional/HR/attendance-regional.html', region_name=region_name)
+
+@bp.route('/api/hrm/attendance', methods=['GET'])
+@role_required('regional','regional_admin')
+def get_regional_attendance():
+    from datetime import date
+
+    db = get_firestore_db()
+    records = []
+    today_str = date.today().isoformat()
+
+    employee_docs = db.collection('employees').stream()
+    for employee_doc in employee_docs:
+        emp = employee_doc.to_dict() or {}
+
+        defaults = {}
+        if 'attendance_date' not in emp:
+            defaults['attendance_date'] = today_str
+        if 'attendance_status' not in emp:
+            defaults['attendance_status'] = 'Present'
+        if 'attendance_remarks' not in emp:
+            defaults['attendance_remarks'] = 'Regular'
+        if 'time_in' not in emp:
+            defaults['time_in'] = ''
+        if 'time_out' not in emp:
+            defaults['time_out'] = ''
+        if 'working_hours' not in emp:
+            defaults['working_hours'] = 0
+
+        if defaults:
+            employee_doc.reference.set(defaults, merge=True)
+            emp.update(defaults)
+
+        scope = (emp.get('scope') or '').strip().upper()
+        if scope not in ('REGIONAL', 'MUNICIPAL'):
+            role = (emp.get('role') or '').strip().lower()
+            scope = 'MUNICIPAL' if 'municipal' in role else 'REGIONAL'
+
+        status_raw = (emp.get('attendance_status') or '').strip()
+        status_map = {
+            'On Duty': 'Present',
+            'Active': 'Present',
+            'Present': 'Present',
+            'Late': 'Late',
+            'Undertime': 'Undertime',
+            'Absent': 'Absent',
+            'On Leave': 'Leave',
+            'Leave': 'Leave'
+        }
+        status = status_map.get(status_raw, status_raw or 'Present')
+
+        records.append({
+            'id': employee_doc.id,
+            'employee_id': emp.get('employee_id', ''),
+            'full_name': f"{emp.get('last_name', '')}, {emp.get('first_name', '')} {emp.get('middle_name', '')}".strip().strip(','),
+            'assignment': emp.get('department_name') or emp.get('division') or emp.get('designation') or '',
+            'sub_assignment': f"{scope.title()} Office",
+            'scope': scope,
+            'date': emp.get('attendance_date') or today_str,
+            'time_in': emp.get('time_in') or '',
+            'time_out': emp.get('time_out') or '',
+            'hours': emp.get('working_hours') or 0,
+            'status': status,
+            'remarks': emp.get('attendance_remarks') or 'Regular'
+        })
+
+    records.sort(key=lambda r: r.get('employee_id') or '')
+    return jsonify({'success': True, 'records': records})
+
+@bp.route('/api/hrm/attendance/adjust', methods=['PUT'])
+@role_required('regional','regional_admin')
+def adjust_regional_attendance():
+    data = request.get_json(silent=True) or {}
+    employee_doc_id = (data.get('employee_doc_id') or '').strip()
+    attendance_date = (data.get('attendance_date') or '').strip()
+    scope = (data.get('scope') or '').strip()
+    time_in = (data.get('time_in') or '').strip()
+    time_out = (data.get('time_out') or '').strip()
+    reason = (data.get('reason') or '').strip()
+    notes = (data.get('notes') or '').strip()
+
+    if not employee_doc_id:
+        return jsonify({'success': False, 'error': 'Employee is required'}), 400
+
+    # Compute working hours when time_in and time_out are both present
+    working_hours = 0
+    try:
+        if time_in and time_out:
+            from datetime import datetime
+            in_dt = datetime.strptime(time_in, '%H:%M')
+            out_dt = datetime.strptime(time_out, '%H:%M')
+            delta = (out_dt - in_dt).total_seconds() / 3600
+            working_hours = round(max(delta, 0), 2)
+    except Exception:
+        working_hours = 0
+
+    status = 'Present'
+    if not time_in and not time_out:
+        status = 'Absent'
+
+    db = get_firestore_db()
+    payload = {
+        'attendance_date': attendance_date,
+        'scope': scope,
+        'time_in': time_in,
+        'time_out': time_out,
+        'working_hours': working_hours,
+        'attendance_status': status,
+        'attendance_remarks': notes or reason or 'Adjusted',
+    }
+
+    db.collection('employees').document(employee_doc_id).set(payload, merge=True)
+    return jsonify({'success': True})
 
 @bp.route('/hrm/holidays')
 @role_required('regional','regional_admin')
@@ -595,7 +739,7 @@ def holidays_view():
                 if user_id:
                     user_doc = db.collection('users').document(user_id).get()
                 elif user_email:
-                    docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
                     for doc in docs:
                         user_doc = doc
                         break
@@ -718,7 +862,7 @@ def leave_requests_view():
                 if user_id:
                     user_doc = db.collection('users').document(user_id).get()
                 elif user_email:
-                    docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
                     for doc in docs:
                         user_doc = doc
                         break
@@ -863,7 +1007,7 @@ def accounting_dashboard_view():
     if not user_region:
         user_email = session.get('user_email')
         if user_email:
-            user_docs = db.collection('users').where('email', '==', user_email).stream()
+            user_docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).stream()
             for user_doc in user_docs:
                 user_data = user_doc.to_dict()
                 region_field = user_data.get('region', '')
@@ -882,7 +1026,7 @@ def accounting_dashboard_view():
 
     # Calculate and update received_from_national for the region
     try:
-        reg_funds_query = db.collection('regional_fund_distribution').where('region', '==', user_region).stream()
+        reg_funds_query = db.collection('regional_fund_distribution').where(filter=FieldFilter('region', '==', user_region)).stream()
         total_received = 0
         for fund_doc in reg_funds_query:
             fund = fund_doc.to_dict()
@@ -912,7 +1056,7 @@ def accounting_dashboard_view():
     municipal_funds = []
     try:
         print(f"[DEBUG] Fetching municipal fund distributions for region: {user_region}")
-        muni_funds_query = db.collection('municipal_fund_distribution').where('region', '==', user_region).order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+        muni_funds_query = db.collection('municipal_fund_distribution').where(filter=FieldFilter('region', '==', user_region)).order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
         for fund_doc in muni_funds_query:
             fund = fund_doc.to_dict()
             municipal_funds.append(fund)
@@ -924,7 +1068,7 @@ def accounting_dashboard_view():
     regional_funds = []
     try:
         print(f"[DEBUG] Fetching regional fund distributions for region: {user_region}")
-        reg_funds_query = db.collection('regional_fund_distribution').where('region', '==', user_region).order_by('date', direction=firestore.Query.DESCENDING).stream()
+        reg_funds_query = db.collection('regional_fund_distribution').where(filter=FieldFilter('region', '==', user_region)).order_by('date', direction=firestore.Query.DESCENDING).stream()
         for fund_doc in reg_funds_query:
             fund = fund_doc.to_dict()
             regional_funds.append(fund)
