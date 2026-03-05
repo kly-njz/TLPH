@@ -449,7 +449,7 @@ def api_get_municipal_payment_deposits():
             )
             return by_user or by_fields
 
-        def append_deposit(record_id, invoice_id, external_id, amount, description, payer_email, payment_method, status, created_at, paid_at, reference):
+        def append_deposit(record_id, invoice_id, external_id, amount, description, payer_email, payment_method, status, created_at, paid_at, reference, source, municipality_name, region_name):
             deposits.append({
                 'id': record_id,
                 'transaction_type': 'Payment Deposit',
@@ -464,6 +464,9 @@ def api_get_municipal_payment_deposits():
                 'created_at': created_at,
                 'paid_at': paid_at,
                 'reference': reference,
+                'source': source,
+                'municipality': municipality_name,
+                'region': region_name,
             })
         
         # Step 2: Fetch all transactions from 'transactions' collection
@@ -499,7 +502,10 @@ def api_get_municipal_payment_deposits():
                             status or 'PAID',
                             trans.get('created_at'),
                             trans.get('paid_at'),
-                            trans.get('reference', trans.get('external_id', ''))
+                            trans.get('reference', trans.get('external_id', '')),
+                            'transactions',
+                            trans.get('municipality') or trans.get('municipality_name') or municipality_scope,
+                            _canonical_region_name(trans.get('region') or trans.get('region_name') or trans.get('regionName') or region_scope)
                         )
                     transaction_count += 1
             
@@ -541,7 +547,10 @@ def api_get_municipal_payment_deposits():
                     status,
                     app.get('createdAt') or app.get('created_at') or app.get('dateFiled'),
                     app.get('updatedAt') or app.get('updated_at'),
-                    app.get('reference') or ''
+                    app.get('reference') or '',
+                    'applications',
+                    app.get('municipality') or app.get('municipality_name') or municipality_scope,
+                    _canonical_region_name(app.get('region') or app.get('region_name') or app.get('regionName') or region_scope)
                 )
         except Exception as e:
             print(f"[WARNING] Failed to merge applications payment records: {e}")
@@ -577,7 +586,10 @@ def api_get_municipal_payment_deposits():
                     status,
                     service.get('createdAt') or service.get('created_at') or service.get('submittedAt'),
                     service.get('updatedAt') or service.get('updated_at'),
-                    service.get('reference') or ''
+                    service.get('reference') or '',
+                    'service_requests',
+                    service.get('municipality') or service.get('municipality_name') or municipality_scope,
+                    _canonical_region_name(service.get('region') or service.get('region_name') or service.get('regionName') or region_scope)
                 )
         except Exception as e:
             print(f"[WARNING] Failed to merge service payment records: {e}")
