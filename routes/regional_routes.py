@@ -2099,11 +2099,15 @@ def get_regional_expenses():
                 if user_doc and user_doc.exists:
                     user_data = user_doc.to_dict() or {}
                     region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
-            except Exception:
+            except Exception as e:
+                print(f"[WARNING] Failed to fetch region from user doc: {e}")
                 pass
 
     if not region_name:
         region_name = 'CALABARZON'
+    
+    region_name = str(region_name).strip().upper()
+    print(f"[DEBUG] Fetching transactions for region: '{region_name}'")
 
     transactions = []
     
@@ -2117,16 +2121,18 @@ def get_regional_expenses():
             filter=FieldFilter('region', '==', region_name)
         ).stream()
         
+        expense_count = 0
         for doc in expense_docs:
             expense = doc.to_dict()
             expense['id'] = doc.id
             expense['transaction_type'] = 'Expense'
             expense['transaction_date'] = expense.get('expense_date', '')
             transactions.append(expense)
+            expense_count += 1
         
-        print(f"[DEBUG] Loaded {len([t for t in transactions if t['transaction_type'] == 'Expense'])} expenses from regional_expenses")
+        print(f"[DEBUG] Loaded {expense_count} expenses from regional_expenses for region '{region_name}'")
     except Exception as e:
-        print(f"[WARNING] Failed to fetch regional expenses: {e}")
+        print(f"[ERROR] Failed to fetch regional expenses: {e}")
     
     # 2️⃣ Municipal Fund Distributions (transfers TO municipalities)
     try:
@@ -2134,6 +2140,7 @@ def get_regional_expenses():
             filter=FieldFilter('region', '==', region_name)
         ).stream()
         
+        transfer_count = 0
         for doc in muni_fund_docs:
             fund = doc.to_dict()
             fund['id'] = doc.id
@@ -2144,15 +2151,26 @@ def get_regional_expenses():
             fund['recipient'] = fund.get('municipality', 'N/A')
             fund['payment_method'] = 'Bank Transfer'
             fund['description'] = f"Fund allocation to {fund.get('municipality')} ({fund.get('province')})"
-            fund['transaction_date'] = fund.get('timestamp', datetime.datetime.utcnow().isoformat()).split('T')[0] if isinstance(fund.get('timestamp'), str) else ''
+            
+            # Handle timestamp properly
+            timestamp = fund.get('timestamp')
+            if timestamp:
+                if isinstance(timestamp, str):
+                    fund['transaction_date'] = timestamp.split('T')[0]
+                else:
+                    fund['transaction_date'] = datetime.datetime.now().strftime('%Y-%m-%d')
+            else:
+                fund['transaction_date'] = ''
+            
             fund['expense_date'] = fund['transaction_date']
             fund['reference_number'] = fund.get('transfer_id', '')
             fund['status'] = fund.get('status', 'Released')
             transactions.append(fund)
+            transfer_count += 1
         
-        print(f"[DEBUG] Loaded {len([t for t in transactions if t.get('transaction_type') == 'Fund Transfer to Municipality'])} fund transfers from municipal_fund_distribution")
+        print(f"[DEBUG] Loaded {transfer_count} municipal fund distributions for region '{region_name}'")
     except Exception as e:
-        print(f"[WARNING] Failed to fetch municipal fund distributions: {e}")
+        print(f"[ERROR] Failed to fetch municipal fund distributions: {e}")
     
     # 3️⃣ Regional Fund Distributions (funds received FROM national)
     try:
@@ -2160,6 +2178,7 @@ def get_regional_expenses():
             filter=FieldFilter('region', '==', region_name)
         ).stream()
         
+        received_count = 0
         for doc in reg_fund_docs:
             fund = doc.to_dict()
             fund['id'] = doc.id
@@ -2170,15 +2189,26 @@ def get_regional_expenses():
             fund['recipient'] = 'National Government'
             fund['payment_method'] = 'Bank Transfer'
             fund['description'] = f"Allocation from national for {fund.get('fund_type', 'regional operations')}"
-            fund['transaction_date'] = fund.get('date', datetime.datetime.utcnow().isoformat()).split('T')[0] if isinstance(fund.get('date'), str) else ''
+            
+            # Handle date properly
+            date_field = fund.get('date')
+            if date_field:
+                if isinstance(date_field, str):
+                    fund['transaction_date'] = date_field.split('T')[0]
+                else:
+                    fund['transaction_date'] = datetime.datetime.now().strftime('%Y-%m-%d')
+            else:
+                fund['transaction_date'] = ''
+            
             fund['expense_date'] = fund['transaction_date']
             fund['reference_number'] = fund.get('transfer_id', '')
             fund['status'] = fund.get('status', 'Received')
             transactions.append(fund)
+            received_count += 1
         
-        print(f"[DEBUG] Loaded {len([t for t in transactions if t.get('transaction_type') == 'Fund Received'])} fund receipts from regional_fund_distribution")
+        print(f"[DEBUG] Loaded {received_count} regional fund distributions for region '{region_name}'")
     except Exception as e:
-        print(f"[WARNING] Failed to fetch regional fund distributions: {e}")
+        print(f"[ERROR] Failed to fetch regional fund distributions: {e}")
     
     # Sort by date (most recent first)
     try:
@@ -2189,7 +2219,8 @@ def get_regional_expenses():
     except Exception as e:
         print(f"[WARNING] Failed to sort transactions: {e}")
     
-    print(f"[DEBUG] Total transactions for {region_name}: {len(transactions)}")
+    print(f"[DEBUG] Total transactions returned for {region_name}: {len(transactions)}")
+    print(f"[DEBUG] Transaction types: {[t.get('transaction_type') for t in transactions]}")
     
     return jsonify({'success': True, 'expenses': transactions})
 
@@ -2418,3 +2449,72 @@ def delete_regional_expense(expense_id):
     except Exception as e:
         print(f"[ERROR] Failed to delete expense: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =====================================
+# DEBUG ENDPOINT - Check what's in Firestore
+# =====================================
+@bp.route('/api/accounting/debug/collections', methods=['GET'])
+@role_required('regional','regional_admin')
+def debug_collections():
+    """Debug endpoint to see what's actually in the collections"""
+    from firebase_admin import firestore
+    
+    db = get_firestore_db()
+    region_name = session.get('region') or session.get('user_region') or 'CALABARZON'
+    region_name = str(region_name).strip().upper()
+    
+    debug_info = {
+        'current_region': region_name,
+        'session_data': {
+            'region': session.get('region'),
+            'user_region': session.get('user_region'),
+            'user_id': session.get('user_id'),
+            'user_email': session.get('user_email')
+        },
+        'collections': {}
+    }
+    
+    # Check each collection
+    collections_to_check = [
+        'regional_expenses',
+        'municipal_fund_distribution', 
+        'regional_fund_distribution'
+    ]
+    
+    for collection_name in collections_to_check:
+        try:
+            # Fetch ALL docs from collection (no filter)
+            all_docs = list(db.collection(collection_name).limit(100).stream())
+            
+            # Fetch docs with region filter
+            region_docs = list(db.collection(collection_name).where(
+                filter=FieldFilter('region', '==', region_name)
+            ).limit(100).stream())
+            
+            debug_info['collections'][collection_name] = {
+                'total_count': len(all_docs),
+                'region_filtered_count': len(region_docs),
+                'sample_docs': [
+                    {
+                        'id': doc.id,
+                        'fields': list(doc.to_dict().keys()),
+                        'region': doc.to_dict().get('region'),
+                    }
+                    for doc in all_docs[:3]
+                ]
+            }
+            
+            # Show any unique region values found
+            if all_docs:
+                regions_found = set()
+                for doc in all_docs:
+                    regions_found.add(doc.to_dict().get('region'))
+                debug_info['collections'][collection_name]['regions_in_collection'] = list(regions_found)
+                
+        except Exception as e:
+            debug_info['collections'][collection_name] = {
+                'error': str(e)
+            }
+    
+    return jsonify(debug_info)
