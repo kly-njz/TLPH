@@ -185,8 +185,14 @@ def national_dashboard():
         transactions.reverse()  # most recent first
         transactions = transactions[:20]
 
-        # ── 4. Permits ─────────────────────────────────────────────────
+        # ── 4 & 5. Permits + Inventory Items (single query) ─────────────
         permits = []
+        inventory_items = []
+        cat_map = {
+            'farm-visit': 'Chemicals', 'fishery-permit': 'Marine Res.',
+            'livestock': 'Livestock', 'forest': 'Forest Res.',
+            'wildlife': 'Wildlife', 'environment': 'Environment'
+        }
         for doc in db.collection('license_applications').stream():
             data = doc.to_dict()
             fd = data.get('formData') or {}
@@ -199,26 +205,14 @@ def national_dashboard():
                 'status': disp,
                 'status_raw': status_raw,
             })
-        permits = permits[:15]
-
-        # ── 5. Inventory Items ────────────────────────────────────────────
-        inventory_items = []
-        for doc in db.collection('license_applications').stream():
-            data = doc.to_dict()
-            fd = data.get('formData') or {}
             atype = data.get('applicationType') or 'N/A'
-            cat_map = {
-                'farm-visit': 'Chemicals', 'fishery-permit': 'Marine Res.',
-                'livestock': 'Livestock', 'forest': 'Forest Res.',
-                'wildlife': 'Wildlife', 'environment': 'Environment'
-            }
             cat = cat_map.get(str(atype).lower(), 'General')
-            region_v = fd.get('region') or data.get('region') or 'N/A'
             inventory_items.append({
                 'category': cat,
                 'quantity': data.get('quantity') or 1,
-                'hub': region_v,
+                'hub': region,
             })
+        permits = permits[:15]
         inventory_items = inventory_items[:15]
 
         # ── 6. Trend (last 6 months, combined apps + SR) ─────────────────
