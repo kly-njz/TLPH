@@ -127,7 +127,38 @@ def application_view(application_id):
 @bp.route('/hrm/company')
 @role_required('regional','regional_admin')
 def company_view():
-    return render_template('regional/HR/company-regional.html')
+    from firebase_admin import firestore
+
+    region_name = session.get('region') or session.get('user_region')
+
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    print(f"[DEBUG] company_view fetched region from Firestore: {region_name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch company region from Firestore: {e}")
+
+    if not region_name:
+        region_name = 'Unknown Region'
+
+    return render_template('regional/HR/company-regional.html', region_name=region_name)
 
 @bp.route('/hrm/departments')
 @role_required('regional','regional_admin')
@@ -813,6 +844,248 @@ def update_regional_department(department_id):
     }
     
     db.collection('departments').document(department_id).set(payload, merge=True)
+    return jsonify({'success': True})
+
+@bp.route('/api/hrm/municipal-offices', methods=['GET'])
+@role_required('regional','regional_admin')
+def get_regional_municipal_offices():
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    
+    # Get the user's region
+    region_name = session.get('region') or session.get('user_region')
+    
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                user_doc = None
+
+                if user_id:
+                    user_doc = db.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+            except Exception:
+                pass
+
+    if not region_name:
+        region_name = 'CALABARZON'
+    
+    offices = []
+
+    # Check if there are any municipal offices for this region
+    existing_docs = list(db.collection('municipal_offices').where(filter=FieldFilter('region', '==', region_name)).limit(1).stream())
+    
+    if not existing_docs:
+        # Auto-seed municipalities based on region
+        region_municipalities = {
+            'CALABARZON': [
+                # Cavite Province
+                {'name': 'Bacoor', 'province': 'Cavite', 'code': 'MUN-CAV-001', 'status': 'Active'},
+                {'name': 'Imus', 'province': 'Cavite', 'code': 'MUN-CAV-002', 'status': 'Active'},
+                {'name': 'Dasmariñas', 'province': 'Cavite', 'code': 'MUN-CAV-003', 'status': 'Active'},
+                {'name': 'Cavite City', 'province': 'Cavite', 'code': 'MUN-CAV-004', 'status': 'Active'},
+                {'name': 'Tagaytay', 'province': 'Cavite', 'code': 'MUN-CAV-005', 'status': 'Active'},
+                {'name': 'Trece Martires', 'province': 'Cavite', 'code': 'MUN-CAV-006', 'status': 'Active'},
+                
+                # Laguna Province
+                {'name': 'Santa Rosa', 'province': 'Laguna', 'code': 'MUN-LAG-001', 'status': 'Active'},
+                {'name': 'Calamba', 'province': 'Laguna', 'code': 'MUN-LAG-002', 'status': 'Active'},
+                {'name': 'Biñan', 'province': 'Laguna', 'code': 'MUN-LAG-003', 'status': 'Active'},
+                {'name': 'San Pedro', 'province': 'Laguna', 'code': 'MUN-LAG-004', 'status': 'Active'},
+                {'name': 'Cabuyao', 'province': 'Laguna', 'code': 'MUN-LAG-005', 'status': 'Active'},
+                {'name': 'Los Baños', 'province': 'Laguna', 'code': 'MUN-LAG-006', 'status': 'Active'},
+                
+                # Batangas Province
+                {'name': 'Batangas City', 'province': 'Batangas', 'code': 'MUN-BAT-001', 'status': 'Active'},
+                {'name': 'Lipa', 'province': 'Batangas', 'code': 'MUN-BAT-002', 'status': 'Active'},
+                {'name': 'Tanauan', 'province': 'Batangas', 'code': 'MUN-BAT-003', 'status': 'Active'},
+                {'name': 'Santo Tomas', 'province': 'Batangas', 'code': 'MUN-BAT-004', 'status': 'Active'},
+                {'name': 'Taal', 'province': 'Batangas', 'code': 'MUN-BAT-005', 'status': 'Active'},
+                
+                # Rizal Province
+                {'name': 'Antipolo', 'province': 'Rizal', 'code': 'MUN-RIZ-001', 'status': 'Active'},
+                {'name': 'Cainta', 'province': 'Rizal', 'code': 'MUN-RIZ-002', 'status': 'Active'},
+                {'name': 'Taytay', 'province': 'Rizal', 'code': 'MUN-RIZ-003', 'status': 'Active'},
+                {'name': 'Binangonan', 'province': 'Rizal', 'code': 'MUN-RIZ-004', 'status': 'Active'},
+                {'name': 'Rodriguez', 'province': 'Rizal', 'code': 'MUN-RIZ-005', 'status': 'Active'},
+                
+                # Quezon Province
+                {'name': 'Lucena City', 'province': 'Quezon', 'code': 'MUN-QUE-001', 'status': 'Active'},
+                {'name': 'Tayabas', 'province': 'Quezon', 'code': 'MUN-QUE-002', 'status': 'Active'},
+                {'name': 'Sariaya', 'province': 'Quezon', 'code': 'MUN-QUE-003', 'status': 'Active'},
+                {'name': 'Candelaria', 'province': 'Quezon', 'code': 'MUN-QUE-004', 'status': 'Active'},
+                {'name': 'Tiaong', 'province': 'Quezon', 'code': 'MUN-QUE-005', 'status': 'Active'},
+            ],
+            'MIMAROPA': [
+                # Marinduque Province
+                {'name': 'Boac', 'province': 'Marinduque', 'code': 'MUN-MAR-001', 'status': 'Active'},
+                {'name': 'Santa Cruz', 'province': 'Marinduque', 'code': 'MUN-MAR-002', 'status': 'Active'},
+                {'name': 'Buenavista', 'province': 'Marinduque', 'code': 'MUN-MAR-003', 'status': 'Active'},
+                {'name': 'Gasan', 'province': 'Marinduque', 'code': 'MUN-MAR-004', 'status': 'Active'},
+                {'name': 'Mogpog', 'province': 'Marinduque', 'code': 'MUN-MAR-005', 'status': 'Active'},
+                
+                # Occidental Mindoro Province
+                {'name': 'Puerto Princesa', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-001', 'status': 'Active'},
+                {'name': 'San Jose', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-002', 'status': 'Active'},
+                {'name': 'Mamburao', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-003', 'status': 'Active'},
+                
+                # Oriental Mindoro Province
+                {'name': 'Calapan', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-001', 'status': 'Active'},
+                {'name': 'Roxas', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-002', 'status': 'Active'},
+                {'name': 'Bongabong', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-003', 'status': 'Active'},
+                
+                # Palawan Province
+                {'name': 'Puerto Princesa', 'province': 'Palawan', 'code': 'MUN-PAL-001', 'status': 'Active'},
+                {'name': 'Coron', 'province': 'Palawan', 'code': 'MUN-PAL-002', 'status': 'Active'},
+                {'name': 'El Nido', 'province': 'Palawan', 'code': 'MUN-PAL-003', 'status': 'Active'},
+                {'name': 'Brooke\'s Point', 'province': 'Palawan', 'code': 'MUN-PAL-004', 'status': 'Active'},
+                
+                # Romblon Province
+                {'name': 'Odiongan', 'province': 'Romblon', 'code': 'MUN-ROM-001', 'status': 'Active'},
+                {'name': 'Calatrava', 'province': 'Romblon', 'code': 'MUN-ROM-002', 'status': 'Active'},
+                {'name': 'San Andres', 'province': 'Romblon', 'code': 'MUN-ROM-003', 'status': 'Active'},
+            ]
+        }
+        
+        municipalities = region_municipalities.get(region_name, [])
+        
+        for mun in municipalities:
+            office_doc = {
+                'office_code': mun['code'],
+                'municipality_name': mun['name'],
+                'province': mun['province'],
+                'region': region_name,
+                'status': mun['status']
+            }
+            db.collection('municipal_offices').add(office_doc)
+    
+    # Now fetch municipal offices for this region only
+    for doc in db.collection('municipal_offices').where(filter=FieldFilter('region', '==', region_name)).stream():
+        item = doc.to_dict() or {}
+        
+        offices.append({
+            'id': doc.id,
+            'office_code': item.get('office_code', ''),
+            'municipality_name': item.get('municipality_name', ''),
+            'province': item.get('province', ''),
+            'region': item.get('region', region_name),
+            'status': item.get('status', 'Active')
+        })
+    
+    offices.sort(key=lambda o: (o.get('province') or '', o.get('municipality_name') or ''))
+    return jsonify({'success': True, 'offices': offices})
+
+@bp.route('/api/hrm/municipal-offices', methods=['POST'])
+@role_required('regional','regional_admin')
+def create_regional_municipal_office():
+    from firebase_admin import firestore
+
+    data = request.get_json(silent=True) or {}
+    
+    office_code = (data.get('office_code') or '').strip()
+    municipality_name = (data.get('municipality_name') or '').strip()
+    
+    if not office_code or not municipality_name:
+        return jsonify({'success': False, 'error': 'Office code and municipality name are required'}), 400
+    
+    # Get the user's region
+    region_name = session.get('region') or session.get('user_region')
+    
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db_client = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db_client.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db_client.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+            except Exception:
+                pass
+
+    if not region_name:
+        region_name = 'CALABARZON'
+    
+    db = get_firestore_db()
+    payload = {
+        'office_code': office_code,
+        'municipality_name': municipality_name,
+        'province': (data.get('province') or '').strip(),
+        'region': region_name,  # Force user's region
+        'status': (data.get('status') or 'Active').strip()
+    }
+    
+    db.collection('municipal_offices').add(payload)
+    return jsonify({'success': True})
+
+@bp.route('/api/hrm/municipal-offices/<office_id>', methods=['PUT'])
+@role_required('regional','regional_admin')
+def update_regional_municipal_office(office_id):
+    from firebase_admin import firestore
+
+    data = request.get_json(silent=True) or {}
+    
+    # Get the user's region
+    region_name = session.get('region') or session.get('user_region')
+    
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db_client = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db_client.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db_client.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+            except Exception:
+                pass
+
+    if not region_name:
+        region_name = 'CALABARZON'
+    
+    db = get_firestore_db()
+    payload = {
+        'office_code': (data.get('office_code') or '').strip(),
+        'municipality_name': (data.get('municipality_name') or '').strip(),
+        'province': (data.get('province') or '').strip(),
+        'region': region_name,  # Force user's region
+        'status': (data.get('status') or 'Active').strip()
+    }
+    
+    db.collection('municipal_offices').document(office_id).set(payload, merge=True)
     return jsonify({'success': True})
 
 @bp.route('/hrm/employees')
