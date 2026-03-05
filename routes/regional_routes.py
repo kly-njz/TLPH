@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, jsonify, request, session
 from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required
 from google.cloud.firestore_v1.base_query import FieldFilter
+from datetime import datetime
 
 bp = Blueprint('regional', __name__, url_prefix='/regional')
 
@@ -2125,6 +2126,7 @@ def accounting_deposits_view():
     municipality_set = set(str(m).strip().lower() for m in municipalities if m)
 
     scoped_users = {}
+    user_id_to_email = {}
     scoped_user_ids = set()
     try:
         users_docs = db.collection('users').limit(4000).stream()
@@ -2153,6 +2155,7 @@ def accounting_deposits_view():
                 'region': str(region_val or '').strip().upper()
             }
             scoped_user_ids.add(str(user_doc.id).strip())
+            user_id_to_email[str(user_doc.id).strip()] = email_val
 
             possible_ids = [
                 ud.get('uid'),
@@ -2162,7 +2165,9 @@ def accounting_deposits_view():
             ]
             for pid in possible_ids:
                 if pid:
-                    scoped_user_ids.add(str(pid).strip())
+                    pid_str = str(pid).strip()
+                    scoped_user_ids.add(pid_str)
+                    user_id_to_email[pid_str] = email_val
     except Exception as e:
         print(f"[WARN] Unable to resolve scoped users for accounting deposits view: {e}")
 
@@ -2181,6 +2186,39 @@ def accounting_deposits_view():
         if not normalized:
             return False
         return normalized in paid_status_markers
+
+    def normalize_date_value(value):
+        if not value:
+            return '-'
+        try:
+            if hasattr(value, 'isoformat'):
+                return value.isoformat()
+            if hasattr(value, 'to_datetime'):
+                return value.to_datetime().isoformat()
+            return str(value)
+        except Exception:
+            return str(value) or '-'
+
+    def resolve_payer_email(record, fallback_user_id=None):
+        candidates = [
+            record.get('user_email'),
+            record.get('userEmail'),
+            record.get('email'),
+            record.get('payer_email'),
+            record.get('payerEmail'),
+            record.get('customer_email'),
+            record.get('customerEmail'),
+            record.get('billing_email'),
+            record.get('billingEmail')
+        ]
+        for candidate in candidates:
+            normalized = str(candidate or '').strip().lower()
+            if normalized:
+                return normalized
+        fallback_id = str(fallback_user_id or '').strip()
+        if fallback_id and fallback_id in user_id_to_email:
+            return user_id_to_email[fallback_id]
+        return '-'
 
     def user_in_scope(email_value=None, user_id_value=None):
         normalized_email = str(email_value or '').strip().lower()
@@ -2205,11 +2243,11 @@ def accounting_deposits_view():
             'invoice_id': invoice_id,
             'description': description,
             'amount': amount,
-            'status': str(status or '').strip().upper(),
+            'status': str(status or 'PAID').strip().upper(),
             'payment_method': payment_method or 'Online Payment',
             'municipality': municipality or 'UNKNOWN',
             'payer_email': payer_email or '-',
-            'created_at': str(created_at or ''),
+            'created_at': normalize_date_value(created_at),
             'source': source,
         })
 
@@ -2219,7 +2257,7 @@ def accounting_deposits_view():
         tx_docs = db.collection('transactions').limit(5000).stream()
         for tx_doc in tx_docs:
             tx = tx_doc.to_dict() or {}
-            payer_email = str(tx.get('user_email') or '').strip().lower()
+            payer_email = resolve_payer_email(tx, tx.get('userId') or tx.get('user_id') or tx.get('uid'))
             tx_user_id = tx.get('userId') or tx.get('user_id') or tx.get('uid')
             tx_municipality = str(tx.get('municipality') or tx.get('municipality_name') or '').strip()
             tx_region = get_firestore_region_name(tx.get('region') or tx.get('region_name') or tx.get('regionName'))
@@ -2230,7 +2268,7 @@ def accounting_deposits_view():
             if not (in_scope_by_user or in_scope_by_fields):
                 continue
 
-            status = tx.get('status') or tx.get('paymentStatus') or tx.get('payment_status')
+            status = tx.get('status') or tx.get('paymentStatus') or tx.get('payment_status') or tx.get('payment_state')
             paid_by_status = is_paid_status(status)
             paid_by_method = bool(tx.get('payment_method')) and str(status or '').strip().lower() not in {'pending', 'failed', 'expired', 'cancelled'}
             if not (paid_by_status or paid_by_method):
@@ -2253,7 +2291,7 @@ def accounting_deposits_view():
                 tx.get('payment_method') or 'Online Payment',
                 municipality_name,
                 payer_email,
-                tx.get('paid_at') or tx.get('created_at'),
+                tx.get('paid_at') or tx.get('updated_at') or tx.get('created_at') or tx.get('createdAt'),
                 'transactions'
             )
 
@@ -2261,7 +2299,7 @@ def accounting_deposits_view():
         app_docs = db.collection('applications').limit(5000).stream()
         for app_doc in app_docs:
             app = app_doc.to_dict() or {}
-            payer_email = str(app.get('userEmail') or app.get('user_email') or app.get('email') or '').strip().lower()
+            payer_email = resolve_payer_email(app, app.get('userId') or app.get('user_id') or app.get('uid'))
             app_user_id = app.get('userId') or app.get('user_id') or app.get('uid')
             app_municipality = str(app.get('municipality') or app.get('municipality_name') or '').strip()
             app_region = get_firestore_region_name(app.get('region') or app.get('region_name') or app.get('regionName'))
@@ -2269,7 +2307,7 @@ def accounting_deposits_view():
             if not (user_in_scope(payer_email, app_user_id) or municipality_region_match(app_municipality, app_region)):
                 continue
 
-            payment_status = app.get('paymentStatus') or app.get('payment_status') or app.get('status')
+            payment_status = app.get('paymentStatus') or app.get('payment_status') or app.get('status') or app.get('payment_state')
             if not is_paid_status(payment_status):
                 continue
 
@@ -2290,7 +2328,7 @@ def accounting_deposits_view():
                 app.get('paymentMethod') or app.get('payment_method') or 'Online Payment',
                 municipality_name,
                 payer_email,
-                app.get('updatedAt') or app.get('createdAt') or app.get('created_at') or app.get('dateFiled'),
+                app.get('paidAt') or app.get('paymentDate') or app.get('updatedAt') or app.get('updated_at') or app.get('createdAt') or app.get('created_at') or app.get('dateFiled'),
                 'applications'
             )
 
@@ -2298,7 +2336,7 @@ def accounting_deposits_view():
         service_docs = db.collection('service_requests').limit(5000).stream()
         for service_doc in service_docs:
             service = service_doc.to_dict() or {}
-            payer_email = str(service.get('userEmail') or service.get('user_email') or service.get('email') or '').strip().lower()
+            payer_email = resolve_payer_email(service, service.get('userId') or service.get('user_id') or service.get('uid'))
             service_user_id = service.get('userId') or service.get('user_id') or service.get('uid')
             service_municipality = str(service.get('municipality') or service.get('municipality_name') or '').strip()
             service_region = get_firestore_region_name(service.get('region') or service.get('region_name') or service.get('regionName'))
@@ -2306,7 +2344,7 @@ def accounting_deposits_view():
             if not (user_in_scope(payer_email, service_user_id) or municipality_region_match(service_municipality, service_region)):
                 continue
 
-            payment_status = service.get('paymentStatus') or service.get('payment_status') or service.get('status')
+            payment_status = service.get('paymentStatus') or service.get('payment_status') or service.get('status') or service.get('payment_state')
             if not is_paid_status(payment_status):
                 continue
 
@@ -2327,7 +2365,7 @@ def accounting_deposits_view():
                 service.get('paymentMethod') or service.get('payment_method') or 'Online Payment',
                 municipality_name,
                 payer_email,
-                service.get('updatedAt') or service.get('createdAt') or service.get('created_at') or service.get('submittedAt'),
+                service.get('paidAt') or service.get('paymentDate') or service.get('updatedAt') or service.get('updated_at') or service.get('createdAt') or service.get('created_at') or service.get('submittedAt'),
                 'service_requests'
             )
     except Exception as e:
