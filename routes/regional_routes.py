@@ -2124,30 +2124,87 @@ def accounting_deposits_view():
 
     municipality_set = set(str(m).strip().lower() for m in municipalities if m)
 
-    deposit_categories = []
+    scoped_users = {}
     try:
-        all_categories = deposit_storage.get_all_deposit_categories()
-        for category in all_categories:
-            cat_muni = str(category.get('municipality') or '').strip()
-            if not cat_muni:
-                category['municipality'] = 'ALL MUNICIPALITIES'
-                deposit_categories.append(category)
+        users_docs = db.collection('users').limit(4000).stream()
+        normalized_region = str(user_region or '').strip().upper()
+        for user_doc in users_docs:
+            ud = user_doc.to_dict() or {}
+            region_val = get_firestore_region_name(ud.get('region') or ud.get('region_name') or ud.get('regionName'))
+            municipality_val = str(ud.get('municipality') or ud.get('municipality_name') or '').strip()
+            email_val = str(ud.get('email') or '').strip().lower()
+
+            if not email_val:
+                continue
+            if normalized_region and str(region_val or '').strip().upper() != normalized_region:
+                continue
+            if municipality_set and municipality_val and municipality_val.lower() not in municipality_set:
                 continue
 
-            if not municipality_set or cat_muni.lower() in municipality_set:
-                deposit_categories.append(category)
+            scoped_users[email_val] = {
+                'municipality': municipality_val,
+                'region': str(region_val or '').strip().upper()
+            }
     except Exception as e:
-        print(f"[WARN] Unable to load deposit categories for accounting deposits view: {e}")
+        print(f"[WARN] Unable to resolve scoped users for accounting deposits view: {e}")
 
-    active_categories = sum(1 for c in deposit_categories if str(c.get('status', 'ACTIVE')).upper() == 'ACTIVE')
+    payment_deposits = []
+    try:
+        tx_docs = db.collection('transactions').limit(5000).stream()
+        for tx_doc in tx_docs:
+            tx = tx_doc.to_dict() or {}
+            payer_email = str(tx.get('user_email') or '').strip().lower()
+            tx_municipality = str(tx.get('municipality') or tx.get('municipality_name') or '').strip()
+            tx_region = get_firestore_region_name(tx.get('region') or tx.get('region_name') or tx.get('regionName'))
+
+            in_scope_by_user = payer_email in scoped_users
+            in_scope_by_fields = (
+                (not municipality_set or (tx_municipality and tx_municipality.lower() in municipality_set))
+                and (not user_region or str(tx_region or '').strip().upper() == str(user_region or '').strip().upper())
+            )
+
+            if not (in_scope_by_user or in_scope_by_fields):
+                continue
+
+            status = str(tx.get('status') or 'PENDING').strip().upper()
+            if status not in ('PAID', 'COMPLETED', 'SETTLED'):
+                continue
+
+            try:
+                amount = float(tx.get('amount', 0) or 0)
+            except (ValueError, TypeError):
+                amount = 0.0
+
+            scoped_user = scoped_users.get(payer_email, {})
+            municipality_name = tx_municipality or scoped_user.get('municipality') or 'UNKNOWN'
+
+            payment_deposits.append({
+                'id': tx_doc.id,
+                'invoice_id': tx.get('invoice_id') or tx.get('external_id') or tx_doc.id,
+                'description': tx.get('description') or tx.get('transaction_name') or 'User Payment',
+                'amount': amount,
+                'status': status,
+                'payment_method': tx.get('payment_method') or 'Online Payment',
+                'municipality': municipality_name,
+                'payer_email': payer_email or '-',
+                'created_at': str(tx.get('created_at') or ''),
+            })
+    except Exception as e:
+        print(f"[WARN] Unable to load transactions for accounting deposits view: {e}")
+
+    payment_deposits.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+
+    total_amount = sum(float(d.get('amount', 0) or 0) for d in payment_deposits)
+    unique_payers = len(set(d.get('payer_email') for d in payment_deposits if d.get('payer_email') and d.get('payer_email') != '-'))
 
     return render_template(
         'regional/accounting/deposit-category-regional.html',
         user_region=user_region,
         municipalities=municipalities,
-        deposit_categories=deposit_categories,
-        total_categories=len(deposit_categories),
-        active_categories=active_categories
+        payment_deposits=payment_deposits,
+        total_payments=len(payment_deposits),
+        total_amount=total_amount,
+        unique_payers=unique_payers
     )
 
 @bp.route('/accounting/accounting-expenses')
