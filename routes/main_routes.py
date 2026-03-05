@@ -264,6 +264,7 @@ def national_dashboard():
         trend_data = category_data = region_data = [0] * 6
         category_labels = ['Farm Visit', 'Chemical/Fert.', 'Financial Aid', 'Seminar', 'Wildlife', 'Fisheries', 'Forestry']
         region_labels = ['N/A']
+        as_of = datetime.now().strftime('%b %d, %Y %I:%M %p')
 
     return render_template(
         'national/landing-national.html',
@@ -285,6 +286,7 @@ def national_dashboard():
         category_data=category_data,
         region_labels=region_labels,
         region_data=region_data,
+        as_of=datetime.now().strftime('%b %d, %Y %I:%M %p'),
     )
 
 @bp.route('/national/system-logs')
