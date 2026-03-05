@@ -141,7 +141,136 @@ def designations_view():
 @bp.route('/hrm/office-shifts')
 @role_required('regional','regional_admin')
 def office_shifts_view():
-    return render_template('regional/HR/office-shift-regional.html')
+    from firebase_admin import firestore
+
+    region_name = session.get('region') or session.get('user_region')
+
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    print(f"[DEBUG] office_shifts_view fetched region from Firestore: {region_name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch office-shift region from Firestore: {e}")
+
+    if not region_name:
+        region_name = 'Unknown Region'
+
+    return render_template('regional/HR/office-shift-regional.html', region_name=region_name)
+
+@bp.route('/api/hrm/office-shifts', methods=['GET'])
+@role_required('regional','regional_admin')
+def get_regional_office_shifts():
+    db = get_firestore_db()
+    shifts = []
+
+    try:
+        docs = db.collection('office_shifts').stream()
+    except Exception:
+        docs = []
+
+    for doc in docs:
+        item = doc.to_dict() or {}
+        shifts.append({
+            'id': doc.id,
+            'shift_code': item.get('shift_code') or item.get('code') or '',
+            'shift_name': item.get('shift_name') or item.get('name') or '',
+            'scope': (item.get('scope') or 'REGIONAL').upper(),
+            'shift_type': item.get('shift_type') or item.get('type') or 'Fixed',
+            'time_in': item.get('time_in') or '',
+            'time_out': item.get('time_out') or '',
+            'time_in_early': item.get('time_in_early') or '',
+            'time_in_late': item.get('time_in_late') or '',
+            'time_out_early': item.get('time_out_early') or '',
+            'time_out_late': item.get('time_out_late') or '',
+            'grace_minutes': item.get('grace_minutes') if item.get('grace_minutes') is not None else 15,
+            'break_policy': item.get('break_policy') or '1 HOUR',
+            'status': item.get('status') or 'Active'
+        })
+
+    shifts.sort(key=lambda item: item.get('shift_code') or '')
+    return jsonify({'success': True, 'shifts': shifts})
+
+@bp.route('/api/hrm/office-shifts', methods=['POST'])
+@role_required('regional','regional_admin')
+def create_regional_office_shift():
+    data = request.get_json(silent=True) or {}
+    shift_code = (data.get('shift_code') or '').strip().upper()
+    shift_name = (data.get('shift_name') or '').strip()
+
+    if not shift_code or not shift_name:
+        return jsonify({'success': False, 'error': 'Shift code and shift name are required'}), 400
+
+    db = get_firestore_db()
+    duplicate = db.collection('office_shifts').where('shift_code', '==', shift_code).limit(1).stream()
+    if any(True for _ in duplicate):
+        return jsonify({'success': False, 'error': 'Shift code already exists'}), 409
+
+    payload = {
+        'shift_code': shift_code,
+        'shift_name': shift_name,
+        'scope': (data.get('scope') or 'REGIONAL').strip().upper(),
+        'shift_type': (data.get('shift_type') or 'Fixed').strip(),
+        'time_in': (data.get('time_in') or '').strip(),
+        'time_out': (data.get('time_out') or '').strip(),
+        'time_in_early': (data.get('time_in_early') or '').strip(),
+        'time_in_late': (data.get('time_in_late') or '').strip(),
+        'time_out_early': (data.get('time_out_early') or '').strip(),
+        'time_out_late': (data.get('time_out_late') or '').strip(),
+        'grace_minutes': int(data.get('grace_minutes') or 0),
+        'break_policy': (data.get('break_policy') or '1 HOUR').strip(),
+        'status': (data.get('status') or 'Active').strip()
+    }
+
+    ref = db.collection('office_shifts').document()
+    ref.set(payload)
+    return jsonify({'success': True, 'id': ref.id})
+
+@bp.route('/api/hrm/office-shifts/<shift_id>', methods=['PUT'])
+@role_required('regional','regional_admin')
+def update_regional_office_shift(shift_id):
+    data = request.get_json(silent=True) or {}
+    shift_code = (data.get('shift_code') or '').strip().upper()
+    shift_name = (data.get('shift_name') or '').strip()
+
+    if not shift_code or not shift_name:
+        return jsonify({'success': False, 'error': 'Shift code and shift name are required'}), 400
+
+    db = get_firestore_db()
+    payload = {
+        'shift_code': shift_code,
+        'shift_name': shift_name,
+        'scope': (data.get('scope') or 'REGIONAL').strip().upper(),
+        'shift_type': (data.get('shift_type') or 'Fixed').strip(),
+        'time_in': (data.get('time_in') or '').strip(),
+        'time_out': (data.get('time_out') or '').strip(),
+        'time_in_early': (data.get('time_in_early') or '').strip(),
+        'time_in_late': (data.get('time_in_late') or '').strip(),
+        'time_out_early': (data.get('time_out_early') or '').strip(),
+        'time_out_late': (data.get('time_out_late') or '').strip(),
+        'grace_minutes': int(data.get('grace_minutes') or 0),
+        'break_policy': (data.get('break_policy') or '1 HOUR').strip(),
+        'status': (data.get('status') or 'Active').strip()
+    }
+
+    db.collection('office_shifts').document(shift_id).set(payload, merge=True)
+    return jsonify({'success': True})
 
 @bp.route('/hrm/employees')
 @role_required('regional','regional_admin')

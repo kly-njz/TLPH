@@ -50,7 +50,7 @@
     {% include 'regional/sidenav.html' %}
   </div>
 
-  <div class="content-area transition-all" x-data="{ shiftModalOpen: false, shiftType: 'Fixed' }">
+  <div class="content-area transition-all" x-data="officeShiftData()" x-init="loadShifts()">
     <main class="flex-1 flex flex-col min-w-0 p-3 gap-2 overflow-y-auto custom-scrollbar">
 
       <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900 mb-1">
@@ -60,15 +60,15 @@
           </div>
           <div class="leading-tight">
             <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Office Shift Timings Oversight</h1>
-            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0 mt-0.5">Consolidated Regional & Municipal Schedule Registry</p>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0 mt-0.5">Consolidated {{ region_name }} & Municipal Schedule Registry</p>
           </div>
         </div>
 
         <div class="flex gap-1.5 no-print">
-          <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+          <button @click="exportReport()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">file_download</span> Export
           </button>
-          <button @click="shiftModalOpen = true" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+          <button @click="newShift()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">add_alarm</span> Add Shift
           </button>
         </div>
@@ -77,24 +77,24 @@
       <section class="grid grid-cols-1 sm:grid-cols-5 gap-2 shrink-0 mb-1">
         <div class="gov-card p-2 px-3 border-l-4 border-l-blue-900 bg-blue-50/30">
           <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Region Scope</p>
-          <div class="text-[11px] font-black text-slate-800 mt-1 leading-none uppercase">Region IV-A</div>
-          <div class="text-[8px] font-bold text-slate-400 mt-1 uppercase">CALABARZON</div>
+          <div class="text-[11px] font-black text-slate-800 mt-1 leading-none uppercase">{{ region_name }}</div>
+          <div class="text-[8px] font-bold text-slate-400 mt-1 uppercase">{{ region_name }}</div>
         </div>
         <div class="gov-card p-2 px-3 border-l-4 border-l-slate-700">
           <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Total Shift Types</p>
-          <div class="text-xl font-black text-slate-900 leading-none mt-1">06</div>
+          <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="shifts.length">0</div>
         </div>
         <div class="gov-card p-2 px-3 border-l-4 border-l-blue-700">
           <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Regional Shifts</p>
-          <div class="text-xl font-black text-slate-900 leading-none mt-1">03</div>
+          <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="shifts.filter(s => normalizeScope(s.scope) === 'REGIONAL').length">0</div>
         </div>
         <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-700">
           <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Municipal Shifts</p>
-          <div class="text-xl font-black text-slate-900 leading-none mt-1">03</div>
+          <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="shifts.filter(s => normalizeScope(s.scope) === 'MUNICIPAL').length">0</div>
         </div>
         <div class="gov-card p-2 px-3 bg-slate-800 text-white border-none">
           <p class="text-[8px] font-black uppercase tracking-widest text-slate-400 m-0">Flexi Enabled</p>
-          <div class="text-xl font-black text-blue-300 leading-none mt-1">02</div>
+          <div class="text-xl font-black text-blue-300 leading-none mt-1" x-text="shifts.filter(s => normalizeType(s.shift_type) === 'Flexi').length">0</div>
         </div>
       </section>
 
@@ -106,13 +106,13 @@
           </h2>
 
           <div class="flex flex-wrap gap-1.5 items-center">
-            <select id="scopeFilter" class="gov-input cursor-pointer" onchange="filterTable()">
+            <select id="scopeFilter" class="gov-input cursor-pointer" x-model="filters.scope" title="Filter by scope">
               <option value="">All Scopes</option>
               <option value="REGIONAL">Regional Office</option>
               <option value="MUNICIPAL">Municipal Offices</option>
             </select>
 
-            <select id="typeFilter" class="gov-input cursor-pointer" onchange="filterTable()">
+            <select id="typeFilter" class="gov-input cursor-pointer" x-model="filters.type" title="Filter by type">
               <option value="">All Types</option>
               <option value="Fixed">Fixed Schedule</option>
               <option value="Flexi">Flexi-Time</option>
@@ -120,10 +120,10 @@
 
             <div class="relative min-w-[200px]">
               <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-              <input type="text" id="searchShift" placeholder="Search shift name/code..." class="gov-input pl-6 w-full" oninput="filterTable()">
+              <input type="text" id="searchShift" placeholder="Search shift name/code..." class="gov-input pl-6 w-full" x-model="filters.search">
             </div>
 
-            <button onclick="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-800 font-bold uppercase text-[9px] rounded-[2px] transition hover:bg-slate-300 shadow-sm">
+            <button @click="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-800 font-bold uppercase text-[9px] rounded-[2px] transition hover:bg-slate-300 shadow-sm">
               Reset
             </button>
           </div>
@@ -145,145 +145,123 @@
               </tr>
             </thead>
             <tbody id="shiftTable" class="text-[10px] divide-y divide-slate-100">
-              <tr class="hover:bg-blue-50 transition shift-row" data-type="Fixed" data-scope="REGIONAL">
-                <td class="px-3 py-2 font-mono font-bold text-blue-900 border-r border-slate-100">R-SFT-001</td>
-                <td class="px-3 py-2 font-black text-slate-900 border-r border-slate-100 uppercase">Regional Regular Dayshift</td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-blue-50 text-blue-800 border border-blue-100 w-16 text-center">Regional</span>
-                </td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="text-slate-600 font-bold uppercase">Fixed</span>
-                </td>
-                <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100">08:00 AM</td>
-                <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100">05:00 PM</td>
-                <td class="px-3 py-2 text-center text-slate-600 border-r border-slate-100">15 mins</td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-100">Active</span>
-                </td>
-                <td class="px-3 py-2 text-center no-print">
-                  <button class="text-blue-700 hover:text-blue-900 font-black">EDIT</button>
-                </td>
-              </tr>
-
-              <tr class="hover:bg-blue-50 transition shift-row" data-type="Flexi" data-scope="REGIONAL">
-                <td class="px-3 py-2 font-mono font-bold text-blue-900 border-r border-slate-100">R-SFT-F01</td>
-                <td class="px-3 py-2 font-black text-slate-900 border-r border-slate-100 uppercase">Regional Flexi Window A</td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-blue-50 text-blue-800 border border-blue-100 w-16 text-center">Regional</span>
-                </td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-amber-50 text-amber-800 border border-amber-200">Flexi</span>
-                </td>
-                <td class="px-3 py-2 font-mono text-center text-slate-600 border-r border-slate-100">07:00 – 09:00</td>
-                <td class="px-3 py-2 font-mono text-center text-slate-600 border-r border-slate-100">04:00 – 06:00</td>
-                <td class="px-3 py-2 text-center text-slate-400 border-r border-slate-100">—</td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-100">Active</span>
-                </td>
-                <td class="px-3 py-2 text-center no-print">
-                  <button class="text-blue-700 hover:text-blue-900 font-black">EDIT</button>
-                </td>
-              </tr>
-
-              <tr class="hover:bg-amber-50 transition shift-row" data-type="Fixed" data-scope="MUNICIPAL">
-                <td class="px-3 py-2 font-mono font-bold text-slate-700 border-r border-slate-100 uppercase">M-SFT-001</td>
-                <td class="px-3 py-2 font-black text-slate-900 border-r border-slate-100 uppercase">Municipal Regular Dayshift</td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-amber-50 text-amber-800 border border-amber-100 w-16 text-center">Municipal</span>
-                </td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="text-slate-600 font-bold uppercase">Fixed</span>
-                </td>
-                <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100">08:00 AM</td>
-                <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100">05:00 PM</td>
-                <td class="px-3 py-2 text-center text-slate-600 border-r border-slate-100">15 mins</td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-100">Active</span>
-                </td>
-                <td class="px-3 py-2 text-center no-print">
-                  <button class="text-blue-700 hover:text-blue-900 font-black">EDIT</button>
-                </td>
-              </tr>
+              <template x-if="loading">
+                <tr>
+                  <td colspan="9" class="px-3 py-4 text-center text-slate-400 italic">Loading shift records...</td>
+                </tr>
+              </template>
+              <template x-if="!loading && filteredShifts.length === 0">
+                <tr>
+                  <td colspan="9" class="px-3 py-4 text-center text-slate-400 italic">No shift records found.</td>
+                </tr>
+              </template>
+              <template x-for="shift in filteredShifts" :key="shift.id">
+                <tr class="hover:bg-blue-50 transition">
+                  <td class="px-3 py-2 font-mono font-bold text-blue-900 border-r border-slate-100" x-text="shift.shift_code || 'N/A'"></td>
+                  <td class="px-3 py-2 font-black text-slate-900 border-r border-slate-100 uppercase" x-text="shift.shift_name || 'N/A'"></td>
+                  <td class="px-3 py-2 text-center border-r border-slate-100">
+                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase border w-16 text-center"
+                          :class="normalizeScope(shift.scope) === 'MUNICIPAL' ? 'bg-amber-50 text-amber-800 border-amber-100' : 'bg-blue-50 text-blue-800 border-blue-100'"
+                          x-text="normalizeScope(shift.scope)"></span>
+                  </td>
+                  <td class="px-3 py-2 text-center border-r border-slate-100">
+                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase border"
+                          :class="normalizeType(shift.shift_type) === 'Flexi' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'"
+                          x-text="normalizeType(shift.shift_type)"></span>
+                  </td>
+                  <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100" x-text="displayTimeIn(shift)"></td>
+                  <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100" x-text="displayTimeOut(shift)"></td>
+                  <td class="px-3 py-2 text-center text-slate-600 border-r border-slate-100" x-text="displayGrace(shift)"></td>
+                  <td class="px-3 py-2 text-center border-r border-slate-100">
+                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase border"
+                          :class="(shift.status || 'Active') === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-700 border-slate-200'"
+                          x-text="shift.status || 'Active'"></span>
+                  </td>
+                  <td class="px-3 py-2 text-center no-print">
+                    <button @click="editShift(shift)" class="text-blue-700 hover:text-blue-900 font-black">EDIT</button>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
 
         <div class="bg-slate-50 border-t border-slate-200 px-3 py-1.5 text-[9px] text-slate-500 flex justify-between items-center shrink-0 italic uppercase">
           <span>Official Regional Operational Registry • 2026</span>
-          <span>Total Records: <span id="recordCount" class="font-black text-slate-800">3</span></span>
+          <span>Total Records: <span id="recordCount" class="font-black text-slate-800" x-text="filteredShifts.length">0</span></span>
         </div>
       </section>
 
       <div x-show="shiftModalOpen" style="display:none;" class="fixed inset-0 z-[100] bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
-        <div @click.away="shiftModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-400">
+        <div @click.away="closeModal()" class="bg-white rounded-[2px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-400">
           <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white">
             <h3 class="text-[10px] font-black uppercase tracking-widest m-0">Configure Shift Schedule Registry</h3>
-            <button @click="shiftModalOpen = false" class="text-slate-400 hover:text-white transition-colors">
+            <button @click="closeModal()" class="text-slate-400 hover:text-white transition-colors">
               <span class="material-icons-round text-[16px]">close</span>
             </button>
           </div>
 
-          <form class="p-4 bg-slate-50 space-y-3">
+          <form class="p-4 bg-slate-50 space-y-3" @submit.prevent="saveShift()">
             <div class="grid grid-cols-3 gap-3">
               <div class="col-span-2">
                 <label class="gov-label">Shift Display Name</label>
-                <input required type="text" class="gov-input w-full uppercase" placeholder="e.g. Regional Regular Dayshift">
+                <input required x-model="editingShift.shift_name" type="text" class="gov-input w-full uppercase" placeholder="e.g. Regional Regular Dayshift">
               </div>
               <div>
                 <label class="gov-label">Shift Code</label>
-                <input required type="text" class="gov-input w-full font-mono uppercase" placeholder="R-SFT-XXX">
+                <input required x-model="editingShift.shift_code" type="text" class="gov-input w-full font-mono uppercase" placeholder="R-SFT-XXX">
               </div>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="gov-label">Jurisdictional Scope</label>
-                <select class="gov-input w-full">
-                  <option>REGIONAL</option>
-                  <option>MUNICIPAL</option>
+                <select x-model="editingShift.scope" class="gov-input w-full" title="Shift scope">
+                  <option value="REGIONAL">REGIONAL</option>
+                  <option value="MUNICIPAL">MUNICIPAL</option>
                 </select>
               </div>
               <div>
                 <label class="gov-label">Schedule Type</label>
-                <select x-model="shiftType" class="gov-input w-full cursor-pointer">
+                <select x-model="editingShift.shift_type" class="gov-input w-full cursor-pointer" title="Schedule type">
                   <option value="Fixed">FIXED STANDARD</option>
                   <option value="Flexi">FLEXI-TIME WINDOW</option>
                 </select>
               </div>
             </div>
 
-            <div x-show="shiftType === 'Fixed'" class="grid grid-cols-2 gap-3 p-3 bg-white border border-slate-200 rounded-[2px]">
+            <div x-show="editingShift.shift_type === 'Fixed'" class="grid grid-cols-2 gap-3 p-3 bg-white border border-slate-200 rounded-[2px]">
               <div>
                 <label class="gov-label text-blue-900">Required Time In</label>
-                <input type="time" class="gov-input w-full cursor-pointer">
+                <input x-model="editingShift.time_in" type="time" class="gov-input w-full cursor-pointer">
               </div>
               <div>
                 <label class="gov-label text-blue-900">Required Time Out</label>
-                <input type="time" class="gov-input w-full cursor-pointer">
+                <input x-model="editingShift.time_out" type="time" class="gov-input w-full cursor-pointer">
               </div>
             </div>
 
-            <div x-show="shiftType === 'Flexi'" style="display:none;" class="grid grid-cols-2 gap-3 p-3 bg-amber-50/50 border border-amber-200 rounded-[2px]">
+            <div x-show="editingShift.shift_type === 'Flexi'" style="display:none;" class="grid grid-cols-2 gap-3 p-3 bg-amber-50/50 border border-amber-200 rounded-[2px]">
               <div class="space-y-2 border-r border-amber-200 pr-2">
                 <label class="gov-label text-amber-900">Time In Window</label>
                 <div class="flex items-center gap-1">
                   <span class="text-[8px] font-bold text-amber-700 w-6">EARLY:</span>
-                  <input type="time" class="gov-input flex-1">
+                  <input x-model="editingShift.time_in_early" type="time" class="gov-input flex-1">
                 </div>
                 <div class="flex items-center gap-1">
                   <span class="text-[8px] font-bold text-amber-700 w-6">LATE:</span>
-                  <input type="time" class="gov-input flex-1">
+                  <input x-model="editingShift.time_in_late" type="time" class="gov-input flex-1">
                 </div>
               </div>
               <div class="space-y-2 pl-1">
                 <label class="gov-label text-amber-900">Time Out Window</label>
                 <div class="flex items-center gap-1">
                   <span class="text-[8px] font-bold text-amber-700 w-6">EARLY:</span>
-                  <input type="time" class="gov-input flex-1">
+                  <input x-model="editingShift.time_out_early" type="time" class="gov-input flex-1">
                 </div>
                 <div class="flex items-center gap-1">
                   <span class="text-[8px] font-bold text-amber-700 w-6">LATE:</span>
-                  <input type="time" class="gov-input flex-1">
+                  <input x-model="editingShift.time_out_late" type="time" class="gov-input flex-1">
                 </div>
               </div>
             </div>
@@ -291,21 +269,29 @@
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="gov-label">Grace Period (Mins)</label>
-                <input type="number" min="0" max="60" class="gov-input w-full" value="15">
+                <input x-model="editingShift.grace_minutes" type="number" min="0" max="60" class="gov-input w-full">
               </div>
               <div>
                 <label class="gov-label">Mandatory Break</label>
-                <select class="gov-input w-full">
-                  <option>1 HOUR</option>
-                  <option>30 MINUTES</option>
-                  <option>NONE</option>
+                <select x-model="editingShift.break_policy" class="gov-input w-full" title="Break policy">
+                  <option value="1 HOUR">1 HOUR</option>
+                  <option value="30 MINUTES">30 MINUTES</option>
+                  <option value="NONE">NONE</option>
                 </select>
               </div>
             </div>
 
+            <div>
+              <label class="gov-label">Status</label>
+              <select x-model="editingShift.status" class="gov-input w-full" title="Shift status">
+                <option value="Active">ACTIVE</option>
+                <option value="Inactive">INACTIVE</option>
+              </select>
+            </div>
+
             <div class="pt-3 border-t border-slate-200 mt-2 flex justify-end gap-2">
-              <button type="button" @click="shiftModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-100">Cancel</button>
-              <button type="button" @click="shiftModalOpen = false" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Save Configuration</button>
+              <button type="button" @click="closeModal()" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-100">Cancel</button>
+              <button type="submit" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Save Configuration</button>
             </div>
           </form>
         </div>
@@ -314,38 +300,184 @@
   </div>
 
   <script>
-    function filterTable() {
-      const q = document.getElementById('searchShift').value.toLowerCase().trim();
-      const scopeF = document.getElementById('scopeFilter').value;
-      const typeF = document.getElementById('typeFilter').value;
-      const rows = document.querySelectorAll('.shift-row');
-      let visibleCount = 0;
+    const OFFICE_SHIFTS_API = '/regional/api/hrm/office-shifts';
 
-      rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        const scope = (row.getAttribute('data-scope') || '').toUpperCase();
-        const type = row.getAttribute('data-type') || '';
+    window.officeShiftData = function () {
+      return {
+        loading: false,
+        shiftModalOpen: false,
+        shifts: [],
+        filters: {
+          search: '',
+          scope: '',
+          type: ''
+        },
+        editingShift: {
+          id: null,
+          shift_code: '',
+          shift_name: '',
+          scope: 'REGIONAL',
+          shift_type: 'Fixed',
+          time_in: '',
+          time_out: '',
+          time_in_early: '',
+          time_in_late: '',
+          time_out_early: '',
+          time_out_late: '',
+          grace_minutes: 15,
+          break_policy: '1 HOUR',
+          status: 'Active'
+        },
 
-        const matchQ = text.includes(q);
-        const matchS = !scopeF || scope === scopeF;
-        const matchT = !typeF || type === typeF;
+        async loadShifts() {
+          this.loading = true;
+          try {
+            const response = await fetch(OFFICE_SHIFTS_API, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error(`Load failed (${response.status})`);
+            const payload = await response.json();
+            this.shifts = payload.shifts || [];
+          } catch (error) {
+            console.error('[SHIFT] load failed:', error);
+            this.shifts = [];
+          } finally {
+            this.loading = false;
+          }
+        },
 
-        if (matchQ && matchS && matchT) {
-          row.style.display = '';
-          visibleCount++;
-        } else {
-          row.style.display = 'none';
+        get filteredShifts() {
+          const search = (this.filters.search || '').toLowerCase().trim();
+          return this.shifts.filter(shift => {
+            const code = (shift.shift_code || '').toLowerCase();
+            const name = (shift.shift_name || '').toLowerCase();
+            const scope = this.normalizeScope(shift.scope);
+            const type = this.normalizeType(shift.shift_type);
+            const matchSearch = !search || code.includes(search) || name.includes(search);
+            const matchScope = !this.filters.scope || scope === this.filters.scope;
+            const matchType = !this.filters.type || type === this.filters.type;
+            return matchSearch && matchScope && matchType;
+          });
+        },
+
+        normalizeScope(scope) {
+          return (scope || 'REGIONAL').toUpperCase();
+        },
+
+        normalizeType(type) {
+          if (!type) return 'Fixed';
+          return type === 'Flexi' ? 'Flexi' : 'Fixed';
+        },
+
+        displayTimeIn(shift) {
+          if (this.normalizeType(shift.shift_type) === 'Flexi') {
+            return `${shift.time_in_early || '--:--'} - ${shift.time_in_late || '--:--'}`;
+          }
+          return shift.time_in || '--:--';
+        },
+
+        displayTimeOut(shift) {
+          if (this.normalizeType(shift.shift_type) === 'Flexi') {
+            return `${shift.time_out_early || '--:--'} - ${shift.time_out_late || '--:--'}`;
+          }
+          return shift.time_out || '--:--';
+        },
+
+        displayGrace(shift) {
+          if (this.normalizeType(shift.shift_type) === 'Flexi') return '—';
+          return `${shift.grace_minutes || 0} mins`;
+        },
+
+        resetFilters() {
+          this.filters = { search: '', scope: '', type: '' };
+        },
+
+        newShift() {
+          this.editingShift = {
+            id: null,
+            shift_code: '',
+            shift_name: '',
+            scope: 'REGIONAL',
+            shift_type: 'Fixed',
+            time_in: '',
+            time_out: '',
+            time_in_early: '',
+            time_in_late: '',
+            time_out_early: '',
+            time_out_late: '',
+            grace_minutes: 15,
+            break_policy: '1 HOUR',
+            status: 'Active'
+          };
+          this.shiftModalOpen = true;
+        },
+
+        editShift(shift) {
+          this.editingShift = { ...shift };
+          this.shiftModalOpen = true;
+        },
+
+        closeModal() {
+          this.shiftModalOpen = false;
+        },
+
+        async saveShift() {
+          try {
+            const payload = { ...this.editingShift };
+            const isUpdate = Boolean(this.editingShift.id);
+            const url = isUpdate ? `${OFFICE_SHIFTS_API}/${this.editingShift.id}` : OFFICE_SHIFTS_API;
+            const method = isUpdate ? 'PUT' : 'POST';
+
+            const response = await fetch(url, {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              const err = await response.json().catch(() => ({}));
+              throw new Error(err.error || `Save failed (${response.status})`);
+            }
+
+            this.shiftModalOpen = false;
+            await this.loadShifts();
+          } catch (error) {
+            console.error('[SHIFT] save failed:', error);
+            alert(error.message || 'Failed to save shift');
+          }
+        },
+
+        exportReport() {
+          const rows = this.filteredShifts;
+          const headers = ['Code', 'Shift Name', 'Scope', 'Type', 'Time In', 'Time Out', 'Grace Minutes', 'Break Policy', 'Status'];
+          const lines = [headers.join(',')];
+
+          for (const row of rows) {
+            const values = [
+              row.shift_code || '',
+              row.shift_name || '',
+              row.scope || '',
+              row.shift_type || '',
+              row.time_in || '',
+              row.time_out || '',
+              row.grace_minutes || '',
+              row.break_policy || '',
+              row.status || ''
+            ].map(v => `"${String(v).replace(/"/g, '""')}"`);
+            lines.push(values.join(','));
+          }
+
+          const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `regional_office_shifts_${new Date().toISOString().slice(0, 10)}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
         }
-      });
-      document.getElementById('recordCount').innerText = visibleCount;
-    }
-
-    function resetFilters() {
-      document.getElementById('searchShift').value = '';
-      document.getElementById('scopeFilter').value = '';
-      document.getElementById('typeFilter').value = '';
-      filterTable();
-    }
+      };
+    };
   </script>
 </body>
 </html>
