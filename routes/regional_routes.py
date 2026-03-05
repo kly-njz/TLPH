@@ -2105,128 +2105,93 @@ def get_regional_expenses():
     if not region_name:
         region_name = 'CALABARZON'
 
-    expenses = []
+    transactions = []
     
-    # Check if expenses exist for this region
-    try:
-        existing = list(db.collection('regional_expenses').where(
-            filter=FieldFilter('region', '==', region_name)
-        ).limit(1).stream())
-        
-        if not existing:
-            # Auto-seed sample expenses for this region
-            print(f"[DEBUG] No expenses found for {region_name}, auto-seeding sample data...")
-            
-            sample_expenses = [
-                {
-                    'expense_type': 'Office Supplies Purchase',
-                    'category': 'Office Supplies',
-                    'amount': 15000.00,
-                    'expense_date': (datetime.datetime.now() - datetime.timedelta(days=5)).strftime('%Y-%m-%d'),
-                    'description': 'Printer cartridges, paper, and office stationery',
-                    'payment_method': 'Check',
-                    'recipient': 'Manila Office Supply Co.',
-                    'reference_number': 'INV-2026-0501',
-                    'municipality': 'REGIONAL',
-                    'region': region_name,
-                    'recorded_by': 'system@denr.gov.ph',
-                    'status': 'Recorded'
-                },
-                {
-                    'expense_type': 'Travel & Transportation',
-                    'category': 'Travel',
-                    'amount': 8500.00,
-                    'expense_date': (datetime.datetime.now() - datetime.timedelta(days=4)).strftime('%Y-%m-%d'),
-                    'description': 'Fuel and maintenance for regional transportation',
-                    'payment_method': 'Bank Transfer',
-                    'recipient': 'Shell Gas Station',
-                    'reference_number': 'TXN-2026-0402',
-                    'municipality': 'REGIONAL',
-                    'region': region_name,
-                    'recorded_by': 'system@denr.gov.ph',
-                    'status': 'Recorded'
-                },
-                {
-                    'expense_type': 'Equipment Maintenance',
-                    'category': 'Equipment',
-                    'amount': 22500.00,
-                    'expense_date': (datetime.datetime.now() - datetime.timedelta(days=3)).strftime('%Y-%m-%d'),
-                    'description': 'Annual maintenance contract for office equipment',
-                    'payment_method': 'Check',
-                    'recipient': 'Tech Solutions Inc.',
-                    'reference_number': 'SVC-2026-0303',
-                    'municipality': 'REGIONAL',
-                    'region': region_name,
-                    'recorded_by': 'system@denr.gov.ph',
-                    'status': 'Recorded'
-                },
-                {
-                    'expense_type': 'Fund Transfer to Municipality',
-                    'category': 'Project',
-                    'amount': 50000.00,
-                    'expense_date': (datetime.datetime.now() - datetime.timedelta(days=2)).strftime('%Y-%m-%d'),
-                    'description': 'Fund allocation to Cavite municipality for environmental programs',
-                    'payment_method': 'Bank Transfer',
-                    'recipient': 'Municipality of Cabuyao',
-                    'reference_number': 'TFER-2026-CBY001',
-                    'municipality': 'Cabuyao',
-                    'region': region_name,
-                    'recorded_by': 'system@denr.gov.ph',
-                    'status': 'Recorded'
-                },
-                {
-                    'expense_type': 'Personnel Training',
-                    'category': 'Personnel',
-                    'amount': 18000.00,
-                    'expense_date': (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%d'),
-                    'description': 'Training expenses for staff on new environmental compliance procedures',
-                    'payment_method': 'Cash',
-                    'recipient': 'DENR Training Center',
-                    'reference_number': 'TRN-2026-0301',
-                    'municipality': 'REGIONAL',
-                    'region': region_name,
-                    'recorded_by': 'system@denr.gov.ph',
-                    'status': 'Recorded'
-                },
-                {
-                    'expense_type': 'Fund Transfer to Municipality',
-                    'category': 'Project',
-                    'amount': 40000.00,
-                    'expense_date': datetime.datetime.now().strftime('%Y-%m-%d'),
-                    'description': 'Emergency allocation to Laguna municipality for disaster response',
-                    'payment_method': 'Bank Transfer',
-                    'recipient': 'Municipality of Binan',
-                    'reference_number': 'TFER-2026-BNN001',
-                    'municipality': 'Binan',
-                    'region': region_name,
-                    'recorded_by': 'system@denr.gov.ph',
-                    'status': 'Recorded'
-                }
-            ]
-            
-            for expense in sample_expenses:
-                expense['created_at'] = datetime.datetime.utcnow().isoformat()
-                expense['updated_at'] = datetime.datetime.utcnow().isoformat()
-                db.collection('regional_expenses').add(expense)
-            
-            print(f"[DEBUG] Seeded {len(sample_expenses)} sample expenses for {region_name}")
-    except Exception as e:
-        print(f"[WARNING] Auto-seeding failed: {e}")
+    # ===================================
+    # Fetch REAL transactions from 3 sources
+    # ===================================
     
+    # 1️⃣ Regional Expenses (direct spending)
     try:
-        # Fetch all expenses for this region, ordered by date (newest first)
         expense_docs = db.collection('regional_expenses').where(
             filter=FieldFilter('region', '==', region_name)
-        ).order_by('expense_date', direction=firestore.Query.DESCENDING).stream()
+        ).stream()
         
         for doc in expense_docs:
             expense = doc.to_dict()
             expense['id'] = doc.id
-            expenses.append(expense)
+            expense['transaction_type'] = 'Expense'
+            expense['transaction_date'] = expense.get('expense_date', '')
+            transactions.append(expense)
+        
+        print(f"[DEBUG] Loaded {len([t for t in transactions if t['transaction_type'] == 'Expense'])} expenses from regional_expenses")
     except Exception as e:
-        print(f"[ERROR] Failed to fetch regional expenses: {e}")
+        print(f"[WARNING] Failed to fetch regional expenses: {e}")
     
-    return jsonify({'success': True, 'expenses': expenses})
+    # 2️⃣ Municipal Fund Distributions (transfers TO municipalities)
+    try:
+        muni_fund_docs = db.collection('municipal_fund_distribution').where(
+            filter=FieldFilter('region', '==', region_name)
+        ).stream()
+        
+        for doc in muni_fund_docs:
+            fund = doc.to_dict()
+            fund['id'] = doc.id
+            fund['transaction_type'] = 'Fund Transfer to Municipality'
+            fund['expense_type'] = f"Fund Transfer to {fund.get('municipality', 'Municipality')}"
+            fund['category'] = 'Project'
+            fund['amount'] = fund.get('amount', 0)
+            fund['recipient'] = fund.get('municipality', 'N/A')
+            fund['payment_method'] = 'Bank Transfer'
+            fund['description'] = f"Fund allocation to {fund.get('municipality')} ({fund.get('province')})"
+            fund['transaction_date'] = fund.get('timestamp', datetime.datetime.utcnow().isoformat()).split('T')[0] if isinstance(fund.get('timestamp'), str) else ''
+            fund['expense_date'] = fund['transaction_date']
+            fund['reference_number'] = fund.get('transfer_id', '')
+            fund['status'] = fund.get('status', 'Released')
+            transactions.append(fund)
+        
+        print(f"[DEBUG] Loaded {len([t for t in transactions if t.get('transaction_type') == 'Fund Transfer to Municipality'])} fund transfers from municipal_fund_distribution")
+    except Exception as e:
+        print(f"[WARNING] Failed to fetch municipal fund distributions: {e}")
+    
+    # 3️⃣ Regional Fund Distributions (funds received FROM national)
+    try:
+        reg_fund_docs = db.collection('regional_fund_distribution').where(
+            filter=FieldFilter('region', '==', region_name)
+        ).stream()
+        
+        for doc in reg_fund_docs:
+            fund = doc.to_dict()
+            fund['id'] = doc.id
+            fund['transaction_type'] = 'Fund Received'
+            fund['expense_type'] = f"Fund Received from National"
+            fund['category'] = 'Project'
+            fund['amount'] = fund.get('amount', 0)
+            fund['recipient'] = 'National Government'
+            fund['payment_method'] = 'Bank Transfer'
+            fund['description'] = f"Allocation from national for {fund.get('fund_type', 'regional operations')}"
+            fund['transaction_date'] = fund.get('date', datetime.datetime.utcnow().isoformat()).split('T')[0] if isinstance(fund.get('date'), str) else ''
+            fund['expense_date'] = fund['transaction_date']
+            fund['reference_number'] = fund.get('transfer_id', '')
+            fund['status'] = fund.get('status', 'Received')
+            transactions.append(fund)
+        
+        print(f"[DEBUG] Loaded {len([t for t in transactions if t.get('transaction_type') == 'Fund Received'])} fund receipts from regional_fund_distribution")
+    except Exception as e:
+        print(f"[WARNING] Failed to fetch regional fund distributions: {e}")
+    
+    # Sort by date (most recent first)
+    try:
+        transactions.sort(
+            key=lambda x: x.get('transaction_date', '') or x.get('expense_date', ''),
+            reverse=True
+        )
+    except Exception as e:
+        print(f"[WARNING] Failed to sort transactions: {e}")
+    
+    print(f"[DEBUG] Total transactions for {region_name}: {len(transactions)}")
+    
+    return jsonify({'success': True, 'expenses': transactions})
 
 @bp.route('/api/accounting/expenses', methods=['POST'])
 @role_required('regional','regional_admin')
