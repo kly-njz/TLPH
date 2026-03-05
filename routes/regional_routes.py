@@ -2073,7 +2073,82 @@ def accounting_entities_view():
 @bp.route('/accounting/accounting-deposits')
 @role_required('regional','regional_admin')
 def accounting_deposits_view():
-    return render_template('regional/accounting/deposit-category-regional.html')
+    db = get_firestore_db()
+
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region)
+
+    if not user_region:
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+        try:
+            if user_id:
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+            if not user_region and user_email:
+                docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                for doc in docs:
+                    user_data = doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+                    break
+        except Exception as e:
+            print(f"[WARN] Unable to resolve region for accounting deposits view: {e}")
+
+    municipalities = []
+    municipality_set = set()
+
+    try:
+        if user_region:
+            muni_doc = db.collection('municipalities').document(user_region).get()
+            if muni_doc.exists:
+                municipalities = muni_doc.to_dict().get('municipalities', []) or []
+
+        if not municipalities:
+            users_docs = db.collection('users').limit(2000).stream()
+            normalized_region = str(user_region or '').strip().upper()
+            for user_doc in users_docs:
+                ud = user_doc.to_dict() or {}
+                region_val = get_firestore_region_name(ud.get('region') or ud.get('region_name') or ud.get('regionName'))
+                municipality_val = ud.get('municipality') or ud.get('municipality_name')
+                if municipality_val and str(region_val or '').strip().upper() == normalized_region:
+                    municipality_set.add(str(municipality_val).strip())
+            municipalities = sorted(municipality_set)
+    except Exception as e:
+        print(f"[WARN] Unable to resolve municipalities for accounting deposits view: {e}")
+
+    municipality_set = set(str(m).strip().lower() for m in municipalities if m)
+
+    deposit_categories = []
+    try:
+        all_categories = deposit_storage.get_all_deposit_categories()
+        for category in all_categories:
+            cat_muni = str(category.get('municipality') or '').strip()
+            if not cat_muni:
+                category['municipality'] = 'ALL MUNICIPALITIES'
+                deposit_categories.append(category)
+                continue
+
+            if not municipality_set or cat_muni.lower() in municipality_set:
+                deposit_categories.append(category)
+    except Exception as e:
+        print(f"[WARN] Unable to load deposit categories for accounting deposits view: {e}")
+
+    active_categories = sum(1 for c in deposit_categories if str(c.get('status', 'ACTIVE')).upper() == 'ACTIVE')
+
+    return render_template(
+        'regional/accounting/deposit-category-regional.html',
+        user_region=user_region,
+        municipalities=municipalities,
+        deposit_categories=deposit_categories,
+        total_categories=len(deposit_categories),
+        active_categories=active_categories
+    )
 
 @bp.route('/accounting/accounting-expenses')
 @role_required('regional','regional_admin')

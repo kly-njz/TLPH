@@ -16,6 +16,38 @@ def _normalize_scope(value):
     return ' '.join(str(value or '').strip().lower().split())
 
 
+REGION_MAPPING = {
+    'MIMAROPA': 'REGION-IV-B',
+    'CALABARZON': 'REGION-IV-A',
+    'BICOL': 'REGION-V',
+    'WESTERN-VISAYAS': 'REGION-VI',
+    'EASTERN-VISAYAS': 'REGION-VIII',
+    'CENTRAL-VISAYAS': 'REGION-VII',
+    'DAVAO': 'REGION-XI',
+    'SOCCSKSARGEN': 'REGION-XII',
+    'ZAMBOANGA': 'REGION-IX',
+    'CARAGA': 'REGION-XIII',
+    'CORDILLERA': 'CAR',
+    'ILOCOS': 'REGION-I',
+    'CAGAYAN-VALLEY': 'REGION-II',
+    'CENTRAL-LUZON': 'REGION-III',
+    'NCR': 'NCR',
+    'ARMM': 'REGION-BANGSAMORO'
+}
+
+
+def _canonical_region_name(value):
+    if not value:
+        return ''
+    region = str(value).strip().upper()
+    if region in REGION_MAPPING:
+        return REGION_MAPPING[region]
+    reverse_mapping = {v: k for k, v in REGION_MAPPING.items()}
+    if region in reverse_mapping:
+        return region
+    return region
+
+
 def _resolve_user_municipality_by_email(email):
     if not email:
         return None
@@ -37,13 +69,12 @@ def _resolve_municipality_from_user_context():
     print(f"\n[DEBUG] _resolve_municipality_from_user_context starting")
     print(f"[DEBUG] Session user_id: {session.get('user_id')}")
     print(f"[DEBUG] Session user_email: {session.get('user_email')}")
-    
+
     try:
         db = get_firestore_db()
         user_id = session.get('user_id')
         user_email = session.get('user_email')
-        
-        # PRIMARY: Try user_id first (most reliable)
+
         if user_id:
             print(f"[DEBUG] Looking up user document by user_id: {user_id}")
             try:
@@ -52,7 +83,7 @@ def _resolve_municipality_from_user_context():
                     user_data = user_doc.to_dict() or {}
                     print(f"[DEBUG] Found user document by user_id")
                     print(f"[DEBUG] User document municipality field: {user_data.get('municipality')}")
-                    
+
                     municipality = user_data.get('municipality') or user_data.get('municipality_name')
                     if municipality:
                         municipality = str(municipality).strip()
@@ -65,18 +96,17 @@ def _resolve_municipality_from_user_context():
             except Exception as e:
                 print(f"[ERROR] Error looking up user_id: {e}")
 
-        # FALLBACK: Try user_email (if user_id failed)
         if user_email:
             print(f"[DEBUG] Looking up user document by user_email: {user_email}")
             try:
                 query = db.collection('users').where('email', '==', user_email).limit(1)
                 docs = list(query.stream())
-                
+
                 if docs:
                     user_data = docs[0].to_dict() or {}
                     print(f"[DEBUG] Found user document by user_email")
                     print(f"[DEBUG] User document municipality field: {user_data.get('municipality')}")
-                    
+
                     municipality = user_data.get('municipality') or user_data.get('municipality_name')
                     if municipality:
                         municipality = str(municipality).strip()
@@ -88,15 +118,46 @@ def _resolve_municipality_from_user_context():
                     print(f"[ERROR] No user document found for email: {user_email}")
             except Exception as e:
                 print(f"[ERROR] Error looking up user_email: {e}")
-        
+
         print(f"[ERROR] Could not resolve municipality - no valid user_id or user_email in session")
         return None
-        
     except Exception as e:
         print(f"[ERROR] Critical error in municipality resolution: {e}")
         import traceback
         traceback.print_exc()
         return None
+
+
+def _resolve_region_from_user_context():
+    if session.get('region'):
+        return str(session.get('region')).strip()
+    if session.get('user_region'):
+        return str(session.get('user_region')).strip()
+
+    try:
+        db = get_firestore_db()
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id:
+            user_doc = db.collection('users').document(user_id).get()
+            if user_doc.exists:
+                user_data = user_doc.to_dict() or {}
+                region = user_data.get('region') or user_data.get('region_name') or user_data.get('regionName')
+                if region:
+                    return str(region).strip()
+
+        if user_email:
+            docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+            for doc in docs:
+                user_data = doc.to_dict() or {}
+                region = user_data.get('region') or user_data.get('region_name') or user_data.get('regionName')
+                if region:
+                    return str(region).strip()
+    except Exception as e:
+        print(f"[WARN] Could not resolve user region by context: {e}")
+
+    return None
 
 
 def _get_current_municipality_scope():
@@ -321,28 +382,39 @@ def api_get_municipal_payment_deposits():
     """Get all payment transactions/deposits for the municipality (from transactions collection)"""
     try:
         municipality_scope = _get_current_municipality_scope()
+        region_scope = _resolve_region_from_user_context()
         if not municipality_scope:
             return jsonify({'success': False, 'error': 'Cannot determine municipality'}), 403
+
+        normalized_municipality_scope = _normalize_scope(municipality_scope)
+        normalized_region_scope = _normalize_scope(_canonical_region_name(region_scope))
         
-        print(f"[DEBUG] Fetching payment deposits for municipality: '{municipality_scope}'")
+        print(f"[DEBUG] Fetching payment deposits for municipality: '{municipality_scope}', region: '{region_scope}'")
         
         db = get_firestore_db()
         
         # Step 1: Get all users that belong to this municipality
-        user_emails = []
+        user_emails = set()
         try:
-            from google.cloud.firestore_v1.base_query import FieldFilter
-            users_docs = db.collection('users').where(
-                filter=FieldFilter('municipality', '==', municipality_scope)
-            ).limit(500).stream()
+            users_docs = db.collection('users').limit(1000).stream()
             
             for user_doc in users_docs:
                 user_data = user_doc.to_dict() or {}
+                user_municipality = _normalize_scope(user_data.get('municipality') or user_data.get('municipality_name'))
+                user_region = _normalize_scope(_canonical_region_name(
+                    user_data.get('region') or user_data.get('region_name') or user_data.get('regionName')
+                ))
+
+                if user_municipality != normalized_municipality_scope:
+                    continue
+                if normalized_region_scope and user_region and user_region != normalized_region_scope:
+                    continue
+
                 email = user_data.get('email')
                 if email:
-                    user_emails.append(email.lower())
+                    user_emails.add(email.lower())
             
-            print(f"[DEBUG] Found {len(user_emails)} users for municipality '{municipality_scope}'")
+            print(f"[DEBUG] Found {len(user_emails)} users for municipality '{municipality_scope}' under region '{region_scope}'")
         except Exception as e:
             print(f"[WARNING] Failed to fetch municipality users: {e}")
         
@@ -356,16 +428,30 @@ def api_get_municipal_payment_deposits():
             for doc in all_transactions:
                 trans = doc.to_dict()
                 user_email = (trans.get('user_email') or '').lower()
+                trans_municipality = _normalize_scope(trans.get('municipality') or trans.get('municipality_name'))
+                trans_region = _normalize_scope(_canonical_region_name(
+                    trans.get('region') or trans.get('region_name') or trans.get('regionName')
+                ))
                 
-                # Filter by municipality users
-                if user_email in user_emails or trans.get('municipality') == municipality_scope:
+                matches_user_scope = user_email in user_emails
+                matches_transaction_scope = (
+                    trans_municipality == normalized_municipality_scope
+                    and (not normalized_region_scope or not trans_region or trans_region == normalized_region_scope)
+                )
+
+                if matches_user_scope or matches_transaction_scope:
+                    try:
+                        amount = float(trans.get('amount', 0) or 0)
+                    except (ValueError, TypeError):
+                        amount = 0.0
+
                     deposit_record = {
                         'id': doc.id,
                         'transaction_type': 'Payment Deposit',
                         'payment_type': 'Online Payment',
                         'invoice_id': trans.get('invoice_id', ''),
                         'external_id': trans.get('external_id', ''),
-                        'amount': float(trans.get('amount', 0)),
+                        'amount': amount,
                         'description': trans.get('description', trans.get('transaction_name', 'Payment')),
                         'payer_email': user_email,
                         'payment_method': trans.get('payment_method', 'Online Payment'),
@@ -397,6 +483,7 @@ def api_get_municipal_payment_deposits():
         return jsonify({
             'success': True,
             'municipality': municipality_scope,
+            'region': region_scope,
             'deposits': deposits,
             'count': len(deposits)
         }), 200
