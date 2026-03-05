@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Payment Deposits | Municipal Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+
+    .gov-card { background:#fff; border:1px solid #cbd5e1; border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    .gov-input { padding:4px 8px; font-size:10px; font-weight:800; border:1px solid #cbd5e1; border-radius:2px; background:#fff; outline:none; }
+    .gov-input:focus { border-color:#0f766e; }
+    .gov-btn { padding:4px 12px; border-radius:2px; font-weight:900; text-transform:uppercase; font-size:9px; letter-spacing:.06em; transition:all .2s; cursor:pointer; }
+
+    .chart-safe-zone{ position:relative; flex:1; min-height:0; width:100%; }
+    .chart-container{ position:absolute; inset:0; }
+
+    th { font-size:9px; font-weight:900; text-transform:uppercase; color:#64748b; background:#f8fafc; border-bottom:2px solid #e2e8f0; padding:8px !important; }
+    td { padding:8px !important; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+
+    .badge { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; padding: 2px 6px; border-radius: 2px; border: 1px solid; }
+    .btn-action { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; cursor: pointer; }
+    .btn-view:hover { color: white; background: #0f766e; border-color: #0f766e; }
+  </style>
+</head>
+
+<body class="text-slate-800 h-screen w-screen overflow-hidden">
+  <div class="h-full lg:grid lg:grid-cols-[260px_1fr]">
+
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'municipal/sidenav.html' %}
+    </aside>
+
+    <div class="h-full flex flex-col overflow-hidden" x-data="paymentDeposits()" x-init="loadDeposits()">
+      <main class="flex-1 min-h-0 bg-slate-100 p-3 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
+
+        <!-- Header -->
+        <header class="gov-card p-3 flex justify-between items-center shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+              <span class="material-icons-round text-emerald-700 text-[18px]">account_balance_wallet</span>
+            </div>
+            <div class="leading-tight">
+              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Payment Deposits</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
+                All Online Payments & License/Permit Fees (Municipality Scoped)
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span class="hidden sm:inline badge bg-blue-50 text-blue-800 border-blue-200">
+              {{ municipality_name|default('Municipality') }}
+            </span>
+          </div>
+        </header>
+
+        <!-- KPI Section -->
+        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-700">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deposits</p>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">₱ <span x-text="formatCurrency(totalAmount)">0</span></div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-blue-700">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Payment Count</p>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="deposits.length">0</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Completed Payments</p>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="completedCount">0</div>
+          </div>
+          <div class="gov-card p-2 px-3 bg-slate-800 text-white border-l-4 border-l-slate-800">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Pending Amount</p>
+            <div class="text-lg font-black text-orange-400 mt-0.5 leading-none">₱ <span x-text="formatCurrency(pendingAmount)">0</span></div>
+          </div>
+        </section>
+
+        <!-- Charts -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 h-[160px]">
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Payment Status Distribution
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="statusChart"></canvas></div>
+            </div>
+          </div>
+
+          <div class="gov-card p-2 flex flex-col overflow-hidden">
+            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">
+              Deposits by Type
+            </h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="typeChart"></canvas></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Table Section -->
+        <section class="flex-1 overflow-hidden flex flex-col gap-2">
+          <div class="gov-card p-2 flex items-center justify-between shrink-0">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
+              <span class="material-icons-round text-[14px]">receipt_long</span> All Payment Deposits
+            </h2>
+            <div class="flex gap-1.5">
+              <input x-model="searchTerm" @input="applyFilters()" type="text" placeholder="Search..." 
+                class="gov-input w-40" />
+              <select x-model="statusFilter" @change="applyFilters()" class="gov-input cursor-pointer">
+                <option value="">All Status</option>
+                <option value="Completed">Completed</option>
+                <option value="Pending">Pending</option>
+              </select>
+              <button @click="resetFilters()" class="gov-btn border border-slate-300 bg-slate-100 hover:bg-slate-200">Reset</button>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-auto gov-card custom-scrollbar">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 z-10">
+                <tr>
+                  <th>Date</th>
+                  <th>Invoice ID</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Payment Method</th>
+                  <th>Payer</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-if="filteredDeposits.length === 0">
+                  <tr>
+                    <td colspan="8" class="text-center py-4 text-slate-500">
+                      <span class="material-icons-round text-[32px] text-slate-300 block mb-1">deployed_code</span>
+                      No payment deposits found for this municipality
+                    </td>
+                  </tr>
+                </template>
+                <template x-for="deposit in filteredDeposits" :key="deposit.id">
+                  <tr>
+                    <td x-text="formatDate(deposit.created_at)">-</td>
+                    <td>
+                      <code class="text-[9px] font-bold text-blue-600" x-text="deposit.invoice_id || deposit.external_id">-</code>
+                    </td>
+                    <td x-text="deposit.description" class="max-w-xs truncate">-</td>
+                    <td class="font-black text-emerald-700">₱ <span x-text="formatCurrency(deposit.amount)">0</span></td>
+                    <td>
+                      <span :class="getStatusBadge(deposit.status)" x-text="deposit.status">-</span>
+                    </td>
+                    <td class="text-[9px]" x-text="deposit.payment_method">-</td>
+                    <td class="text-[9px]" x-text="deposit.payer_email">-</td>
+                    <td>
+                      <button class="btn-action btn-view" title="View Details">
+                        <span class="material-icons-round text-[14px]">open_in_new</span>
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0 text-[9px]">
+            <span class="text-slate-500 font-bold uppercase tracking-wider italic">
+              Showing <span x-text="filteredDeposits.length"></span> of <span x-text="deposits.length"></span> deposits
+            </span>
+            <span class="text-emerald-700 font-black">
+              Total: ₱ <span x-text="formatCurrency(totalAmount)">0</span>
+            </span>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    function paymentDeposits() {
+      return {
+        deposits: [],
+        searchTerm: '',
+        statusFilter: '',
+
+        get filteredDeposits() {
+          return this.deposits.filter(dep => {
+            const matchSearch = !this.searchTerm || 
+              (dep.description || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+              (dep.invoice_id || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+              (dep.payer_email || '').toLowerCase().includes(this.searchTerm.toLowerCase());
+            const matchStatus = !this.statusFilter || dep.status === this.statusFilter;
+            return matchSearch && matchStatus;
+          });
+        },
+
+        get totalAmount() {
+          return this.deposits.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+        },
+
+        get completedCount() {
+          return this.deposits.filter(d => d.status === 'Completed' || d.status === 'Paid').length;
+        },
+
+        get pendingAmount() {
+          return this.deposits
+            .filter(d => d.status === 'Pending')
+            .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+        },
+
+        formatCurrency(val) {
+          return typeof val === 'number' ? val.toLocaleString('en-PH', { maximumFractionDigits: 2 }) : '0';
+        },
+
+        formatDate(dateStr) {
+          if (!dateStr) return '-';
+          try {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-PH');
+          } catch (e) {
+            return dateStr;
+          }
+        },
+
+        getStatusBadge(status) {
+          const classes = {
+            'Completed': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+            'Paid': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+            'Pending': 'bg-amber-50 text-amber-800 border-amber-200',
+            'Failed': 'bg-red-50 text-red-800 border-red-200',
+          };
+          return `px-1 py-0.5 rounded-[2px] font-bold text-[8px] uppercase border ${classes[status] || classes['Pending']}`;
+        },
+
+        applyFilters() {
+          // Filters are applied via computed properties above
+          this.updateCharts();
+        },
+
+        resetFilters() {
+          this.searchTerm = '';
+          this.statusFilter = '';
+          this.updateCharts();
+        },
+
+        async loadDeposits() {
+          try {
+            console.log('[DEBUG] Loading payment deposits...');
+            const res = await fetch('/api/municipal/deposits/payments');
+            const data = await res.json();
+            
+            if (data.success && Array.isArray(data.deposits)) {
+              this.deposits = data.deposits;
+              console.log(`[DEBUG] Loaded ${this.deposits.length} payment deposits`);
+              this.$nextTick(() => this.updateCharts());
+            } else {
+              console.error('[ERROR] Invalid response:', data);
+            }
+          } catch (e) {
+            console.error('[ERROR] Failed to load deposits:', e);
+          }
+        },
+
+        updateCharts() {
+          try {
+            console.log('[DEBUG] Updating charts...');
+
+            // Status distribution
+            const statusData = {};
+            this.deposits.forEach(dep => {
+              const status = dep.status || 'Unknown';
+              statusData[status] = (statusData[status] || 0) + Number(dep.amount || 0);
+            });
+
+            const statusCtx = document.getElementById('statusChart');
+            if (statusCtx) {
+              if (window.statusChartInstance) window.statusChartInstance.destroy();
+              window.statusChartInstance = new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                  labels: Object.keys(statusData),
+                  datasets: [{
+                    data: Object.values(statusData),
+                    backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#6b7280'],
+                    borderWidth: 0
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  cutout: '65%',
+                  plugins: {
+                    legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8, weight: 'bold' } } }
+                  }
+                }
+              });
+            }
+
+            // Type distribution
+            const typeData = { 'Online Payment': 0 };
+            this.deposits.forEach(dep => {
+              typeData['Online Payment'] = (typeData['Online Payment'] || 0) + Number(dep.amount || 0);
+            });
+
+            const typeCtx = document.getElementById('typeChart');
+            if (typeCtx) {
+              if (window.typeChartInstance) window.typeChartInstance.destroy();
+              window.typeChartInstance = new Chart(typeCtx, {
+                type: 'bar',
+                data: {
+                  labels: Object.keys(typeData),
+                  datasets: [{
+                    label: 'Amount',
+                    data: Object.values(typeData),
+                    backgroundColor: '#0f766e',
+                    borderColor: '#0f766e',
+                    borderWidth: 0
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  indexAxis: 'y',
+                  plugins: { legend: { display: false } },
+                  scales: {
+                    x: { grid: { display: false }, ticks: { font: { size: 8 } } },
+                    y: { grid: { display: false }, ticks: { font: { size: 8 } } }
+                  }
+                }
+              });
+            }
+
+            console.log('[DEBUG] Charts updated');
+          } catch (e) {
+            console.error('[ERROR] Failed to update charts:', e);
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

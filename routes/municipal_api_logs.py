@@ -311,6 +311,102 @@ def api_add_deposit():
         print(f"[ERROR] Adding deposit: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+
+# =============================================
+# MUNICIPAL PAYMENT DEPOSITS TRACKING
+# =============================================
+@bp.route('/deposits/payments', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_municipal_payment_deposits():
+    """Get all payment transactions/deposits for the municipality (from transactions collection)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        if not municipality_scope:
+            return jsonify({'success': False, 'error': 'Cannot determine municipality'}), 403
+        
+        print(f"[DEBUG] Fetching payment deposits for municipality: '{municipality_scope}'")
+        
+        db = get_firestore_db()
+        
+        # Step 1: Get all users that belong to this municipality
+        user_emails = []
+        try:
+            from google.cloud.firestore_v1.base_query import FieldFilter
+            users_docs = db.collection('users').where(
+                filter=FieldFilter('municipality', '==', municipality_scope)
+            ).limit(500).stream()
+            
+            for user_doc in users_docs:
+                user_data = user_doc.to_dict() or {}
+                email = user_data.get('email')
+                if email:
+                    user_emails.append(email.lower())
+            
+            print(f"[DEBUG] Found {len(user_emails)} users for municipality '{municipality_scope}'")
+        except Exception as e:
+            print(f"[WARNING] Failed to fetch municipality users: {e}")
+        
+        deposits = []
+        
+        # Step 2: Fetch all transactions from 'transactions' collection
+        try:
+            all_transactions = db.collection('transactions').limit(1000).stream()
+            
+            transaction_count = 0
+            for doc in all_transactions:
+                trans = doc.to_dict()
+                user_email = (trans.get('user_email') or '').lower()
+                
+                # Filter by municipality users
+                if user_email in user_emails or trans.get('municipality') == municipality_scope:
+                    deposit_record = {
+                        'id': doc.id,
+                        'transaction_type': 'Payment Deposit',
+                        'payment_type': 'Online Payment',
+                        'invoice_id': trans.get('invoice_id', ''),
+                        'external_id': trans.get('external_id', ''),
+                        'amount': float(trans.get('amount', 0)),
+                        'description': trans.get('description', trans.get('transaction_name', 'Payment')),
+                        'payer_email': user_email,
+                        'payment_method': trans.get('payment_method', 'Online Payment'),
+                        'status': trans.get('status', 'Pending'),
+                        'created_at': trans.get('created_at'),
+                        'paid_at': trans.get('paid_at'),
+                        'reference': trans.get('reference', trans.get('external_id', '')),
+                    }
+                    deposits.append(deposit_record)
+                    transaction_count += 1
+            
+            print(f"[DEBUG] Loaded {transaction_count} payment deposits for municipality '{municipality_scope}'")
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch transactions: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Sort by date (most recent first)
+        try:
+            deposits.sort(
+                key=lambda x: str(x.get('created_at', '')) or '',
+                reverse=True
+            )
+        except Exception as e:
+            print(f"[WARNING] Failed to sort deposits: {e}")
+        
+        print(f"[DEBUG] Returning {len(deposits)} total deposits for municipality '{municipality_scope}'")
+        
+        return jsonify({
+            'success': True,
+            'municipality': municipality_scope,
+            'deposits': deposits,
+            'count': len(deposits)
+        }), 200
+        
+    except Exception as e:
+        print(f"[ERROR] Fetching municipal payment deposits: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @bp.route('/deposits/<category_id>', methods=['DELETE'])
 @role_required('municipal','municipal_admin')
 def api_delete_deposit(category_id):
