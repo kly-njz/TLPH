@@ -2475,6 +2475,9 @@ def delete_regional_expense(expense_id):
     if not region_name:
         region_name = 'CALABARZON'
     
+    region_name = str(region_name).strip().upper()
+    firestore_region = get_firestore_region_name(region_name)
+    
     db = get_firestore_db()
     
     # Verify expense belongs to user's region
@@ -2484,7 +2487,7 @@ def delete_regional_expense(expense_id):
             return jsonify({'success': False, 'error': 'Expense not found'}), 404
         
         expense = expense_doc.to_dict()
-        if expense.get('region') != region_name:
+        if expense.get('region') != firestore_region:
             return jsonify({'success': False, 'error': 'Cannot delete expenses from other regions'}), 403
     except Exception as e:
         print(f"[ERROR] Failed to verify expense: {e}")
