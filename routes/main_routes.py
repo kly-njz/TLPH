@@ -40,21 +40,269 @@ def create_regional_account():
 @bp.route('/national/dashboard')
 @role_required('national','national_admin')
 def national_dashboard():
-    # TODO: Replace with real Firestore/database queries
-    total_collections = 0
-    total_applications = 0
-    total_service_requests = 0
-    total_count = 0
-    approved_count = 0
-    pending_count = 0
+    from firebase_config import get_firestore_db
+    from datetime import datetime
+    from collections import defaultdict
+    import calendar
+
+    try:
+        db = get_firestore_db()
+
+        # ── 1. Applications ───────────────────────────────────────────────
+        applications = []
+        app_region_count = defaultdict(int)
+        app_monthly = defaultdict(int)
+        app_approved = app_pending = app_rejected = 0
+
+        for doc in db.collection('applications').stream():
+            data = doc.to_dict()
+            status = (data.get('status') or 'pending').lower()
+            if status not in ['approved', 'to review', 'review']:
+                continue
+
+            nat_status = (data.get('nationalStatus') or 'pending').lower()
+            if nat_status == 'approved':
+                app_approved += 1
+            elif nat_status == 'rejected':
+                app_rejected += 1
+            else:
+                app_pending += 1
+
+            created_at = data.get('createdAt') or data.get('dateFiled') or data.get('date_filed')
+            date_obj = None
+            if created_at:
+                if isinstance(created_at, str):
+                    try:
+                        date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    except Exception:
+                        pass
+                elif hasattr(created_at, 'strftime'):
+                    date_obj = created_at
+                elif hasattr(created_at, 'ToDatetime'):
+                    try:
+                        date_obj = created_at.ToDatetime()
+                    except Exception:
+                        pass
+            date_str = date_obj.strftime('%b %d, %Y') if date_obj else 'N/A'
+            if date_obj:
+                app_monthly[date_obj.strftime('%Y-%m')] += 1
+
+            region = data.get('region') or 'N/A'
+            if region and region != 'N/A':
+                app_region_count[region] += 1
+
+            applications.append({
+                'id': doc.id,
+                'created_at': date_str,
+                'reference_id': doc.id[:10].upper(),
+                'applicant_name': data.get('applicantName') or data.get('fullName') or data.get('name') or 'N/A',
+                'category': data.get('category') or data.get('applicantCategory') or 'N/A',
+                'region': region,
+                'status': nat_status,
+            })
+        applications.sort(key=lambda x: x['created_at'], reverse=True)
+
+        # ── 2. Service Requests ───────────────────────────────────────────
+        service_requests = []
+        sr_type_count = defaultdict(int)
+        sr_region_count = defaultdict(int)
+        sr_monthly = defaultdict(int)
+
+        for doc in db.collection('service_requests').stream():
+            data = doc.to_dict()
+            nat_status = (data.get('nationalStatus') or 'pending').lower()
+            created_at = data.get('createdAt')
+            date_obj = None
+            if created_at:
+                if isinstance(created_at, str):
+                    try:
+                        date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    except Exception:
+                        pass
+                elif hasattr(created_at, 'strftime'):
+                    date_obj = created_at
+                elif hasattr(created_at, 'ToDatetime'):
+                    try:
+                        date_obj = created_at.ToDatetime()
+                    except Exception:
+                        pass
+            date_str = date_obj.strftime('%b %d, %Y') if date_obj else 'N/A'
+            if date_obj:
+                sr_monthly[date_obj.strftime('%Y-%m')] += 1
+
+            stype = data.get('serviceType') or data.get('type') or data.get('category') or 'N/A'
+            sr_type_count[stype] += 1
+            region = data.get('region') or data.get('province') or 'N/A'
+            if region and region != 'N/A':
+                sr_region_count[region] += 1
+
+            service_requests.append({
+                'id': doc.id,
+                'date_filed': date_str,
+                'reference_id': doc.id[-6:].upper(),
+                'service_type': stype,
+                'region': region,
+                'status': nat_status,
+            })
+        service_requests.sort(key=lambda x: x['date_filed'], reverse=True)
+
+        # ── 3. Transactions / Collections ────────────────────────────────
+        transactions = []
+        total_collections = 0.0
+
+        for doc in db.collection('transactions').order_by('created_at').stream():
+            data = doc.to_dict()
+            raw_status = (data.get('status') or '').upper()
+            amount_val = float(data.get('amount') or 0)
+            if raw_status == 'PAID':
+                total_collections += amount_val
+
+            created_at = data.get('created_at') or data.get('createdAt')
+            date_obj2 = None
+            if created_at:
+                if isinstance(created_at, str):
+                    try:
+                        date_obj2 = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    except Exception:
+                        pass
+                elif hasattr(created_at, 'strftime'):
+                    date_obj2 = created_at
+                elif hasattr(created_at, 'ToDatetime'):
+                    try:
+                        date_obj2 = created_at.ToDatetime()
+                    except Exception:
+                        pass
+            date_str2 = date_obj2.strftime('%b %d, %Y') if date_obj2 else 'N/A'
+
+            transactions.append({
+                'ref': (data.get('external_id') or doc.id[:8]).upper(),
+                'date': date_str2,
+                'payor': data.get('user_email') or data.get('fullName') or 'N/A',
+                'description': data.get('transaction_name') or data.get('description') or 'Payment',
+                'amount': f"{amount_val:,.2f}",
+                'status': raw_status,
+            })
+        transactions.reverse()  # most recent first
+        transactions = transactions[:20]
+
+        # ── 4. Permits ─────────────────────────────────────────────────
+        permits = []
+        for doc in db.collection('license_applications').stream():
+            data = doc.to_dict()
+            fd = data.get('formData') or {}
+            region = fd.get('region') or data.get('region') or 'N/A'
+            status_raw = (data.get('status') or 'pending').lower()
+            disp = 'Valid' if status_raw == 'approved' else ('Expired' if status_raw == 'rejected' else 'Pending')
+            permits.append({
+                'ref': 'LIC-' + doc.id[-6:].upper(),
+                'region': region,
+                'status': disp,
+                'status_raw': status_raw,
+            })
+        permits = permits[:15]
+
+        # ── 5. Inventory Items ────────────────────────────────────────────
+        inventory_items = []
+        for doc in db.collection('license_applications').stream():
+            data = doc.to_dict()
+            fd = data.get('formData') or {}
+            atype = data.get('applicationType') or 'N/A'
+            cat_map = {
+                'farm-visit': 'Chemicals', 'fishery-permit': 'Marine Res.',
+                'livestock': 'Livestock', 'forest': 'Forest Res.',
+                'wildlife': 'Wildlife', 'environment': 'Environment'
+            }
+            cat = cat_map.get(str(atype).lower(), 'General')
+            region_v = fd.get('region') or data.get('region') or 'N/A'
+            inventory_items.append({
+                'category': cat,
+                'quantity': data.get('quantity') or 1,
+                'hub': region_v,
+            })
+        inventory_items = inventory_items[:15]
+
+        # ── 6. Trend (last 6 months, combined apps + SR) ─────────────────
+        now = datetime.now()
+        trend_labels = []
+        trend_data = []
+        for i in range(5, -1, -1):
+            yr = now.year
+            mo = now.month - i
+            while mo <= 0:
+                mo += 12
+                yr -= 1
+            key = f"{yr}-{mo:02d}"
+            trend_labels.append(calendar.month_abbr[mo] + ' ' + str(yr))
+            trend_data.append(app_monthly.get(key, 0) + sr_monthly.get(key, 0))
+
+        # ── 7. Category chart (service request types) ───────────────────
+        cat_keywords = {
+            'Farm Visit': ['farm', 'crop', 'pest'],
+            'Chemical/Fert.': ['chemical', 'fertilizer', 'pesticide'],
+            'Financial Aid': ['subsidy', 'grant', 'loan', 'startup', 'financial'],
+            'Seminar': ['seminar', 'training', 'workshop'],
+            'Wildlife': ['wildlife', 'animal'],
+            'Fisheries': ['fish', 'aqua'],
+            'Forestry': ['forest', 'timber', 'tree'],
+        }
+        cat_counts = {k: 0 for k in cat_keywords}
+        for stype, cnt in sr_type_count.items():
+            sl = stype.lower()
+            matched = False
+            for cat, kws in cat_keywords.items():
+                if any(k in sl for k in kws):
+                    cat_counts[cat] += cnt
+                    matched = True
+                    break
+            if not matched:
+                cat_counts['Farm Visit'] += cnt
+        category_labels = list(cat_counts.keys())
+        category_data = list(cat_counts.values())
+
+        # ── 8. Regional chart ─────────────────────────────────────────────
+        combined_region = defaultdict(int)
+        for r, c in app_region_count.items():
+            combined_region[r] += c
+        for r, c in sr_region_count.items():
+            combined_region[r] += c
+        top_regions = sorted(combined_region.items(), key=lambda x: x[1], reverse=True)[:8]
+        region_labels = [r[0] for r in top_regions] if top_regions else ['N/A']
+        region_data = [r[1] for r in top_regions] if top_regions else [0]
+
+        # ── 9. Totals ─────────────────────────────────────────────────────
+        total_count = len(applications) + len(service_requests)
+        approved_count = app_approved
+        pending_count = app_pending
+        rejected_count = app_rejected
+
+    except Exception as e:
+        print(f"[national_dashboard] Error: {e}")
+        import traceback; traceback.print_exc()
+        applications = service_requests = transactions = permits = inventory_items = []
+        total_collections = total_count = approved_count = pending_count = rejected_count = 0
+        trend_labels = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar']
+        trend_data = category_data = region_data = [0] * 6
+        category_labels = ['Farm Visit', 'Chemical/Fert.', 'Financial Aid', 'Seminar', 'Wildlife', 'Fisheries', 'Forestry']
+        region_labels = ['N/A']
+
     return render_template(
         'national/landing-national.html',
+        applications=applications,
+        service_requests=service_requests,
+        transactions=transactions,
+        permits=permits,
+        inventory_items=inventory_items,
         total_collections=total_collections,
-        total_applications=total_applications,
-        total_service_requests=total_service_requests,
         total_count=total_count,
         approved_count=approved_count,
-        pending_count=pending_count
+        pending_count=pending_count,
+        rejected_count=rejected_count,
+        trend_labels=trend_labels,
+        trend_data=trend_data,
+        category_labels=category_labels,
+        category_data=category_data,
+        region_labels=region_labels,
+        region_data=region_data,
     )
 
 @bp.route('/national/system-logs')
