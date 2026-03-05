@@ -2186,7 +2186,11 @@ def get_regional_expenses():
             fund['transaction_type'] = 'Fund Transfer to Municipality'
             fund['expense_type'] = f"Fund Transfer to {fund.get('municipality', 'Municipality')}"
             fund['category'] = 'Project'
-            fund['amount'] = fund.get('amount', 0)
+            # Ensure amount is properly converted to a number
+            try:
+                fund['amount'] = float(fund.get('amount', 0))
+            except (ValueError, TypeError):
+                fund['amount'] = 0
             fund['recipient'] = fund.get('municipality', 'N/A')
             fund['payment_method'] = 'Bank Transfer'
             fund['description'] = f"Fund allocation to {fund.get('municipality')} ({fund.get('province')})"
@@ -2226,7 +2230,11 @@ def get_regional_expenses():
             fund['transaction_type'] = 'Fund Received'
             fund['expense_type'] = f"Fund Received from National"
             fund['category'] = 'Project'
-            fund['amount'] = fund.get('amount', 0)
+            # Ensure amount is properly converted to a number
+            try:
+                fund['amount'] = float(fund.get('amount', 0))
+            except (ValueError, TypeError):
+                fund['amount'] = 0
             fund['recipient'] = 'National Government'
             fund['payment_method'] = 'Bank Transfer'
             fund['description'] = f"Allocation from national for {fund.get('fund_type', 'regional operations')}"
