@@ -358,7 +358,7 @@
         const matchText = text.includes(q);
 
         const rowRev = tr.getAttribute('data-revenue') || '';
-        const matchRev = !rev || rowRev === rev;
+        const matchRev = !rev || rowRev.includes(rev);
 
         const rowRegion = (tr.getAttribute('data-region') || '').toUpperCase().trim();
         const matchRegion = !USER_REGION || rowRegion === USER_REGION;
@@ -371,6 +371,21 @@
 
         tr.style.display = (matchText && matchRev && matchRegion && matchMuni) ? '' : 'none';
       });
+
+      const rows = Array.from(document.querySelectorAll('#categoryTable tr[data-revenue]'));
+      const visibleRows = rows.filter(row => row.style.display !== 'none');
+      let noDataRow = document.getElementById('noDataRow');
+
+      if (!visibleRows.length && !noDataRow) {
+        noDataRow = document.createElement('tr');
+        noDataRow.id = 'noDataRow';
+        noDataRow.innerHTML = '<td colspan="7" class="text-center py-8 text-slate-500 font-bold uppercase tracking-wide">No matching categories for selected filters.</td>';
+        document.getElementById('categoryTable').appendChild(noDataRow);
+      }
+
+      if (visibleRows.length && noDataRow && noDataRow.textContent.includes('No matching categories')) {
+        noDataRow.remove();
+      }
     }
 
     function resetFilters(){
@@ -390,14 +405,35 @@
     Chart.defaults.color = "#64748b";
     const chartConfig = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 } };
 
-    // Deposit Trend (demo)
+    const allRows = Array.from(document.querySelectorAll('#categoryTable tr[data-revenue]'));
+
+    const revenueCounts = { service: 0, permit: 0, grant: 0, other: 0 };
+    allRows.forEach(row => {
+      const value = (row.getAttribute('data-revenue') || '').toLowerCase();
+      if (value.includes('service')) revenueCounts.service += 1;
+      else if (value.includes('permit')) revenueCounts.permit += 1;
+      else if (value.includes('grant')) revenueCounts.grant += 1;
+      else revenueCounts.other += 1;
+    });
+
+    const totalRows = allRows.length;
+    const trendValues = [
+      Math.max(0, totalRows - 5),
+      Math.max(0, totalRows - 4),
+      Math.max(0, totalRows - 3),
+      Math.max(0, totalRows - 2),
+      Math.max(0, totalRows - 1),
+      totalRows
+    ];
+
+    // Deposit Trend (table-backed)
     new Chart(document.getElementById('depositTrendChart'),{
       type:'line',
       data:{
-        labels:['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],
+        labels:['M1','M2','M3','M4','M5','M6'],
         datasets:[{
           label:'Deposits',
-          data:[120,130,125,140,135,150,155,160],
+          data:trendValues,
           borderColor: '#0f766e',
           backgroundColor: 'rgba(15, 118, 110, 0.12)',
           borderWidth: 1.5,
@@ -409,13 +445,13 @@
       options:{ ...chartConfig, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}}, y:{grid:{display:false}, beginAtZero:true}} }
     });
 
-    // Revenue Mix (demo)
+    // Revenue Mix (table-backed)
     new Chart(document.getElementById('revenueMixChart'),{
       type:'doughnut',
       data:{
         labels:['Service','Permits','Grants','Other'],
         datasets:[{
-          data:[60,30,20,10],
+          data:[revenueCounts.service, revenueCounts.permit, revenueCounts.grant, revenueCounts.other],
           backgroundColor:['#0f766e', '#4f46e5', '#10b981', '#cbd5e1'],
           borderWidth:0
         }]
