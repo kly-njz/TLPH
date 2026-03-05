@@ -2040,11 +2040,6 @@ def accounting_entities_view():
 def accounting_deposits_view():
     return render_template('regional/accounting/deposit-category-regional.html')
 
-@bp.route('/accounting/admin-transactions')
-@role_required('regional','regional_admin')
-def admin_transactions_view():
-    return render_template('regional/accounting/admin-transactions-regional.html')
-
 @bp.route('/accounting/accounting-expenses')
 @role_required('regional','regional_admin')
 def accounting_expenses_view():
@@ -2069,9 +2064,13 @@ def topup_fund():
     region_finance_ref.update({'available_fund': current + amount})
     return jsonify({'success': True, 'region': region, 'new_available_fund': current + amount})
 
-@bp.route('/api/regional/admin-transactions', methods=['GET'])
+# ============================================
+# REGIONAL EXPENSE TRACKING APIs
+# ============================================
+
+@bp.route('/api/accounting/expenses', methods=['GET'])
 @role_required('regional','regional_admin')
-def get_regional_admin_transactions():
+def get_regional_expenses():
     from firebase_admin import firestore
     import datetime
 
@@ -2106,33 +2105,29 @@ def get_regional_admin_transactions():
     if not region_name:
         region_name = 'CALABARZON'
 
-    admin_id = session.get('user_id', 'Unknown')
-    admin_name = session.get('user_name', 'Unknown Admin')
-    
-    transactions = []
+    expenses = []
     
     try:
-        # Fetch transactions for this region and admin
-        tx_docs = db.collection('regional_admin_transactions').where(
+        # Fetch all expenses for this region, ordered by date (newest first)
+        expense_docs = db.collection('regional_expenses').where(
             filter=FieldFilter('region', '==', region_name)
-        ).order_by('timestamp', direction='DESCENDING').stream()
+        ).order_by('expense_date', direction=firestore.Query.DESCENDING).stream()
         
-        for doc in tx_docs:
-            tx_data = doc.to_dict() or {}
-            tx_data['id'] = doc.id
-            transactions.append(tx_data)
+        for doc in expense_docs:
+            expense = doc.to_dict()
+            expense['id'] = doc.id
+            expenses.append(expense)
     except Exception as e:
-        print(f"[ERROR] Failed fetching transactions: {e}")
+        print(f"[ERROR] Failed to fetch regional expenses: {e}")
     
-    return jsonify({'success': True, 'transactions': transactions, 'region': region_name})
+    return jsonify({'success': True, 'expenses': expenses})
 
-@bp.route('/api/regional/admin-transactions', methods=['POST'])
+@bp.route('/api/accounting/expenses', methods=['POST'])
 @role_required('regional','regional_admin')
-def create_regional_admin_transaction():
+def create_regional_expense():
     from firebase_admin import firestore
     import datetime
 
-    db = get_firestore_db()
     data = request.get_json(silent=True) or {}
     
     # Get the user's region
@@ -2163,58 +2158,145 @@ def create_regional_admin_transaction():
 
     if not region_name:
         region_name = 'CALABARZON'
-
+    
     # Validate required fields
-    transaction_type = (data.get('transaction_type') or '').strip()
-    amount = float(data.get('amount') or 0)
+    expense_type = (data.get('expense_type') or '').strip()
+    amount = data.get('amount')
+    expense_date = (data.get('expense_date') or '').strip()
     description = (data.get('description') or '').strip()
-    category = (data.get('category') or '').strip()
     
-    if not all([transaction_type, amount > 0, description]):
-        return jsonify({'success': False, 'error': 'Transaction type, amount, and description are required'}), 400
+    if not all([expense_type, amount, expense_date]):
+        return jsonify({'success': False, 'error': 'Expense type, amount, and date are required'}), 400
     
-    admin_id = session.get('user_id', 'Unknown')
-    admin_name = session.get('user_name', 'Unknown Admin')
+    try:
+        amount = float(amount)
+        if amount <= 0:
+            return jsonify({'success': False, 'error': 'Amount must be positive'}), 400
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid amount'}), 400
     
-    # Create transaction record
+    db = get_firestore_db()
+    
     payload = {
-        'region': region_name,
-        'admin_id': admin_id,
-        'admin_name': admin_name,
-        'transaction_type': transaction_type,  # expense, transfer_to_municipal, transfer_to_national, payroll, etc.
+        'expense_type': expense_type,
+        'category': (data.get('category') or 'General').strip(),
         'amount': amount,
+        'expense_date': expense_date,
         'description': description,
-        'category': category or 'General',
-        'recipient': (data.get('recipient') or '').strip(),  # For transfers
-        'reference_number': (data.get('reference_number') or '').strip(),  # Check number, invoice, etc.
-        'status': 'completed',  # completed, pending, approved
-        'timestamp': datetime.datetime.utcnow().isoformat(),
-        'date_created': datetime.datetime.utcnow().strftime('%Y-%m-%d')
+        'payment_method': (data.get('payment_method') or 'Check').strip(),
+        'recipient': (data.get('recipient') or 'N/A').strip(),
+        'reference_number': (data.get('reference_number') or '').strip(),
+        'municipality': (data.get('municipality') or 'REGIONAL').strip(),
+        'region': region_name,
+        'recorded_by': session.get('user_email') or session.get('user_id') or 'System',
+        'status': 'Recorded',
+        'created_at': datetime.datetime.utcnow().isoformat(),
+        'updated_at': datetime.datetime.utcnow().isoformat()
     }
     
-    ref = db.collection('regional_admin_transactions').document()
-    ref.set(payload)
-    
-    # Deduct from regional finance if it's an expense/transfer
     try:
-        region_finance_ref = db.collection('finance').document(region_name)
-        region_finance_doc = region_finance_ref.get()
-        if region_finance_doc.exists:
-            current_fund = float(region_finance_doc.to_dict().get('available_fund', 0))
-            region_finance_ref.update({'available_fund': current_fund - amount})
+        ref = db.collection('regional_expenses').add(payload)
+        return jsonify({'success': True, 'id': ref[1].id})
     except Exception as e:
-        print(f"[WARNING] Could not update finance record: {e}")
-    
-    return jsonify({'success': True, 'id': ref.id, 'message': f'Transaction recorded: {description}'})
+        print(f"[ERROR] Failed to record expense: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@bp.route('/api/regional/admin-transactions/<transaction_id>', methods=['PUT'])
+@bp.route('/api/accounting/expenses/<expense_id>', methods=['PUT'])
 @role_required('regional','regional_admin')
-def update_regional_admin_transaction(transaction_id):
+def update_regional_expense(expense_id):
+    from firebase_admin import firestore
+    import datetime
+
+    data = request.get_json(silent=True) or {}
+    
+    # Get the user's region
+    region_name = session.get('region') or session.get('user_region')
+    
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db_client = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db_client.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db_client.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+            except Exception:
+                pass
+
+    if not region_name:
+        region_name = 'CALABARZON'
+    
+    db = get_firestore_db()
+    
+    # Verify expense belongs to user's region
+    try:
+        expense_doc = db.collection('regional_expenses').document(expense_id).get()
+        if not expense_doc.exists:
+            return jsonify({'success': False, 'error': 'Expense not found'}), 404
+        
+        expense = expense_doc.to_dict()
+        if expense.get('region') != region_name:
+            return jsonify({'success': False, 'error': 'Cannot modify expenses from other regions'}), 403
+    except Exception as e:
+        print(f"[ERROR] Failed to verify expense: {e}")
+        return jsonify({'success': False, 'error': 'Verification failed'}), 500
+    
+    # Build update payload
+    payload = {
+        'updated_at': datetime.datetime.utcnow().isoformat()
+    }
+    
+    if 'expense_type' in data:
+        payload['expense_type'] = (data.get('expense_type') or '').strip()
+    if 'category' in data:
+        payload['category'] = (data.get('category') or 'General').strip()
+    if 'amount' in data:
+        try:
+            amount = float(data.get('amount', 0))
+            if amount <= 0:
+                return jsonify({'success': False, 'error': 'Amount must be positive'}), 400
+            payload['amount'] = amount
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Invalid amount'}), 400
+    if 'expense_date' in data:
+        payload['expense_date'] = (data.get('expense_date') or '').strip()
+    if 'description' in data:
+        payload['description'] = (data.get('description') or '').strip()
+    if 'payment_method' in data:
+        payload['payment_method'] = (data.get('payment_method') or 'Check').strip()
+    if 'recipient' in data:
+        payload['recipient'] = (data.get('recipient') or 'N/A').strip()
+    if 'reference_number' in data:
+        payload['reference_number'] = (data.get('reference_number') or '').strip()
+    if 'municipality' in data:
+        payload['municipality'] = (data.get('municipality') or 'REGIONAL').strip()
+    if 'status' in data:
+        payload['status'] = (data.get('status') or 'Recorded').strip()
+    
+    try:
+        db.collection('regional_expenses').document(expense_id).set(payload, merge=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] Failed to update expense: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/api/accounting/expenses/<expense_id>', methods=['DELETE'])
+@role_required('regional','regional_admin')
+def delete_regional_expense(expense_id):
     from firebase_admin import firestore
 
-    db = get_firestore_db()
-    data = request.get_json(silent=True) or {}
-    
     # Get the user's region
     region_name = session.get('region') or session.get('user_region')
     
@@ -2244,15 +2326,24 @@ def update_regional_admin_transaction(transaction_id):
     if not region_name:
         region_name = 'CALABARZON'
     
-    payload = {
-        'transaction_type': (data.get('transaction_type') or '').strip(),
-        'amount': float(data.get('amount') or 0),
-        'description': (data.get('description') or '').strip(),
-        'category': (data.get('category') or '').strip(),
-        'recipient': (data.get('recipient') or '').strip(),
-        'reference_number': (data.get('reference_number') or '').strip(),
-        'status': (data.get('status') or 'completed').strip()
-    }
+    db = get_firestore_db()
     
-    db.collection('regional_admin_transactions').document(transaction_id).set(payload, merge=True)
-    return jsonify({'success': True, 'message': 'Transaction updated'})
+    # Verify expense belongs to user's region
+    try:
+        expense_doc = db.collection('regional_expenses').document(expense_id).get()
+        if not expense_doc.exists:
+            return jsonify({'success': False, 'error': 'Expense not found'}), 404
+        
+        expense = expense_doc.to_dict()
+        if expense.get('region') != region_name:
+            return jsonify({'success': False, 'error': 'Cannot delete expenses from other regions'}), 403
+    except Exception as e:
+        print(f"[ERROR] Failed to verify expense: {e}")
+        return jsonify({'success': False, 'error': 'Verification failed'}), 500
+    
+    try:
+        db.collection('regional_expenses').document(expense_id).delete()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] Failed to delete expense: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
