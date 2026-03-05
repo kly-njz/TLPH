@@ -45,6 +45,23 @@ def national_dashboard():
     from collections import defaultdict
     import calendar
 
+    def _parse_ts(raw):
+        """Convert Firestore Timestamp / ISO string / datetime to (datetime, str) tuple."""
+        if not raw:
+            return None, 'N/A'
+        try:
+            if hasattr(raw, 'ToDatetime'):
+                dt = raw.ToDatetime()
+            elif hasattr(raw, 'strftime'):
+                dt = raw
+            elif isinstance(raw, str):
+                dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+            else:
+                return None, 'N/A'
+            return dt, dt.strftime('%b %d, %Y')
+        except Exception:
+            return None, 'N/A'
+
     try:
         db = get_firestore_db()
 
@@ -69,21 +86,7 @@ def national_dashboard():
                 app_pending += 1
 
             created_at = data.get('createdAt') or data.get('dateFiled') or data.get('date_filed')
-            date_obj = None
-            if created_at:
-                if isinstance(created_at, str):
-                    try:
-                        date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                    except Exception:
-                        pass
-                elif hasattr(created_at, 'strftime'):
-                    date_obj = created_at
-                elif hasattr(created_at, 'ToDatetime'):
-                    try:
-                        date_obj = created_at.ToDatetime()
-                    except Exception:
-                        pass
-            date_str = date_obj.strftime('%b %d, %Y') if date_obj else 'N/A'
+            date_obj, date_str = _parse_ts(created_at)
             if date_obj:
                 app_monthly[date_obj.strftime('%Y-%m')] += 1
 
@@ -119,21 +122,7 @@ def national_dashboard():
             else:
                 sr_pending += 1
             created_at = data.get('createdAt')
-            date_obj = None
-            if created_at:
-                if isinstance(created_at, str):
-                    try:
-                        date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                    except Exception:
-                        pass
-                elif hasattr(created_at, 'strftime'):
-                    date_obj = created_at
-                elif hasattr(created_at, 'ToDatetime'):
-                    try:
-                        date_obj = created_at.ToDatetime()
-                    except Exception:
-                        pass
-            date_str = date_obj.strftime('%b %d, %Y') if date_obj else 'N/A'
+            date_obj, date_str = _parse_ts(created_at)
             if date_obj:
                 sr_monthly[date_obj.strftime('%Y-%m')] += 1
 
@@ -164,22 +153,7 @@ def national_dashboard():
             if raw_status == 'PAID':
                 total_collections += amount_val
 
-            created_at = data.get('created_at') or data.get('createdAt')
-            date_obj2 = None
-            if created_at:
-                if isinstance(created_at, str):
-                    try:
-                        date_obj2 = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                    except Exception:
-                        pass
-                elif hasattr(created_at, 'strftime'):
-                    date_obj2 = created_at
-                elif hasattr(created_at, 'ToDatetime'):
-                    try:
-                        date_obj2 = created_at.ToDatetime()
-                    except Exception:
-                        pass
-            date_str2 = date_obj2.strftime('%b %d, %Y') if date_obj2 else 'N/A'
+            _, date_str2 = _parse_ts(data.get('created_at') or data.get('createdAt'))
 
             transactions.append({
                 'ref': (data.get('external_id') or doc.id[:8]).upper(),
