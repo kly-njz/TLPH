@@ -478,12 +478,43 @@ def get_regional_office_shifts():
 @bp.route('/api/hrm/office-shifts', methods=['POST'])
 @role_required('regional','regional_admin')
 def create_regional_office_shift():
+    from firebase_admin import firestore
+
     data = request.get_json(silent=True) or {}
     shift_code = (data.get('shift_code') or '').strip().upper()
     shift_name = (data.get('shift_name') or '').strip()
 
     if not shift_code or not shift_name:
         return jsonify({'success': False, 'error': 'Shift code and shift name are required'}), 400
+
+    # Get the user's region
+    region_name = session.get('region') or session.get('user_region')
+    
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db_client = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db_client.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db_client.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+            except Exception:
+                pass
+
+    if not region_name:
+        region_name = 'CALABARZON'
 
     db = get_firestore_db()
     duplicate = db.collection('office_shifts').where(filter=FieldFilter('shift_code', '==', shift_code)).limit(1).stream()
@@ -503,6 +534,7 @@ def create_regional_office_shift():
         'time_out_late': (data.get('time_out_late') or '').strip(),
         'grace_minutes': int(data.get('grace_minutes') or 0),
         'break_policy': (data.get('break_policy') or '1 HOUR').strip(),
+        'region': region_name,
         'status': (data.get('status') or 'Active').strip()
     }
 
@@ -513,12 +545,43 @@ def create_regional_office_shift():
 @bp.route('/api/hrm/office-shifts/<shift_id>', methods=['PUT'])
 @role_required('regional','regional_admin')
 def update_regional_office_shift(shift_id):
+    from firebase_admin import firestore
+
     data = request.get_json(silent=True) or {}
     shift_code = (data.get('shift_code') or '').strip().upper()
     shift_name = (data.get('shift_name') or '').strip()
 
     if not shift_code or not shift_name:
         return jsonify({'success': False, 'error': 'Shift code and shift name are required'}), 400
+
+    # Get the user's region
+    region_name = session.get('region') or session.get('user_region')
+    
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db_client = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db_client.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db_client.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+            except Exception:
+                pass
+
+    if not region_name:
+        region_name = 'CALABARZON'
 
     db = get_firestore_db()
     payload = {
@@ -534,6 +597,7 @@ def update_regional_office_shift(shift_id):
         'time_out_late': (data.get('time_out_late') or '').strip(),
         'grace_minutes': int(data.get('grace_minutes') or 0),
         'break_policy': (data.get('break_policy') or '1 HOUR').strip(),
+        'region': region_name,
         'status': (data.get('status') or 'Active').strip()
     }
 
@@ -652,6 +716,8 @@ def get_regional_designations():
 @bp.route('/api/hrm/designations', methods=['POST'])
 @role_required('regional','regional_admin')
 def create_regional_designation():
+    from firebase_admin import firestore
+
     data = request.get_json(silent=True) or {}
     
     designation_code = (data.get('designation_code') or '').strip()
@@ -659,6 +725,35 @@ def create_regional_designation():
     
     if not designation_code or not designation_title:
         return jsonify({'success': False, 'error': 'Designation code and title are required'}), 400
+    
+    # Get the user's region
+    region_name = session.get('region') or session.get('user_region')
+    
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db_client = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db_client.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db_client.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+            except Exception:
+                pass
+
+    if not region_name:
+        region_name = 'CALABARZON'
     
     db = get_firestore_db()
     payload = {
@@ -668,6 +763,7 @@ def create_regional_designation():
         'salary_grade': (data.get('salary_grade') or 'SG-15').strip(),
         'category': (data.get('category') or 'Administrative').strip(),
         'headcount': int(data.get('headcount') or 0),
+        'region': region_name,
         'status': (data.get('status') or 'Active').strip()
     }
     
@@ -677,7 +773,38 @@ def create_regional_designation():
 @bp.route('/api/hrm/designations/<designation_id>', methods=['PUT'])
 @role_required('regional','regional_admin')
 def update_regional_designation(designation_id):
+    from firebase_admin import firestore
+
     data = request.get_json(silent=True) or {}
+    
+    # Get the user's region
+    region_name = session.get('region') or session.get('user_region')
+    
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db_client = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db_client.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db_client.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+            except Exception:
+                pass
+
+    if not region_name:
+        region_name = 'CALABARZON'
     
     db = get_firestore_db()
     payload = {
@@ -687,6 +814,7 @@ def update_regional_designation(designation_id):
         'salary_grade': (data.get('salary_grade') or 'SG-15').strip(),
         'category': (data.get('category') or 'Administrative').strip(),
         'headcount': int(data.get('headcount') or 0),
+        'region': region_name,
         'status': (data.get('status') or 'Active').strip()
     }
     
@@ -805,6 +933,8 @@ def get_regional_departments():
 @bp.route('/api/hrm/departments', methods=['POST'])
 @role_required('regional','regional_admin')
 def create_regional_department():
+    from firebase_admin import firestore
+
     data = request.get_json(silent=True) or {}
     
     department_code = (data.get('department_code') or '').strip()
@@ -812,6 +942,35 @@ def create_regional_department():
     
     if not department_code or not department_name:
         return jsonify({'success': False, 'error': 'Department code and name are required'}), 400
+    
+    # Get the user's region
+    region_name = session.get('region') or session.get('user_region')
+    
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db_client = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db_client.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db_client.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+            except Exception:
+                pass
+
+    if not region_name:
+        region_name = 'CALABARZON'
     
     db = get_firestore_db()
     payload = {
@@ -821,6 +980,7 @@ def create_regional_department():
         'parent_code': (data.get('parent_code') or '').strip(),
         'head_name': (data.get('head_name') or 'TBA').strip(),
         'headcount': int(data.get('headcount') or 0),
+        'region': region_name,
         'status': (data.get('status') or 'Active').strip()
     }
     
@@ -830,7 +990,38 @@ def create_regional_department():
 @bp.route('/api/hrm/departments/<department_id>', methods=['PUT'])
 @role_required('regional','regional_admin')
 def update_regional_department(department_id):
+    from firebase_admin import firestore
+
     data = request.get_json(silent=True) or {}
+    
+    # Get the user's region
+    region_name = session.get('region') or session.get('user_region')
+    
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db_client = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db_client.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db_client.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+            except Exception:
+                pass
+
+    if not region_name:
+        region_name = 'CALABARZON'
     
     db = get_firestore_db()
     payload = {
@@ -840,6 +1031,7 @@ def update_regional_department(department_id):
         'parent_code': (data.get('parent_code') or '').strip(),
         'head_name': (data.get('head_name') or 'TBA').strip(),
         'headcount': int(data.get('headcount') or 0),
+        'region': region_name,
         'status': (data.get('status') or 'Active').strip()
     }
     
