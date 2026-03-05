@@ -137,7 +137,38 @@ def departments_view():
 @bp.route('/hrm/designations')
 @role_required('regional','regional_admin')
 def designations_view():
-    return render_template('regional/HR/designation-regional.html')
+    from firebase_admin import firestore
+
+    region_name = session.get('region') or session.get('user_region')
+
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    print(f"[DEBUG] designations_view fetched region from Firestore: {region_name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch designation region from Firestore: {e}")
+
+    if not region_name:
+        region_name = 'Unknown Region'
+
+    return render_template('regional/HR/designation-regional.html', region_name=region_name)
 
 @bp.route('/hrm/office-shifts')
 @role_required('regional','regional_admin')
@@ -445,6 +476,159 @@ def update_regional_office_shift(shift_id):
     }
 
     db.collection('office_shifts').document(shift_id).set(payload, merge=True)
+    return jsonify({'success': True})
+
+@bp.route('/api/hrm/designations', methods=['GET'])
+@role_required('regional','regional_admin')
+def get_regional_designations():
+    db = get_firestore_db()
+    designations = []
+
+    # First check if designations collection exists and has data
+    desig_docs = list(db.collection('designations').limit(1).stream())
+    
+    if not desig_docs:
+        # Auto-seed from employees collection
+        employee_docs = list(db.collection('employees').stream())
+        
+        # Group employees by designation to count headcount
+        desig_map = {}
+        
+        for employee_doc in employee_docs:
+            emp = employee_doc.to_dict() or {}
+            
+            # Infer designation details from employee
+            designation_title = emp.get('designation') or emp.get('position') or 'Staff'
+            
+            # Infer scope
+            scope = (emp.get('scope') or '').strip().upper()
+            if scope not in ('REGIONAL', 'MUNICIPAL'):
+                role = (emp.get('role') or '').strip().lower()
+                scope = 'MUNICIPAL' if 'municipal' in role else 'REGIONAL'
+            
+            # Infer salary grade from employee
+            salary_grade = emp.get('salary_grade') or 'SG-15'
+            
+            # Infer category from designation title
+            title_lower = designation_title.lower()
+            if any(word in title_lower for word in ['director', 'chief', 'manager', 'head', 'officer']):
+                category = 'Executive'
+            elif any(word in title_lower for word in ['accountant', 'cashier', 'budget', 'finance']):
+                category = 'Financial'
+            elif any(word in title_lower for word in ['engineer', 'technician', 'specialist', 'analyst', 'it']):
+                category = 'Technical'
+            else:
+                category = 'Administrative'
+            
+            # Create unique key for this designation
+            key = f"{scope}|{designation_title}|{salary_grade}"
+            
+            if key not in desig_map:
+                desig_map[key] = {
+                    'title': designation_title,
+                    'scope': scope,
+                    'salary_grade': salary_grade,
+                    'category': category,
+                    'headcount': 0
+                }
+            
+            desig_map[key]['headcount'] += 1
+            
+            # Backfill designation fields to employee document
+            employee_doc.reference.set({
+                'designation_title': designation_title,
+                'designation_scope': scope,
+                'designation_salary_grade': salary_grade,
+                'designation_category': category,
+                'designation_status': 'Active'
+            }, merge=True)
+        
+        # Generate unique codes and save to designations collection
+        reg_count = 0
+        mun_count = 0
+        
+        for key, desig_data in desig_map.items():
+            scope = desig_data['scope']
+            
+            if scope == 'REGIONAL':
+                reg_count += 1
+                code = f"R-DSG-{reg_count:03d}"
+            else:
+                mun_count += 1
+                code = f"M-DSG-{mun_count:03d}"
+            
+            designation_doc = {
+                'designation_code': code,
+                'designation_title': desig_data['title'],
+                'scope': scope,
+                'salary_grade': desig_data['salary_grade'],
+                'category': desig_data['category'],
+                'headcount': desig_data['headcount'],
+                'status': 'Active'
+            }
+            
+            db.collection('designations').add(designation_doc)
+    
+    # Now fetch all designations
+    for doc in db.collection('designations').stream():
+        item = doc.to_dict() or {}
+        
+        designations.append({
+            'id': doc.id,
+            'designation_code': item.get('designation_code', ''),
+            'designation_title': item.get('designation_title', ''),
+            'scope': (item.get('scope') or 'REGIONAL').upper(),
+            'salary_grade': item.get('salary_grade', 'SG-15'),
+            'category': item.get('category', 'Administrative'),
+            'headcount': item.get('headcount', 0),
+            'status': item.get('status', 'Active')
+        })
+    
+    designations.sort(key=lambda d: d.get('designation_code') or '')
+    return jsonify({'success': True, 'designations': designations})
+
+@bp.route('/api/hrm/designations', methods=['POST'])
+@role_required('regional','regional_admin')
+def create_regional_designation():
+    data = request.get_json(silent=True) or {}
+    
+    designation_code = (data.get('designation_code') or '').strip()
+    designation_title = (data.get('designation_title') or '').strip()
+    
+    if not designation_code or not designation_title:
+        return jsonify({'success': False, 'error': 'Designation code and title are required'}), 400
+    
+    db = get_firestore_db()
+    payload = {
+        'designation_code': designation_code,
+        'designation_title': designation_title,
+        'scope': (data.get('scope') or 'REGIONAL').strip().upper(),
+        'salary_grade': (data.get('salary_grade') or 'SG-15').strip(),
+        'category': (data.get('category') or 'Administrative').strip(),
+        'headcount': int(data.get('headcount') or 0),
+        'status': (data.get('status') or 'Active').strip()
+    }
+    
+    db.collection('designations').add(payload)
+    return jsonify({'success': True})
+
+@bp.route('/api/hrm/designations/<designation_id>', methods=['PUT'])
+@role_required('regional','regional_admin')
+def update_regional_designation(designation_id):
+    data = request.get_json(silent=True) or {}
+    
+    db = get_firestore_db()
+    payload = {
+        'designation_code': (data.get('designation_code') or '').strip(),
+        'designation_title': (data.get('designation_title') or '').strip(),
+        'scope': (data.get('scope') or 'REGIONAL').strip().upper(),
+        'salary_grade': (data.get('salary_grade') or 'SG-15').strip(),
+        'category': (data.get('category') or 'Administrative').strip(),
+        'headcount': int(data.get('headcount') or 0),
+        'status': (data.get('status') or 'Active').strip()
+    }
+    
+    db.collection('designations').document(designation_id).set(payload, merge=True)
     return jsonify({'success': True})
 
 @bp.route('/hrm/employees')
