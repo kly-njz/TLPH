@@ -132,7 +132,38 @@ def company_view():
 @bp.route('/hrm/departments')
 @role_required('regional','regional_admin')
 def departments_view():
-    return render_template('regional/HR/department-regional.html')
+    from firebase_admin import firestore
+
+    region_name = session.get('region') or session.get('user_region')
+
+    if not region_name or str(region_name).strip().lower() == 'unknown':
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id or user_email:
+            try:
+                db = firestore.client()
+                user_doc = None
+
+                if user_id:
+                    user_doc = db.collection('users').document(user_id).get()
+                elif user_email:
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                    for doc in docs:
+                        user_doc = doc
+                        break
+
+                if user_doc and user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    print(f"[DEBUG] departments_view fetched region from Firestore: {region_name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch department region from Firestore: {e}")
+
+    if not region_name:
+        region_name = 'Unknown Region'
+
+    return render_template('regional/HR/department-regional.html', region_name=region_name)
 
 @bp.route('/hrm/designations')
 @role_required('regional','regional_admin')
@@ -629,6 +660,159 @@ def update_regional_designation(designation_id):
     }
     
     db.collection('designations').document(designation_id).set(payload, merge=True)
+    return jsonify({'success': True})
+
+@bp.route('/api/hrm/departments', methods=['GET'])
+@role_required('regional','regional_admin')
+def get_regional_departments():
+    db = get_firestore_db()
+    departments = []
+
+    # First check if departments collection exists and has data
+    dept_docs = list(db.collection('departments').limit(1).stream())
+    
+    if not dept_docs:
+        # Auto-seed from employees collection
+        employee_docs = list(db.collection('employees').stream())
+        
+        # Group employees by department to count headcount
+        dept_map = {}
+        
+        for employee_doc in employee_docs:
+            emp = employee_doc.to_dict() or {}
+            
+            # Infer department details from employee
+            department_name = emp.get('department_name') or emp.get('division') or emp.get('section') or 'General Office'
+            
+            # Infer scope
+            scope = (emp.get('scope') or '').strip().upper()
+            if scope not in ('REGIONAL', 'MUNICIPAL'):
+                role = (emp.get('role') or '').strip().lower()
+                scope = 'MUNICIPAL' if 'municipal' in role else 'REGIONAL'
+            
+            # Infer parent department (most departments report to main office)
+            parent_code = 'REG-RO' if scope == 'REGIONAL' else 'MUN-RO'
+            
+            # Infer head from employee (if they have 'director', 'chief', 'head', 'manager' in designation)
+            designation = (emp.get('designation') or '').lower()
+            is_head = any(word in designation for word in ['director', 'chief', 'head', 'manager', 'officer'])
+            
+            # Create unique key for this department
+            key = f"{scope}|{department_name}"
+            
+            if key not in dept_map:
+                dept_map[key] = {
+                    'name': department_name,
+                    'scope': scope,
+                    'parent_code': parent_code,
+                    'head_name': '',
+                    'headcount': 0,
+                    'status': 'Active'
+                }
+            
+            dept_map[key]['headcount'] += 1
+            
+            # Assign head if this employee looks like a department head
+            if is_head and not dept_map[key]['head_name']:
+                full_name = f"{emp.get('first_name', '')} {emp.get('middle_name', '')} {emp.get('last_name', '')}".strip()
+                dept_map[key]['head_name'] = full_name
+            
+            # Backfill department fields to employee document
+            employee_doc.reference.set({
+                'department_code': f"{scope[:3]}-{department_name[:3].upper()}",
+                'department_name': department_name,
+                'department_scope': scope,
+                'department_parent': parent_code,
+                'department_status': 'Active'
+            }, merge=True)
+        
+        # Generate unique codes and save to departments collection
+        reg_count = 0
+        mun_count = 0
+        
+        for key, dept_data in dept_map.items():
+            scope = dept_data['scope']
+            name = dept_data['name']
+            
+            if scope == 'REGIONAL':
+                reg_count += 1
+                code = f"R-DPT-{reg_count:03d}"
+            else:
+                mun_count += 1
+                code = f"M-DPT-{mun_count:03d}"
+            
+            department_doc = {
+                'department_code': code,
+                'department_name': name,
+                'scope': scope,
+                'parent_code': dept_data['parent_code'],
+                'head_name': dept_data['head_name'] or 'TBA',
+                'headcount': dept_data['headcount'],
+                'status': dept_data['status']
+            }
+            
+            db.collection('departments').add(department_doc)
+    
+    # Now fetch all departments
+    for doc in db.collection('departments').stream():
+        item = doc.to_dict() or {}
+        
+        departments.append({
+            'id': doc.id,
+            'department_code': item.get('department_code', ''),
+            'department_name': item.get('department_name', ''),
+            'scope': (item.get('scope') or 'REGIONAL').upper(),
+            'parent_code': item.get('parent_code', ''),
+            'head_name': item.get('head_name', 'TBA'),
+            'headcount': item.get('headcount', 0),
+            'status': item.get('status', 'Active')
+        })
+    
+    departments.sort(key=lambda d: d.get('department_code') or '')
+    return jsonify({'success': True, 'departments': departments})
+
+@bp.route('/api/hrm/departments', methods=['POST'])
+@role_required('regional','regional_admin')
+def create_regional_department():
+    data = request.get_json(silent=True) or {}
+    
+    department_code = (data.get('department_code') or '').strip()
+    department_name = (data.get('department_name') or '').strip()
+    
+    if not department_code or not department_name:
+        return jsonify({'success': False, 'error': 'Department code and name are required'}), 400
+    
+    db = get_firestore_db()
+    payload = {
+        'department_code': department_code,
+        'department_name': department_name,
+        'scope': (data.get('scope') or 'REGIONAL').strip().upper(),
+        'parent_code': (data.get('parent_code') or '').strip(),
+        'head_name': (data.get('head_name') or 'TBA').strip(),
+        'headcount': int(data.get('headcount') or 0),
+        'status': (data.get('status') or 'Active').strip()
+    }
+    
+    db.collection('departments').add(payload)
+    return jsonify({'success': True})
+
+@bp.route('/api/hrm/departments/<department_id>', methods=['PUT'])
+@role_required('regional','regional_admin')
+def update_regional_department(department_id):
+    data = request.get_json(silent=True) or {}
+    
+    db = get_firestore_db()
+    payload = {
+        'department_code': (data.get('department_code') or '').strip(),
+        'department_name': (data.get('department_name') or '').strip(),
+        'scope': (data.get('scope') or 'REGIONAL').strip().upper(),
+        'parent_code': (data.get('parent_code') or '').strip(),
+        'head_name': (data.get('head_name') or 'TBA').strip(),
+        'headcount': int(data.get('headcount') or 0),
+        'status': (data.get('status') or 'Active').strip()
+    }
+    
+    db.collection('departments').document(department_id).set(payload, merge=True)
     return jsonify({'success': True})
 
 @bp.route('/hrm/employees')
