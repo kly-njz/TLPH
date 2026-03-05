@@ -150,7 +150,7 @@ def national_dashboard():
         transactions = []
         total_collections = 0.0
 
-        for doc in db.collection('transactions').order_by('created_at').stream():
+        for doc in db.collection('transactions').stream():
             data = doc.to_dict()
             raw_status = (data.get('status') or '').upper()
             amount_val = float(data.get('amount') or 0)
