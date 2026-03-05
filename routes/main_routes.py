@@ -107,10 +107,17 @@ def national_dashboard():
         sr_type_count = defaultdict(int)
         sr_region_count = defaultdict(int)
         sr_monthly = defaultdict(int)
+        sr_approved = sr_pending = sr_rejected = 0
 
         for doc in db.collection('service_requests').stream():
             data = doc.to_dict()
             nat_status = (data.get('nationalStatus') or 'pending').lower()
+            if nat_status == 'approved':
+                sr_approved += 1
+            elif nat_status == 'rejected':
+                sr_rejected += 1
+            else:
+                sr_pending += 1
             created_at = data.get('createdAt')
             date_obj = None
             if created_at:
@@ -265,9 +272,9 @@ def national_dashboard():
 
         # ── 9. Totals ─────────────────────────────────────────────────────
         total_count = len(applications) + len(service_requests)
-        approved_count = app_approved
-        pending_count = app_pending
-        rejected_count = app_rejected
+        approved_count = app_approved + sr_approved
+        pending_count = app_pending + sr_pending
+        rejected_count = app_rejected + sr_rejected
 
     except Exception as e:
         print(f"[national_dashboard] Error: {e}")
