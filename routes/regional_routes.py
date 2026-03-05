@@ -204,6 +204,180 @@ def get_regional_office_shifts():
             'status': item.get('status') or 'Active'
         })
 
+    # Seed from employees collection when office_shifts has no records yet
+    if not shifts:
+        try:
+            employee_docs = list(db.collection('employees').stream())
+            generated_shifts = {}
+
+            def infer_scope(emp):
+                explicit_scope = (emp.get('scope') or '').strip().upper()
+                if explicit_scope in ('REGIONAL', 'MUNICIPAL'):
+                    return explicit_scope
+                role = (emp.get('role') or '').strip().lower()
+                if 'municipal' in role:
+                    return 'MUNICIPAL'
+                return 'REGIONAL'
+
+            def infer_type(emp):
+                duty_type = (emp.get('duty_type') or '').strip().lower()
+                if 'flex' in duty_type:
+                    return 'Flexi'
+                return 'Fixed'
+
+            def default_times(shift_type):
+                if shift_type == 'Flexi':
+                    return {
+                        'time_in': '',
+                        'time_out': '',
+                        'time_in_early': '07:00',
+                        'time_in_late': '09:00',
+                        'time_out_early': '16:00',
+                        'time_out_late': '18:00',
+                        'grace_minutes': 0,
+                        'break_policy': '1 HOUR',
+                    }
+                return {
+                    'time_in': '08:00',
+                    'time_out': '17:00',
+                    'time_in_early': '',
+                    'time_in_late': '',
+                    'time_out_early': '',
+                    'time_out_late': '',
+                    'grace_minutes': 15,
+                    'break_policy': '1 HOUR',
+                }
+
+            reg_count = 0
+            mun_count = 0
+
+            for employee_doc in employee_docs:
+                emp = employee_doc.to_dict() or {}
+                scope = infer_scope(emp)
+                shift_type = infer_type(emp)
+                key = f"{scope}|{shift_type}"
+
+                if key not in generated_shifts:
+                    if scope == 'REGIONAL':
+                        reg_count += 1
+                        shift_code = f"R-SFT-{reg_count:03d}" if shift_type == 'Fixed' else f"R-SFT-F{reg_count:02d}"
+                    else:
+                        mun_count += 1
+                        shift_code = f"M-SFT-{mun_count:03d}" if shift_type == 'Fixed' else f"M-SFT-F{mun_count:02d}"
+
+                    timing = default_times(shift_type)
+                    generated_shifts[key] = {
+                        'shift_code': shift_code,
+                        'shift_name': f"{scope.title()} {shift_type} Schedule",
+                        'scope': scope,
+                        'shift_type': shift_type,
+                        'time_in': timing['time_in'],
+                        'time_out': timing['time_out'],
+                        'time_in_early': timing['time_in_early'],
+                        'time_in_late': timing['time_in_late'],
+                        'time_out_early': timing['time_out_early'],
+                        'time_out_late': timing['time_out_late'],
+                        'grace_minutes': timing['grace_minutes'],
+                        'break_policy': timing['break_policy'],
+                        'status': 'Active'
+                    }
+
+                chosen_shift = generated_shifts[key]
+                employee_doc.reference.set({
+                    'shift_code': chosen_shift['shift_code'],
+                    'shift_name': chosen_shift['shift_name'],
+                    'shift_scope': chosen_shift['scope'],
+                    'shift_type': chosen_shift['shift_type'],
+                    'shift_time_in': chosen_shift['time_in'],
+                    'shift_time_out': chosen_shift['time_out'],
+                    'shift_time_in_early': chosen_shift['time_in_early'],
+                    'shift_time_in_late': chosen_shift['time_in_late'],
+                    'shift_time_out_early': chosen_shift['time_out_early'],
+                    'shift_time_out_late': chosen_shift['time_out_late'],
+                    'shift_grace_minutes': chosen_shift['grace_minutes'],
+                    'shift_break_policy': chosen_shift['break_policy'],
+                }, merge=True)
+
+            for seed in generated_shifts.values():
+                existing = db.collection('office_shifts').where('shift_code', '==', seed['shift_code']).limit(1).stream()
+                if not any(True for _ in existing):
+                    db.collection('office_shifts').document().set(seed)
+
+            # If employees collection is empty, still seed minimum demo records for UI
+            if not generated_shifts:
+                demo = [
+                    {
+                        'shift_code': 'R-SFT-001',
+                        'shift_name': 'Regional Fixed Schedule',
+                        'scope': 'REGIONAL',
+                        'shift_type': 'Fixed',
+                        'time_in': '08:00',
+                        'time_out': '17:00',
+                        'time_in_early': '',
+                        'time_in_late': '',
+                        'time_out_early': '',
+                        'time_out_late': '',
+                        'grace_minutes': 15,
+                        'break_policy': '1 HOUR',
+                        'status': 'Active'
+                    },
+                    {
+                        'shift_code': 'R-SFT-F01',
+                        'shift_name': 'Regional Flexi Schedule',
+                        'scope': 'REGIONAL',
+                        'shift_type': 'Flexi',
+                        'time_in': '',
+                        'time_out': '',
+                        'time_in_early': '07:00',
+                        'time_in_late': '09:00',
+                        'time_out_early': '16:00',
+                        'time_out_late': '18:00',
+                        'grace_minutes': 0,
+                        'break_policy': '1 HOUR',
+                        'status': 'Active'
+                    },
+                    {
+                        'shift_code': 'M-SFT-001',
+                        'shift_name': 'Municipal Fixed Schedule',
+                        'scope': 'MUNICIPAL',
+                        'shift_type': 'Fixed',
+                        'time_in': '08:00',
+                        'time_out': '17:00',
+                        'time_in_early': '',
+                        'time_in_late': '',
+                        'time_out_early': '',
+                        'time_out_late': '',
+                        'grace_minutes': 15,
+                        'break_policy': '1 HOUR',
+                        'status': 'Active'
+                    }
+                ]
+                for seed in demo:
+                    db.collection('office_shifts').document().set(seed)
+
+            # Reload seeded shifts
+            shifts = []
+            for doc in db.collection('office_shifts').stream():
+                item = doc.to_dict() or {}
+                shifts.append({
+                    'id': doc.id,
+                    'shift_code': item.get('shift_code') or item.get('code') or '',
+                    'shift_name': item.get('shift_name') or item.get('name') or '',
+                    'scope': (item.get('scope') or 'REGIONAL').upper(),
+                    'shift_type': item.get('shift_type') or item.get('type') or 'Fixed',
+                    'time_in': item.get('time_in') or '',
+                    'time_out': item.get('time_out') or '',
+                    'time_in_early': item.get('time_in_early') or '',
+                    'time_in_late': item.get('time_in_late') or '',
+                    'time_out_early': item.get('time_out_early') or '',
+                    'time_out_late': item.get('time_out_late') or '',
+                    'grace_minutes': item.get('grace_minutes') if item.get('grace_minutes') is not None else 15,
+                    'break_policy': item.get('break_policy') or '1 HOUR',
+                    'status': item.get('status') or 'Active'
+                })
+        except Exception as e:
+            print(f"[ERROR] Failed seeding office shifts from employees: {e}")
+
     shifts.sort(key=lambda item: item.get('shift_code') or '')
     return jsonify({'success': True, 'shifts': shifts})
 
