@@ -5,6 +5,41 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 
 bp = Blueprint('regional', __name__, url_prefix='/regional')
 
+# Region name mapping (session name -> Firestore name)
+REGION_MAPPING = {
+    'MIMAROPA': 'REGION-IV-B',
+    'CALABARZON': 'REGION-IV-A',
+    'BICOL': 'REGION-V',
+    'WESTERN-VISAYAS': 'REGION-VI',
+    'EASTERN-VISAYAS': 'REGION-VIII',
+    'CENTRAL-VISAYAS': 'REGION-VII',
+    'DAVAO': 'REGION-XI',
+    'SOCCSKSARGEN': 'REGION-XII',
+    'ZAMBOANGA': 'REGION-IX',
+    'CARAGA': 'REGION-XIII',
+    'CORDILLERA': 'CAR',
+    'ILOCOS': 'REGION-I',
+    'CAGAYAN-VALLEY': 'REGION-II',
+    'CENTRAL-LUZON': 'REGION-III',
+    'NCR': 'NCR',
+    'ARMM': 'REGION-BANGSAMORO'
+}
+
+def get_firestore_region_name(session_region):
+    """Convert session region name to Firestore region name"""
+    if not session_region:
+        return None
+    session_region_upper = str(session_region).strip().upper()
+    # Try direct mapping
+    if session_region_upper in REGION_MAPPING:
+        return REGION_MAPPING[session_region_upper]
+    # Try reverse mapping (in case Firestore name is passed)
+    reverse_mapping = {v: k for k, v in REGION_MAPPING.items()}
+    if session_region_upper in reverse_mapping:
+        return session_region_upper
+    # Return as-is if no mapping found
+    return session_region_upper
+
 @bp.route('/profile')
 @role_required('regional','regional_admin')
 def profile_view():
@@ -2107,7 +2142,11 @@ def get_regional_expenses():
         region_name = 'CALABARZON'
     
     region_name = str(region_name).strip().upper()
-    print(f"[DEBUG] Fetching transactions for region: '{region_name}'")
+    
+    # Map session region name to Firestore region name
+    firestore_region = get_firestore_region_name(region_name)
+    
+    print(f"[DEBUG] Session region: '{region_name}' -> Firestore region: '{firestore_region}'")
 
     transactions = []
     
@@ -2118,7 +2157,7 @@ def get_regional_expenses():
     # 1️⃣ Regional Expenses (direct spending)
     try:
         expense_docs = db.collection('regional_expenses').where(
-            filter=FieldFilter('region', '==', region_name)
+            filter=FieldFilter('region', '==', firestore_region)
         ).stream()
         
         expense_count = 0
@@ -2130,15 +2169,15 @@ def get_regional_expenses():
             transactions.append(expense)
             expense_count += 1
         
-        print(f"[DEBUG] Loaded {expense_count} expenses from regional_expenses for region '{region_name}'")
+        print(f"[DEBUG] Loaded {expense_count} expenses from regional_expenses for region '{firestore_region}'")
     except Exception as e:
         print(f"[ERROR] Failed to fetch regional expenses: {e}")
     
     # 2️⃣ Municipal Fund Distributions (transfers TO municipalities)
     try:
-        muni_fund_docs = db.collection('municipal_fund_distribution').where(
-            filter=FieldFilter('region', '==', region_name)
-        ).stream()
+        muni_fund_docs = list(db.collection('municipal_fund_distribution').where(
+            filter=FieldFilter('region', '==', firestore_region)
+        ).limit(50).stream())
         
         transfer_count = 0
         for doc in muni_fund_docs:
@@ -2168,14 +2207,16 @@ def get_regional_expenses():
             transactions.append(fund)
             transfer_count += 1
         
-        print(f"[DEBUG] Loaded {transfer_count} municipal fund distributions for region '{region_name}'")
+        print(f"[DEBUG] Loaded {transfer_count} municipal fund distributions for region '{firestore_region}'")
     except Exception as e:
         print(f"[ERROR] Failed to fetch municipal fund distributions: {e}")
+        import traceback
+        traceback.print_exc()
     
     # 3️⃣ Regional Fund Distributions (funds received FROM national)
     try:
         reg_fund_docs = db.collection('regional_fund_distribution').where(
-            filter=FieldFilter('region', '==', region_name)
+            filter=FieldFilter('region', '==', firestore_region)
         ).stream()
         
         received_count = 0
@@ -2206,7 +2247,7 @@ def get_regional_expenses():
             transactions.append(fund)
             received_count += 1
         
-        print(f"[DEBUG] Loaded {received_count} regional fund distributions for region '{region_name}'")
+        print(f"[DEBUG] Loaded {received_count} regional fund distributions for region '{firestore_region}'")
     except Exception as e:
         print(f"[ERROR] Failed to fetch regional fund distributions: {e}")
     
@@ -2219,7 +2260,7 @@ def get_regional_expenses():
     except Exception as e:
         print(f"[WARNING] Failed to sort transactions: {e}")
     
-    print(f"[DEBUG] Total transactions returned for {region_name}: {len(transactions)}")
+    print(f"[DEBUG] Total transactions returned for {firestore_region}: {len(transactions)}")
     print(f"[DEBUG] Transaction types: {[t.get('transaction_type') for t in transactions]}")
     
     return jsonify({'success': True, 'expenses': transactions})
@@ -2261,6 +2302,9 @@ def create_regional_expense():
     if not region_name:
         region_name = 'CALABARZON'
     
+    region_name = str(region_name).strip().upper()
+    firestore_region = get_firestore_region_name(region_name)
+    
     # Validate required fields
     expense_type = (data.get('expense_type') or '').strip()
     amount = data.get('amount')
@@ -2289,7 +2333,7 @@ def create_regional_expense():
         'recipient': (data.get('recipient') or 'N/A').strip(),
         'reference_number': (data.get('reference_number') or '').strip(),
         'municipality': (data.get('municipality') or 'REGIONAL').strip(),
-        'region': region_name,
+        'region': firestore_region,
         'recorded_by': session.get('user_email') or session.get('user_id') or 'System',
         'status': 'Recorded',
         'created_at': datetime.datetime.utcnow().isoformat(),
@@ -2340,6 +2384,9 @@ def update_regional_expense(expense_id):
     if not region_name:
         region_name = 'CALABARZON'
     
+    region_name = str(region_name).strip().upper()
+    firestore_region = get_firestore_region_name(region_name)
+    
     db = get_firestore_db()
     
     # Verify expense belongs to user's region
@@ -2349,7 +2396,7 @@ def update_regional_expense(expense_id):
             return jsonify({'success': False, 'error': 'Expense not found'}), 404
         
         expense = expense_doc.to_dict()
-        if expense.get('region') != region_name:
+        if expense.get('region') != firestore_region:
             return jsonify({'success': False, 'error': 'Cannot modify expenses from other regions'}), 403
     except Exception as e:
         print(f"[ERROR] Failed to verify expense: {e}")
@@ -2463,9 +2510,11 @@ def debug_collections():
     db = get_firestore_db()
     region_name = session.get('region') or session.get('user_region') or 'CALABARZON'
     region_name = str(region_name).strip().upper()
+    firestore_region = get_firestore_region_name(region_name)
     
     debug_info = {
-        'current_region': region_name,
+        'session_region': region_name,
+        'firestore_region': firestore_region,
         'session_data': {
             'region': session.get('region'),
             'user_region': session.get('user_region'),
@@ -2487,9 +2536,9 @@ def debug_collections():
             # Fetch ALL docs from collection (no filter)
             all_docs = list(db.collection(collection_name).limit(100).stream())
             
-            # Fetch docs with region filter
+            # Fetch docs with region filter (using firestore_region)
             region_docs = list(db.collection(collection_name).where(
-                filter=FieldFilter('region', '==', region_name)
+                filter=FieldFilter('region', '==', firestore_region)
             ).limit(100).stream())
             
             debug_info['collections'][collection_name] = {

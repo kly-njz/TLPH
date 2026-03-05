@@ -41,7 +41,7 @@
       {% include 'regional/sidenav.html' %}
     </aside>
 
-    <div class="h-full flex flex-col overflow-hidden" x-data="expenseTracker()">
+    <div class="h-full flex flex-col overflow-hidden" x-data="expenseTracker()" x-init="loadExpenses()">
       <main class="flex-1 min-h-0 bg-slate-100 p-3 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
 
         <!-- Header -->
@@ -394,15 +394,22 @@
 
         async loadExpenses() {
           try {
+            console.log('[DEBUG] Starting loadExpenses() call...');
             const res = await fetch('/regional/api/accounting/expenses');
+            console.log('[DEBUG] Response received:', res.status);
             const data = await res.json();
-            if (data.success) {
+            console.log('[DEBUG] Parsed JSON:', data);
+            if (data.success && Array.isArray(data.expenses)) {
               this.expenses = data.expenses;
-              console.log(`[DEBUG] Loaded ${this.expenses.length} total transactions (expenses + fund transfers)`);
-              this.updateCharts();
+              console.log(`[DEBUG] Successfully loaded ${this.expenses.length} total transactions (expenses + fund transfers)`);
+              console.log('[DEBUG] Transaction types:', this.expenses.map(e => e.transaction_type));
+              console.log('[DEBUG] Calling updateCharts()...');
+              this.$nextTick(() => this.updateCharts());
+            } else {
+              console.error('[ERROR] Invalid response format:', data);
             }
           } catch (e) {
-            console.error('Failed to load expenses:', e);
+            console.error('[ERROR] Failed to load expenses:', e);
           }
         },
 
@@ -457,84 +464,96 @@
         },
 
         updateCharts() {
-          // Group by transaction type
-          const typeData = {};
-          this.expenses.forEach(exp => {
-            const type = exp.transaction_type || 'Other';
-            typeData[type] = (typeData[type] || 0) + exp.amount;
-          });
-
-          // Group by category (for regular expenses)
-          const catData = {};
-          this.expenses.forEach(exp => {
-            if (exp.category) {
-              catData[exp.category] = (catData[exp.category] || 0) + exp.amount;
+          try {
+            console.log('[DEBUG] updateCharts() called with expenses:', this.expenses);
+            if (!this.expenses || this.expenses.length === 0) {
+              console.warn('[WARNING] No expenses to chart');
+              return;
             }
-          });
 
-          // Type chart
-          const typeCtx = document.getElementById('typeChart');
-          if (typeCtx) {
-            if (window.typeChartInstance) window.typeChartInstance.destroy();
-            window.typeChartInstance = new Chart(typeCtx, {
-              type: 'doughnut',
-              data: {
-                labels: Object.keys(typeData),
-                datasets: [{
-                  data: Object.values(typeData),
-                  backgroundColor: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'],
-                  borderWidth: 0
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '65%',
-                plugins: {
-                  legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8, weight: 'bold' } } }
-                }
+            // Group by transaction type
+            const typeData = {};
+            this.expenses.forEach(exp => {
+              const type = exp.transaction_type || 'Other';
+              typeData[type] = (typeData[type] || 0) + (Number(exp.amount) || 0);
+            });
+            console.log('[DEBUG] Type data:', typeData);
+
+            // Group by category (for regular expenses)
+            const catData = {};
+            this.expenses.forEach(exp => {
+              if (exp.category) {
+                catData[exp.category] = (catData[exp.category] || 0) + (Number(exp.amount) || 0);
               }
             });
-          }
+            console.log('[DEBUG] Category data:', catData);
 
-          // Category chart
-          const catCtx = document.getElementById('categoryChart');
-          if (catCtx) {
-            if (window.catChartInstance) window.catChartInstance.destroy();
-            window.catChartInstance = new Chart(catCtx, {
-              type: 'bar',
-              data: {
-                labels: Object.keys(catData).length > 0 ? Object.keys(catData) : ['No data'],
-                datasets: [{
-                  label: 'Amount',
-                  data: Object.values(catData).length > 0 ? Object.values(catData) : [0],
-                  backgroundColor: '#be123c',
-                  borderColor: '#be123c',
-                  borderWidth: 0
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: 'y',
-                plugins: { legend: { display: false } },
-                scales: {
-                  x: { grid: { display: false }, ticks: { font: { size: 8 } } },
-                  y: { grid: { display: false }, ticks: { font: { size: 8 } } }
+            // Type chart
+            const typeCtx = document.getElementById('typeChart');
+            if (typeCtx) {
+              if (window.typeChartInstance) window.typeChartInstance.destroy();
+              window.typeChartInstance = new Chart(typeCtx, {
+                type: 'doughnut',
+                data: {
+                  labels: Object.keys(typeData),
+                  datasets: [{
+                    data: Object.values(typeData),
+                    backgroundColor: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'],
+                    borderWidth: 0
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  cutout: '65%',
+                  plugins: {
+                    legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8, weight: 'bold' } } }
+                  }
                 }
-              }
-            });
+              });
+              console.log('[DEBUG] Type chart updated');
+            }
+
+            // Category chart
+            const catCtx = document.getElementById('categoryChart');
+            if (catCtx) {
+              if (window.catChartInstance) window.catChartInstance.destroy();
+              window.catChartInstance = new Chart(catCtx, {
+                type: 'bar',
+                data: {
+                  labels: Object.keys(catData).length > 0 ? Object.keys(catData) : ['No data'],
+                  datasets: [{
+                    label: 'Amount',
+                    data: Object.values(catData).length > 0 ? Object.values(catData) : [0],
+                    backgroundColor: '#be123c',
+                    borderColor: '#be123c',
+                    borderWidth: 0
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  indexAxis: 'y',
+                  plugins: { legend: { display: false } },
+                  scales: {
+                    x: { grid: { display: false }, ticks: { font: { size: 8 } } },
+                    y: { grid: { display: false }, ticks: { font: { size: 8 } } }
+                  }
+                }
+              });
+              console.log('[DEBUG] Category chart updated');
+            }
+          } catch (e) {
+            console.error('[ERROR] Failed to update charts:', e);
           }
         }
       };
     }
-
-    // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-      const tracker = expenseTracker();
-      Alpine.data('expenseTracker', () => tracker);
-      tracker.loadExpenses();
-    });
+  </script>
+  
+  <script>
+    // Register expenseTracker with Alpine
+    Alpine.data('expenseTracker', expenseTracker);
   </script>
 </body>
 </html>
