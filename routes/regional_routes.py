@@ -2107,6 +2107,112 @@ def get_regional_expenses():
 
     expenses = []
     
+    # Check if expenses exist for this region
+    try:
+        existing = list(db.collection('regional_expenses').where(
+            filter=FieldFilter('region', '==', region_name)
+        ).limit(1).stream())
+        
+        if not existing:
+            # Auto-seed sample expenses for this region
+            print(f"[DEBUG] No expenses found for {region_name}, auto-seeding sample data...")
+            
+            sample_expenses = [
+                {
+                    'expense_type': 'Office Supplies Purchase',
+                    'category': 'Office Supplies',
+                    'amount': 15000.00,
+                    'expense_date': (datetime.datetime.now() - datetime.timedelta(days=5)).strftime('%Y-%m-%d'),
+                    'description': 'Printer cartridges, paper, and office stationery',
+                    'payment_method': 'Check',
+                    'recipient': 'Manila Office Supply Co.',
+                    'reference_number': 'INV-2026-0501',
+                    'municipality': 'REGIONAL',
+                    'region': region_name,
+                    'recorded_by': 'system@denr.gov.ph',
+                    'status': 'Recorded'
+                },
+                {
+                    'expense_type': 'Travel & Transportation',
+                    'category': 'Travel',
+                    'amount': 8500.00,
+                    'expense_date': (datetime.datetime.now() - datetime.timedelta(days=4)).strftime('%Y-%m-%d'),
+                    'description': 'Fuel and maintenance for regional transportation',
+                    'payment_method': 'Bank Transfer',
+                    'recipient': 'Shell Gas Station',
+                    'reference_number': 'TXN-2026-0402',
+                    'municipality': 'REGIONAL',
+                    'region': region_name,
+                    'recorded_by': 'system@denr.gov.ph',
+                    'status': 'Recorded'
+                },
+                {
+                    'expense_type': 'Equipment Maintenance',
+                    'category': 'Equipment',
+                    'amount': 22500.00,
+                    'expense_date': (datetime.datetime.now() - datetime.timedelta(days=3)).strftime('%Y-%m-%d'),
+                    'description': 'Annual maintenance contract for office equipment',
+                    'payment_method': 'Check',
+                    'recipient': 'Tech Solutions Inc.',
+                    'reference_number': 'SVC-2026-0303',
+                    'municipality': 'REGIONAL',
+                    'region': region_name,
+                    'recorded_by': 'system@denr.gov.ph',
+                    'status': 'Recorded'
+                },
+                {
+                    'expense_type': 'Fund Transfer to Municipality',
+                    'category': 'Project',
+                    'amount': 50000.00,
+                    'expense_date': (datetime.datetime.now() - datetime.timedelta(days=2)).strftime('%Y-%m-%d'),
+                    'description': 'Fund allocation to Cavite municipality for environmental programs',
+                    'payment_method': 'Bank Transfer',
+                    'recipient': 'Municipality of Cabuyao',
+                    'reference_number': 'TFER-2026-CBY001',
+                    'municipality': 'Cabuyao',
+                    'region': region_name,
+                    'recorded_by': 'system@denr.gov.ph',
+                    'status': 'Recorded'
+                },
+                {
+                    'expense_type': 'Personnel Training',
+                    'category': 'Personnel',
+                    'amount': 18000.00,
+                    'expense_date': (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%d'),
+                    'description': 'Training expenses for staff on new environmental compliance procedures',
+                    'payment_method': 'Cash',
+                    'recipient': 'DENR Training Center',
+                    'reference_number': 'TRN-2026-0301',
+                    'municipality': 'REGIONAL',
+                    'region': region_name,
+                    'recorded_by': 'system@denr.gov.ph',
+                    'status': 'Recorded'
+                },
+                {
+                    'expense_type': 'Fund Transfer to Municipality',
+                    'category': 'Project',
+                    'amount': 40000.00,
+                    'expense_date': datetime.datetime.now().strftime('%Y-%m-%d'),
+                    'description': 'Emergency allocation to Laguna municipality for disaster response',
+                    'payment_method': 'Bank Transfer',
+                    'recipient': 'Municipality of Binan',
+                    'reference_number': 'TFER-2026-BNN001',
+                    'municipality': 'Binan',
+                    'region': region_name,
+                    'recorded_by': 'system@denr.gov.ph',
+                    'status': 'Recorded'
+                }
+            ]
+            
+            for expense in sample_expenses:
+                expense['created_at'] = datetime.datetime.utcnow().isoformat()
+                expense['updated_at'] = datetime.datetime.utcnow().isoformat()
+                db.collection('regional_expenses').add(expense)
+            
+            print(f"[DEBUG] Seeded {len(sample_expenses)} sample expenses for {region_name}")
+    except Exception as e:
+        print(f"[WARNING] Auto-seeding failed: {e}")
+    
     try:
         # Fetch all expenses for this region, ordered by date (newest first)
         expense_docs = db.collection('regional_expenses').where(
