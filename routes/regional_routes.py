@@ -2137,9 +2137,15 @@ def accounting_deposits_view():
 
             if not email_val:
                 continue
-            if normalized_region and str(region_val or '').strip().upper() != normalized_region:
-                continue
-            if municipality_set and municipality_val and municipality_val.lower() not in municipality_set:
+
+            in_scope_by_municipality = bool(
+                municipality_set and municipality_val and municipality_val.lower() in municipality_set
+            )
+            in_scope_by_region = bool(
+                normalized_region and str(region_val or '').strip().upper() == normalized_region
+            )
+
+            if not (in_scope_by_municipality or in_scope_by_region):
                 continue
 
             scoped_users[email_val] = {
@@ -2193,7 +2199,7 @@ def accounting_deposits_view():
             return False
         return bool(rec_muni or rec_region)
 
-    def append_record(target, record_id, invoice_id, description, amount, status, payment_method, municipality, payer_email, created_at):
+    def append_record(target, record_id, invoice_id, description, amount, status, payment_method, municipality, payer_email, created_at, source):
         target.append({
             'id': record_id,
             'invoice_id': invoice_id,
@@ -2204,6 +2210,7 @@ def accounting_deposits_view():
             'municipality': municipality or 'UNKNOWN',
             'payer_email': payer_email or '-',
             'created_at': str(created_at or ''),
+            'source': source,
         })
 
     payment_deposits = []
@@ -2246,7 +2253,8 @@ def accounting_deposits_view():
                 tx.get('payment_method') or 'Online Payment',
                 municipality_name,
                 payer_email,
-                tx.get('paid_at') or tx.get('created_at')
+                tx.get('paid_at') or tx.get('created_at'),
+                'transactions'
             )
 
         # Source 2: applications collection with payment fields
@@ -2282,7 +2290,8 @@ def accounting_deposits_view():
                 app.get('paymentMethod') or app.get('payment_method') or 'Online Payment',
                 municipality_name,
                 payer_email,
-                app.get('updatedAt') or app.get('createdAt') or app.get('created_at') or app.get('dateFiled')
+                app.get('updatedAt') or app.get('createdAt') or app.get('created_at') or app.get('dateFiled'),
+                'applications'
             )
 
         # Source 3: service_requests collection with payment fields
@@ -2318,7 +2327,8 @@ def accounting_deposits_view():
                 service.get('paymentMethod') or service.get('payment_method') or 'Online Payment',
                 municipality_name,
                 payer_email,
-                service.get('updatedAt') or service.get('createdAt') or service.get('created_at') or service.get('submittedAt')
+                service.get('updatedAt') or service.get('createdAt') or service.get('created_at') or service.get('submittedAt'),
+                'service_requests'
             )
     except Exception as e:
         print(f"[WARN] Unable to load transactions for accounting deposits view: {e}")
@@ -2326,7 +2336,9 @@ def accounting_deposits_view():
     deduped = {}
     for row in payment_deposits:
         dedupe_key = str(row.get('invoice_id') or row.get('id'))
-        deduped[dedupe_key] = row
+        existing = deduped.get(dedupe_key)
+        if not existing or str(row.get('created_at') or '') >= str(existing.get('created_at') or ''):
+            deduped[dedupe_key] = row
     payment_deposits = list(deduped.values())
 
     payment_deposits.sort(key=lambda x: x.get('created_at', ''), reverse=True)
