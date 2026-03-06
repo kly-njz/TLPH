@@ -1426,3 +1426,109 @@ def user_inventory_national():
 @role_required('national', 'national_admin')
 def system_logs_national():
     return render_template('national/system/system-logs.html')
+
+# ---------------------------------
+# EXPENSE CATEGORIES (National)
+# ---------------------------------
+@bp.route('/api/expense-categories', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_expense_categories():
+    """Get ALL expense categories from all municipalities (National view)"""
+    try:
+        db = get_firestore_db()
+        categories = []
+        
+        # Fetch all expense categories without any filtering
+        query_result = db.collection('expense_categories').stream()
+        
+        for doc in query_result:
+            data = doc.to_dict() or {}
+            categories.append({
+                'id': doc.id,
+                'name': data.get('name', 'Unnamed'),
+                'coa_code': data.get('coa_code', 'N/A'),
+                'tax_type': data.get('tax_type', 'None'),
+                'default_rate': data.get('default_rate', 0),
+                'status': data.get('status', 'active'),
+                'municipality': data.get('municipality', 'National')
+            })
+        
+        print(f'[INFO] National: Retrieved {len(categories)} expense categories')
+        return jsonify(categories), 200
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to get expense categories: {e}')
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/expense-categories', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_create_national_expense_category():
+    """Create a new expense category (National admin only)"""
+    try:
+        from flask import request
+        data = request.get_json()
+        
+        db = get_firestore_db()
+        new_category = {
+            'name': data.get('name', 'Unnamed'),
+            'coa_code': data.get('coa_code', ''),
+            'tax_type': data.get('tax_type', 'None'),
+            'default_rate': data.get('default_rate', 0),
+            'status': data.get('status', 'active'),
+            'municipality': 'National',
+            'created_at': datetime.utcnow()
+        }
+        
+        doc_ref = db.collection('expense_categories').document()
+        doc_ref.set(new_category)
+        
+        print(f'[INFO] National: Created expense category {doc_ref.id}')
+        return jsonify({'id': doc_ref.id, **new_category}), 201
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to create category: {e}')
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/expense-categories/<category_id>', methods=['PUT'])
+@role_required('national', 'national_admin')
+def api_update_national_expense_category(category_id):
+    """Update an expense category"""
+    try:
+        from flask import request
+        data = request.get_json()
+        
+        db = get_firestore_db()
+        doc_ref = db.collection('expense_categories').document(category_id)
+        
+        update_data = {
+            'name': data.get('name'),
+            'coa_code': data.get('coa_code'),
+            'tax_type': data.get('tax_type'),
+            'default_rate': data.get('default_rate'),
+            'status': data.get('status'),
+            'updated_at': datetime.utcnow()
+        }
+        
+        doc_ref.update(update_data)
+        
+        print(f'[INFO] National: Updated expense category {category_id}')
+        return jsonify({'id': category_id, **update_data}), 200
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to update category: {e}')
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/expense-categories/<category_id>', methods=['DELETE'])
+@role_required('national', 'national_admin')
+def api_delete_national_expense_category(category_id):
+    """Delete an expense category"""
+    try:
+        db = get_firestore_db()
+        db.collection('expense_categories').document(category_id).delete()
+        
+        print(f'[INFO] National: Deleted expense category {category_id}')
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to delete category: {e}')
+        return jsonify({'error': str(e)}), 500
