@@ -1532,3 +1532,72 @@ def api_delete_national_expense_category(category_id):
     except Exception as e:
         print(f'[ERROR] National: Failed to delete category: {e}')
         return jsonify({'error': str(e)}), 500
+
+# ---------------------------------
+# PAYMENT DEPOSITS (National)
+# ---------------------------------
+@bp.route('/api/deposits/payments', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_payment_deposits():
+    """Get ALL payment transactions from all regions/municipalities (National view)"""
+    try:
+        print('[DEBUG] National: Fetching ALL payment deposits')
+        
+        db = get_firestore_db()
+        deposits = []
+        
+        paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
+        
+        def parse_amount(raw_value):
+            try:
+                return float(raw_value or 0)
+            except (ValueError, TypeError):
+                return 0.0
+        
+        def is_paid(status_value):
+            return str(status_value or '').strip().lower() in paid_markers
+        
+        # Fetch ALL transactions without any filtering
+        try:
+            all_transactions = db.collection('transactions').limit(5000).stream()
+            
+            for doc in all_transactions:
+                trans = doc.to_dict()
+                if not trans:
+                    continue
+                
+                status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status')
+                paid_by_status = is_paid(status)
+                paid_by_method = bool(trans.get('payment_method')) and str(status or '').strip().lower() not in {'pending', 'failed', 'expired', 'cancelled'}
+                amount = parse_amount(trans.get('amount'))
+                
+                # Only include paid/completed transactions
+                if amount > 0 and (paid_by_status or paid_by_method):
+                    deposits.append({
+                        'id': doc.id,
+                        'transaction_type': 'Payment Deposit',
+                        'payment_type': 'Online Payment',
+                        'invoice_id': trans.get('invoice_id', ''),
+                        'external_id': trans.get('external_id', ''),
+                        'amount': amount,
+                        'description': trans.get('description', trans.get('transaction_name', 'Payment')),
+                        'payer_email': trans.get('user_email', '').lower(),
+                        'payment_method': trans.get('payment_method', 'Unknown'),
+                        'status': str(status or '').strip().upper(),
+                        'created_at': trans.get('created_at', trans.get('createdAt', '')),
+                        'paid_at': trans.get('paid_at', trans.get('paidAt', '')),
+                        'reference': trans.get('reference_id', doc.id[:12]),
+                        'source': trans.get('source', 'Online Portal'),
+                        'municipality': trans.get('municipality', trans.get('municipality_name', 'N/A')),
+                        'region': trans.get('region', trans.get('region_name', trans.get('regionName', 'N/A'))),
+                    })
+        except Exception as e:
+            print(f'[ERROR] National: Failed to fetch transactions: {e}')
+            return jsonify({'error': str(e)}), 500
+        
+        print(f'[INFO] National: Retrieved {len(deposits)} payment deposits from ALL regions/municipalities')
+        return jsonify(deposits), 200
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to get payment deposits: {e}')
+        return jsonify({'error': str(e)}), 500
