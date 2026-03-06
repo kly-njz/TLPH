@@ -230,139 +230,203 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <script>
-    // --- EXACT LOGIC RESTORED & CHART FIX APPLIED ---
-    const tbody = document.getElementById('txnTbody');
-    const fFrom = document.getElementById('fFrom');
-    const fTo = document.getElementById('fTo');
-    const fType = document.getElementById('fType');
-    const fRegion = document.getElementById('fRegion');
-    const fStatus = document.getElementById('fStatus');
-    const fSearch = document.getElementById('fSearch');
-    let charts = {};
+    function transactionDashboard() {
+      return {
+        transactions: [],
+        selectedTransaction: null,
+        filterFromDate: '',
+        filterToDate: '',
+        filterType: '',
+        filterRegion: '',
+        filterStatus: '',
+        searchQuery: '',
+        charts: {},
 
-    function peso(n){ return "₱ " + new Intl.NumberFormat('en-US', { minimumFractionDigits: 0 }).format(Number(n || 0)); }
-    function getAmount(td){ 
-        // Handles "₱1,250" string manipulation safely
-        return Number(td.getAttribute('data-amount')) || 0; 
-    }
+        async loadTransactions() {
+          try {
+            console.log('[DEBUG] Loading all transactions...');
+            const resp = await fetch('/national/api/transactions/all');
+            if (resp.ok) {
+              this.transactions = await resp.json();
+              console.log('[DEBUG] Loaded', this.transactions.length, 'transactions');
+              this.updateCharts();
+            }
+          } catch (error) {
+            console.error('[ERROR] Failed to load transactions:', error);
+          }
+        },
 
-    function applyTxnFilters(){
-      const type = fType.value.toUpperCase();
-      const region = fRegion.value.toUpperCase();
-      const status = fStatus.value.toUpperCase();
-      const q = fSearch.value.trim().toLowerCase();
-      const from = fFrom.value ? new Date(fFrom.value + "T00:00:00") : null;
-      const to = fTo.value ? new Date(fTo.value + "T23:59:59") : null;
+        get paidTotal() {
+          return this.filteredTransactions
+            .filter(t => t.status === 'Paid')
+            .reduce((sum, t) => sum + (t.amount || 0), 0);
+        },
 
-      [...tbody.querySelectorAll('tr')].forEach(tr => {
-        const c = tr.cells;
-        const hay = (c[0].innerText + " " + c[1].innerText + " " + c[4].innerText).toLowerCase();
-        const d = new Date(c[3].innerText + "T12:00:00");
+        get refundedTotal() {
+          return this.filteredTransactions
+            .filter(t => t.status === 'Refunded')
+            .reduce((sum, t) => sum + (t.amount || 0), 0);
+        },
 
-        const okType = (type === "ALL") || (c[2].innerText.trim().toUpperCase() === type);
-        const okRegion = (region === "ALL") || (c[4].innerText.toUpperCase().includes(region));
-        const okStatus = (status === "ALL") || (c[5].innerText.trim().toUpperCase() === status);
-        const okQ = (!q) || hay.includes(q);
-        let okDate = true;
-        if(from && d < from) okDate = false;
-        if(to && d > to) okDate = false;
+        get filteredTransactions() {
+          return this.transactions.filter(txn => {
+            const matchSearch = !this.searchQuery || 
+              (txn.reference || '').toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+              (txn.name || '').toLowerCase().includes(this.searchQuery.toLowerCase());
+            const matchType = !this.filterType || (txn.type || '') === this.filterType;
+            const matchRegion = !this.filterRegion || (txn.region || '') === this.filterRegion;
+            const matchStatus = !this.filterStatus || (txn.status || '') === this.filterStatus;
+            
+            let matchDate = true;
+            if (this.filterFromDate || this.filterToDate) {
+              const txnDate = new Date(txn.created_at);
+              if (this.filterFromDate && txnDate < new Date(this.filterFromDate + 'T00:00:00')) matchDate = false;
+              if (this.filterToDate && txnDate > new Date(this.filterToDate + 'T23:59:59')) matchDate = false;
+            }
+            
+            return matchSearch && matchType && matchRegion && matchStatus && matchDate;
+          });
+        },
 
-        tr.style.display = (okType && okRegion && okStatus && okQ && okDate) ? "" : "none";
-      });
-      updateTxnAnalytics();
-    }
+        formatCurrency(amount) {
+          return '₱ ' + (amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        },
 
-    function resetTxnFilters(){
-      fFrom.value = fTo.value = fSearch.value = "";
-      fType.value = fRegion.value = fStatus.value = "ALL";
-      [...tbody.querySelectorAll('tr')].forEach(tr => tr.style.display = "");
-      updateTxnAnalytics();
-    }
+        formatDate(dateStr) {
+          if (!dateStr) return '-';
+          try {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-PH', { year: 'numeric', month: '2-digit', day: '2-digit' });
+          } catch (e) {
+            return '-';
+          }
+        },
 
-    function updateTxnAnalytics(){
-      const rows = [...tbody.querySelectorAll('tr')].filter(tr => tr.style.display !== "none");
-      let paidSum = 0, refundedSum = 0, paidCount = 0, refundedCount = 0;
-      const byType = {}, byRegion = {};
+        getStatusClass(status) {
+          if (status === 'Paid') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+          if (status === 'Refunded') return 'border-rose-200 bg-rose-50 text-rose-800';
+          return 'border-slate-200 bg-slate-50 text-slate-600';
+        },
 
-      rows.forEach(tr => {
-        const c = tr.cells;
-        const type = c[2].innerText.trim();
-        const reg = c[4].innerText.split(',')[0].trim();
-        const st = c[5].innerText.trim().toUpperCase();
-        const amt = getAmount(c[6]);
+        getUniqueRegions() {
+          const regions = new Set();
+          this.transactions.forEach(t => {
+            if (t.region && t.region !== 'N/A') {
+              regions.add(t.region);
+            }
+          });
+          return Array.from(regions).sort();
+        },
 
-        if(st === "PAID"){
-          paidSum += amt; paidCount++;
-          byType[type] = (byType[type] || 0) + amt;
-          byRegion[reg] = (byRegion[reg] || 0) + amt;
-        } else {
-          refundedSum += amt; refundedCount++;
-        }
-      });
+        resetFilters() {
+          this.filterFromDate = '';
+          this.filterToDate = '';
+          this.filterType = '';
+          this.filterRegion = '';
+          this.filterStatus = '';
+          this.searchQuery = '';
+          this.updateCharts();
+        },
 
-      document.getElementById('kpiTxnCount').textContent = rows.length;
-      document.getElementById('kpiPaid').textContent = peso(paidSum);
-      document.getElementById('kpiRefunded').textContent = peso(refundedSum);
-      document.getElementById('kpiNet').textContent = peso(paidSum - refundedSum);
+        viewTransaction(txn) {
+          this.selectedTransaction = txn;
+          document.getElementById('txnViewModal').classList.add('flex');
+        },
 
-      updateCompactChart('chartStatus', 'doughnut', ['Paid', 'Refunded'], [paidCount, refundedCount], { backgroundColor: ['#059669', '#e11d48'] });
-      updateCompactChart('chartType', 'bar', Object.keys(byType), Object.values(byType), { label: 'Paid (PHP)' });
-      updateCompactChart('chartRegion', 'bar', Object.keys(byRegion), Object.values(byRegion), { label: 'Income (PHP)' });
-    }
+        closeTransaction() {
+          this.selectedTransaction = null;
+          document.getElementById('txnViewModal').classList.remove('flex');
+        },
 
-    function updateCompactChart(id, type, labels, data, extra = {}){
-      Chart.defaults.font.family = "Verdana, Arial, sans-serif";
-      Chart.defaults.font.size = 8;
-      Chart.defaults.color = "#64748b";
+        exportTableAsCSV() {
+          const csv = [
+            ['Reference', 'Name', 'Type', 'Date', 'Location', 'Region', 'Status', 'Amount'],
+            ...this.filteredTransactions.map(t => [
+              t.reference,
+              t.name,
+              t.type,
+              this.formatDate(t.created_at),
+              t.location,
+              t.region,
+              t.status,
+              t.amount
+            ])
+          ].map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
 
-      if(charts[id]) charts[id].destroy();
-      charts[id] = new Chart(document.getElementById(id), {
-        type, 
-        data: { 
-            labels, 
-            datasets: [{ 
-                data, 
-                backgroundColor: extra.backgroundColor || ['#1e40af', '#3b82f6', '#93c5fd'], 
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
+          a.click();
+          window.URL.revokeObjectURL(url);
+        },
+
+        updateCharts() {
+          const filtered = this.filteredTransactions;
+          
+          // Status breakdown
+          const paidCount = filtered.filter(t => t.status === 'Paid').length;
+          const refundedCount = filtered.filter(t => t.status === 'Refunded').length;
+          
+          // Amount by type
+          const byType = {};
+          filtered.forEach(t => {
+            if (t.status === 'Paid') {
+              byType[t.type] = (byType[t.type] || 0) + t.amount;
+            }
+          });
+          
+          // Amount by region
+          const byRegion = {};
+          filtered.forEach(t => {
+            if (t.status === 'Paid') {
+              byRegion[t.region] = (byRegion[t.region] || 0) + t.amount;
+            }
+          });
+
+          this.createChart('chartStatus', 'doughnut', ['Paid', 'Refunded'], [paidCount, refundedCount], 
+            { backgroundColor: ['#059669', '#e11d48'] });
+          this.createChart('chartType', 'bar', Object.keys(byType), Object.values(byType), 
+            { label: 'Paid (PHP)' });
+          this.createChart('chartRegion', 'bar', Object.keys(byRegion), Object.values(byRegion), 
+            { label: 'Income (PHP)' });
+        },
+
+        createChart(id, type, labels, data, extra = {}) {
+          Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+          Chart.defaults.font.size = 8;
+          Chart.defaults.color = "#64748b";
+
+          const canvasEl = document.getElementById(id);
+          if (!canvasEl) return;
+
+          if (this.charts[id]) this.charts[id].destroy();
+          this.charts[id] = new Chart(canvasEl, {
+            type,
+            data: {
+              labels,
+              datasets: [{
+                data,
+                backgroundColor: extra.backgroundColor || ['#1e40af', '#3b82f6', '#93c5fd'],
                 label: extra.label,
                 borderWidth: 0,
                 borderRadius: type === 'bar' ? 2 : 0
-            }] 
-        },
-        options: { 
-          responsive: true, 
-          maintainAspectRatio: false, 
-          plugins: { legend: { display: type==='doughnut', position: 'bottom', labels: { boxWidth: 6, font: { weight: 'bold' } } } },
-          scales: type === 'bar' ? { y: { beginAtZero: true, display: false }, x: { grid: {display: false} } } : {}
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: type === 'doughnut', position: 'bottom', labels: { boxWidth: 6, font: { weight: 'bold' } } } },
+              scales: type === 'bar' ? { y: { beginAtZero: true, display: false }, x: { grid: { display: false } } } : {}
+            }
+          });
         }
-      });
-    }
-
-    function viewThisRow(btn){
-      const c = btn.closest('tr').cells;
-      const data = { 
-          "Reference #": c[0].innerText, 
-          "Customer Name": c[1].innerText, 
-          "Trans. Type": c[2].innerText, 
-          "Date Filed": c[3].innerText, 
-          "Location": c[4].innerText, 
-          "Status": c[5].innerText, 
-          "Amount": c[6].innerText 
       };
-      
-      document.getElementById('txnViewContent').innerHTML = Object.entries(data).map(([k,v]) => `
-        <div class="p-2 border border-slate-200 rounded-[2px] bg-white">
-          <p class="text-[8px] text-slate-400 font-bold uppercase tracking-tight">${k}</p>
-          <p class="text-[10px] font-black text-slate-800 uppercase mt-0.5">${v}</p>
-        </div>
-      `).join('');
-      document.getElementById('txnViewModal').classList.replace('hidden', 'flex');
     }
-
-    function closeTxnView(){ document.getElementById('txnViewModal').classList.replace('flex', 'hidden'); }
-
-    // Init
-    updateTxnAnalytics();
   </script>
 </body>
 </html>
