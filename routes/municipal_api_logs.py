@@ -1424,8 +1424,8 @@ def api_create_expense_category_frontend():
             'updated_at': firestore.SERVER_TIMESTAMP
         }
         
-        write_result, doc_ref = db.collection('expense_categories').add(category_data)
-        doc_id = doc_ref.id
+        result = db.collection('expense_categories').add(category_data)
+        doc_id = result[1].id
         
         return jsonify({
             'id': doc_id,
