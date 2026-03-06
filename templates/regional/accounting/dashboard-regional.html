@@ -335,7 +335,7 @@
                     region: "{{ user_region }}",
                     amount: amount,
                     fund_type: 'national',
-                    transfer_id: 'NAT-TRF-' + Date.now() + '-' + muni + '-' + province,
+                    transfer_id: 'NAT-TRF-' + Date.now() + '-' + muni.replace(/\s+/g, '_'),
                     municipality: muni,
                     province: province
                   });
@@ -343,21 +343,34 @@
               }
             }
             if (payload.length === 0) {
-              alert('Enter at least one amount.');
+              alert('Please enter at least one amount greater than 0.');
               return;
             }
+            
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Distributing...';
+            
             Promise.all(payload.map(item =>
               fetch('/regional/accounting/distribute-fund', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(item)
+              }).then(res => res.json()).then(resp => {
+                if (!resp.success) throw new Error(resp.error || 'Unknown error');
+                return resp;
               })
-            )).then(() => {
-              alert('Fund distribution complete!');
+            )).then(results => {
+              alert(`Successfully distributed ₱${payload.reduce((sum, p) => sum + p.amount, 0).toFixed(2)} to ${payload.length} municipality(ies).`);
               closeDistributeModal();
-              location.reload();
-            }).catch(() => {
-              alert('Distribution failed.');
+              form.reset();
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Distribute';
+              setTimeout(() => location.reload(), 500);
+            }).catch(err => {
+              alert('Distribution failed: ' + (err.message || 'Unknown error occurred'));
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Distribute';
             });
           }
           </script>
@@ -381,8 +394,20 @@
                   <td class="px-3 py-2 font-bold">{{ fund.municipality if fund.municipality else 'N/A' }}</td>
                   <td class="px-3 py-2 text-slate-600">{{ fund.fund_type if fund.fund_type else 'N/A' }}</td>
                   <td class="px-3 py-2 font-mono text-slate-500">{{ fund.transfer_id if fund.transfer_id else 'N/A' }}</td>
-                  <td class="px-3 py-2 text-right font-bold text-slate-900">₱ {{ fund.amount if fund.amount else 'N/A' }}</td>
-                  <td class="px-3 py-2 text-slate-500">{{ fund.timestamp.strftime('%Y-%m-%d %H:%M:%S') if fund.timestamp and fund.timestamp.strftime else (fund.timestamp if fund.timestamp else 'N/A') }}</td>
+                  <td class="px-3 py-2 text-right font-bold text-slate-900">₱ {{ "%.2f"|format(fund.amount) if fund.amount else 'N/A' }}</td>
+                  <td class="px-3 py-2 text-slate-500">
+                    {% if fund.timestamp %}
+                      {% if fund.timestamp.strftime %}
+                        {{ fund.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+                      {% elif fund.timestamp.__class__.__name__ == 'Timestamp' %}
+                        {{ fund.timestamp.isoformat()[:19] }}
+                      {% else %}
+                        {{ fund.timestamp }}
+                      {% endif %}
+                    {% else %}
+                      N/A
+                    {% endif %}
+                  </td>
                   <td class="px-3 py-2">
                     <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-sm font-black uppercase text-[8px]">{{ fund.status if fund.status else 'N/A' }}</span>
                   </td>
