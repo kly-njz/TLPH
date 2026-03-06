@@ -711,22 +711,43 @@ def accounting_dashboard():
 @bp.route('/api/entities', methods=['GET'])
 @role_required('national', 'national_admin')
 def api_get_national_entities():
-    """Fetch all entities for national dashboard"""
+    """Fetch all entities from regional and municipal levels for national dashboard"""
     try:
-        # Get all entities (no municipality filter for national view)
-        entities = list_entities()
+        db = get_firestore_db()
         
-        # Calculate stats
-        active_count = sum(1 for e in entities if e.get('status') in ['active', 'Active'])
+        # Get all entities from all municipalities and regions
+        entities_ref = db.collection("entities")
+        docs = entities_ref.stream()
+        
+        entities = []
+        for doc in docs:
+            entity = doc.to_dict()
+            if entity:
+                entities.append(entity)
+        
+        # Calculate stats - include all entities regardless of level
+        active_count = sum(1 for e in entities if e.get('status', '').lower() in ['active', 'enabled'])
         total_count = len(entities)
         
         # Group by type
         by_type = {}
+        by_municipality = {}
+        
         for e in entities:
             entity_type = e.get('type', 'Unknown')
+            municipality = e.get('municipality', 'Regional')
+            
+            # Count by type
             if entity_type not in by_type:
                 by_type[entity_type] = 0
             by_type[entity_type] += 1
+            
+            # Count by municipality
+            if municipality not in by_municipality:
+                by_municipality[municipality] = {'count': 0, 'active': 0}
+            by_municipality[municipality]['count'] += 1
+            if e.get('status', '').lower() in ['active', 'enabled']:
+                by_municipality[municipality]['active'] += 1
         
         return jsonify({
             'success': True,
@@ -734,7 +755,8 @@ def api_get_national_entities():
             'stats': {
                 'total_entities': total_count,
                 'active_entities': active_count,
-                'by_type': by_type
+                'by_type': by_type,
+                'by_municipality': by_municipality
             }
         })
     except Exception as e:
