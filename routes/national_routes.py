@@ -1762,9 +1762,9 @@ def api_get_all_national_transactions():
                 status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status') or 'pending'
                 trans_status = get_transaction_status(status)
                 
+                                user_email, user_name = get_user_info(trans)
+                                region, municipality = get_location_info(trans, user_email)
                 
-                 user_email, user_name = get_user_info(trans)
-                 region, municipality = get_location_info(trans, user_email)
                 created_at = trans.get('created_at') or trans.get('createdAt') or ''
                 if isinstance(created_at, object) and hasattr(created_at, 'timestamp'):
                     created_at = created_at.timestamp() * 1000
