@@ -105,8 +105,8 @@
                     <button onclick="window.print()" class="gov-btn bg-slate-800 text-white hover:bg-slate-900 shadow-sm">
                         <i class="fa-solid fa-print"></i> Report
                     </button>
-                    <button onclick="location.reload()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">
-                        <i class="fa-solid fa-rotate text-denr-green"></i> Sync System
+                    <button onclick="syncSystem(this)" id="syncBtn" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">
+                        <i class="fa-solid fa-rotate text-denr-green" id="syncIcon"></i> Sync System
                     </button>
                 </div>
             </header>
@@ -492,6 +492,47 @@
             } catch (e) {
                 console.error('Audit trail fetch error:', e);
                 list.innerHTML = `<p class="m-0 text-rose-500 italic">Failed to load: ${e.message}</p>`;
+            }
+        }
+
+        async function syncSystem(btn) {
+            const icon = document.getElementById('syncIcon');
+            btn.disabled = true;
+            icon.classList.add('fa-spin');
+            try {
+                // Refresh stats from API
+                const statsRes = await fetch('/api/superadmin/applications/stats');
+                const statsJson = await statsRes.json();
+                if (statsJson.success) {
+                    const s = statsJson.stats;
+                    document.getElementById('statTotal').textContent = s.total;
+                    document.getElementById('statPending').textContent = s.pending;
+                    document.getElementById('statReview').textContent = s.to_review;
+                    document.getElementById('statApproved').textContent = s.approved;
+                    document.getElementById('statRate').textContent = s.approval_rate + '%';
+                    document.getElementById('statRejected').textContent = s.rejected;
+                }
+                // Refresh charts
+                const chartRes = await fetch('/api/superadmin/applications/charts');
+                const chartJson = await chartRes.json();
+                if (chartJson.success) {
+                    myTrendChart.data.labels = chartJson.trend.labels;
+                    myTrendChart.data.datasets[0].data = chartJson.trend.data;
+                    myTrendChart.update();
+                    myRegionalChart.data.labels = chartJson.regions.labels;
+                    myRegionalChart.data.datasets[0].data = chartJson.regions.data;
+                    myRegionalChart.update();
+                    myCategoryChart.data.labels = chartJson.categories.labels;
+                    myCategoryChart.data.datasets[0].data = chartJson.categories.data;
+                    myCategoryChart.update();
+                }
+                // Refresh table and audit trail
+                await Promise.all([loadApplications(), loadAuditTrail()]);
+            } catch (e) {
+                console.error('Sync error:', e);
+            } finally {
+                icon.classList.remove('fa-spin');
+                btn.disabled = false;
             }
         }
 
