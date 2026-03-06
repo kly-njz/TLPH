@@ -21,13 +21,13 @@
 </style>
 </head>
 
-<body class="text-slate-800 text-xs h-screen overflow-hidden flex flex-col">
+<body class="text-slate-800 text-xs h-screen overflow-hidden flex flex-col" x-data="expenseCategoriesApp()" x-init="loadCategories()">
 <div class="flex-1 flex overflow-hidden">
     <aside class="sidebar-container hidden lg:block">
         {% include 'national/sidenav-national.html' %}
     </aside>
 
-    <div class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar" x-data="{ modalOpen: false }">
+    <div class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar">
 
         <header class="bg-white border border-slate-300 rounded-[2px] p-3 shadow-sm flex justify-between items-center shrink-0">
           <div class="flex items-center gap-3">
@@ -39,7 +39,7 @@
               <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">COA Mapping & Tax Configuration</p>
             </div>
           </div>
-          <button @click="modalOpen = true" class="bg-rose-700 hover:bg-rose-800 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
+          <button @click="openModal()" class="bg-rose-700 hover:bg-rose-800 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
             <span class="material-icons-round text-[14px]">add</span> Add Category
           </button>
         </header>
@@ -47,15 +47,15 @@
         <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-rose-700">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Expenses</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">₱ 850,000</div>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="`₱ ${(filteredCategories.reduce((sum, c) => sum + (c.default_rate || 0), 0) * 1000).toLocaleString()}`">₱ 0</div>
           </div>
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-700">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Categories</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">15</div>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="filteredCategories.length">0</div>
           </div>
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm bg-slate-800 text-white">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">MoM Growth</p>
-            <div class="text-lg font-black text-rose-400 mt-0.5 leading-none">+5%</div>
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">By Tax Type</p>
+            <div class="text-lg font-black text-rose-400 mt-0.5 leading-none" x-text="`${getUniqueTaxTypes()}`">0</div>
           </div>
         </section>
 
@@ -73,11 +73,11 @@
         <section class="flex-1 min-h-[250px] bg-white rounded-[2px] border border-slate-300 shadow-sm flex flex-col overflow-hidden">
           <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex justify-between items-center">
             <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
-                <span class="material-icons-round text-[14px]">table_chart</span> Mapped Categories
+                <span class="material-icons-round text-[14px]">table_chart</span> Mapped Categories (<span x-text="filteredCategories.length">0</span>)
             </h2>
             <div class="relative">
                 <span class="material-icons-round text-slate-400 absolute left-1.5 top-1/2 -translate-y-1/2 text-[12px]">search</span>
-                <input type="text" id="searchInput" placeholder="Search category..." class="pl-6 pr-2 py-0.5 text-[10px] font-bold border border-slate-300 rounded-[2px] w-48 bg-white outline-none focus:border-rose-700">
+                <input type="text" x-model="searchQuery" placeholder="Search category..." class="pl-6 pr-2 py-0.5 text-[10px] font-bold border border-slate-300 rounded-[2px] w-48 bg-white outline-none focus:border-rose-700">
             </div>
           </div>
 
@@ -92,104 +92,218 @@
                   <th class="px-3 py-1.5 text-[9px] font-bold uppercase text-slate-600 text-center">Action</th>
                 </tr>
               </thead>
-              <tbody id="categoryTable" class="text-[10px] divide-y divide-slate-100">
-                
-                <tr class="hover:bg-slate-50 transition">
-                  <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Office Supplies</td>
-                  <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">5-02-03-010</td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="px-1 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-[2px] font-black text-[8px] uppercase">VAT Registered</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-right font-bold text-slate-700 border-r border-slate-100">12%</td>
-                  <td class="px-3 py-1.5 text-center flex justify-center gap-2">
-                    <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
-                    <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
-                  </td>
-                </tr>
-
-                <tr class="hover:bg-slate-50 transition">
-                  <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Professional Services</td>
-                  <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">5-02-11-990</td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="px-1 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-[2px] font-black text-[8px] uppercase">Withholding Tax</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-right font-bold text-slate-700 border-r border-slate-100">2%</td>
-                  <td class="px-3 py-1.5 text-center flex justify-center gap-2">
-                    <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
-                    <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
-                  </td>
-                </tr>
-
+              <tbody class="text-[10px] divide-y divide-slate-100">
+                <template x-for="category in filteredCategories" :key="category.id">
+                  <tr class="hover:bg-slate-50 transition">
+                    <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100" x-text="category.name">-</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100" x-text="category.coa_code">-</td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                      <span :class="getTaxTypeClass(category.tax_type)" class="px-1 py-0.5 border rounded-[2px] font-black text-[8px] uppercase" x-text="category.tax_type">-</span>
+                    </td>
+                    <td class="px-3 py-1.5 text-right font-bold text-slate-700 border-r border-slate-100" x-text="`${category.default_rate}%`">-</td>
+                    <td class="px-3 py-1.5 text-center flex justify-center gap-2">
+                      <button @click="editCategory(category)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
+                      <button @click="deleteCategory(category.id)" class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="filteredCategories.length === 0">
+                  <tr>
+                    <td colspan="5" class="px-3 py-6 text-center text-slate-400 text-[10px]">No expense categories found</td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
         </section>
 
-        <div x-show="modalOpen" style="display: none;" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[3000]">
-          <div @click.away="modalOpen = false" class="bg-white rounded-[2px] w-full max-w-sm p-0 shadow-2xl border border-slate-400 overflow-hidden">
-            <div class="bg-slate-800 px-4 py-2 flex justify-between items-center">
-              <h3 class="text-[11px] font-black uppercase tracking-widest text-white m-0">New Expense Category</h3>
-              <button @click="modalOpen = false" class="text-slate-400 hover:text-white">
-                <span class="material-icons-round text-[16px]">close</span>
-              </button>
-            </div>
-            <form class="p-4 space-y-3 bg-slate-50">
-              <div>
-                  <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Category Name</label>
-                  <input type="text" placeholder="e.g. Fuel & Lubricants" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none focus:border-rose-700 uppercase">
-              </div>
-              <div>
-                  <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Link to COA Account</label>
-                  <select class="w-full px-2 py-1.5 text-[10px] font-mono border border-slate-300 rounded-[2px] bg-white focus:border-rose-700 outline-none">
-                    <option>5-02-03-090 — Fuel, Oil and Lubricants Expenses</option>
-                    <option>5-02-03-010 — Office Supplies Expenses</option>
-                  </select>
-              </div>
-              <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Tax Type</label>
-                    <select class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none">
-                        <option>VAT</option>
-                        <option>Percentage Tax</option>
-                        <option>Withholding Tax</option>
-                        <option>None</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Default Rate (%)</label>
-                    <input type="number" placeholder="0" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none text-right">
-                  </div>
-              </div>
-              <div class="pt-2">
-                  <button type="button" @click="modalOpen = false" class="w-full bg-rose-700 hover:bg-rose-800 text-white py-2 rounded-[2px] text-[10px] font-black uppercase shadow-sm">
-                    Save Mapping
-                  </button>
-              </div>
-            </form>
-          </div>
-        </div>
-
     </div>
   </div>
+
+<div x-show="modalOpen" style="display: none;" @click.outside="closeModal()" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[3000]">
+  <div class="bg-white rounded-[2px] w-full max-w-sm p-0 shadow-2xl border border-slate-400 overflow-hidden">
+    <div class="bg-slate-800 px-4 py-2 flex justify-between items-center">
+      <h3 class="text-[11px] font-black uppercase tracking-widest text-white m-0" x-text="editingCategory ? 'Edit Category' : 'New Expense Category'">New Expense Category</h3>
+      <button @click="closeModal()" class="text-slate-400 hover:text-white">
+        <span class="material-icons-round text-[16px]">close</span>
+      </button>
+    </div>
+    <form @submit.prevent="saveCategory()" class="p-4 space-y-3 bg-slate-50">
+      <div>
+          <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Category Name</label>
+          <input type="text" x-model="formData.name" placeholder="e.g. Fuel & Lubricants" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none focus:border-rose-700 uppercase">
+      </div>
+      <div>
+          <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Link to COA Account</label>
+          <input type="text" x-model="formData.coa_code" placeholder="e.g. 5-02-03-090" class="w-full px-2 py-1.5 text-[10px] font-mono border border-slate-300 rounded-[2px] bg-white outline-none focus:border-rose-700">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Tax Type</label>
+            <select x-model="formData.tax_type" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none">
+                <option>VAT</option>
+                <option>Percentage Tax</option>
+                <option>Withholding Tax</option>
+                <option>None</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Default Rate (%)</label>
+            <input type="number" x-model.number="formData.default_rate" placeholder="0" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none text-right">
+          </div>
+      </div>
+      <div class="pt-2">
+          <button type="submit" class="w-full bg-rose-700 hover:bg-rose-800 text-white py-2 rounded-[2px] text-[10px] font-black uppercase shadow-sm" x-text="editingCategory ? 'Update Category' : 'Save Mapping'">
+            Save Mapping
+          </button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-// Search
-document.getElementById('searchInput').addEventListener('input', function(){
-  let value = this.value.toLowerCase();
-  document.querySelectorAll('#categoryTable tr').forEach(row => {
-    row.style.display = row.innerText.toLowerCase().includes(value) ? '' : 'none';
-  });
-});
+function expenseCategoriesApp() {
+  return {
+    categories: [],
+    searchQuery: '',
+    modalOpen: false,
+    editingCategory: null,
+    formData: { name: '', coa_code: '', tax_type: 'VAT', default_rate: 0 },
 
-// Charts
+    async loadCategories() {
+      try {
+        const responses = await Promise.all([
+          fetch('/api/municipal/expense-categories'),
+          fetch('/regional/api/expense-categories')
+        ]);
+        
+        const [municipal, regional] = await Promise.all(responses.map(r => r.json()));
+        
+        // Combine and deduplicate
+        const combined = [...(Array.isArray(municipal) ? municipal : []), ...(Array.isArray(regional) ? regional : [])];
+        this.categories = Array.from(new Map(combined.map(c => [c.id, c])).values());
+        
+        console.log('Loaded expense categories:', this.categories);
+        this.updateCharts();
+      } catch (error) {
+        console.error('Error loading categories:', error);
+      }
+    },
+
+    get filteredCategories() {
+      return this.categories.filter(c => {
+        const q = this.searchQuery.toLowerCase();
+        return !q || c.name.toLowerCase().includes(q) || c.coa_code.toLowerCase().includes(q);
+      });
+    },
+
+    getTaxTypeClass(taxType) {
+      const classes = {
+        'VAT': 'bg-blue-50 text-blue-700 border-blue-200',
+        'Withholding Tax': 'bg-amber-50 text-amber-700 border-amber-200',
+        'Percentage Tax': 'bg-green-50 text-green-700 border-green-200',
+        'None': 'bg-slate-100 text-slate-600 border-slate-200'
+      };
+      return classes[taxType] || classes['None'];
+    },
+
+    getUniqueTaxTypes() {
+      return new Set(this.categories.map(c => c.tax_type)).size;
+    },
+
+    openModal() {
+      this.editingCategory = null;
+      this.formData = { name: '', coa_code: '', tax_type: 'VAT', default_rate: 0 };
+      this.modalOpen = true;
+    },
+
+    closeModal() {
+      this.modalOpen = false;
+      this.editingCategory = null;
+    },
+
+    editCategory(category) {
+      this.editingCategory = category;
+      this.formData = { ...category };
+      this.modalOpen = true;
+    },
+
+    async saveCategory() {
+      try {
+        const url = this.editingCategory 
+          ? `/api/municipal/expense-categories/${this.editingCategory.id}`
+          : '/api/municipal/expense-categories';
+        const method = this.editingCategory ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.formData)
+        });
+
+        if (response.ok) {
+          await this.loadCategories();
+          this.closeModal();
+          alert(this.editingCategory ? 'Category updated' : 'Category created');
+        }
+      } catch (error) {
+        console.error('Error saving category:', error);
+        alert('Error saving category');
+      }
+    },
+
+    async deleteCategory(id) {
+      if (!confirm('Delete this category?')) return;
+      
+      try {
+        await fetch(`/api/municipal/expense-categories/${id}`, { method: 'DELETE' });
+        await this.loadCategories();
+        alert('Category deleted');
+      } catch (error) {
+        console.error('Error deleting category:', error);
+        alert('Error deleting category');
+      }
+    },
+
+    updateCharts() {
+      // Tax distribution chart
+      const taxTypes = {};
+      this.categories.forEach(c => {
+        taxTypes[c.tax_type] = (taxTypes[c.tax_type] || 0) + 1;
+      });
+
+      const taxChart = Chart.getChart('taxChart');
+      if (taxChart) taxChart.destroy();
+
+      new Chart(document.getElementById('taxChart'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(taxTypes),
+          datasets: [{ 
+            data: Object.values(taxTypes),
+            backgroundColor: ['#3b82f6', '#f59e0b', '#10b981', '#cbd5e1'],
+            borderWidth: 0 
+          }]
+        },
+        options: { 
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '65%',
+          plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8 } } } }
+        }
+      });
+    }
+  };
+}
+
 Chart.defaults.font.family = "Verdana, Arial, sans-serif";
 Chart.defaults.font.size = 9;
 Chart.defaults.color = "#64748b";
 const chartConfig = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 } };
 
-// Line Chart
+// Line Chart - Trend
 new Chart(document.getElementById('trendChart'), {
   type: 'line',
   data: {
@@ -197,7 +311,7 @@ new Chart(document.getElementById('trendChart'), {
     datasets: [{
       label: 'Expense',
       data: [90,95,92,98,100,110,120,130],
-      borderColor: '#be123c', // Rose-700
+      borderColor: '#be123c',
       backgroundColor: 'rgba(190, 18, 60, 0.1)',
       borderWidth: 1.5,
       fill: true,
@@ -205,23 +319,9 @@ new Chart(document.getElementById('trendChart'), {
     }]
   },
   options: { 
-      ...chartConfig, 
-      plugins: { legend: { display: false } },
-      scales: { x: { display: false }, y: { display: false } }
-  }
-});
-
-// Pie Chart
-new Chart(document.getElementById('taxChart'), {
-  type: 'doughnut',
-  data: {
-    labels: ['VAT', 'EWT', 'None'],
-    datasets: [{ data: [8, 5, 2], backgroundColor: ['#3b82f6', '#f59e0b', '#cbd5e1'], borderWidth: 0 }]
-  },
-  options: { 
-      ...chartConfig, 
-      cutout: '65%',
-      plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: {size: 8} } } } 
+    ...chartConfig, 
+    plugins: { legend: { display: false } },
+    scales: { x: { display: false }, y: { display: false } }
   }
 });
 </script>
