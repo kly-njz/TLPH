@@ -21,6 +21,22 @@
           active_entities: 0,
           total_entities: 0
         },
+        deposits: {
+          total: 0,
+          by_type: {}
+        },
+
+        formatCurrency(amount) {
+          return new Intl.NumberFormat('en-PH', {
+            style: 'currency',
+            currency: 'PHP',
+            minimumFractionDigits: 2
+          }).format(amount || 0);
+        },
+
+        getDepositDisplay() {
+          return this.formatCurrency(this.deposits.total);
+        },
 
         async loadEntities() {
           try {
@@ -38,6 +54,24 @@
           } catch (e) {
             console.error('[ERROR] Failed to fetch entities:', e);
           }
+        },
+
+        async loadDeposits() {
+          try {
+            console.log('[DEBUG] Loading national deposits...');
+            const res = await fetch('/national/api/deposits');
+            const data = await res.json();
+            
+            if (data.success) {
+              this.deposits.total = data.total_deposits;
+              this.deposits.by_type = data.by_type;
+              console.log(`[DEBUG] Loaded total deposits: ₱${this.deposits.total}`);
+            } else {
+              console.error('[ERROR] Failed to load deposits:', data.error);
+            }
+          } catch (e) {
+            console.error('[ERROR] Failed to fetch deposits:', e);
+          }
         }
       };
     };
@@ -53,7 +87,7 @@
   </style>
 </head>
 
-<body class="text-slate-800 text-xs bg-slate-50 h-screen overflow-hidden" x-data="dashboardData()" x-init="loadEntities()">
+<body class="text-slate-800 text-xs bg-slate-50 h-screen overflow-hidden" x-data="dashboardData()" x-init="loadEntities(); loadDeposits()">
 
   <div class="h-full lg:grid lg:grid-cols-[260px_1fr]">
 
@@ -142,8 +176,8 @@
         <section class="grid grid-cols-1 md:grid-cols-4 gap-2 shrink-0">
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deposits</p>
-            <div id="kpiTotalDeposits" class="mt-1 text-lg font-black text-emerald-700 leading-none">₱ {{ finance['national']['total_deposit'] if finance['national'] else '—' }}</div>
-            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Current period</p>
+            <div class="mt-1 text-lg font-black text-emerald-700 leading-none" x-text="getDepositDisplay()">₱ 0.00</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">From all users, municipal & regional</p>
           </div>
 
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">

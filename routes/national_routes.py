@@ -764,6 +764,91 @@ def api_get_national_entities():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/deposits', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_deposits():
+    """Fetch all deposits from transactions, applications, and service_requests across all municipalities/regions"""
+    try:
+        db = get_firestore_db()
+        total_deposits = 0.0
+        deposits_by_type = {'transactions': 0, 'applications': 0, 'service_requests': 0}
+        deposit_records = []
+        
+        # 1. Get paid transactions
+        try:
+            trans_ref = db.collection('transactions')
+            trans_docs = trans_ref.where('payment_status', '==', 'Paid').stream()
+            for doc in trans_docs:
+                trans = doc.to_dict()
+                if trans:
+                    amount = float(trans.get('amount', 0) or 0)
+                    total_deposits += amount
+                    deposits_by_type['transactions'] += amount
+                    deposit_records.append({
+                        'id': doc.id,
+                        'source': 'transactions',
+                        'amount': amount,
+                        'description': trans.get('description', ''),
+                        'date': trans.get('created_at'),
+                        'municipality': trans.get('municipality', 'N/A')
+                    })
+        except Exception as e:
+            print(f'[WARN] Error fetching transactions: {e}')
+        
+        # 2. Get paid applications
+        try:
+            app_ref = db.collection('applications')
+            app_docs = app_ref.where('payment_status', '==', 'Paid').stream()
+            for doc in app_docs:
+                app = doc.to_dict()
+                if app:
+                    amount = float(app.get('amount', 0) or 0)
+                    total_deposits += amount
+                    deposits_by_type['applications'] += amount
+                    deposit_records.append({
+                        'id': doc.id,
+                        'source': 'applications',
+                        'amount': amount,
+                        'description': app.get('application_type', 'Application'),
+                        'date': app.get('created_at'),
+                        'municipality': app.get('municipality', 'N/A')
+                    })
+        except Exception as e:
+            print(f'[WARN] Error fetching applications: {e}')
+        
+        # 3. Get paid service requests
+        try:
+            sr_ref = db.collection('service_requests')
+            sr_docs = sr_ref.where('payment_status', '==', 'Paid').stream()
+            for doc in sr_docs:
+                sr = doc.to_dict()
+                if sr:
+                    amount = float(sr.get('service_fee', 0) or 0)
+                    total_deposits += amount
+                    deposits_by_type['service_requests'] += amount
+                    deposit_records.append({
+                        'id': doc.id,
+                        'source': 'service_requests',
+                        'amount': amount,
+                        'description': sr.get('service_type', 'Service'),
+                        'date': sr.get('created_at'),
+                        'municipality': sr.get('municipality', 'N/A')
+                    })
+        except Exception as e:
+            print(f'[WARN] Error fetching service_requests: {e}')
+        
+        return jsonify({
+            'success': True,
+            'total_deposits': round(total_deposits, 2),
+            'by_type': deposits_by_type,
+            'records': deposit_records,
+            'record_count': len(deposit_records)
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch national deposits: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/accounting/entities')
 @role_required('national', 'national_admin')
 def accounting_entities():
