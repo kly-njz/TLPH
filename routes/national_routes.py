@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, jsonify
 from firebase_config import get_firestore_db
 from datetime import datetime
 from firebase_auth_middleware import role_required
+from entities_storage import list_entities
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -705,6 +706,40 @@ def applicants():
 @role_required('national', 'national_admin')
 def accounting_dashboard():
     return render_template('national/accounting/accounting-dashboard.html')
+
+
+@bp.route('/api/entities', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_entities():
+    """Fetch all entities for national dashboard"""
+    try:
+        # Get all entities (no municipality filter for national view)
+        entities = list_entities()
+        
+        # Calculate stats
+        active_count = sum(1 for e in entities if e.get('status') in ['active', 'Active'])
+        total_count = len(entities)
+        
+        # Group by type
+        by_type = {}
+        for e in entities:
+            entity_type = e.get('type', 'Unknown')
+            if entity_type not in by_type:
+                by_type[entity_type] = 0
+            by_type[entity_type] += 1
+        
+        return jsonify({
+            'success': True,
+            'entities': entities,
+            'stats': {
+                'total_entities': total_count,
+                'active_entities': active_count,
+                'by_type': by_type
+            }
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch national entities: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @bp.route('/accounting/entities')
