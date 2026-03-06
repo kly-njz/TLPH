@@ -3182,6 +3182,29 @@ def api_get_coa_templates_wrapped():
     try:
         db = get_firestore_db()
         
+        # Check user role - national admins can see all templates
+        user_role = session.get('role', '')
+        if 'national' in user_role.lower():
+            # National admin: return all templates
+            templates = []
+            try:
+                all_templates = db.collection('coa_templates').limit(5000).stream()
+                for doc in all_templates:
+                    template = doc.to_dict() or {}
+                    templates.append({
+                        'id': doc.id,
+                        'name': template.get('name'),
+                        'description': template.get('description', ''),
+                        'status': template.get('status', 'active'),
+                        'account_count': template.get('account_count', 0),
+                        'municipality': template.get('municipality')
+                    })
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch all COA templates: {e}")
+            
+            return jsonify(templates), 200
+        
+        # Regional admin: filter by region
         session_region = session.get('region') or session.get('user_region')
         user_region = get_firestore_region_name(session_region)
         
@@ -3251,6 +3274,46 @@ def api_get_coa_accounts_wrapped():
     try:
         db = get_firestore_db()
         
+        # Check user role - national admins can see all accounts
+        user_role = session.get('role', '')
+        template_id = request.args.get('template')
+        
+        if 'national' in user_role.lower():
+            # National admin: return all accounts
+            accounts = []
+            try:
+                if template_id:
+                    # Get accounts for specific template
+                    query_result = db.collection('coa_accounts').where('template_id', '==', template_id).limit(1000).stream()
+                    for doc in query_result:
+                        data = doc.to_dict() or {}
+                        accounts.append({
+                            'id': doc.id,
+                            'code': data.get('code'),
+                            'name': data.get('name'),
+                            'type': data.get('account_type', 'Asset'),
+                            'locked': data.get('locked', False),
+                            'description': data.get('description', '')
+                        })
+                else:
+                    # Get all accounts
+                    query_result = db.collection('coa_accounts').limit(5000).stream()
+                    for doc in query_result:
+                        data = doc.to_dict() or {}
+                        accounts.append({
+                            'id': doc.id,
+                            'code': data.get('code'),
+                            'name': data.get('name'),
+                            'type': data.get('account_type', 'Asset'),
+                            'locked': data.get('locked', False),
+                            'description': data.get('description', '')
+                        })
+            except Exception as e:
+                print(f"[ERROR] Failed to fetch all COA accounts: {e}")
+            
+            return jsonify(accounts), 200
+        
+        # Regional admin: filter by region
         session_region = session.get('region') or session.get('user_region')
         user_region = get_firestore_region_name(session_region)
         
@@ -3287,7 +3350,6 @@ def api_get_coa_accounts_wrapped():
         except Exception as e:
             print(f"[WARN] Unable to resolve municipalities: {e}")
         
-        template_id = request.args.get('template')
         accounts = []
         
         try:
