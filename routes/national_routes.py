@@ -1675,14 +1675,28 @@ def api_get_all_national_transactions():
             
             return user_email, user_name or 'Unknown User'
         
-        def get_location_info(trans_data):
-            """Extract region and municipality from transaction or related collections"""
+        def get_location_info(trans_data, user_email):
+            """Extract region and municipality from user profile, then transaction"""
             region = (trans_data.get('region') or trans_data.get('regionName') or '').strip()
             municipality = (trans_data.get('municipality') or trans_data.get('municipality_name') or '').strip()
             
-            # Try to get from related document if available
+            # First try to get from user profile by email
+            if user_email and not (region and municipality):
+                try:
+                    user_docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+                    for user_doc in user_docs:
+                        user_data = user_doc.to_dict()
+                        if user_data:
+                            region = region or user_data.get('region') or user_data.get('region_name') or ''
+                            municipality = municipality or user_data.get('municipality') or user_data.get('municipality_name') or ''
+                            if region and municipality:
+                                print(f'[DEBUG] Got location from user profile: {region}, {municipality}')
+                                break
+                except Exception as e:
+                    print(f'[DEBUG] Could not lookup user by email {user_email}: {e}')
+            
+            # Try to get from related document if still missing
             related_id = trans_data.get('related_id') or trans_data.get('applicationId') or trans_data.get('application_id')
-            collection_name = trans_data.get('relation_type') or 'applications'
             
             if related_id and not (region and municipality):
                 try:
@@ -1696,6 +1710,7 @@ def api_get_all_national_transactions():
                                 region = region or rel_data.get('region') or rel_data.get('regionName') or ''
                                 municipality = municipality or rel_data.get('municipality') or rel_data.get('municipality_name') or ''
                                 if region and municipality:
+                                    print(f'[DEBUG] Got location from {coll}: {region}, {municipality}')
                                     break
                         except:
                             continue
@@ -1722,7 +1737,7 @@ def api_get_all_national_transactions():
                 
                 # Get user and location details
                 user_email, user_name = get_user_info(trans)
-                region, municipality = get_location_info(trans)
+                region, municipality = get_location_info(trans, user_email)
                 
                 created_at = trans.get('created_at') or trans.get('createdAt') or ''
                 if isinstance(created_at, object) and hasattr(created_at, 'timestamp'):
