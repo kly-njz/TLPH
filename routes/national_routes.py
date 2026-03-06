@@ -3,6 +3,7 @@ from firebase_config import get_firestore_db
 from datetime import datetime
 from firebase_auth_middleware import role_required
 from entities_storage import list_entities
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -1615,16 +1616,23 @@ def api_get_all_national_transactions():
     """Get ALL transactions from all regions/municipalities with region, type, and user details (National Transaction Registry)"""
     try:
         print('[DEBUG] National: Fetching ALL transactions (paid & refunded)')
-        
+
         db = get_firestore_db()
         transactions = []
-        
+
         def parse_amount(raw_value):
             try:
                 return float(raw_value or 0)
             except (ValueError, TypeError):
                 return 0.0
-        
+
+        def first_non_empty(values):
+            for value in values:
+                text = str(value or '').strip()
+                if text:
+                    return text
+            return ''
+
         def get_transaction_type(description, trans_type=None):
             """Infer transaction type from description or field"""
             if trans_type:
@@ -1637,138 +1645,182 @@ def api_get_all_national_transactions():
             if 'application' in desc:
                 return 'Application'
             return 'General Payment'
-        
+
         def get_transaction_status(status_field):
             """Determine if transaction is Paid or Refunded"""
             status_str = str(status_field or '').strip().lower()
             paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
             refunded_markers = {'refunded', 'cancelled', 'rejected'}
-            
+
             if status_str in refunded_markers:
                 return 'Refunded'
             elif status_str in paid_markers:
                 return 'Paid'
             else:
                 return 'Pending'
-        
+
+        user_cache = {}
+
+        def get_user_profile(email, user_id):
+            cache_key = (str(email or '').lower(), str(user_id or ''))
+            if cache_key in user_cache:
+                return user_cache[cache_key]
+
+            profile = None
+            email_value = str(email or '').strip().lower()
+            user_id_value = str(user_id or '').strip()
+
+            try:
+                if email_value:
+                    doc = db.collection('users').document(email_value).get()
+                    if doc.exists:
+                        profile = doc.to_dict() or {}
+
+                if not profile and user_id_value:
+                    doc = db.collection('users').document(user_id_value).get()
+                    if doc.exists:
+                        profile = doc.to_dict() or {}
+
+                if not profile and email_value:
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', email_value)).limit(1).stream()
+                    for item in docs:
+                        profile = item.to_dict() or {}
+                        break
+            except Exception as user_lookup_error:
+                print(f"[DEBUG] User lookup failed for {email_value or user_id_value}: {user_lookup_error}")
+
+            user_cache[cache_key] = profile or {}
+            return user_cache[cache_key]
+
         def get_user_info(trans_data):
             """Extract comprehensive user information from transaction"""
-            user_email = trans_data.get('user_email', '').strip().lower()
-            user_name = trans_data.get('user_name', '').strip()
-            user_id = trans_data.get('user_id', '').strip()
-            
-            # Try direct from transaction first
+            user_email = first_non_empty([
+                trans_data.get('user_email'),
+                trans_data.get('email'),
+                trans_data.get('payer_email'),
+                trans_data.get('customer_email')
+            ]).lower()
+            user_name = first_non_empty([
+                trans_data.get('user_name'),
+                trans_data.get('userName'),
+                trans_data.get('fullName'),
+                trans_data.get('name'),
+                trans_data.get('customer_name')
+            ])
+            user_id = first_non_empty([
+                trans_data.get('user_id'),
+                trans_data.get('userId'),
+                trans_data.get('uid')
+            ])
+
             if not user_name and user_email:
-                user_name = trans_data.get('userName') or trans_data.get('email_name') or user_email.split('@')[0]
-            
-            # Try to lookup from users collection - try multiple methods
-            if user_email or user_id:
-                try:
-                    user_data = None
-                    
-                    # Method 1: Try document ID as email
-                    if user_email:
-                        user_doc = db.collection('users').document(user_email).get()
-                        if user_doc.exists:
-                            user_data = user_doc.to_dict()
-                            print(f'[DEBUG] Found user by document ID: {user_email}')
-                    
-                    # Method 2: Try where clause to find by email field
-                    if not user_data and user_email:
-                        user_docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
-                        for doc in user_docs:
-                            user_data = doc.to_dict()
-                            print(f'[DEBUG] Found user by email field query')
-                            break
-                    
-                    # Method 3: Try document ID as user_id
-                    if not user_data and user_id:
-                        user_doc = db.collection('users').document(user_id).get()
-                        if user_doc.exists:
-                            user_data = user_doc.to_dict()
-                            print(f'[DEBUG] Found user by user_id document')
-                    
-                    # Extract name from user data
-                    if user_data:
-                        user_name = user_name or user_data.get('display_name') or user_data.get('fullName') or (user_data.get('firstName', '').strip() + ' ' + user_data.get('lastName', '').strip()).strip() or ''
-                        
-                except Exception as e:
-                    print(f'[DEBUG] Could not lookup user {user_email or user_id}: {e}')
-            
-            return user_email, user_name or 'Unknown User'
-        
-        def get_location_info(trans_data, user_email):
-            """Extract region and municipality from user profile, then transaction"""
-            region = (trans_data.get('region') or trans_data.get('regionName') or '').strip()
-            municipality = (trans_data.get('municipality') or trans_data.get('municipality_name') or '').strip()
-            
-            # First try to get from user profile by email
-            if user_email and not (region and municipality):
-                try:
-                    user_docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
-                    for user_doc in user_docs:
-                        user_data = user_doc.to_dict()
-                        if user_data:
-                            # Log all available fields for debugging
-                            print(f'[DEBUG] User data fields: {list(user_data.keys())}')
-                            
-                            # Try multiple field name variations
-                            region = region or user_data.get('region') or user_data.get('region_name') or user_data.get('regionName') or user_data.get('user_region') or ''
-                            municipality = municipality or user_data.get('municipality') or user_data.get('municipality_name') or user_data.get('municipalityName') or user_data.get('user_municipality') or ''
-                            
-                            print(f'[DEBUG] From user profile - Region: {region}, Municipality: {municipality}')
-                            if region and municipality:
-                                break
-                except Exception as e:
-                    print(f'[DEBUG] Could not lookup user by email {user_email}: {e}')
-            
-            # Try to get from related document if still missing
-            related_id = trans_data.get('related_id') or trans_data.get('applicationId') or trans_data.get('application_id') or trans_data.get('service_request_id')
-            
-            if related_id and not (region and municipality):
-                try:
-                    # Try common collection names
-                    collections_to_try = ['applications', 'service_requests', 'licenses', 'permits']
-                    for coll in collections_to_try:
-                        try:
-                            rel_doc = db.collection(coll).document(related_id).get()
-                            if rel_doc.exists:
-                                rel_data = rel_doc.to_dict()
-                                region = region or rel_data.get('region') or rel_data.get('regionName') or rel_data.get('user_region') or ''
-                                municipality = municipality or rel_data.get('municipality') or rel_data.get('municipality_name') or rel_data.get('municipalityName') or rel_data.get('user_municipality') or ''
-                                if region and municipality:
-                                    print(f'[DEBUG] Got location from {coll}: {region}, {municipality}')
-                                    break
-                        except:
+                user_name = user_email.split('@')[0]
+
+            user_profile = get_user_profile(user_email, user_id)
+            if user_profile:
+                profile_name = first_non_empty([
+                    user_profile.get('display_name'),
+                    user_profile.get('fullName'),
+                    user_profile.get('name'),
+                    f"{str(user_profile.get('firstName', '')).strip()} {str(user_profile.get('lastName', '')).strip()}".strip(),
+                ])
+                if profile_name:
+                    user_name = profile_name
+
+            return user_email, user_name or 'Unknown User', user_profile
+
+        def get_location_info(trans_data, user_profile):
+            """Resolve location from transaction, metadata, user profile, then related docs."""
+            metadata = trans_data.get('metadata') if isinstance(trans_data.get('metadata'), dict) else {}
+
+            region = first_non_empty([
+                trans_data.get('region'),
+                trans_data.get('region_name'),
+                trans_data.get('regionName'),
+                trans_data.get('user_region'),
+                metadata.get('region'),
+                metadata.get('region_name'),
+                metadata.get('regionName'),
+            ])
+            municipality = first_non_empty([
+                trans_data.get('municipality'),
+                trans_data.get('municipality_name'),
+                trans_data.get('municipalityName'),
+                trans_data.get('user_municipality'),
+                metadata.get('municipality'),
+                metadata.get('municipality_name'),
+                metadata.get('municipalityName'),
+            ])
+
+            if user_profile and (not region or not municipality):
+                region = region or first_non_empty([
+                    user_profile.get('region'),
+                    user_profile.get('region_name'),
+                    user_profile.get('regionName'),
+                    user_profile.get('user_region'),
+                ])
+                municipality = municipality or first_non_empty([
+                    user_profile.get('municipality'),
+                    user_profile.get('municipality_name'),
+                    user_profile.get('municipalityName'),
+                    user_profile.get('user_municipality'),
+                ])
+
+            related_id = first_non_empty([
+                trans_data.get('related_id'),
+                trans_data.get('applicationId'),
+                trans_data.get('application_id'),
+                trans_data.get('service_request_id'),
+                metadata.get('application_id'),
+                metadata.get('service_request_id'),
+            ])
+            if related_id and (not region or not municipality):
+                for collection_name in ['applications', 'service_requests', 'licenses', 'permits']:
+                    try:
+                        rel_doc = db.collection(collection_name).document(related_id).get()
+                        if not rel_doc.exists:
                             continue
-                except Exception as e:
-                    print(f'[DEBUG] Could not lookup related document: {e}')
-            
+                        rel_data = rel_doc.to_dict() or {}
+                        region = region or first_non_empty([
+                            rel_data.get('region'),
+                            rel_data.get('region_name'),
+                            rel_data.get('regionName'),
+                        ])
+                        municipality = municipality or first_non_empty([
+                            rel_data.get('municipality'),
+                            rel_data.get('municipality_name'),
+                            rel_data.get('municipalityName'),
+                        ])
+                        if region and municipality:
+                            break
+                    except Exception:
+                        continue
+
             return region or 'N/A', municipality or 'N/A'
-        
+
         try:
             # Fetch ALL transactions (no filtering)
             all_trans = db.collection('transactions').limit(5000).stream()
-            
+
             for doc in all_trans:
                 trans = doc.to_dict()
                 if not trans:
                     continue
-                
+
                 amount = parse_amount(trans.get('amount'))
                 if amount <= 0:
                     continue
-                
+
                 status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status') or 'pending'
                 trans_status = get_transaction_status(status)
-                
-                                user_email, user_name = get_user_info(trans)
-                                region, municipality = get_location_info(trans, user_email)
-                
+
+                user_email, user_name, user_profile = get_user_info(trans)
+                region, municipality = get_location_info(trans, user_profile)
+
                 created_at = trans.get('created_at') or trans.get('createdAt') or ''
                 if isinstance(created_at, object) and hasattr(created_at, 'timestamp'):
                     created_at = created_at.timestamp() * 1000
-                
+
                 transactions.append({
                     'id': doc.id,
                     'reference': trans.get('invoice_id', trans.get('reference_id', doc.id[:12])),
@@ -1785,17 +1837,17 @@ def api_get_all_national_transactions():
                     'description': trans.get('description', ''),
                     'payment_method': trans.get('payment_method', 'Unknown'),
                 })
-        
+
         except Exception as e:
             print(f'[ERROR] National: Failed to fetch transactions: {e}')
             return jsonify({'error': str(e)}), 500
-        
+
         # Sort by date descending
         transactions.sort(key=lambda x: x['created_at'], reverse=True)
-        
+
         print(f'[INFO] National: Retrieved {len(transactions)} transactions from ALL regions/municipalities')
         return jsonify(transactions), 200
-        
+
     except Exception as e:
         print(f'[ERROR] National: Failed to get transactions: {e}')
         return jsonify({'error': str(e)}), 500
