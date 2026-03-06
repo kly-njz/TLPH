@@ -23,15 +23,203 @@
         width: 100%;
         overflow: hidden;
     }
+    <script>
+      window.entitiesManagement = function() {
+        return {
+          entities: [],
+          stats: {
+            regional_count: 0,
+            municipal_count: 0,
+            total_count: 0,
+            active_count: 0,
+            status_distribution: {}
+          },
+          typeChartData: { labels: [], data: [] },
+          statusChartData: { labels: [], data: [] },
+          modalOpen: false,
+          editingEntity: null,
+          newEntity: {
+            name: '',
+            level: 'Municipality',
+            parent_region: '',
+            bank_account: ''
+          },
+          searchQuery: '',
+
+          get filteredEntities() {
+            if (!this.searchQuery) return this.entities;
+            const query = this.searchQuery.toLowerCase();
+            return this.entities.filter(e => 
+              e.name.toLowerCase().includes(query) ||
+              e.level.toLowerCase().includes(query) ||
+              e.parent_region.toLowerCase().includes(query) ||
+              e.bank_account.toLowerCase().includes(query)
+            );
+          },
+
+          getStatusColor(status) {
+            const colors = {
+              'active': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+              'enabled': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+              'approved': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+              'suspended': 'bg-rose-100 text-rose-800 border-rose-200',
+              'pending': 'bg-amber-100 text-amber-800 border-amber-200',
+              'inactive': 'bg-slate-100 text-slate-800 border-slate-200'
+            };
+            return colors[status.toLowerCase()] || colors['inactive'];
+          },
+
+          openEditModal(entity) {
+            this.editingEntity = { ...entity };
+            this.modalOpen = true;
+          },
+
+          openNewModal() {
+            this.editingEntity = null;
+            this.newEntity = { name: '', level: 'Municipality', parent_region: '', bank_account: '' };
+            this.modalOpen = true;
+          },
+
+          async saveEntity() {
+            try {
+              const entityData = this.editingEntity || this.newEntity;
+              const method = this.editingEntity ? 'PUT' : 'POST';
+          
+              const response = await fetch('/national/api/entities-management', {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(entityData)
+              });
+          
+              const result = await response.json();
+              if (result.success) {
+                this.modalOpen = false;
+                await this.loadEntities();
+              } else {
+                alert('Error: ' + result.error);
+              }
+            } catch (e) {
+              console.error('Error saving entity:', e);
+              alert('Error saving entity');
+            }
+          },
+
+          async loadEntities() {
+            try {
+              console.log('[DEBUG] Loading entities for management...');
+              const res = await fetch('/national/api/entities-management');
+              const data = await res.json();
+          
+              if (data.success) {
+                this.entities = data.entities;
+                this.stats = data.stats;
+                this.updateCharts();
+                console.log(`[DEBUG] Loaded ${this.entities.length} entities`);
+              } else {
+                console.error('[ERROR] Failed to load entities:', data.error);
+              }
+            } catch (e) {
+              console.error('[ERROR] Failed to fetch entities:', e);
+            }
+          },
+
+          updateCharts() {
+            // Type distribution
+            this.typeChartData = {
+              labels: ['Regions', 'Municipalities'],
+              data: [this.stats.regional_count, this.stats.municipal_count]
+            };
+
+            // Status distribution
+            const statusLabels = Object.keys(this.stats.status_distribution);
+            const statusData = Object.values(this.stats.status_distribution);
+            this.statusChartData = {
+              labels: statusLabels.length > 0 ? statusLabels : ['No Data'],
+              data: statusData.length > 0 ? statusData : [0]
+            };
+
+            // Re-render charts
+            this.renderCharts();
+          },
+
+          renderCharts() {
+            setTimeout(() => {
+              const typeCtx = document.getElementById('typeChart');
+              const statusCtx = document.getElementById('statusChart');
+          
+              if (typeCtx && statusCtx) {
+                // Destroy existing charts if they exist
+                if (window.typeChartInstance) window.typeChartInstance.destroy();
+                if (window.statusChartInstance) window.statusChartInstance.destroy();
+
+                const chartConfig = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 } };
+
+                // Type Chart
+                window.typeChartInstance = new Chart(typeCtx, {
+                  type: 'doughnut',
+                  data: {
+                    labels: this.typeChartData.labels,
+                    datasets: [{ 
+                      data: this.typeChartData.data, 
+                      backgroundColor: ['#1e3a8a', '#10b981'], 
+                      borderWidth: 0 
+                    }]
+                  },
+                  options: { 
+                    ...chartConfig, 
+                    cutout: '70%',
+                    plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8 }, padding: 10 } } } 
+                  }
+                });
+
+                // Status Chart
+                const statusColors = {
+                  'Active': '#10b981',
+                  'active': '#10b981',
+                  'Suspended': '#f43f5e',
+                  'suspended': '#f43f5e',
+                  'Pending': '#f59e0b',
+                  'pending': '#f59e0b'
+                };
+            
+                const bgColors = this.statusChartData.labels.map(label => statusColors[label] || '#94a3b8');
+
+                window.statusChartInstance = new Chart(statusCtx, {
+                  type: 'bar',
+                  data: {
+                    labels: this.statusChartData.labels,
+                    datasets: [{ 
+                      data: this.statusChartData.data, 
+                      backgroundColor: bgColors, 
+                      borderRadius: 2, 
+                      barPercentage: 0.6 
+                    }]
+                  },
+                  options: { 
+                    ...chartConfig, 
+                    plugins: { legend: { display: false } }, 
+                    scales: { x: { grid: { display: false } }, y: { display: false } } 
+                  }
+                });
+              }
+            }, 100);
+          },
+      
+          init() {
+            this.loadEntities();
+          }
+        };
+      };
+    </script>
 </style>
 </head>
 
 <body class="text-slate-800 text-xs h-screen overflow-hidden flex flex-col">
 <div class="flex-1 flex overflow-hidden">
-    <aside class="sidebar-container hidden lg:block">
-        {% include 'national/sidenav-national.html' %}
-    </aside>
-    <div class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar" x-data="{ modalOpen: false, newEntityType: '' }">
+  <aside class="sidebar-container hidden lg:block">
+    {% include 'national/sidenav-national.html' %}
+  </aside>
+  <div class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar" x-data="entitiesManagement()">
 
         <header class="bg-white border border-slate-300 rounded-[2px] p-3 shadow-sm flex justify-between items-center shrink-0">
           <div class="flex items-center gap-3">
@@ -43,7 +231,7 @@
               <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Region & Municipality Management</p>
             </div>
           </div>
-          <button @click="modalOpen = true" class="bg-blue-900 hover:bg-blue-800 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
+          <button @click="openNewModal()" class="bg-blue-900 hover:bg-blue-800 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
             <span class="material-icons-round text-[14px]">add</span> Add Entity
           </button>
         </header>
@@ -51,15 +239,15 @@
         <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-800">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Regional Offices</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">8</div>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.regional_count">0</div>
           </div>
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-emerald-700">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Municipalities</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">42</div>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.municipal_count">0</div>
           </div>
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm bg-slate-800 text-white">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Entities</p>
-            <div class="text-lg font-black text-emerald-400 mt-0.5 leading-none">50</div>
+            <div class="text-lg font-black text-emerald-400 mt-0.5 leading-none" x-text="stats.total_count">0</div>
           </div>
         </section>
 
@@ -91,7 +279,7 @@
             </h2>
             <div class="relative">
                 <span class="material-icons-round text-slate-400 absolute left-1.5 top-1/2 -translate-y-1/2 text-[12px]">search</span>
-                <input type="text" id="searchInput" placeholder="Search entity..." class="pl-6 pr-2 py-0.5 text-[10px] font-bold border border-slate-300 rounded-[2px] w-48 bg-white outline-none focus:border-blue-800">
+                <input type="text" x-model="searchQuery" placeholder="Search entity..." class="pl-6 pr-2 py-0.5 text-[10px] font-bold border border-slate-300 rounded-[2px] w-48 bg-white outline-none focus:border-blue-800">
             </div>
           </div>
 
@@ -108,32 +296,30 @@
                 </tr>
               </thead>
               <tbody id="entityTable" class="text-[10px] divide-y divide-slate-100">
-                <tr class="hover:bg-blue-50 transition bg-slate-50/50">
-                  <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">NCR (National Capital Region)</td>
-                  <td class="px-3 py-1.5 text-blue-800 font-black border-r border-slate-100">REGION</td>
-                  <td class="px-3 py-1.5 text-slate-400 border-r border-slate-100 text-center">—</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100 font-mono text-slate-600">LBP-1001-XXXX</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100 text-center">
-                    <span class="px-1 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-[2px] font-black text-[8px] uppercase">Active</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center">
-                    <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
-                  </td>
-                </tr>
-                <tr class="hover:bg-slate-50 transition">
-                  <td class="px-3 py-1.5 font-bold pl-8 text-slate-700 border-r border-slate-100 flex items-center gap-1">
-                      <span class="material-icons-round text-slate-300 text-[12px]">subdirectory_arrow_right</span> Quezon City
-                  </td>
-                  <td class="px-3 py-1.5 border-r border-slate-100 font-bold text-slate-600">MUNICIPALITY</td>
-                  <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">NCR</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100 font-mono text-slate-600">LBP-5678-XXXX</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100 text-center">
-                    <span class="px-1 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-[2px] font-black text-[8px] uppercase">Active</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center">
-                    <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
-                  </td>
-                </tr>
+                <template x-for="entity in filteredEntities" :key="entity.id">
+                  <tr :class="entity.level === 'Regional' ? 'hover:bg-blue-50 transition bg-slate-50/50' : 'hover:bg-slate-50 transition'" :style="entity.level === 'Municipal' && 'padding-left: 2rem;'">
+                    <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 flex items-center gap-1">
+                      <template x-if="entity.level === 'Municipal'">
+                        <span class="material-icons-round text-slate-300 text-[12px]">subdirectory_arrow_right</span>
+                      </template>
+                      <span x-text="entity.name"></span>
+                    </td>
+                    <td class="px-3 py-1.5 font-black border-r border-slate-100" :class="entity.level === 'Regional' ? 'text-blue-800' : 'text-slate-600'" x-text="entity.level"></td>
+                    <td class="px-3 py-1.5 border-r border-slate-100" x-text="entity.parent_region || '—'"></td>
+                    <td class="px-3 py-1.5 border-r border-slate-100 font-mono text-slate-600" x-text="entity.bank_account"></td>
+                    <td class="px-3 py-1.5 border-r border-slate-100 text-center">
+                      <span class="px-1 py-0.5 border rounded-[2px] font-black text-[8px] uppercase" :class="getStatusColor(entity.status)" x-text="entity.status"></span>
+                    </td>
+                    <td class="px-3 py-1.5 text-center">
+                      <button @click="openEditModal(entity)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="filteredEntities.length === 0">
+                  <tr>
+                    <td colspan="6" class="px-3 py-4 text-center text-slate-500">No entities found</td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
