@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Entities Registry | National Admin</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  window.entitiesManagement = function() {
+    return {
+      entities: [],
+      stats: {
+        regional_count: 0,
+        municipal_count: 0,
+        total_count: 0,
+        status_distribution: {}
+      },
+      searchQuery: '',
+      modalOpen: false,
+      editingEntity: null,
+      formEntity: {
+        id: '',
+        name: '',
+        level: 'Municipal',
+        parent_region: '',
+        bank_account: '',
+        status: 'active'
+      },
+
+      get filteredEntities() {
+        const q = this.searchQuery.trim().toLowerCase();
+        if (!q) return this.entities;
+        return this.entities.filter(e =>
+          String(e.name || '').toLowerCase().includes(q) ||
+          String(e.level || '').toLowerCase().includes(q) ||
+          String(e.parent_region || '').toLowerCase().includes(q) ||
+          String(e.status || '').toLowerCase().includes(q)
+        );
+      },
+
+      getStatusClass(status) {
+        const s = String(status || '').toLowerCase();
+        if (['active', 'enabled', 'approved'].includes(s)) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+        if (['pending'].includes(s)) return 'bg-amber-100 text-amber-800 border-amber-200';
+        if (['suspended', 'inactive', 'disabled'].includes(s)) return 'bg-rose-100 text-rose-800 border-rose-200';
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+      },
+
+      openCreate() {
+        this.editingEntity = null;
+        this.formEntity = {
+          id: '',
+          name: '',
+          level: 'Municipal',
+          parent_region: '',
+          bank_account: '',
+          status: 'active'
+        };
+        this.modalOpen = true;
+      },
+
+      openEdit(entity) {
+        this.editingEntity = entity.id;
+        this.formEntity = {
+          id: entity.id,
+          name: entity.name || '',
+          level: entity.level || 'Municipal',
+          parent_region: entity.parent_region === '—' ? '' : (entity.parent_region || ''),
+          bank_account: entity.bank_account === 'N/A' ? '' : (entity.bank_account || ''),
+          status: entity.status || 'active'
+        };
+        this.modalOpen = true;
+      },
+
+      async saveEntity() {
+        try {
+          const isEdit = !!this.editingEntity;
+          const payload = {
+            id: this.formEntity.id,
+            name: this.formEntity.name,
+            level: this.formEntity.level,
+            parent_region: this.formEntity.parent_region,
+            bank_account: this.formEntity.bank_account,
+            status: this.formEntity.status
+          };
+
+          const res = await fetch('/national/api/entities-management', {
+            method: isEdit ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+
+          if (!data.success) {
+            alert(data.error || 'Failed to save entity');
+            return;
+          }
+
+          this.modalOpen = false;
+          await this.loadEntities();
+        } catch (e) {
+          console.error('[ERROR] Failed to save entity:', e);
+          alert('Failed to save entity');
+        }
+      },
+
+      async loadEntities() {
+        try {
+          const res = await fetch('/national/api/entities-management');
+          const data = await res.json();
+
+          if (!data.success) {
+            console.error('[ERROR] Failed to load entities:', data.error);
+            return;
+          }
+
+          this.entities = data.entities || [];
+          this.stats = data.stats || this.stats;
+          this.renderCharts();
+        } catch (e) {
+          console.error('[ERROR] Failed to fetch entities:', e);
+        }
+      },
+
+      renderCharts() {
+        const labelsType = ['Regions', 'Municipalities'];
+        const valuesType = [this.stats.regional_count || 0, this.stats.municipal_count || 0];
+
+        const statusLabels = Object.keys(this.stats.status_distribution || {});
+        const statusValues = Object.values(this.stats.status_distribution || {});
+
+        const typeCanvas = document.getElementById('typeChart');
+        const statusCanvas = document.getElementById('statusChart');
+        if (!typeCanvas || !statusCanvas) return;
+
+        if (window._typeChart) window._typeChart.destroy();
+        if (window._statusChart) window._statusChart.destroy();
+
+        const commonOptions = {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: 0 }
+        };
+
+        window._typeChart = new Chart(typeCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: labelsType,
+            datasets: [{ data: valuesType, backgroundColor: ['#1e3a8a', '#10b981'], borderWidth: 0 }]
+          },
+          options: {
+            ...commonOptions,
+            cutout: '70%',
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: { boxWidth: 8, font: { size: 8 }, padding: 10 }
+              }
+            }
+          }
+        });
+
+        const barColors = statusLabels.map((s) => {
+          const k = String(s).toLowerCase();
+          if (['active', 'enabled', 'approved'].includes(k)) return '#10b981';
+          if (['pending'].includes(k)) return '#f59e0b';
+          if (['suspended', 'inactive', 'disabled'].includes(k)) return '#f43f5e';
+          return '#94a3b8';
+        });
+
+        window._statusChart = new Chart(statusCanvas, {
+          type: 'bar',
+          data: {
+            labels: statusLabels.length ? statusLabels : ['No Data'],
+            datasets: [{
+              data: statusValues.length ? statusValues : [0],
+              backgroundColor: barColors.length ? barColors : ['#94a3b8'],
+              borderRadius: 2,
+              barPercentage: 0.6
+            }]
+          },
+          options: {
+            ...commonOptions,
+            plugins: { legend: { display: false } },
+            scales: { x: { grid: { display: false } }, y: { display: false } }
+          }
+        });
+      },
+
+      init() {
+        Chart.defaults.font.family = 'Verdana, Arial, sans-serif';
+        Chart.defaults.font.size = 9;
+        Chart.defaults.color = '#64748b';
+        this.loadEntities();
+      }
+    };
+  };
+</script>
+
+<style>
+  body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; }
+  .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
+  .chart-container { position: relative; height: 100%; width: 100%; overflow: hidden; }
+  [x-cloak] { display: none !important; }
+</style>
+</head>
+
+<body class="text-slate-800 text-xs h-screen overflow-hidden flex flex-col">
+  <div class="flex-1 flex overflow-hidden">
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'national/sidenav-national.html' %}
+    </aside>
+
+    <div class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar" x-data="entitiesManagement()" x-init="init()">
+      <header class="bg-white border border-slate-300 rounded-[2px] p-3 shadow-sm flex justify-between items-center shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center">
+            <span class="material-icons-round text-white text-[18px]">corporate_fare</span>
+          </div>
+          <div class="leading-tight">
+            <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Entity Registry</h1>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Region & Municipality Management</p>
+          </div>
+        </div>
+        <button @click="openCreate()" class="bg-blue-900 hover:bg-blue-800 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
+          <span class="material-icons-round text-[14px]">add</span> Add Entity
+        </button>
+      </header>
+
+      <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-800">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Regional Offices</p>
+          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.regional_count">0</div>
+        </div>
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-emerald-700">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Municipalities</p>
+          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.municipal_count">0</div>
+        </div>
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm bg-slate-800 text-white">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Entities</p>
+          <div class="text-lg font-black text-emerald-400 mt-0.5 leading-none" x-text="stats.total_count">0</div>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 h-[160px]">
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 shadow-sm flex flex-col h-full overflow-hidden">
+          <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">Entity Composition</h2>
+          <div class="chart-container"><canvas id="typeChart"></canvas></div>
+        </div>
+
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2 shadow-sm flex flex-col h-full overflow-hidden">
+          <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">Status Distribution</h2>
+          <div class="chart-container"><canvas id="statusChart"></canvas></div>
+        </div>
+      </section>
+
+      <section class="flex-1 min-h-[200px] bg-white rounded-[2px] border border-slate-300 shadow-sm flex flex-col overflow-hidden">
+        <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex justify-between items-center">
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
+            <span class="material-icons-round text-[14px]">format_list_bulleted</span> Entity Master List
+          </h2>
+          <div class="relative">
+            <span class="material-icons-round text-slate-400 absolute left-1.5 top-1/2 -translate-y-1/2 text-[12px]">search</span>
+            <input type="text" x-model="searchQuery" placeholder="Search entity..." class="pl-6 pr-2 py-0.5 text-[10px] font-bold border border-slate-300 rounded-[2px] w-48 bg-white outline-none focus:border-blue-800">
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-auto custom-scrollbar">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-100 border-b border-slate-300 sticky top-0 z-10">
+              <tr>
+                <th class="px-3 py-1.5 text-[9px] font-black uppercase text-slate-600 border-r border-slate-200">Entity Name</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase text-slate-600 border-r border-slate-200">Level/Type</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase text-slate-600 border-r border-slate-200">Parent Region</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase text-slate-600 border-r border-slate-200">Depository Bank</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase text-slate-600 border-r border-slate-200 text-center">Status</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase text-slate-600 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody class="text-[10px] divide-y divide-slate-100">
+              <template x-for="entity in filteredEntities" :key="entity.id">
+                <tr :class="entity.level === 'Regional' ? 'hover:bg-blue-50 transition bg-slate-50/50' : 'hover:bg-slate-50 transition'">
+                  <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 flex items-center gap-1">
+                    <template x-if="entity.level === 'Municipal'">
+                      <span class="material-icons-round text-slate-300 text-[12px]">subdirectory_arrow_right</span>
+                    </template>
+                    <span x-text="entity.name"></span>
+                  </td>
+                  <td class="px-3 py-1.5 border-r border-slate-100 font-black" :class="entity.level === 'Regional' ? 'text-blue-800' : 'text-slate-600'" x-text="entity.level"></td>
+                  <td class="px-3 py-1.5 border-r border-slate-100" x-text="entity.parent_region || '—'"></td>
+                  <td class="px-3 py-1.5 border-r border-slate-100 font-mono text-slate-600" x-text="entity.bank_account || 'N/A'"></td>
+                  <td class="px-3 py-1.5 border-r border-slate-100 text-center">
+                    <span class="px-1 py-0.5 border rounded-[2px] font-black text-[8px] uppercase" :class="getStatusClass(entity.status)" x-text="entity.status"></span>
+                  </td>
+                  <td class="px-3 py-1.5 text-center">
+                    <button @click="openEdit(entity)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
+                  </td>
+                </tr>
+              </template>
+              <template x-if="filteredEntities.length === 0">
+                <tr>
+                  <td colspan="6" class="px-3 py-4 text-center text-slate-500">No entities found</td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div x-show="modalOpen" x-cloak class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[3000]">
+        <div @click.away="modalOpen = false" class="bg-white rounded-[2px] w-full max-w-sm p-0 shadow-2xl border border-slate-400 overflow-hidden">
+          <div class="bg-slate-800 px-4 py-2 flex justify-between items-center">
+            <h3 class="text-[11px] font-black uppercase tracking-widest text-white m-0" x-text="editingEntity ? 'Edit Entity' : 'Register New Entity'"></h3>
+            <button @click="modalOpen = false" class="text-slate-400 hover:text-white">
+              <span class="material-icons-round text-[16px]">close</span>
+            </button>
+          </div>
+          <form class="p-4 space-y-3 bg-slate-50" @submit.prevent="saveEntity()">
+            <div>
+              <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Entity Level</label>
+              <select x-model="formEntity.level" :disabled="!!editingEntity" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white focus:border-blue-800 outline-none disabled:bg-slate-100 disabled:cursor-not-allowed">
+                <option value="Regional">Regional Office (Region)</option>
+                <option value="Municipal">Local Government (Municipality)</option>
+              </select>
+            </div>
+
+            <div x-show="formEntity.level === 'Municipal'" x-cloak class="bg-blue-50 border border-blue-200 p-2 rounded-[2px]">
+              <label class="block text-[9px] font-bold text-blue-800 uppercase mb-1">Assign to Parent Region</label>
+              <input type="text" x-model="formEntity.parent_region" placeholder="e.g. Region IV-A" class="w-full px-2 py-1 text-[10px] font-bold border border-blue-300 rounded-[2px] bg-white outline-none">
+            </div>
+
+            <div>
+              <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Official Name</label>
+              <input type="text" x-model="formEntity.name" required placeholder="e.g. City of Manila" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none focus:border-blue-800 uppercase">
+            </div>
+
+            <div>
+              <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Depository Bank Account</label>
+              <input type="text" x-model="formEntity.bank_account" placeholder="Format: LBP-XXXX-XXXX" class="w-full px-2 py-1.5 text-[10px] font-mono border border-slate-300 rounded-[2px] bg-white outline-none focus:border-blue-800">
+            </div>
+
+            <div x-show="!!editingEntity" x-cloak>
+              <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Status</label>
+              <select x-model="formEntity.status" class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white outline-none">
+                <option value="active">Active</option>
+                <option value="pending">Pending</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+
+            <div class="pt-2">
+              <button type="submit" class="w-full bg-blue-900 hover:bg-blue-950 text-white py-2 rounded-[2px] text-[10px] font-black uppercase shadow-sm">
+                <span x-text="editingEntity ? 'Update Entity' : 'Save Entity Record'"></span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
