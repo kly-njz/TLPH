@@ -668,3 +668,269 @@ def get_user_applications(user_id):
             'success': False,
             'message': str(e)
         }), 500
+
+
+# ==================== SUPERADMIN APPLICATION REGISTRY ====================
+
+@bp.route('/superadmin/applications', methods=['GET'])
+def superadmin_get_applications():
+    """Return all applications for superadmin master registry"""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = db.collection('applications').limit(5000).stream()
+
+        apps = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            created_at = data.get('createdAt') or data.get('dateFiled') or data.get('date_filed') or ''
+            date_filed = ''
+            if created_at:
+                if isinstance(created_at, str):
+                    try:
+                        from datetime import datetime as dt
+                        date_filed = dt.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%Y-%m-%d')
+                    except Exception:
+                        date_filed = str(created_at)[:10]
+                elif hasattr(created_at, 'strftime'):
+                    date_filed = created_at.strftime('%Y-%m-%d')
+
+            status = (data.get('status') or 'pending').lower()
+            national_status = (data.get('nationalStatus') or '').lower()
+            display_status = national_status if national_status else status
+
+            category = (data.get('category') or data.get('applicantCategory') or 'General').strip()
+            region = (data.get('region') or data.get('regionName') or 'N/A').strip()
+            municipality = (data.get('municipality') or 'N/A').strip()
+
+            apps.append({
+                'id': doc.id,
+                'ref': doc.id[:12].upper(),
+                'date': date_filed,
+                'name': (data.get('applicantName') or data.get('fullName') or data.get('name') or 'N/A').strip(),
+                'sector': category,
+                'region': region,
+                'municipality': municipality,
+                'status': display_status,
+                'regional_status': status,
+            })
+
+        apps.sort(key=lambda x: x['date'], reverse=True)
+
+        return jsonify({'success': True, 'data': apps, 'total': len(apps)})
+
+    except Exception as e:
+        print(f'[ERROR] superadmin_get_applications: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/superadmin/applications/stats', methods=['GET'])
+def superadmin_application_stats():
+    """Return KPI stats for superadmin application registry"""
+    try:
+        from firebase_config import get_firestore_db
+        from datetime import datetime as dt
+        db = get_firestore_db()
+
+        docs = db.collection('applications').limit(5000).stream()
+
+        total = 0
+        pending = 0
+        approved = 0
+        rejected = 0
+        to_review = 0
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+            total += 1
+            national_status = (data.get('nationalStatus') or '').lower()
+            status = (data.get('status') or 'pending').lower()
+            effective = national_status if national_status else status
+
+            if effective in ['approved']:
+                approved += 1
+            elif effective in ['rejected']:
+                rejected += 1
+            elif effective in ['to review', 'review']:
+                to_review += 1
+            else:
+                pending += 1
+
+        approval_rate = round((approved / total * 100), 1) if total > 0 else 0
+
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total': total,
+                'pending': pending,
+                'approved': approved,
+                'rejected': rejected,
+                'to_review': to_review,
+                'approval_rate': approval_rate,
+            }
+        })
+
+    except Exception as e:
+        print(f'[ERROR] superadmin_application_stats: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/superadmin/applications/charts', methods=['GET'])
+def superadmin_application_charts():
+    """Return chart data for superadmin application registry"""
+    try:
+        from firebase_config import get_firestore_db
+        from datetime import datetime as dt
+        from collections import defaultdict
+        import calendar
+        db = get_firestore_db()
+
+        docs = db.collection('applications').limit(5000).stream()
+
+        monthly_trend = defaultdict(int)
+        region_count = defaultdict(int)
+        category_count = defaultdict(int)
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+            created_at = data.get('createdAt') or data.get('dateFiled') or data.get('date_filed')
+            if created_at:
+                if isinstance(created_at, str):
+                    try:
+                        d = dt.fromisoformat(created_at.replace('Z', '+00:00'))
+                        monthly_trend[d.strftime('%Y-%m')] += 1
+                    except Exception:
+                        pass
+                elif hasattr(created_at, 'strftime'):
+                    monthly_trend[created_at.strftime('%Y-%m')] += 1
+
+            region = (data.get('region') or data.get('regionName') or '').strip()
+            if region:
+                region_count[region] += 1
+
+            category = (data.get('category') or data.get('applicantCategory') or 'General').strip()
+            category_count[category] += 1
+
+        # Last 8 weeks (week-by-week) trend
+        now = dt.now()
+        week_labels = []
+        week_data = []
+        weekly_trend = defaultdict(int)
+
+        docs2 = db.collection('applications').limit(5000).stream()
+        for doc in docs2:
+            data = doc.to_dict() or {}
+            created_at = data.get('createdAt') or data.get('dateFiled') or data.get('date_filed')
+            if created_at:
+                if isinstance(created_at, str):
+                    try:
+                        d = dt.fromisoformat(created_at.replace('Z', '+00:00'))
+                        iso = d.isocalendar()
+                        weekly_trend[f"{iso[0]}-W{iso[1]:02d}"] += 1
+                    except Exception:
+                        pass
+                elif hasattr(created_at, 'strftime'):
+                    iso = created_at.isocalendar()
+                    weekly_trend[f"{iso[0]}-W{iso[1]:02d}"] += 1
+
+        for i in range(7, -1, -1):
+            import datetime as dt_module
+            target = now - dt_module.timedelta(weeks=i)
+            iso = target.isocalendar()
+            key = f"{iso[0]}-W{iso[1]:02d}"
+            week_labels.append(f"W{iso[1]}")
+            week_data.append(weekly_trend.get(key, 0))
+
+        # Monthly fallback labels too
+        last_6_months = []
+        monthly_data = []
+        for i in range(5, -1, -1):
+            target_month = now.month - i
+            target_year = now.year
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+            key = f"{target_year}-{target_month:02d}"
+            last_6_months.append(calendar.month_abbr[target_month])
+            monthly_data.append(monthly_trend.get(key, 0))
+
+        top_regions = sorted(region_count.items(), key=lambda x: x[1], reverse=True)[:7]
+        top_categories = sorted(category_count.items(), key=lambda x: x[1], reverse=True)[:6]
+
+        return jsonify({
+            'success': True,
+            'trend': {'labels': week_labels, 'data': week_data},
+            'monthly': {'labels': last_6_months, 'data': monthly_data},
+            'regions': {
+                'labels': [r[0] for r in top_regions],
+                'data': [r[1] for r in top_regions],
+            },
+            'categories': {
+                'labels': [c[0] for c in top_categories],
+                'data': [c[1] for c in top_categories],
+            }
+        })
+
+    except Exception as e:
+        print(f'[ERROR] superadmin_application_charts: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/superadmin/applications/audit-trail', methods=['GET'])
+def superadmin_application_audit():
+    """Return recent audit trail entries for application registry"""
+    try:
+        from firebase_config import get_firestore_db
+        from datetime import datetime as dt
+        db = get_firestore_db()
+
+        docs = db.collection('applications') \
+                 .order_by('createdAt', direction='DESCENDING') \
+                 .limit(10) \
+                 .stream()
+
+        entries = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            created_at = data.get('createdAt') or data.get('dateFiled')
+            time_str = ''
+            if created_at:
+                if isinstance(created_at, str):
+                    try:
+                        d = dt.fromisoformat(created_at.replace('Z', '+00:00'))
+                        time_str = d.strftime('%H:%M')
+                    except Exception:
+                        time_str = str(created_at)[:5]
+                elif hasattr(created_at, 'strftime'):
+                    time_str = created_at.strftime('%H:%M')
+
+            status = (data.get('status') or 'pending').lower()
+            name = (data.get('applicantName') or data.get('fullName') or doc.id[:8].upper())
+
+            entries.append({
+                'time': time_str,
+                'ref': doc.id[:8].upper(),
+                'name': name,
+                'status': status,
+            })
+
+        return jsonify({'success': True, 'entries': entries})
+
+    except Exception as e:
+        print(f'[ERROR] superadmin_application_audit: {e}')
+        # Fallback: get latest without ordering
+        try:
+            from firebase_config import get_firestore_db
+            from datetime import datetime as dt
+            db = get_firestore_db()
+            docs = db.collection('applications').limit(10).stream()
+            entries = []
+            for doc in docs:
+                data = doc.to_dict() or {}
+                status = (data.get('status') or 'pending').lower()
+                name = (data.get('applicantName') or data.get('fullName') or doc.id[:8].upper())
+                entries.append({'time': '--:--', 'ref': doc.id[:8].upper(), 'name': name, 'status': status})
+            return jsonify({'success': True, 'entries': entries})
+        except Exception as e2:
+            return jsonify({'success': False, 'message': str(e2)}), 500

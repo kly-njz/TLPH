@@ -102,11 +102,14 @@
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-1.5 mt-2 sm:mt-0">
+                    <button onclick="exportCSV()" class="gov-btn bg-denr-green text-white hover:bg-emerald-800 shadow-sm no-print">
+                        <i class="fa-solid fa-file-csv"></i> Export
+                    </button>
                     <button onclick="window.print()" class="gov-btn bg-slate-800 text-white hover:bg-slate-900 shadow-sm">
                         <i class="fa-solid fa-print"></i> Report
                     </button>
-                    <button onclick="location.reload()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">
-                        <i class="fa-solid fa-rotate text-denr-green"></i> Sync System
+                    <button onclick="syncSystem(this)" id="syncBtn" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">
+                        <i class="fa-solid fa-rotate text-denr-green" id="syncIcon"></i> Sync System
                     </button>
                 </div>
             </header>
@@ -114,27 +117,27 @@
             <div class="grid grid-cols-3 md:grid-cols-6 gap-2 shrink-0">
                 <div class="gov-card border-t-2 border-t-denr-green p-2 text-center transition-colors hover:bg-slate-50">
                     <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">National Intake</p>
-                    <h3 class="text-[14px] font-black text-slate-900 m-0 mt-0.5">2,840</h3>
+                    <h3 class="text-[14px] font-black text-slate-900 m-0 mt-0.5" id="statTotal">{{ stats.total }}</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-gov-red p-2 text-center bg-red-50/30 transition-colors hover:bg-red-50">
-                    <p class="text-[8px] font-black text-gov-red uppercase tracking-widest m-0">SLA Breached</p>
-                    <h3 class="text-[14px] font-black text-gov-red m-0 mt-0.5">12</h3>
+                    <p class="text-[8px] font-black text-gov-red uppercase tracking-widest m-0">Pending Review</p>
+                    <h3 class="text-[14px] font-black text-gov-red m-0 mt-0.5" id="statPending">{{ stats.pending }}</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-gov-blue p-2 text-center transition-colors hover:bg-slate-50">
-                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Pending Review</p>
-                    <h3 class="text-[14px] font-black text-gov-blue m-0 mt-0.5">89</h3>
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">For Review</p>
+                    <h3 class="text-[14px] font-black text-gov-blue m-0 mt-0.5" id="statReview">{{ stats.to_review }}</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-emerald-600 p-2 text-center transition-colors hover:bg-slate-50">
-                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Apprv. Rate</p>
-                    <h3 class="text-[14px] font-black text-emerald-700 m-0 mt-0.5">92.4%</h3>
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Approved</p>
+                    <h3 class="text-[14px] font-black text-emerald-700 m-0 mt-0.5" id="statApproved">{{ stats.approved }}</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-amber-500 p-2 text-center transition-colors hover:bg-slate-50">
-                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Avg. Response</p>
-                    <h3 class="text-[14px] font-black text-amber-600 m-0 mt-0.5">3.2d</h3>
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Apprv. Rate</p>
+                    <h3 class="text-[14px] font-black text-amber-600 m-0 mt-0.5" id="statRate">{{ stats.approval_rate }}%</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-slate-800 p-2 text-center transition-colors hover:bg-slate-50">
-                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Total Personnel</p>
-                    <h3 class="text-[14px] font-black text-slate-900 m-0 mt-0.5">142</h3>
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Rejected</p>
+                    <h3 class="text-[14px] font-black text-slate-900 m-0 mt-0.5" id="statRejected">{{ stats.rejected }}</h3>
                 </div>
             </div>
 
@@ -144,7 +147,7 @@
                         <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-gov-blue pl-1.5 m-0 leading-none">Weekly Trend</h4>
                         <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-blue transition-colors">open_in_full</span>
                     </div>
-                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="trendChart"></canvas></div>
+                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="trendChart"></canvas><span id="trendChartLoading" class="absolute inset-0 flex items-center justify-center text-[8px] font-black uppercase tracking-widest text-slate-400 animate-pulse bg-white/80">Loading...</span></div>
                 </div>
 
                 <div class="col-span-1 md:col-span-3 gov-card p-2 cursor-pointer hover:border-gov-red transition-colors group relative" onclick="openChartModal('regional')">
@@ -152,7 +155,7 @@
                         <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-gov-red pl-1.5 m-0 leading-none">Regional Rank</h4>
                         <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-red transition-colors">open_in_full</span>
                     </div>
-                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="regionalChart"></canvas></div>
+                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="regionalChart"></canvas><span id="regionalChartLoading" class="absolute inset-0 flex items-center justify-center text-[8px] font-black uppercase tracking-widest text-slate-400 animate-pulse bg-white/80">Loading...</span></div>
                 </div>
 
                 <div class="col-span-1 md:col-span-2 gov-card p-2 cursor-pointer hover:border-denr-green transition-colors group relative" onclick="openChartModal('category')">
@@ -160,7 +163,7 @@
                         <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-denr-green pl-1.5 m-0 leading-none">Class</h4>
                         <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-denr-green transition-colors">open_in_full</span>
                     </div>
-                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="categoryChart"></canvas></div>
+                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="categoryChart"></canvas><span id="categoryChartLoading" class="absolute inset-0 flex items-center justify-center text-[8px] font-black uppercase tracking-widest text-slate-400 animate-pulse bg-white/80">Loading...</span></div>
                 </div>
 
                 <div class="col-span-1 md:col-span-3 bg-slate-900 text-slate-300 gov-card border-slate-800 flex flex-col h-[165px]">
@@ -168,11 +171,8 @@
                         <h4 class="text-[8px] font-black text-emerald-400 uppercase tracking-widest m-0">Live Audit Trail</h4>
                         <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_5px_#10b981]"></span>
                     </div>
-                    <div class="p-2 overflow-y-auto custom-scrollbar flex-1 font-mono text-[9px] space-y-1.5">
-                        <p class="m-0 leading-tight border-l border-slate-700 pl-2"><span class="text-blue-400">[14:02]</span> Approved PMT-X1</p>
-                        <p class="m-0 leading-tight border-l border-rose-900 pl-2 text-rose-400"><span class="text-rose-500">[13:58]</span> Flagged Incomplete Docs</p>
-                        <p class="m-0 leading-tight border-l border-emerald-900 pl-2 text-emerald-400"><span class="text-emerald-500">[13:55]</span> System Sync Completed</p>
-                        <p class="m-0 leading-tight border-l border-slate-700 pl-2"><span class="text-slate-500">[13:40]</span> New application queued</p>
+                    <div id="auditTrailList" class="p-2 overflow-y-auto custom-scrollbar flex-1 font-mono text-[9px] space-y-1.5">
+                        <p class="m-0 text-slate-500 animate-pulse">Loading audit trail...</p>
                     </div>
                 </div>
             </div>
@@ -184,7 +184,9 @@
                             <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
                             <input id="searchInput" oninput="renderTable()" class="gov-input w-full pl-6 h-7" placeholder="Search Applicant...">
                         </div>
-                        <select id="catFilter" onchange="renderTable()" class="gov-input w-full sm:w-auto cursor-pointer h-7"></select>
+                        <select id="catFilter" onchange="renderTable()" class="gov-input w-full sm:w-auto cursor-pointer h-7">
+                            <option value="all">-- ALL SECTORS --</option>
+                        </select>
                         <select id="regionFilter" onchange="renderTable()" class="gov-input w-full sm:w-auto cursor-pointer h-7">
                             <option value="all">-- ALL 17 REGIONS --</option>
                             <option value="NCR">NCR - National Capital Region</option>
@@ -205,6 +207,19 @@
                             <option value="XIII">Region XIII - Caraga</option>
                             <option value="BARMM">BARMM - Bangsamoro</option>
                         </select>
+                        <select id="statusFilter" onchange="renderTable()" class="gov-input w-full sm:w-auto cursor-pointer h-7">
+                            <option value="all">-- ALL STATUS --</option>
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="to review">For Review</option>
+                        </select>
+                        <div class="flex items-center gap-1">
+                            <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">From</span>
+                            <input type="date" id="dateFrom" onchange="renderTable()" class="gov-input h-7 cursor-pointer">
+                            <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest">To</span>
+                            <input type="date" id="dateTo" onchange="renderTable()" class="gov-input h-7 cursor-pointer">
+                        </div>
                         <button onclick="clearFilters()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 h-7 shadow-sm">
                             <i class="fa-solid fa-eraser"></i> Clear
                         </button>
@@ -229,10 +244,10 @@
                 </div>
                 
                 <div class="p-2 bg-slate-800 text-white flex justify-between items-center text-[9px] font-black uppercase tracking-widest shrink-0 no-print">
-                    <div>Live Records: <span id="resCount" class="text-amber-400">0</span></div>
+                    <div>Showing <span id="resCount" class="text-amber-400">0</span> of <span id="totalCount" class="text-emerald-400">0</span> records</div>
                     <div class="flex items-center gap-1.5 italic text-slate-400">
                         <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_4px_#10b981]"></span>
-                        Secure Admin Access • System Synced
+                        Secure Admin Access &bull; Last synced: <span id="lastSyncedTime" class="text-emerald-400 not-italic font-black">--:--</span>
                     </div>
                 </div>
             </div>
@@ -258,192 +273,352 @@
     </div>
 
     <script>
-        const APP_CATEGORIES = ["Forestry", "Biodiversity", "Lands", "Mining", "Environmental Services"];
-        const MOCK_DATA = [
-            { date: "2026-02-13", ref: "APP-2026-001", name: "MIMAROPA Dev Corp", sector: "Forestry", reg: "IV-B", status: "Pending" },
-            { date: "2026-02-12", ref: "APP-2026-002", name: "Green Foundation", sector: "Biodiversity", reg: "NCR", status: "Approved" },
-            { date: "2026-02-13", ref: "APP-2026-004", name: "Oriental Mindoro Co", sector: "Lands", reg: "IV-B", status: "To Review" },
-            { date: "2026-02-12", ref: "APP-2026-005", name: "Eco Builders Inc", sector: "Mining", reg: "III", status: "Approved" },
-            { date: "2026-02-11", ref: "APP-2026-006", name: "Oceanic Resources", sector: "Environmental", reg: "VII", status: "Rejected" }
-        ];
-
-        let myTrendChart, myRegionalChart, myCategoryChart, modalChartInstance = null;
-
-        function initCharts() {
-            const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
-
-            // 1. Trend Chart (Line)
-            myTrendChart = new Chart(document.getElementById('trendChart'), { 
-                type: 'line', 
-                data: { 
-                    labels: ['07','08','09','10','11','12','13'], 
-                    datasets: [{ data: [120, 150, 90, 210, 180, 240, 280], borderColor: '#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.1)', fill: true, tension: 0.3, borderWidth: 2 }] 
-                }, 
-                options: { 
-                    responsive: true, maintainAspectRatio: false, 
-                    plugins: { legend: { display: false } }, 
-                    scales: { x: { ticks: { font: chartFont }, grid: { display: false } }, y: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' }, beginAtZero: true } } 
-                } 
-            });
-
-            // 2. Regional Chart (Bar) - SEPARATE CONFIGURATION FIX
-            myRegionalChart = new Chart(document.getElementById('regionalChart'), { 
-                type: 'bar', 
-                data: { 
-                    labels: ['IV-B', 'III', 'NCR', 'IV-A', 'VII'], 
-                    datasets: [{ data: [840, 620, 580, 450, 350], backgroundColor: '#be123c', borderRadius: 2 }] 
-                }, 
-                options: { 
-                    indexAxis: 'y', 
-                    responsive: true, maintainAspectRatio: false, 
-                    plugins: { legend: { display: false } }, 
-                    scales: { 
-                        x: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' }, beginAtZero: true }, 
-                        y: { ticks: { font: chartFont }, grid: { display: false } } 
-                    } 
-                } 
-            });
-
-            // 3. Category Chart (Doughnut)
-            myCategoryChart = new Chart(document.getElementById('categoryChart'), { 
-                type: 'doughnut', 
-                data: { 
-                    labels: ['For', 'Bio', 'Land', 'Min'], 
-                    datasets: [{ data: [45, 25, 20, 10], backgroundColor: ['#15803d', '#1e3a8a', '#d97706', '#be123c'], borderWidth: 0 }] 
-                }, 
-                options: { 
-                    responsive: true, maintainAspectRatio: false, cutout: '75%', 
-                    plugins: { legend: { display: false } } 
-                } 
-            });
+        function showToast(msg, type = 'error') {
+            const container = document.getElementById('toastContainer');
+            const colors = type === 'success'
+                ? 'bg-emerald-900 border-emerald-500 text-emerald-100'
+                : type === 'info'
+                ? 'bg-slate-800 border-slate-500 text-slate-100'
+                : 'bg-rose-900 border-rose-500 text-rose-100';
+            const icon = type === 'success' ? 'fa-circle-check' : type === 'info' ? 'fa-circle-info' : 'fa-triangle-exclamation';
+            const el = document.createElement('div');
+            el.className = `${colors} border rounded px-3 py-2 text-[9px] font-bold uppercase tracking-widest shadow-xl flex items-center gap-2 max-w-xs transform translate-x-full transition-transform duration-300`;
+            el.innerHTML = `<i class="fa-solid ${icon}"></i><span>${msg}</span>`;
+            container.appendChild(el);
+            requestAnimationFrame(() => { el.classList.remove('translate-x-full'); });
+            setTimeout(() => { el.classList.add('translate-x-full'); setTimeout(() => el.remove(), 400); }, 4000);
         }
 
-        // --- MODAL LOGIC (FIXED REFERENCES) ---
-        function openChartModal(type) {
-            const modalWrapper = document.getElementById('chartModalWrapper');
-            const modalBody = document.getElementById('chartModalBody');
-            const modalTitle = document.getElementById('modalChartTitle');
-            
-            modalWrapper.classList.remove('hidden');
-            setTimeout(() => { modalWrapper.classList.add('flex'); modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
-            
-            if (modalChartInstance) modalChartInstance.destroy();
+        const APP_CATEGORIES = {{ categories | tojson }};
+        const APP_REGIONS = {{ regions | tojson }};
 
-            const ctx = document.getElementById('modalCanvas').getContext('2d');
-            const modalFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+        let ALL_DATA = [];
+        let myTrendChart, myRegionalChart, myCategoryChart, modalChartInstance = null;
 
-            if (type === 'trend') {
-                modalTitle.innerHTML = '<i class="fa-solid fa-chart-line text-gov-blue mr-2"></i> Weekly Trend (Detailed View)';
-                modalChartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: myTrendChart.data,
-                    options: { 
-                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
-                        plugins: { legend: { display: false } },
-                        scales: { x: { grid: {display:false}, ticks: { font: modalFont } }, y: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont }, beginAtZero: true } }
-                    }
-                });
-            } else if (type === 'regional') {
-                modalTitle.innerHTML = '<i class="fa-solid fa-chart-column text-gov-red mr-2"></i> Regional Rank (Detailed View)';
-                modalChartInstance = new Chart(ctx, {
-                    type: 'bar',
-                    data: myRegionalChart.data,
-                    options: { 
-                        indexAxis: 'y', 
-                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
-                        plugins: { legend: { display: false } },
-                        scales: { x: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont }, beginAtZero: true }, y: { grid: {display:false}, ticks: { font: modalFont } } }
-                    }
-                });
-            } else if (type === 'category') {
-                modalTitle.innerHTML = '<i class="fa-solid fa-chart-pie text-denr-green mr-2"></i> Classification Distribution (Detailed View)';
-                modalChartInstance = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: myCategoryChart.data,
-                    options: { 
-                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, 
-                        cutout: '60%', 
-                        plugins: { legend: { position: 'right', labels: {font: modalFont} } } 
-                    }
-                });
+        // ---- DATA FETCH ----
+        async function loadApplications() {
+            const body = document.getElementById('appTableBody');
+            body.innerHTML = '<tr id="loadingRow"><td colspan="6" class="py-8 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px] animate-pulse"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Loading records from Firestore...</td></tr>';
+            document.getElementById('resCount').textContent = '…';
+            document.getElementById('totalCount').textContent = '…';
+            try {
+                const res = await fetch('/api/superadmin/applications');
+                const json = await res.json();
+                if (json.success) {
+                    ALL_DATA = json.data;
+                    renderTable();
+                    const ts = document.getElementById('lastSyncedTime');
+                    if (ts) ts.textContent = new Date().toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false });
+                    showToast(`Loaded ${ALL_DATA.length} application records`, 'success');
+                } else {
+                    showTableError('Failed to load applications: ' + (json.message || 'Unknown error'));
+                    showToast('Failed to load applications: ' + (json.message || 'Unknown error'));
+                }
+            } catch (e) {
+                showTableError('Network error: ' + e.message);
+                showToast('Failed to load applications: ' + e.message);
             }
         }
 
-        function closeChartModal() {
-            const modalWrapper = document.getElementById('chartModalWrapper');
-            const modalBody = document.getElementById('chartModalBody');
-            
-            modalWrapper.classList.remove('flex');
-            modalBody.classList.remove('scale-100');
-            modalBody.classList.add('scale-95');
-            setTimeout(() => { modalWrapper.classList.add('hidden'); if(modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } }, 300);
+        function showTableError(msg) {
+            document.getElementById('appTableBody').innerHTML =
+                `<tr><td colspan="6" class="py-10 text-center text-rose-400 font-bold uppercase tracking-widest text-[9px]"><i class="fa-solid fa-triangle-exclamation mr-1"></i>${msg}</td></tr>`;
+            document.getElementById('resCount').textContent = '0';
+            document.getElementById('totalCount').textContent = '0';
         }
 
-        // --- TABLE LOGIC ---
+        // ---- TABLE RENDER ----
         function renderTable() {
             const body = document.getElementById('appTableBody');
             const search = document.getElementById('searchInput').value.toLowerCase();
             const category = document.getElementById('catFilter').value;
             const region = document.getElementById('regionFilter').value;
-            
-            const filtered = MOCK_DATA.filter(item => {
-                const matchSearch = Object.values(item).join(" ").toLowerCase().includes(search);
+            const statusV = document.getElementById('statusFilter').value;
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+
+            const filtered = ALL_DATA.filter(item => {
+                const matchSearch = Object.values(item).join(' ').toLowerCase().includes(search);
                 const matchCat = category === 'all' || item.sector === category;
-                const matchReg = region === 'all' || item.reg === region;
-                return matchSearch && matchCat && matchReg;
+                const matchReg = region === 'all' || item.region === region;
+                const matchStatus = statusV === 'all' || item.status === statusV;
+                const matchFrom = !dateFrom || item.date >= dateFrom;
+                const matchTo = !dateTo || item.date <= dateTo;
+                return matchSearch && matchCat && matchReg && matchStatus && matchFrom && matchTo;
             });
 
             body.innerHTML = '';
             document.getElementById('resCount').textContent = filtered.length;
+            document.getElementById('totalCount').textContent = ALL_DATA.length;
 
-            if(filtered.length === 0) {
-                body.innerHTML = '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No records found.</td></tr>';
+            if (filtered.length === 0) {
+                const noDataMsg = ALL_DATA.length === 0
+                    ? 'No application records found in Firestore.'
+                    : `No records match your current filters (${ALL_DATA.length} total available).`;
+                body.innerHTML = `<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]"><i class="fa-solid fa-magnifying-glass mr-1"></i>${noDataMsg}</td></tr>`;
                 return;
             }
 
             filtered.forEach(row => {
-                const statusColor = row.status === 'Approved' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 
-                                   row.status === 'Rejected' ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200';
-                
+                const s = (row.status || '').toLowerCase();
+                const statusColor = s === 'approved'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : s === 'rejected'
+                    ? 'bg-rose-50 text-rose-800 border-rose-200'
+                    : s === 'to review' || s === 'review'
+                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200';
+
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition-colors data-row";
-                
+                tr.className = 'hover:bg-slate-50 transition-colors data-row';
                 tr.innerHTML = `
-                    <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap font-bold text-[9px]">${row.date}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap font-bold text-[9px]">${row.date || 'N/A'}</td>
                     <td class="px-3 py-1.5 border-r border-slate-100">
                         <div class="font-black text-slate-900 uppercase leading-tight tracking-tight">${row.ref}</div>
                         <div class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">${row.name}</div>
                     </td>
-                    <td class="px-3 py-1.5 font-bold uppercase text-slate-700 border-r border-slate-100 tracking-widest text-[9px]">${row.sector}</td>
-                    <td class="px-3 py-1.5 font-black text-slate-800 border-r border-slate-100 whitespace-nowrap uppercase tracking-widest text-[9px]">Region ${row.reg}</td>
+                    <td class="px-3 py-1.5 font-bold uppercase text-slate-700 border-r border-slate-100 tracking-widest text-[9px]">${row.sector || 'N/A'}</td>
+                    <td class="px-3 py-1.5 font-black text-slate-800 border-r border-slate-100 whitespace-nowrap uppercase tracking-widest text-[9px]">${row.region || 'N/A'}${row.municipality && row.municipality !== 'N/A' ? '<br><span class="text-[8px] text-slate-400 font-bold">' + row.municipality + '</span>' : ''}</td>
                     <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                        <span class="status-badge ${statusColor}">${row.status}</span>
+                        <span class="status-badge ${statusColor}">${s.toUpperCase()}</span>
+                        ${row.regional_status && row.regional_status !== s ? '<br><span class="text-[7px] text-slate-400 font-bold uppercase mt-0.5 block">Regional: ' + row.regional_status + '</span>' : ''}
                     </td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <button class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">View Profile</button>
-                    </td>
-                `;
+                        <a href="/superadmin/user-application/view/${row.id}" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">View</a>
+                    </td>`;
                 body.appendChild(tr);
             });
         }
 
         function clearFilters() {
-            document.getElementById('searchInput').value = "";
-            document.getElementById('catFilter').value = "all";
-            document.getElementById('regionFilter').value = "all";
+            document.getElementById('searchInput').value = '';
+            document.getElementById('catFilter').value = 'all';
+            document.getElementById('regionFilter').value = 'all';
+            document.getElementById('statusFilter').value = 'all';
+            document.getElementById('dateFrom').value = '';
+            document.getElementById('dateTo').value = '';
             renderTable();
         }
 
-        window.onload = () => {
+        // ---- CHARTS: initialized with real API data ----
+        async function initCharts() {
+            const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+
+            // Placeholder empty charts first
+            myTrendChart = new Chart(document.getElementById('trendChart'), {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderColor: '#1e3a8a', backgroundColor: 'rgba(30,58,138,0.1)', fill: true, tension: 0.3, borderWidth: 2 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: chartFont }, grid: { display: false } }, y: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' }, beginAtZero: true } } }
+            });
+            myRegionalChart = new Chart(document.getElementById('regionalChart'), {
+                type: 'bar',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: '#be123c', borderRadius: 2 }] },
+                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' }, beginAtZero: true }, y: { ticks: { font: chartFont }, grid: { display: false } } } }
+            });
+            myCategoryChart = new Chart(document.getElementById('categoryChart'), {
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: ['#15803d','#1e3a8a','#d97706','#be123c','#0891b2','#7c3aed'], borderWidth: 0 }] },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } }
+            });
+
+            // Fetch real chart data
+            try {
+                const res = await fetch('/api/superadmin/applications/charts');
+                const json = await res.json();
+                if (json.success) {
+                    myTrendChart.data.labels = json.trend.labels;
+                    myTrendChart.data.datasets[0].data = json.trend.data;
+                    myTrendChart.update();
+
+                    myRegionalChart.data.labels = json.regions.labels;
+                    myRegionalChart.data.datasets[0].data = json.regions.data;
+                    myRegionalChart.update();
+
+                    myCategoryChart.data.labels = json.categories.labels;
+                    myCategoryChart.data.datasets[0].data = json.categories.data;
+                    myCategoryChart.update();
+
+                    // Hide loading overlays after data loads
+                    ['trendChartLoading','regionalChartLoading','categoryChartLoading'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.remove();
+                    });
+                }
+            } catch (e) {
+                console.warn('Chart API error:', e);
+                showToast('Chart data failed to load');
+                ['trendChartLoading','regionalChartLoading','categoryChartLoading'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) { el.textContent = 'No data'; el.classList.remove('animate-pulse'); el.classList.add('text-slate-300'); }
+                });
+            }
+        }
+
+        // --- MODAL LOGIC ---
+        function openChartModal(type) {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            const modalTitle = document.getElementById('modalChartTitle');
+
+            modalWrapper.classList.remove('hidden');
+            setTimeout(() => { modalWrapper.classList.add('flex'); modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
+
+            if (modalChartInstance) modalChartInstance.destroy();
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            const modalFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+
+            if (type === 'trend') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-line text-gov-blue mr-2"></i> Weekly Trend (Detailed View)';
+                modalChartInstance = new Chart(ctx, { type: 'line', data: myTrendChart.data, options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: modalFont } }, y: { grid: { color: '#e2e8f0' }, ticks: { font: modalFont }, beginAtZero: true } } } });
+            } else if (type === 'regional') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-column text-gov-red mr-2"></i> Regional Rank (Detailed View)';
+                modalChartInstance = new Chart(ctx, { type: 'bar', data: myRegionalChart.data, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#e2e8f0' }, ticks: { font: modalFont }, beginAtZero: true }, y: { grid: { display: false }, ticks: { font: modalFont } } } } });
+            } else if (type === 'category') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-pie text-denr-green mr-2"></i> Classification Distribution (Detailed View)';
+                modalChartInstance = new Chart(ctx, { type: 'doughnut', data: myCategoryChart.data, options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, cutout: '60%', plugins: { legend: { position: 'right', labels: { font: modalFont } } } } });
+            }
+        }
+
+        function exportCSV() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const category = document.getElementById('catFilter').value;
+            const region = document.getElementById('regionFilter').value;
+            const statusV = document.getElementById('statusFilter').value;
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+            const filtered = ALL_DATA.filter(item => {
+                const matchSearch = Object.values(item).join(' ').toLowerCase().includes(search);
+                const matchCat = category === 'all' || item.sector === category;
+                const matchReg = region === 'all' || item.region === region;
+                const matchStatus = statusV === 'all' || item.status === statusV;
+                const matchFrom = !dateFrom || item.date >= dateFrom;
+                const matchTo = !dateTo || item.date <= dateTo;
+                return matchSearch && matchCat && matchReg && matchStatus && matchFrom && matchTo;
+            });
+            if (!filtered.length) { showToast('No records to export', 'info'); return; }
+            const headers = ['Ref','Date','Name','Sector','Region','Municipality','Status','Regional Status'];
+            const rows = filtered.map(r => [r.ref,r.date,r.name,r.sector,r.region,r.municipality,r.status,r.regional_status].map(v => `"${(v||'').toString().replace(/"/g,'""')}"`));
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `applications_export_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(`Exported ${filtered.length} records`, 'success');
+        }
+
+        function closeChartModal() {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            modalWrapper.classList.remove('flex');
+            modalBody.classList.remove('scale-100');
+            modalBody.classList.add('scale-95');
+            setTimeout(() => { modalWrapper.classList.add('hidden'); if (modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } }, 300);
+        }
+
+        function getStatusColor(s) {
+            s = (s || '').toLowerCase();
+            if (s === 'approved') return { border: 'border-emerald-500', text: 'text-emerald-400', span: 'text-emerald-500' };
+            if (s === 'rejected') return { border: 'border-rose-800', text: 'text-rose-400', span: 'text-rose-500' };
+            if (s === 'to review' || s === 'for review') return { border: 'border-yellow-800', text: 'text-yellow-400', span: 'text-yellow-500' };
+            return { border: 'border-slate-700', text: 'text-slate-300', span: 'text-slate-500' };
+        }
+
+        async function loadAuditTrail() {
+            const list = document.getElementById('auditTrailList');
+            try {
+                const res = await fetch('/api/superadmin/applications/audit-trail');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                if (!data.length) {
+                    list.innerHTML = '<p class="m-0 text-slate-600 italic">No recent activity.</p>';
+                    return;
+                }
+                list.innerHTML = data.map(app => {
+                    const c = getStatusColor(app.status);
+                    const dt = app.date ? new Date(app.date) : null;
+                    const timeStr = dt ? dt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+                    const label = app.status ? app.status.charAt(0).toUpperCase() + app.status.slice(1) : 'Filed';
+                    const ref = (app.ref || app.id || 'APP').substring(0, 10).toUpperCase();
+                    return `<p class="m-0 leading-tight border-l ${c.border} pl-2 ${c.text}">
+                        <span class="${c.span}">[${timeStr}]</span> ${label} — ${ref} &bull; ${app.name || 'Unknown'}
+                    </p>`;
+                }).join('\n');
+            } catch (e) {
+                console.error('Audit trail fetch error:', e);
+                list.innerHTML = `<p class="m-0 text-rose-500 italic">Failed to load: ${e.message}</p>`;
+                showToast('Audit trail failed: ' + e.message);
+            }
+        }
+
+        async function syncSystem(btn) {
+            const icon = document.getElementById('syncIcon');
+            btn.disabled = true;
+            icon.classList.add('fa-spin');
+            try {
+                // Refresh stats from API
+                const statsRes = await fetch('/api/superadmin/applications/stats');
+                const statsJson = await statsRes.json();
+                if (statsJson.success) {
+                    const s = statsJson.stats;
+                    document.getElementById('statTotal').textContent = s.total;
+                    document.getElementById('statPending').textContent = s.pending;
+                    document.getElementById('statReview').textContent = s.to_review;
+                    document.getElementById('statApproved').textContent = s.approved;
+                    document.getElementById('statRate').textContent = s.approval_rate + '%';
+                    document.getElementById('statRejected').textContent = s.rejected;
+                }
+                // Refresh charts
+                const chartRes = await fetch('/api/superadmin/applications/charts');
+                const chartJson = await chartRes.json();
+                if (chartJson.success) {
+                    myTrendChart.data.labels = chartJson.trend.labels;
+                    myTrendChart.data.datasets[0].data = chartJson.trend.data;
+                    myTrendChart.update();
+                    myRegionalChart.data.labels = chartJson.regions.labels;
+                    myRegionalChart.data.datasets[0].data = chartJson.regions.data;
+                    myRegionalChart.update();
+                    myCategoryChart.data.labels = chartJson.categories.labels;
+                    myCategoryChart.data.datasets[0].data = chartJson.categories.data;
+                    myCategoryChart.update();
+                }
+                // Refresh table and audit trail
+                await Promise.all([loadApplications(), loadAuditTrail()]);
+            } catch (e) {
+                console.error('Sync error:', e);
+            } finally {
+                icon.classList.remove('fa-spin');
+                btn.disabled = false;
+                const ts = document.getElementById('lastSyncedTime');
+                if (ts) ts.textContent = new Date().toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false });
+            }
+        }
+
+        window.onload = async () => {
+            // Populate category filter from real server data
             const catFilter = document.getElementById('catFilter');
-            catFilter.innerHTML = '<option value="all">-- ALL SECTORS --</option>';
             APP_CATEGORIES.forEach(c => {
                 const opt = document.createElement('option');
                 opt.value = c; opt.textContent = c.toUpperCase(); catFilter.appendChild(opt);
             });
-            initCharts(); 
-            renderTable();
+
+            // Populate region filter with real regions
+            const regFilter = document.getElementById('regionFilter');
+            // Keep existing hardcoded options, but add any extra from server
+            APP_REGIONS.forEach(r => {
+                if (!regFilter.querySelector(`option[value="${r}"]`)) {
+                    const opt = document.createElement('option');
+                    opt.value = r; opt.textContent = r.toUpperCase();
+                    regFilter.appendChild(opt);
+                }
+            });
+
+            await Promise.all([initCharts(), loadApplications(), loadAuditTrail()]);
         };
     </script>
+    <div id="toastContainer" class="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 no-print"></div>
 </body>
 </html>
