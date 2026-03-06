@@ -1661,17 +1661,39 @@ def api_get_all_national_transactions():
             if not user_name and user_email:
                 user_name = trans_data.get('userName') or trans_data.get('email_name') or user_email.split('@')[0]
             
-            # Try to lookup from users collection
+            # Try to lookup from users collection - try multiple methods
             if user_email or user_id:
                 try:
-                    lookup_key = user_email if user_email else user_id
-                    user_doc = db.collection('users').document(lookup_key).get()
-                    if user_doc.exists:
-                        user_data = user_doc.to_dict()
-                        user_name = user_name or user_data.get('display_name') or user_data.get('firstName', '') + ' ' + user_data.get('lastName', '')
-                        user_name = user_name.strip() if user_name else user_email.split('@')[0]
+                    user_data = None
+                    
+                    # Method 1: Try document ID as email
+                    if user_email:
+                        user_doc = db.collection('users').document(user_email).get()
+                        if user_doc.exists:
+                            user_data = user_doc.to_dict()
+                            print(f'[DEBUG] Found user by document ID: {user_email}')
+                    
+                    # Method 2: Try where clause to find by email field
+                    if not user_data and user_email:
+                        user_docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+                        for doc in user_docs:
+                            user_data = doc.to_dict()
+                            print(f'[DEBUG] Found user by email field query')
+                            break
+                    
+                    # Method 3: Try document ID as user_id
+                    if not user_data and user_id:
+                        user_doc = db.collection('users').document(user_id).get()
+                        if user_doc.exists:
+                            user_data = user_doc.to_dict()
+                            print(f'[DEBUG] Found user by user_id document')
+                    
+                    # Extract name from user data
+                    if user_data:
+                        user_name = user_name or user_data.get('display_name') or user_data.get('fullName') or (user_data.get('firstName', '').strip() + ' ' + user_data.get('lastName', '').strip()).strip() or ''
+                        
                 except Exception as e:
-                    print(f'[DEBUG] Could not lookup user {lookup_key}: {e}')
+                    print(f'[DEBUG] Could not lookup user {user_email or user_id}: {e}')
             
             return user_email, user_name or 'Unknown User'
         
