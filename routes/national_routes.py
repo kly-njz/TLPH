@@ -933,6 +933,131 @@ def api_get_national_expenses():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/growth-rate', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_growth_rate():
+    """Calculate growth rate: (current deposits - previous period deposits) / previous period deposits * 100"""
+    try:
+        db = get_firestore_db()
+        from datetime import datetime, timedelta
+        
+        # Define periods (e.g., current month and previous month)
+        today = datetime.now()
+        current_month_start = datetime(today.year, today.month, 1)
+        if today.month == 1:
+            prev_month_start = datetime(today.year - 1, 12, 1)
+            prev_month_end = datetime(today.year - 1, 12, 31)
+        else:
+            prev_month_start = datetime(today.year, today.month - 1, 1)
+            prev_month_end = datetime(today.year, today.month - 1 if today.month > 1 else 12, 
+                                     28 if today.month - 1 == 2 else (30 if today.month - 1 in [4,6,9,11] else 31))
+        
+        # Helper to check if status indicates paid
+        paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
+        
+        def is_paid(status_value):
+            return str(status_value or '').strip().lower() in paid_markers
+        
+        def get_deposits_for_period(period_start, period_end):
+            """Sum deposits within period"""
+            total = 0.0
+            try:
+                # Check transactions
+                trans_docs = db.collection('transactions').stream()
+                for doc in trans_docs:
+                    trans = doc.to_dict()
+                    if trans:
+                        status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status') or ''
+                        amount = float(trans.get('amount', 0) or 0)
+                        
+                        # Get transaction date
+                        tx_date = None
+                        paid_at = trans.get('paid_at')
+                        if paid_at:
+                            if hasattr(paid_at, 'timestamp'):
+                                tx_date = datetime.fromtimestamp(paid_at.timestamp())
+                            elif isinstance(paid_at, datetime):
+                                tx_date = paid_at
+                        
+                        if tx_date and period_start <= tx_date <= period_end:
+                            paid_by_status = is_paid(status)
+                            paid_by_method = bool(trans.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'}
+                            if amount > 0 and (paid_by_status or paid_by_method):
+                                total += amount
+            except Exception as e:
+                print(f'[WARN] Error in period transactions: {e}')
+            
+            try:
+                # Check applications
+                app_docs = db.collection('applications').stream()
+                for doc in app_docs:
+                    app = doc.to_dict()
+                    if app:
+                        status = app.get('paymentStatus') or app.get('payment_status') or app.get('status') or ''
+                        amount = float(app.get('amount', 0) or 0)
+                        
+                        # Get application date
+                        app_date = None
+                        paid_at = app.get('paid_at')
+                        if paid_at:
+                            if hasattr(paid_at, 'timestamp'):
+                                app_date = datetime.fromtimestamp(paid_at.timestamp())
+                            elif isinstance(paid_at, datetime):
+                                app_date = paid_at
+                        
+                        if app_date and period_start <= app_date <= period_end:
+                            if amount > 0 and (is_paid(status) or (bool(app.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'})):
+                                total += amount
+            except Exception as e:
+                print(f'[WARN] Error in period applications: {e}')
+            
+            try:
+                # Check service requests
+                sr_docs = db.collection('service_requests').stream()
+                for doc in sr_docs:
+                    sr = doc.to_dict()
+                    if sr:
+                        status = sr.get('paymentStatus') or sr.get('payment_status') or sr.get('status') or ''
+                        amount = float(sr.get('service_fee', 0) or 0)
+                        
+                        # Get service request date
+                        sr_date = None
+                        paid_at = sr.get('paid_at')
+                        if paid_at:
+                            if hasattr(paid_at, 'timestamp'):
+                                sr_date = datetime.fromtimestamp(paid_at.timestamp())
+                            elif isinstance(paid_at, datetime):
+                                sr_date = paid_at
+                        
+                        if sr_date and period_start <= sr_date <= period_end:
+                            if amount > 0 and (is_paid(status) or (bool(sr.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'})):
+                                total += amount
+            except Exception as e:
+                print(f'[WARN] Error in period service requests: {e}')
+            
+            return total
+        
+        # Get current and previous period deposits
+        current_deposits = get_deposits_for_period(current_month_start, today)
+        previous_deposits = get_deposits_for_period(prev_month_start, prev_month_end)
+        
+        # Calculate growth rate
+        growth_rate = 0.0
+        if previous_deposits > 0:
+            growth_rate = ((current_deposits - previous_deposits) / previous_deposits) * 100
+        
+        return jsonify({
+            'success': True,
+            'growth_rate': round(growth_rate, 2),
+            'current_period': current_deposits,
+            'previous_period': previous_deposits,
+            'growth_percentage': f"{'+' if growth_rate >= 0 else ''}{round(growth_rate, 2)}%"
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to calculate growth rate: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/accounting/entities')
 @role_required('national', 'national_admin')
 def accounting_entities():
