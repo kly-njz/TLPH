@@ -774,66 +774,86 @@ def api_get_national_deposits():
         deposits_by_type = {'transactions': 0, 'applications': 0, 'service_requests': 0}
         deposit_records = []
         
+        # Helper to check if status indicates paid
+        paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
+        
+        def is_paid(status_value):
+            return str(status_value or '').strip().lower() in paid_markers
+        
         # 1. Get paid transactions
         try:
             trans_ref = db.collection('transactions')
-            trans_docs = trans_ref.where('payment_status', '==', 'Paid').stream()
+            trans_docs = trans_ref.stream()
             for doc in trans_docs:
                 trans = doc.to_dict()
                 if trans:
+                    # Check status in multiple field name variations
+                    status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status') or ''
                     amount = float(trans.get('amount', 0) or 0)
-                    total_deposits += amount
-                    deposits_by_type['transactions'] += amount
-                    deposit_records.append({
-                        'id': doc.id,
-                        'source': 'transactions',
-                        'amount': amount,
-                        'description': trans.get('description', ''),
-                        'date': trans.get('created_at'),
-                        'municipality': trans.get('municipality', 'N/A')
-                    })
+                    
+                    # Check if either status indicates paid OR payment_method is present + status not failed
+                    paid_by_status = is_paid(status)
+                    paid_by_method = bool(trans.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'}
+                    
+                    if amount > 0 and (paid_by_status or paid_by_method):
+                        total_deposits += amount
+                        deposits_by_type['transactions'] += amount
+                        deposit_records.append({
+                            'id': doc.id,
+                            'source': 'transactions',
+                            'amount': amount,
+                            'description': trans.get('description', trans.get('name', 'Transaction')),
+                            'date': trans.get('paid_at', trans.get('created_at')),
+                            'municipality': trans.get('municipality', 'N/A')
+                        })
         except Exception as e:
             print(f'[WARN] Error fetching transactions: {e}')
         
         # 2. Get paid applications
         try:
             app_ref = db.collection('applications')
-            app_docs = app_ref.where('payment_status', '==', 'Paid').stream()
+            app_docs = app_ref.stream()
             for doc in app_docs:
                 app = doc.to_dict()
                 if app:
+                    status = app.get('paymentStatus') or app.get('payment_status') or app.get('status') or ''
                     amount = float(app.get('amount', 0) or 0)
-                    total_deposits += amount
-                    deposits_by_type['applications'] += amount
-                    deposit_records.append({
-                        'id': doc.id,
-                        'source': 'applications',
-                        'amount': amount,
-                        'description': app.get('application_type', 'Application'),
-                        'date': app.get('created_at'),
-                        'municipality': app.get('municipality', 'N/A')
-                    })
+                    
+                    if amount > 0 and (is_paid(status) or (bool(app.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'})):
+                        total_deposits += amount
+                        deposits_by_type['applications'] += amount
+                        deposit_records.append({
+                            'id': doc.id,
+                            'source': 'applications',
+                            'amount': amount,
+                            'description': app.get('application_type', 'Application'),
+                            'date': app.get('paid_at', app.get('created_at')),
+                            'municipality': app.get('municipality', 'N/A')
+                        })
         except Exception as e:
             print(f'[WARN] Error fetching applications: {e}')
         
         # 3. Get paid service requests
         try:
             sr_ref = db.collection('service_requests')
-            sr_docs = sr_ref.where('payment_status', '==', 'Paid').stream()
+            sr_docs = sr_ref.stream()
             for doc in sr_docs:
                 sr = doc.to_dict()
                 if sr:
+                    status = sr.get('paymentStatus') or sr.get('payment_status') or sr.get('status') or ''
                     amount = float(sr.get('service_fee', 0) or 0)
-                    total_deposits += amount
-                    deposits_by_type['service_requests'] += amount
-                    deposit_records.append({
-                        'id': doc.id,
-                        'source': 'service_requests',
-                        'amount': amount,
-                        'description': sr.get('service_type', 'Service'),
-                        'date': sr.get('created_at'),
-                        'municipality': sr.get('municipality', 'N/A')
-                    })
+                    
+                    if amount > 0 and (is_paid(status) or (bool(sr.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'})):
+                        total_deposits += amount
+                        deposits_by_type['service_requests'] += amount
+                        deposit_records.append({
+                            'id': doc.id,
+                            'source': 'service_requests',
+                            'amount': amount,
+                            'description': sr.get('service_type', 'Service Request'),
+                            'date': sr.get('paid_at', sr.get('created_at')),
+                            'municipality': sr.get('municipality', 'N/A')
+                        })
         except Exception as e:
             print(f'[WARN] Error fetching service_requests: {e}')
         
