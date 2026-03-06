@@ -3394,3 +3394,39 @@ def api_get_coa_accounts_wrapped():
     except Exception as e:
         print(f"[ERROR] Getting COA accounts: {e}")
         return jsonify([]), 200
+
+
+# ==================== EXPENSE CATEGORIES API (Frontend-compatible) ====================
+
+@bp.route('/api/expense-categories', methods=['GET'])
+def api_get_expense_categories_wrapped():
+    """Get all expense categories (frontend-compatible endpoint)"""
+    try:
+        db = get_firestore_db()
+        
+        # Fetch ALL categories (no role check)
+        categories = []
+        try:
+            print(f"[INFO] Regional endpoint fetching ALL expense categories from Firestore...")
+            query_result = db.collection('expense_categories').stream()
+            for doc in query_result:
+                data = doc.to_dict() or {}
+                categories.append({
+                    'id': doc.id,
+                    'name': data.get('name'),
+                    'coa_code': data.get('coa_code'),
+                    'tax_type': data.get('tax_type', 'None'),
+                    'default_rate': data.get('default_rate', 0),
+                    'status': data.get('status', 'active'),
+                    'municipality': data.get('municipality')
+                })
+            print(f"[INFO] Fetched {len(categories)} expense categories from regional endpoint")
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch all expense categories: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return jsonify(categories), 200
+    except Exception as e:
+        print(f"[ERROR] Getting expense categories: {e}")
+        return jsonify([]), 200
