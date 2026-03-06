@@ -168,11 +168,8 @@
                         <h4 class="text-[8px] font-black text-emerald-400 uppercase tracking-widest m-0">Live Audit Trail</h4>
                         <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_5px_#10b981]"></span>
                     </div>
-                    <div class="p-2 overflow-y-auto custom-scrollbar flex-1 font-mono text-[9px] space-y-1.5">
-                        <p class="m-0 leading-tight border-l border-slate-700 pl-2"><span class="text-blue-400">[14:02]</span> Approved PMT-X1</p>
-                        <p class="m-0 leading-tight border-l border-rose-900 pl-2 text-rose-400"><span class="text-rose-500">[13:58]</span> Flagged Incomplete Docs</p>
-                        <p class="m-0 leading-tight border-l border-emerald-900 pl-2 text-emerald-400"><span class="text-emerald-500">[13:55]</span> System Sync Completed</p>
-                        <p class="m-0 leading-tight border-l border-slate-700 pl-2"><span class="text-slate-500">[13:40]</span> New application queued</p>
+                    <div id="auditTrailList" class="p-2 overflow-y-auto custom-scrollbar flex-1 font-mono text-[9px] space-y-1.5">
+                        <p class="m-0 text-slate-500 animate-pulse">Loading audit trail...</p>
                     </div>
                 </div>
             </div>
@@ -494,6 +491,41 @@
             modalBody.classList.remove('scale-100');
             modalBody.classList.add('scale-95');
             setTimeout(() => { modalWrapper.classList.add('hidden'); if (modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } }, 300);
+        }
+
+        function getStatusColor(s) {
+            s = (s || '').toLowerCase();
+            if (s === 'approved') return { border: 'border-emerald-500', text: 'text-emerald-400', span: 'text-emerald-500' };
+            if (s === 'rejected') return { border: 'border-rose-800', text: 'text-rose-400', span: 'text-rose-500' };
+            if (s === 'to review' || s === 'for review') return { border: 'border-yellow-800', text: 'text-yellow-400', span: 'text-yellow-500' };
+            return { border: 'border-slate-700', text: 'text-slate-300', span: 'text-slate-500' };
+        }
+
+        async function loadAuditTrail() {
+            const list = document.getElementById('auditTrailList');
+            try {
+                const res = await fetch('/api/superadmin/applications/audit-trail');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                if (!data.length) {
+                    list.innerHTML = '<p class="m-0 text-slate-600 italic">No recent activity.</p>';
+                    return;
+                }
+                list.innerHTML = data.map(app => {
+                    const c = getStatusColor(app.status);
+                    const dt = app.date ? new Date(app.date) : null;
+                    const timeStr = dt ? dt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+                    const label = app.status ? app.status.charAt(0).toUpperCase() + app.status.slice(1) : 'Filed';
+                    const ref = (app.ref || app.id || 'APP').substring(0, 10).toUpperCase();
+                    return `<p class="m-0 leading-tight border-l ${c.border} pl-2 ${c.text}">
+                        <span class="${c.span}">[${timeStr}]</span> ${label} — ${ref} &bull; ${app.name || 'Unknown'}
+                    </p>`;
+                }).join('\n');
+            } catch (e) {
+                console.error('Audit trail fetch error:', e);
+                list.innerHTML = `<p class="m-0 text-rose-500 italic">Failed to load: ${e.message}</p>`;
+            }
         }
 
         window.onload = async () => {
