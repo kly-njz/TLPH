@@ -2064,7 +2064,133 @@ def sync_municipalities():
 @bp.route('/accounting/coa-templates')
 @role_required('regional','regional_admin')
 def accounting_coa_templates_view():
-    return render_template('regional/accounting/coa-templates-regional.html')
+    db = get_firestore_db()
+    
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region)
+    
+    if not user_region:
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+        try:
+            if user_id:
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+            if not user_region and user_email:
+                docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                for doc in docs:
+                    user_data = doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+                    break
+        except Exception as e:
+            print(f"[WARN] Unable to resolve region for COA templates view: {e}")
+    
+    municipalities = []
+    try:
+        if user_region:
+            muni_doc = db.collection('municipalities').document(user_region).get()
+            if muni_doc.exists:
+                municipalities = muni_doc.to_dict().get('municipalities', []) or []
+    except Exception as e:
+        print(f"[WARN] Unable to resolve municipalities for COA view: {e}")
+    
+    return render_template('regional/accounting/coa-templates-regional.html',
+                         user_region=user_region,
+                         municipalities=municipalities)
+
+@bp.route('/api/coa/templates', methods=['GET'])
+@role_required('regional','regional_admin')
+def api_get_regional_coa_templates():
+    """Get all COA templates and accounts for municipalities in this region"""
+    db = get_firestore_db()
+    
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region)
+    
+    if not user_region:
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+        try:
+            if user_id:
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+            if not user_region and user_email:
+                docs = db.collection('users').where(filter=FieldFilter('email',  '==', user_email)).limit(1).stream()
+                for doc in docs:
+                    user_data = doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+                    break
+        except Exception as e:
+            print(f"[WARN] Unable to resolve region for COA API: {e}")
+    
+    if not user_region:
+        return jsonify({'success': False, 'error': 'Cannot determine region'}), 403
+    
+    municipalities = []
+    try:
+        muni_doc = db.collection('municipalities').document(user_region).get()
+        if muni_doc.exists:
+            municipalities = muni_doc.to_dict().get('municipalities', []) or []
+    except Exception as e:
+        print(f"[WARN] Unable to resolve municipalities: {e}")
+    
+    templates = []
+    accounts = []
+    stats = {
+        'total_templates': 0,
+        'total_accounts': 0,
+        'total_locked': 0,
+        'municipalities_count': len(municipalities)
+    }
+    
+    try:
+        all_templates = db.collection('coa_templates').limit(5000).stream()
+        
+        for doc in all_templates:
+            template = doc.to_dict() or {}
+            template_municipality = template.get('municipality', '')
+            
+            if municipalities and template_municipality in municipalities:
+                template['id'] = doc.id
+                templates.append(template)
+                stats['total_accounts'] += template.get('account_count', 0)
+                stats['total_locked'] += template.get('locked_count', 0)
+        
+        stats['total_templates'] = len(templates)
+        
+        if templates:
+            template_ids = [t['id'] for t in templates]
+            for template_id in template_ids:
+                template_accounts = db.collection('coa_accounts').where('template_id', '==', template_id).limit(1000).stream()
+                for acc_doc in template_accounts:
+                    acc = acc_doc.to_dict() or {}
+                    acc['id'] = acc_doc.id
+                    accounts.append(acc)
+    
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch COA templates: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return jsonify({
+        'success': True,
+        'region': user_region,
+        'templates': templates,
+        'accounts': accounts,
+        'stats': stats
+    }), 200
 
 @bp.route('/accounting/accounting-entities')
 @role_required('regional','regional_admin')
