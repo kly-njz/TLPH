@@ -6,9 +6,131 @@
   <title>Accounting Dashboard — National</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <script src="/static/js/ph-locations.js"></script>
+
+  <script>
+    // ============================
+    // Alpine.js Dashboard Data (must be defined before body x-data)
+    // ============================
+    window.dashboardData = function() {
+      return {
+        stats: {
+          active_entities: 0,
+          total_entities: 0
+        },
+        deposits: {
+          total: 0,
+          by_type: {}
+        },
+        expenses: {
+          total: 0
+        },
+        growth_rate: {
+          percentage: 0,
+          display_text: '—'
+        },
+
+        formatCurrency(amount) {
+          return new Intl.NumberFormat('en-PH', {
+            style: 'currency',
+            currency: 'PHP',
+            minimumFractionDigits: 2
+          }).format(amount || 0);
+        },
+
+        getDepositDisplay() {
+          return this.formatCurrency(this.deposits.total);
+        },
+
+        getExpenseDisplay() {
+          return this.formatCurrency(this.expenses.total);
+        },
+
+        getNetMovementDisplay() {
+          const netMovement = this.deposits.total - this.expenses.total;
+          return this.formatCurrency(netMovement);
+        },
+
+        getGrowthRateDisplay() {
+          return this.growth_rate.display_text;
+        },
+
+        async loadEntities() {
+          try {
+            console.log('[DEBUG] Loading national entities...');
+            const res = await fetch('/national/api/entities');
+            const data = await res.json();
+            
+            if (data.success) {
+              this.stats.active_entities = data.stats.active_entities;
+              this.stats.total_entities = data.stats.total_entities;
+              console.log(`[DEBUG] Loaded ${this.stats.active_entities} active entities`);
+            } else {
+              console.error('[ERROR] Failed to load entities:', data.error);
+            }
+          } catch (e) {
+            console.error('[ERROR] Failed to fetch entities:', e);
+          }
+        },
+
+        async loadDeposits() {
+          try {
+            console.log('[DEBUG] Loading national deposits...');
+            const res = await fetch('/national/api/deposits');
+            const data = await res.json();
+            
+            if (data.success) {
+              this.deposits.total = data.total_deposits;
+              this.deposits.by_type = data.by_type;
+              console.log(`[DEBUG] Loaded total deposits: ₱${this.deposits.total}`);
+            } else {
+              console.error('[ERROR] Failed to load deposits:', data.error);
+            }
+          } catch (e) {
+            console.error('[ERROR] Failed to fetch deposits:', e);
+          }
+        },
+
+        async loadExpenses() {
+          try {
+            console.log('[DEBUG] Loading national expenses...');
+            const res = await fetch('/national/api/expenses');
+            const data = await res.json();
+            
+            if (data.success) {
+              this.expenses.total = data.total_expenses;
+              console.log(`[DEBUG] Loaded total expenses: ₱${this.expenses.total}`);
+            } else {
+              console.error('[ERROR] Failed to load expenses:', data.error);
+            }
+          } catch (e) {
+            console.error('[ERROR] Failed to fetch expenses:', e);
+          }
+        },
+
+        async loadGrowthRate() {
+          try {
+            console.log('[DEBUG] Loading national growth rate...');
+            const res = await fetch('/national/api/growth-rate');
+            const data = await res.json();
+            
+            if (data.success) {
+              this.growth_rate.percentage = data.growth_rate;
+              this.growth_rate.display_text = data.growth_percentage;
+              console.log(`[DEBUG] Loaded growth rate: ${data.growth_percentage}`);
+            } else {
+              console.error('[ERROR] Failed to load growth rate:', data.error);
+            }
+          } catch (e) {
+            console.error('[ERROR] Failed to fetch growth rate:', e);
+          }
+        }
+      };
+    };
+  </script>
 
   <style>
     body { font-family: 'Inter', sans-serif; background:#f8fafc; }
@@ -16,10 +138,11 @@
     .custom-scrollbar::-webkit-scrollbar-track { background:#f1f5f9; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:6px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background:#94a3b8; }
+    [x-cloak] { display: none !important; }
   </style>
 </head>
 
-<body class="text-slate-800 text-xs bg-slate-50 h-screen overflow-hidden">
+<body class="text-slate-800 text-xs bg-slate-50 h-screen overflow-hidden" x-data="dashboardData()" x-init="loadEntities(); loadDeposits(); loadExpenses(); loadGrowthRate()">
 
   <div class="h-full lg:grid lg:grid-cols-[260px_1fr]">
 
@@ -91,7 +214,7 @@
               <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Entities</p>
               <span class="material-icons-round text-blue-800 text-[14px]">corporate_fare</span>
             </div>
-            <div id="kpiActiveEntities" class="mt-1 text-lg font-black text-slate-900 leading-none">47</div>
+            <div class="mt-1 text-lg font-black text-slate-900 leading-none" x-text="stats.active_entities">47</div>
             <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Reporting enabled</p>
           </div>
 
@@ -108,25 +231,25 @@
         <section class="grid grid-cols-1 md:grid-cols-4 gap-2 shrink-0">
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deposits</p>
-            <div id="kpiTotalDeposits" class="mt-1 text-lg font-black text-emerald-700 leading-none">₱ {{ finance['national']['total_deposit'] if finance['national'] else '—' }}</div>
-            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Current period</p>
+            <div class="mt-1 text-lg font-black text-emerald-700 leading-none" x-text="getDepositDisplay()">₱ 0.00</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">From all users, municipal & regional</p>
           </div>
 
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Expenses</p>
-            <div id="kpiTotalExpenses" class="mt-1 text-lg font-black text-rose-700 leading-none">₱ {{ finance['national']['total_expenses'] if finance['national'] else '—' }}</div>
-            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Current period</p>
+            <div class="mt-1 text-lg font-black text-rose-700 leading-none" x-text="getExpenseDisplay()">₱ 0.00</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Fund transfers to regions/municipalities</p>
           </div>
 
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Net Movement</p>
-            <div id="kpiNetMovement" class="mt-1 text-lg font-black text-slate-900 leading-none">₱ {{ finance['national']['net_movement'] if finance['national'] else '—' }}</div>
+            <div class="mt-1 text-lg font-black text-slate-900 leading-none" x-text="getNetMovementDisplay()">₱ 0.00</div>
             <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Deposits - Expenses</p>
           </div>
 
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Growth Rate</p>
-            <div id="kpiGrowthRate" class="mt-1 text-lg font-black text-amber-700 leading-none">{{ finance['national']['growth_rate'] if finance['national'] else '—' }}</div>
+            <div id="kpiGrowthRate" class="mt-1 text-lg font-black text-amber-700 leading-none" x-text="getGrowthRateDisplay()"></div>
             <p class="text-[9px] text-slate-500 mt-0.5 font-medium">vs previous</p>
           </div>
         </section>
@@ -240,9 +363,11 @@
                 document.getElementById('fundModal').style.display = 'flex';
                 // Debug logging
                 console.log('openFundModal called');
-                console.log('philippineLocations:', typeof philippineLocations, philippineLocations);
+                const phLocations = (typeof window !== 'undefined' && window.philippineLocations) ? window.philippineLocations : null;
+                console.log('philippineLocations:', typeof phLocations, phLocations);
                 const dropdown = document.getElementById('regionDropdown');
                 console.log('regionDropdown element:', dropdown);
+                if (!dropdown) return;
                 dropdown.innerHTML = '';
                 // Use official administrative regions
                 const adminRegions = [

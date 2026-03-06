@@ -4,6 +4,7 @@ from datetime import datetime
 import random
 from firebase_auth_middleware import firebase_auth_required
 import system_logs_storage
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -43,7 +44,7 @@ def get_user_municipality(user_id: str = None, user_email: str = None) -> str:
                     return normalized
 
         if user_email:
-            docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+            docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
             for doc in docs:
                 user_data = doc.to_dict() or {}
                 # For regional admins, use 'regional' as municipality
@@ -80,7 +81,7 @@ def get_user_region(user_id: str = None, user_email: str = None) -> str:
                     return region
 
         if user_email:
-            docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+            docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
             for doc in docs:
                 user_data = doc.to_dict() or {}
                 # Prioritize regionName (full name like MIMAROPA) over region code (like 4B)

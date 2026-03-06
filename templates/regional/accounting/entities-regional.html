@@ -38,7 +38,7 @@
     <!-- Main Column -->
     <div class="h-full flex flex-col overflow-hidden">
       <main class="flex-1 min-h-0 bg-slate-100 p-3 gap-2 overflow-y-auto custom-scrollbar flex flex-col"
-            x-data="{ modalOpen: false, newEntityType: '' }">
+            x-data="entitiesData()" x-init="loadEntities()">
 
         <!-- Header -->
         <header class="bg-white border border-slate-300 rounded-[2px] p-3 shadow-sm flex justify-between items-center shrink-0">
@@ -60,16 +60,16 @@
         <!-- KPI -->
         <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-800">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Regional Offices</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">8</div>
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Office Entities</p>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.by_type['OFFICE'] || 0">0</div>
           </div>
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-emerald-700">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Municipalities</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">42</div>
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Municipalities Covered</p>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="stats.municipalities_count || 0">0</div>
           </div>
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm bg-slate-800 text-white">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-300">Total Entities</p>
-            <div class="text-lg font-black text-emerald-300 mt-0.5 leading-none">50</div>
+            <div class="text-lg font-black text-emerald-300 mt-0.5 leading-none" x-text="stats.total || 0">0</div>
           </div>
         </section>
 
@@ -120,43 +120,37 @@
                 </tr>
               </thead>
               <tbody id="entityTable" class="text-[10px] divide-y divide-slate-100">
-                <tr class="hover:bg-blue-50 transition bg-slate-50/50">
-                  <td class="px-3 py-2 font-bold text-slate-900 border-r border-slate-100">NCR (National Capital Region)</td>
-                  <td class="px-3 py-2 text-blue-800 font-black border-r border-slate-100">REGION</td>
-                  <td class="px-3 py-2 text-slate-400 border-r border-slate-100 text-center">—</td>
-                  <td class="px-3 py-2 border-r border-slate-100 font-mono text-slate-600">LBP-1001-XXXX</td>
-                  <td class="px-3 py-2 border-r border-slate-100 text-center">
-                    <span class="px-1 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-[2px] font-black text-[8px] uppercase">Active</span>
-                  </td>
-                  <td class="px-3 py-2 text-center">
-                    <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
-                  </td>
-                </tr>
-
-                <tr class="hover:bg-slate-50 transition">
-                  <td class="px-3 py-2 font-bold pl-8 text-slate-700 border-r border-slate-100">
-                    <span class="inline-flex items-center gap-1">
-                      <span class="material-icons-round text-slate-300 text-[12px]">subdirectory_arrow_right</span>
-                      Quezon City
-                    </span>
-                  </td>
-                  <td class="px-3 py-2 border-r border-slate-100 font-bold text-slate-600">MUNICIPALITY</td>
-                  <td class="px-3 py-2 font-bold text-slate-800 border-r border-slate-100">NCR</td>
-                  <td class="px-3 py-2 border-r border-slate-100 font-mono text-slate-600">LBP-5678-XXXX</td>
-                  <td class="px-3 py-2 border-r border-slate-100 text-center">
-                    <span class="px-1 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-[2px] font-black text-[8px] uppercase">Active</span>
-                  </td>
-                  <td class="px-3 py-2 text-center">
-                    <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Edit</button>
-                  </td>
-                </tr>
+                <template x-if="filteredEntities.length === 0">
+                  <tr>
+                    <td colspan="6" class="px-3 py-8 text-center text-slate-500">
+                      <span class="material-icons-round text-[32px] text-slate-300 block mb-1">inbox</span>
+                      <span class="font-bold uppercase">No entities found in this region</span>
+                    </td>
+                  </tr>
+                </template>
+                <template x-for="entity in filteredEntities" :key="entity.id">
+                  <tr class="hover:bg-slate-50 transition">
+                    <td class="px-3 py-2 font-bold text-slate-900 border-r border-slate-100" x-text="entity.name">-</td>
+                    <td class="px-3 py-2 border-r border-slate-100">
+                      <span :class="getTypeBadge(entity.type)" x-text="entity.type">-</span>
+                    </td>
+                    <td class="px-3 py-2 font-bold text-slate-700 border-r border-slate-100" x-text="entity.municipality || '{{ user_region }}'">-</td>
+                    <td class="px-3 py-2 border-r border-slate-100 font-mono text-slate-600 text-[9px]" x-text="entity.bank_account || '—'">-</td>
+                    <td class="px-3 py-2 border-r border-slate-100 text-center">
+                      <span :class="getStatusBadge(entity.status)" x-text="entity.status">-</span>
+                    </td>
+                    <td class="px-3 py-2 text-center">
+                      <button @click="editEntity(entity)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">View</button>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
         </section>
 
         <!-- Modal -->
-        <div x-show="modalOpen" style="display:none"
+        <div x-show="modalOpen" x-cloak
           class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[3000] p-3">
           <div @click.away="modalOpen=false"
             class="bg-white rounded-[2px] w-full max-w-sm p-0 shadow-2xl border border-slate-400 overflow-hidden">
@@ -170,7 +164,7 @@
             <form class="p-4 space-y-3 bg-slate-50">
               <div>
                 <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Entity Level</label>
-                <select x-model="newEntityType"
+                <select x-model="newEntityType" title="Entity Level"
                   class="w-full px-2 py-1.5 text-[10px] font-bold border border-slate-300 rounded-[2px] bg-white focus:border-blue-800 outline-none">
                   <option value="" disabled selected>Select Administrative Level...</option>
                   <option value="Region">Regional Office (Region)</option>
@@ -178,10 +172,10 @@
                 </select>
               </div>
 
-              <div x-show="newEntityType==='Municipality'" style="display:none"
+              <div x-show="newEntityType==='Municipality'" x-cloak
                 class="bg-blue-50 border border-blue-200 p-2 rounded-[2px]">
                 <label class="block text-[9px] font-bold text-blue-800 uppercase mb-1">Assign to Parent Region</label>
-                <select class="w-full px-2 py-1 text-[10px] font-bold border border-blue-300 rounded-[2px] bg-white outline-none">
+                <select title="Parent Region" class="w-full px-2 py-1 text-[10px] font-bold border border-blue-300 rounded-[2px] bg-white outline-none">
                   <option>NCR</option>
                   <option>Region IV-A</option>
                 </select>
@@ -214,64 +208,145 @@
   </div>
 
 <script>
-  // Search Logic
-  document.getElementById('searchInput').addEventListener('input', function(){
-    const value = this.value.toLowerCase();
-    document.querySelectorAll('#entityTable tr').forEach(row => {
-      row.style.display = row.innerText.toLowerCase().includes(value) ? '' : 'none';
-    });
-  });
+  function entitiesData() {
+    return {
+      entities: [],
+      searchTerm: '',
+      modalOpen: false,
+      newEntityType: '',
+      stats: {
+        total: 0,
+        by_type: {},
+        by_status: {},
+        municipalities_count: 0
+      },
 
-  // Chart.js Defaults
-  Chart.defaults.font.family = "Verdana, Arial, sans-serif";
-  Chart.defaults.font.size = 9;
-  Chart.defaults.color = "#64748b";
+      get filteredEntities() {
+        if (!this.searchTerm) return this.entities;
+        const term = this.searchTerm.toLowerCase();
+        return this.entities.filter(e => 
+          (e.name || '').toLowerCase().includes(term) ||
+          (e.type || '').toLowerCase().includes(term) ||
+          (e.municipality || '').toLowerCase().includes(term)
+        );
+      },
 
-  const chartConfig = {
-    responsive: true,
-    maintainAspectRatio: false,
-    layout: { padding: 0 }
-  };
+      async loadEntities() {
+        try {
+          console.log('[DEBUG] Loading entities...');
+          const res = await fetch('/regional/api/entities');
+          const data = await res.json();
+          
+          if (data.success) {
+            this.entities = data.entities || [];
+            this.stats = data.stats || this.stats;
+            console.log(`[DEBUG] Loaded ${this.entities.length} entities`);
+            this.$nextTick(() => this.updateCharts());
+          } else {
+            console.error('[ERROR] Failed to load entities:', data.error);
+          }
+        } catch (e) {
+          console.error('[ERROR] Failed to fetch entities:', e);
+        }
+      },
 
-  // 1) Composition
-  new Chart(document.getElementById('typeChart'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Regions', 'Municipalities'],
-      datasets: [{
-        data: [8, 42],
-        backgroundColor: ['#1e3a8a', '#10b981'],
-        borderWidth: 0
-      }]
-    },
-    options: {
-      ...chartConfig,
-      cutout: '70%',
-      plugins: {
-        legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8 }, padding: 10 } }
+      updateCharts() {
+        Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+        Chart.defaults.font.size = 9;
+        Chart.defaults.color = "#64748b";
+        const chartConfig = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 } };
+
+        // Type composition
+        const typeLabels = Object.keys(this.stats.by_type);
+        const typeData = Object.values(this.stats.by_type);
+        const typeColors = ['#1e3a8a', '#10b981', '#f59e0b', '#8b5cf6'];
+
+        const typeCtx = document.getElementById('typeChart');
+        if (typeCtx) {
+          if (window.typeChartInstance) window.typeChartInstance.destroy();
+          window.typeChartInstance = new Chart(typeCtx, {
+            type: 'doughnut',
+            data: {
+              labels: typeLabels.length ? typeLabels : ['No Data'],
+              datasets: [{
+                data: typeData.length ? typeData : [1],
+                backgroundColor: typeLabels.length ? typeColors.slice(0, typeLabels.length) : ['#cbd5e1'],
+                borderWidth: 0
+              }]
+            },
+            options: {
+              ...chartConfig,
+              cutout: '70%',
+              plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8 }, padding: 10 } } }
+            }
+          });
+        }
+
+        // Status distribution
+        const statusLabels = Object.keys(this.stats.by_status);
+        const statusData = Object.values(this.stats.by_status);
+        const statusColors = { 'ACTIVE': '#10b981', 'INACTIVE': '#f43f5e', 'PENDING': '#f59e0b' };
+        const statusBgColors = statusLabels.map(s => statusColors[s] || '#94a3b8');
+
+        const statusCtx = document.getElementById('statusChart');
+        if (statusCtx) {
+          if (window.statusChartInstance) window.statusChartInstance.destroy();
+          window.statusChartInstance = new Chart(statusCtx, {
+            type: 'bar',
+            data: {
+              labels: statusLabels.length ? statusLabels : ['No Data'],
+              datasets: [{
+                data: statusData.length ? statusData : [0],
+                backgroundColor: statusLabels.length ? statusBgColors : ['#cbd5e1'],
+                borderRadius: 2,
+                barPercentage: 0.6
+              }]
+            },
+            options: {
+              ...chartConfig,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { display: false } },
+                y: { display: false }
+              }
+            }
+          });
+        }
+      },
+
+      getTypeBadge(type) {
+        const badges = {
+          'OFFICE': 'px-1 py-0.5 bg-blue-100 text-blue-800 border border-blue-200 rounded-[2px] font-black text-[8px] uppercase',
+          'UNIT': 'px-1 py-0.5 bg-purple-100 text-purple-800 border border-purple-200 rounded-[2px] font-black text-[8px] uppercase',
+          'BANK': 'px-1 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-[2px] font-black text-[8px] uppercase'
+        };
+        return badges[type] || badges['OFFICE'];
+      },
+
+      getStatusBadge(status) {
+        const badges = {
+          'ACTIVE': 'px-1 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-[2px] font-black text-[8px] uppercase',
+          'INACTIVE': 'px-1 py-0.5 bg-red-100 text-red-800 border border-red-200 rounded-[2px] font-black text-[8px] uppercase',
+          'PENDING': 'px-1 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 rounded-[2px] font-black text-[8px] uppercase'
+        };
+        return badges[status] || badges['ACTIVE'];
+      },
+
+      editEntity(entity) {
+        console.log('[DEBUG] View entity:', entity);
+        alert(`Entity: ${entity.name}\nType: ${entity.type}\nMunicipality: ${entity.municipality}`);
       }
-    }
-  });
+    };
+  }
 
-  // 2) Status
-  new Chart(document.getElementById('statusChart'), {
-    type: 'bar',
-    data: {
-      labels: ['Active', 'Suspended', 'Pending'],
-      datasets: [{
-        data: [48, 1, 1],
-        backgroundColor: ['#10b981', '#f43f5e', '#f59e0b'],
-        borderRadius: 2,
-        barPercentage: 0.6
-      }]
-    },
-    options: {
-      ...chartConfig,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { display: false } },
-        y: { display: false }
-      }
+  // Search input binding
+  document.addEventListener('alpine:init', () => {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+      searchInput.addEventListener('input', function(e) {
+        const app = Alpine.$data(document.querySelector('[x-data]'));
+        if (app) app.searchTerm = e.target.value;
+      });
     }
   });
 </script>

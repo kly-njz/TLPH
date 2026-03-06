@@ -7,6 +7,7 @@
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <!-- Icons + Font -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
@@ -30,10 +31,11 @@
 
     /* Small badge */
     .badge { font-size: 0.62rem; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; padding: .2rem .45rem; border-radius: 2px; border: 1px solid; }
+    [x-cloak] { display: none !important; }
   </style>
 </head>
 
-<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col" x-data="coaData()" x-init="loadTemplates()">
 
   <!-- ✅ Layout wrapper -->
   <div class="h-full lg:grid lg:grid-cols-[260px_1fr]">
@@ -71,11 +73,11 @@
             </span>
 
             <div class="flex gap-2 ml-2">
-              <button type="button" onclick="openTemplateModal()"
+              <button type="button" @click="templateModalOpen = true"
                 class="gov-btn bg-blue-800 text-white hover:bg-blue-900 flex items-center gap-1">
                 <span class="material-icons-round text-[14px]">add</span> Create
               </button>
-              <button type="button" onclick="exportTemplate()"
+              <button type="button" @click="exportTemplate()"
                 class="gov-btn border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1">
                 <span class="material-icons-round text-[14px]">download</span> Export
               </button>
@@ -90,30 +92,28 @@
               <span class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Templates</span>
               <span class="material-icons-round text-slate-300 text-[16px]">layers</span>
             </div>
-            <div class="text-lg font-black text-slate-800 mt-0.5" id="statTemplates">{{ stat_templates|default(0) }}</div>
+            <div class="text-lg font-black text-slate-800 mt-0.5" x-text="stats.total_templates">0</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
             <div class="flex items-center justify-between">
               <span class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Accounts</span>
               <span class="material-icons-round text-blue-200 text-[16px]">format_list_numbered</span>
             </div>
-            <div class="text-lg font-black text-blue-700 mt-0.5" id="statAccounts">{{ stat_accounts|default(0) }}</div>
+            <div class="text-lg font-black text-blue-700 mt-0.5" x-text="stats.total_accounts">0</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600">
             <div class="flex items-center justify-between">
               <span class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Locked</span>
               <span class="material-icons-round text-rose-200 text-[16px]">lock</span>
             </div>
-            <div class="text-lg font-black text-rose-700 mt-0.5" id="statLocked">{{ stat_locked|default(0) }}</div>
+            <div class="text-lg font-black text-rose-700 mt-0.5" x-text="stats.total_locked">0</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
             <div class="flex items-center justify-between">
               <span class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Municipalities</span>
               <span class="material-icons-round text-emerald-200 text-[16px]">domain</span>
             </div>
-            <div class="text-lg font-black text-emerald-700 mt-0.5" id="statEntities">
-              {{ stat_municipalities|default(0) }}
-            </div>
+            <div class="text-lg font-black text-emerald-700 mt-0.5" x-text="stats.municipalities_count">0</div>
           </div>
         </section>
 
@@ -128,7 +128,7 @@
               </span>
 
               <!-- Optional municipality filter -->
-              <select id="municipalityFilter" class="gov-input bg-white text-[10px]" title="Filter templates by municipality">
+              <select x-model="municipalityFilter" @change="applyFilters()" class="gov-input bg-white text-[10px]" title="Filter templates by municipality">
                 <option value="">All Municipalities</option>
                 {% for m in municipalities %}
                   <option value="{{ m|lower }}">{{ m }}</option>
@@ -137,7 +137,7 @@
             </div>
 
             <div class="p-2 border-b border-slate-100 shrink-0">
-              <input id="templateSearch" type="text" placeholder="Search..." class="gov-input w-full bg-slate-50">
+              <input x-model="templateSearch" @input="applyFilters()" type="text" placeholder="Search..." class="gov-input w-full bg-slate-50">
             </div>
 
             <!-- ✅ IMPORTANT:
@@ -145,49 +145,35 @@
                  data-region="REGION X"
                  data-municipality="municipality name or '' for regional-wide"
             -->
-            <div id="templateList" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 space-y-2">
-              {% for t in coa_templates %}
-              <button type="button"
-                class="w-full text-left border border-slate-200 bg-white rounded-[2px] p-2 hover:bg-slate-50 transition template-item"
-                data-template-id="{{ t.id }}"
-                data-region="{{ t.region|lower }}"
-                data-municipality="{{ (t.municipality or '')|lower }}"
-                onclick="selectTemplate('{{ t.id }}')">
+            <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 space-y-2">
+              <template x-if="filteredTemplates.length === 0">
+                <div class="text-center py-8 text-slate-500 text-[10px] font-bold uppercase">
+                  <span class="material-icons-round text-[32px] text-slate-300 block mb-1">inbox</span>
+                  No templates found in this region
+                </div>
+              </template>
+              <template x-for="t in filteredTemplates" :key="t.id">
+              <button type="button" @click="selectTemplate(t.id)"
+                class="w-full text-left border border-slate-200 bg-white rounded-[2px] p-2 hover:bg-slate-50 transition"
+                :class="{ 'ring-2 ring-blue-500': selectedTemplateId === t.id }">
                 <div class="flex justify-between items-start">
                   <div>
-                    <div class="text-[11px] font-black text-slate-700 uppercase">{{ t.name }}</div>
-                    <div class="text-[9px] text-slate-500 font-medium mt-0.5">
-                      {{ t.description or 'Regional template' }}
-                    </div>
+                    <div class="text-[11px] font-black text-slate-700 uppercase" x-text="t.name">-</div>
+                    <div class="text-[9px] text-slate-500 font-medium mt-0.5" x-text="t.description || 'Regional template'">-</div>
 
                     <div class="mt-1 flex gap-1 flex-wrap">
-                      <span class="badge bg-blue-50 text-blue-800 border-blue-200">
-                        {{ t.region }}
-                      </span>
-                      {% if t.municipality %}
-                        <span class="badge bg-emerald-50 text-emerald-800 border-emerald-200">
-                          {{ t.municipality }}
-                        </span>
-                      {% else %}
-                        <span class="badge bg-slate-100 text-slate-600 border-slate-200">
-                          All Municipalities
-                        </span>
-                      {% endif %}
+                      <span class="badge bg-emerald-50 text-emerald-800 border-emerald-200" x-text="t.municipality || 'All Municipalities'">-</span>
                     </div>
                   </div>
 
-                  {% if t.is_active %}
-                    <span class="badge bg-blue-700 text-white border-blue-700">Active</span>
-                  {% else %}
-                    <span class="badge bg-slate-200 text-slate-600 border-slate-200">Inactive</span>
-                  {% endif %}
+                  <span :class="t.status === 'active' ? 'badge bg-blue-700 text-white border-blue-700' : 'badge bg-slate-200 text-slate-600 border-slate-200'" x-text="t.status === 'active' ? 'Active' : 'Inactive'">-</span>
                 </div>
 
                 <div class="flex gap-2 mt-2 text-[9px] text-slate-600 font-mono">
-                  <span><b>{{ t.accounts_count }}</b> Accts</span> • <span><b>{{ t.locked_count }}</b> Locked</span>
+                  <span><b x-text="t.account_count || 0">0</b> Accts</span> • <span><b x-text="t.locked_count || 0">0</b> Locked</span>
                 </div>
               </button>
-              {% endfor %}
+              </template>
             </div>
           </aside>
 
@@ -197,9 +183,7 @@
               <div>
                 <span class="text-[10px] font-black uppercase text-slate-600 tracking-widest">
                   Accounts:
-                  <span id="selectedTemplateName" class="text-blue-700">
-                    {{ selected_template_name|default('Select a template') }}
-                  </span>
+                  <span class="text-blue-700" x-text="selectedTemplateName">Select a template</span>
                 </span>
                 <div class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
                   Region scope enforced: <span class="text-blue-700">{{ user_region|default('') }}</span>
@@ -207,8 +191,8 @@
               </div>
 
               <div class="flex flex-wrap gap-1.5 items-center">
-                <input id="accountSearch" type="text" placeholder="Search code/name..." class="gov-input w-36 bg-white">
-                <select id="typeFilter" class="gov-input bg-white">
+                <input x-model="accountSearch" @input="applyAccountFilters()" type="text" placeholder="Search code/name..." class="gov-input w-36 bg-white">
+                <select x-model="typeFilter" @change="applyAccountFilters()" class="gov-input bg-white" title="Account Type">
                   <option value="">All Types</option>
                   <option value="asset">Asset</option>
                   <option value="liability">Liability</option>
@@ -216,12 +200,12 @@
                   <option value="income">Income</option>
                   <option value="expense">Expense</option>
                 </select>
-                <select id="statusFilter" class="gov-input bg-white">
+                <select x-model="statusFilter" @change="applyAccountFilters()" class="gov-input bg-white" title="Status">
                   <option value="">All Status</option>
                   <option value="locked">Locked</option>
                   <option value="editable">Editable</option>
                 </select>
-                <button type="button" onclick="openAccountModal()"
+                <button type="button" @click="openAccountModal()"
                   class="gov-btn bg-emerald-700 text-white hover:bg-emerald-800 flex items-center gap-1">
                   <span class="material-icons-round text-[12px]">add</span> Add
                 </button>
@@ -246,31 +230,27 @@
                      data-region="..."
                      data-municipality="..." (if municipality-scoped template/account)
                 -->
-                <tbody id="accountTable" class="text-[10px]">
-                  {% for a in coa_accounts %}
-                  <tr class="hover:bg-slate-50 border-b border-slate-100 account-row"
-                      data-template-id="{{ a.template_id }}"
-                      data-region="{{ a.region|lower }}"
-                      data-municipality="{{ (a.municipality or '')|lower }}"
-                      data-type="{{ a.type|lower }}"
-                      data-status="{{ 'locked' if a.locked else 'editable' }}">
-                    <td class="font-mono font-bold text-slate-700">{{ a.code }}</td>
-                    <td class="font-bold text-slate-900">{{ a.name }}</td>
+                <tbody class="text-[10px]">
+                  <template x-if="filteredAccounts.length === 0">
+                    <tr>
+                      <td colspan="5" class="text-center py-8 text-slate-500 font-bold uppercase">
+                        <span class="material-icons-round text-[32px] text-slate-300 block mb-1">deployed_code</span>
+                        Select a template to view accounts
+                      </td>
+                    </tr>
+                  </template>
+                  <template x-for="a in filteredAccounts" :key="a.id">
+                  <tr class="hover:bg-slate-50 border-b border-slate-100">
+                    <td class="font-mono font-bold text-slate-700" x-text="a.code">-</td>
+                    <td class="font-bold text-slate-900" x-text="a.name">-</td>
                     <td>
-                      <span class="px-1.5 py-0.5 rounded-[2px] bg-slate-50 text-slate-600 border border-slate-200 font-bold text-[9px] uppercase">
-                        {{ a.type }}
-                      </span>
+                      <span class="px-1.5 py-0.5 rounded-[2px] bg-slate-50 text-slate-600 border border-slate-200 font-bold text-[9px] uppercase" x-text="a.account_type">-</span>
                     </td>
                     <td>
-                      {% if a.locked %}
-                        <span class="px-1.5 py-0.5 rounded-[2px] bg-slate-100 text-slate-600 border border-slate-200 font-bold text-[9px] uppercase inline-flex items-center gap-1">
-                          <span class="material-icons-round text-[10px]">lock</span> Locked
-                        </span>
-                      {% else %}
-                        <span class="px-1.5 py-0.5 rounded-[2px] bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold text-[9px] uppercase">
-                          Editable
-                        </span>
-                      {% endif %}
+                      <span :class="a.locked ? 'px-1.5 py-0.5 rounded-[2px] bg-slate-100 text-slate-600 border border-slate-200 font-bold text-[9px] uppercase' : 'px-1.5 py-0.5 rounded-[2px] bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold text-[9px] uppercase'">
+                        <span x-show="a.locked" class="material-icons-round text-[10px]">lock</span>
+                        <span x-text="a.locked ? 'Locked' : 'Editable'">-</span>
+                      </span>
                     </td>
                     <td class="text-center">
                       <button type="button" class="text-slate-400 hover:text-blue-700 transition">
@@ -278,14 +258,14 @@
                       </button>
                     </td>
                   </tr>
-                  {% endfor %}
+                  </template>
                 </tbody>
               </table>
             </div>
 
             <div class="p-2 border-t border-slate-200 bg-slate-50 flex justify-between items-center text-[9px] text-slate-500 shrink-0">
-              <span>Showing matching records (region scoped)</span>
-              <button type="button" onclick="resetAccountFilters()" class="hover:text-blue-700 font-bold uppercase">
+              <span>Showing <span x-text="filteredAccounts.length"></span> of <span x-text="selectedTemplateAccounts.length"></span> accounts</span>
+              <button type="button" @click="resetAccountFilters()" class="hover:text-blue-700 font-bold uppercase">
                 Reset Filters
               </button>
             </div>
@@ -298,11 +278,11 @@
   </div>
 
   <!-- Template Modal -->
-  <div id="templateModal" class="hidden fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div x-show="templateModalOpen" x-cloak class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-[2px] shadow-xl w-full max-w-md border border-slate-300 overflow-hidden">
       <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
         <h3 class="text-xs font-black uppercase text-slate-700">New Template (Regional)</h3>
-        <button type="button" onclick="closeTemplateModal()" class="text-slate-400 hover:text-rose-600">
+        <button type="button" @click="templateModalOpen = false" class="text-slate-400 hover:text-rose-600">
           <span class="material-icons-round text-sm">close</span>
         </button>
       </div>
@@ -313,18 +293,17 @@
         </div>
         <div>
           <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Description</label>
-          <textarea class="gov-input w-full" rows="2"></textarea>
+          <textarea class="gov-input w-full" rows="2" placeholder="Template description" title="Template Description"></textarea>
         </div>
 
-        <!-- ✅ Region fixed + Municipality optional -->
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Region</label>
-            <input type="text" class="gov-input w-full bg-slate-50" value="{{ user_region|default('') }}" readonly>
+            <input type="text" class="gov-input w-full bg-slate-50" value="{{ user_region|default('') }}" readonly title="Region (Fixed)">
           </div>
           <div>
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Municipality</label>
-            <select class="gov-input w-full bg-white">
+            <select class="gov-input w-full bg-white" title="Municipality">
               <option value="">All Municipalities</option>
               {% for m in municipalities %}
                 <option value="{{ m }}">{{ m }}</option>
@@ -334,7 +313,7 @@
         </div>
 
         <div class="flex justify-end gap-2 pt-2">
-          <button type="button" onclick="closeTemplateModal()"
+          <button type="button" @click="templateModalOpen = false"
             class="gov-btn border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
           <button type="button" class="gov-btn bg-blue-800 text-white hover:bg-blue-900">Save</button>
         </div>
@@ -343,11 +322,11 @@
   </div>
 
   <!-- Account Modal -->
-  <div id="accountModal" class="hidden fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div x-show="accountModalOpen" x-cloak class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-[2px] shadow-xl w-full max-w-md border border-slate-300 overflow-hidden">
       <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
         <h3 class="text-xs font-black uppercase text-slate-700">Add Account</h3>
-        <button type="button" onclick="closeAccountModal()" class="text-slate-400 hover:text-rose-600">
+        <button type="button" @click="accountModalOpen = false" class="text-slate-400 hover:text-rose-600">
           <span class="material-icons-round text-sm">close</span>
         </button>
       </div>
@@ -359,7 +338,7 @@
           </div>
           <div class="col-span-2">
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Type</label>
-            <select class="gov-input w-full bg-white">
+            <select class="gov-input w-full bg-white" title="Account Type">
               <option>Asset</option><option>Liability</option><option>Equity</option><option>Income</option><option>Expense</option>
             </select>
           </div>
@@ -373,11 +352,11 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Region</label>
-            <input type="text" class="gov-input w-full bg-slate-50" value="{{ user_region|default('') }}" readonly>
+            <input type="text" class="gov-input w-full bg-slate-50" value="{{ user_region|default('') }}" readonly title="Region (Fixed)">
           </div>
           <div>
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Municipality (Optional)</label>
-            <select class="gov-input w-full bg-white">
+            <select class="gov-input w-full bg-white" title="Municipality">
               <option value="">All Municipalities</option>
               {% for m in municipalities %}
                 <option value="{{ m }}">{{ m }}</option>
@@ -392,7 +371,7 @@
         </div>
 
         <div class="flex justify-end gap-2 pt-2">
-          <button type="button" onclick="closeAccountModal()"
+          <button type="button" @click="accountModalOpen = false"
             class="gov-btn border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
           <button type="button" class="gov-btn bg-blue-800 text-white hover:bg-blue-900">Save</button>
         </div>
@@ -401,130 +380,121 @@
   </div>
 
   <script>
-    // ============================
-    // Region Scope (Injected)
-    // ============================
-    // ✅ This page is intended to show ONLY templates/accounts where:
-    //   item.region == user_region
-    // AND (if municipality filter used):
-    //   item.municipality == selectedMunicipality OR item.municipality == ""
-    //
-    // IMPORTANT: This is UI filtering only — enforce region access in backend/security rules too.
-    const USER_REGION = ("{{ user_region|default('') }}").trim().toLowerCase();
+    function coaData() {
+      return {
+        templates: [],
+        accounts: [],
+        stats: {
+          total_templates: 0,
+          total_accounts: 0,
+          total_locked: 0,
+          municipalities_count: 0
+        },
+        templateSearch: '',
+        municipalityFilter: '',
+        accountSearch: '',
+        typeFilter: '',
+        statusFilter: '',
+        selectedTemplateId: null,
+        templateModalOpen: false,
+        accountModalOpen: false,
 
-    // Modals
-    function openTemplateModal(){ document.getElementById('templateModal').classList.remove('hidden'); }
-    function closeTemplateModal(){ document.getElementById('templateModal').classList.add('hidden'); }
-    function openAccountModal(){ document.getElementById('accountModal').classList.remove('hidden'); }
-    function closeAccountModal(){ document.getElementById('accountModal').classList.add('hidden'); }
+        get filteredTemplates() {
+          let filtered = this.templates;
+          if (this.templateSearch) {
+            const term = this.templateSearch.toLowerCase();
+            filtered = filtered.filter(t => 
+              (t.name || '').toLowerCase().includes(term) ||
+              (t.description || '').toLowerCase().includes(term)
+            );
+          }
+          if (this.municipalityFilter) {
+            filtered = filtered.filter(t => 
+              !t.municipality || t.municipality.toLowerCase() === this.municipalityFilter.toLowerCase()
+            );
+          }
+          return filtered;
+        },
 
-    // Demo Export
-    function exportTemplate(){ alert('Export (demo)'); }
+        get selectedTemplateName() {
+          const selected = this.templates.find(t => t.id === this.selectedTemplateId);
+          return selected ? selected.name : 'Select a template';
+        },
 
-    // Select template => shows accounts of that template (still region-scoped)
-    function selectTemplate(templateId){
-      const btn = document.querySelector(`.template-item[data-template-id="${templateId}"]`);
-      if (!btn) return;
+        get selectedTemplateAccounts() {
+          if (!this.selectedTemplateId) return [];
+          return this.accounts.filter(a => a.template_id === this.selectedTemplateId);
+        },
 
-      const templateName = btn.querySelector('.text-[11px]')?.innerText || 'Selected Template';
-      document.getElementById('selectedTemplateName').textContent = templateName;
+        get filteredAccounts() {
+          let filtered = this.selectedTemplateAccounts;
+          if (this.accountSearch) {
+            const term = this.accountSearch.toLowerCase();
+            filtered = filtered.filter(a => 
+              (a.code || '').toLowerCase().includes(term) ||
+              (a.name || '').toLowerCase().includes(term)
+            );
+          }
+          if (this.typeFilter) {
+            filtered = filtered.filter(a => (a.account_type || '').toLowerCase() === (this.typeFilter || '').toLowerCase());
+          }
+          if (this.statusFilter) {
+            if (this.statusFilter === 'locked') {
+              filtered = filtered.filter(a => a.locked);
+            } else if (this.statusFilter === 'editable') {
+              filtered = filtered.filter(a => !a.locked);
+            }
+          }
+          return filtered;
+        },
 
-      // show only account rows for this template
-      document.querySelectorAll('#accountTable .account-row').forEach(tr => {
-        tr.dataset.activeTemplate = (tr.getAttribute('data-template-id') === templateId) ? "1" : "0";
-      });
+        async loadTemplates() {
+          try {
+            console.log('[DEBUG] Loading COA templates...');
+            const res = await fetch('/regional/api/coa/templates');
+            const data = await res.json();
+            
+            if (data.success) {
+              this.templates = data.templates || [];
+              this.accounts = data.accounts || [];
+              this.stats = data.stats || this.stats;
+              console.log(`[DEBUG] Loaded ${this.templates.length} templates, ${this.accounts.length} accounts`);
+            } else {
+              console.error('[ERROR] Failed to load templates:', data.error);
+            }
+          } catch (e) {
+            console.error('[ERROR] Failed to fetch templates:', e);
+          }
+        },
 
-      applyAccountFilters(); // re-filter
-    }
+        selectTemplate(templateId) {
+          this.selectedTemplateId = templateId;
+          console.log('[DEBUG] Selected template:', templateId);
+        },
 
-    // Template search + region + municipality filter
-    const templateSearch = document.getElementById('templateSearch');
-    const municipalityFilter = document.getElementById('municipalityFilter');
+        applyFilters() {
+          // Filters are reactive via computed properties
+        },
 
-    function applyTemplateFilters(){
-      const q = (templateSearch.value || '').toLowerCase().trim();
-      const muni = (municipalityFilter.value || '').toLowerCase().trim();
+        applyAccountFilters() {
+          // Filters are reactive via computed properties
+        },
 
-      document.querySelectorAll('#templateList .template-item').forEach(btn => {
-        const text = btn.innerText.toLowerCase();
-        const itemRegion = (btn.getAttribute('data-region') || '').toLowerCase();
-        const itemMuni = (btn.getAttribute('data-municipality') || '').toLowerCase(); // '' means all municipalities
+        resetAccountFilters() {
+          this.accountSearch = '';
+          this.typeFilter = '';
+          this.statusFilter = '';
+        },
 
-        const matchRegion = !USER_REGION || itemRegion === USER_REGION;
-        const matchText = !q || text.includes(q);
+        openAccountModal() {
+          this.accountModalOpen = true;
+        },
 
-        // Municipality logic:
-        // - If no muni selected => show all templates in region
-        // - If muni selected => show templates for that muni OR templates for all municipalities (blank)
-        const matchMuni = !muni || itemMuni === muni || itemMuni === '';
-
-        btn.style.display = (matchRegion && matchText && matchMuni) ? '' : 'none';
-      });
-    }
-
-    templateSearch.addEventListener('input', applyTemplateFilters);
-    municipalityFilter.addEventListener('change', applyTemplateFilters);
-
-    // Account filters (search/type/status) + region + activeTemplate + municipality filter
-    const accountSearch = document.getElementById('accountSearch');
-    const typeFilter = document.getElementById('typeFilter');
-    const statusFilter = document.getElementById('statusFilter');
-
-    function applyAccountFilters(){
-      const q = (accountSearch.value || '').toLowerCase().trim();
-      const type = typeFilter.value;
-      const status = statusFilter.value;
-      const muni = (municipalityFilter.value || '').toLowerCase().trim();
-
-      document.querySelectorAll('#accountTable .account-row').forEach(tr => {
-        const text = tr.innerText.toLowerCase();
-
-        const trType = tr.getAttribute('data-type') || '';
-        const trStatus = tr.getAttribute('data-status') || '';
-        const trRegion = (tr.getAttribute('data-region') || '').toLowerCase();
-        const trMuni = (tr.getAttribute('data-municipality') || '').toLowerCase(); // '' means all municipalities
-        const activeTemplate = tr.dataset.activeTemplate; // "1" or "0" or undefined
-
-        const matchRegion = !USER_REGION || trRegion === USER_REGION;
-        const matchText = !q || text.includes(q);
-        const matchType = !type || trType === type;
-        const matchStatus = !status || trStatus === status;
-
-        // If a template is selected, only show rows from that template
-        const matchTemplate = !activeTemplate || activeTemplate === "1";
-
-        // Municipality logic (same as template list)
-        const matchMuni = !muni || trMuni === muni || trMuni === '';
-
-        tr.style.display = (matchRegion && matchText && matchType && matchStatus && matchTemplate && matchMuni) ? '' : 'none';
-      });
-    }
-
-    function resetAccountFilters(){
-      accountSearch.value = '';
-      typeFilter.value = '';
-      statusFilter.value = '';
-      applyAccountFilters();
-    }
-
-    accountSearch.addEventListener('input', applyAccountFilters);
-    typeFilter.addEventListener('change', applyAccountFilters);
-    statusFilter.addEventListener('change', applyAccountFilters);
-
-    // Initial enforce region filtering on page load
-    document.addEventListener('DOMContentLoaded', () => {
-      applyTemplateFilters();
-      applyAccountFilters();
-
-      // If no region injected, warn (optional)
-      if (!USER_REGION) {
-        const badge = document.getElementById('regionScopeBadge');
-        if (badge) {
-          badge.textContent = "NO REGION SET";
-          badge.className = "badge bg-rose-50 text-rose-800 border-rose-200";
+        exportTemplate() {
+          alert('Export (demo)');
         }
-      }
-    });
+      };
+    }
   </script>
 </body>
 </html>

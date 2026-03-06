@@ -8,6 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
 
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     /* Government Standard Typography & Scale */
@@ -20,6 +22,7 @@
 
     /* Chart Fix */
     .chart-container { position: relative; height: 100%; width: 100%; overflow: hidden; }
+    .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; }
 
     /* Reusable Form Inputs */
     .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; }
@@ -27,7 +30,7 @@
   </style>
 </head>
 
-<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col" x-data="depositDashboard()" x-init="loadDeposits(); loadCategories()">
 
   <div class="flex-1 flex overflow-hidden">
   <aside class="sidebar-container hidden lg:block">
@@ -54,26 +57,30 @@
         <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-teal-700">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deposits (YTD)</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">₱ 1,200,000</div>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">₱ <span x-text="formatCurrency(totalAmount)">0</span></div>
           </div>
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-indigo-600">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Categories</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">12</div>
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Payment Count</p>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="deposits.length">0</div>
           </div>
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm bg-slate-800 text-white">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">MoM Growth</p>
-            <div class="text-lg font-black text-teal-400 mt-0.5 leading-none">+8%</div>
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Completed Payments</p>
+            <div class="text-lg font-black text-teal-400 mt-0.5 leading-none" x-text="completedCount">0</div>
           </div>
         </section>
 
         <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 h-[160px]">
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 shadow-sm flex flex-col h-full overflow-hidden">
-            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">Deposit Trends</h2>
-            <div class="chart-container"><canvas id="depositTrendChart"></canvas></div>
+            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">Payment Status Distribution</h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="depositTrendChart"></canvas></div>
+            </div>
           </div>
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 shadow-sm flex flex-col h-full overflow-hidden">
-            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">Revenue Mix</h2>
-            <div class="chart-container"><canvas id="revenueMixChart"></canvas></div>
+            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">Deposits by Region</h2>
+            <div class="chart-safe-zone">
+              <div class="chart-container"><canvas id="revenueMixChart"></canvas></div>
+            </div>
           </div>
         </section>
 
@@ -81,18 +88,23 @@
           
           <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 shrink-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
             <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
-                <span class="material-icons-round text-[14px]">account_balance_wallet</span> Category Mappings
+                <span class="material-icons-round text-[14px]">account_balance_wallet</span> All Payment Deposits (<span x-text="filteredDeposits.length">0</span>)
             </h2>
-            <div class="flex gap-1.5">
-                <input id="searchCategory" type="text" placeholder="Search category..." class="gov-input w-40">
-                <select id="filterRevenue" class="gov-input cursor-pointer">
-                    <option value="">All Revenue Types</option>
-                    <option value="service">Service Revenue</option>
-                    <option value="permit">Permit Fees</option>
-                    <option value="grant">Grants</option>
-                    <option value="other">Other Income</option>
+            <div class="flex gap-1.5 flex-wrap">
+                <input x-model="searchQuery" type="text" placeholder="Search invoice/email..." class="gov-input w-48 text-[10px]">
+                <select x-model="filterStatus" class="gov-input cursor-pointer text-[10px]">
+                    <option value="">All Status</option>
+                    <option value="PAID">Paid</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="FAILED">Failed</option>
                 </select>
-                <button onclick="resetFilters()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] transition">Reset</button>
+                <select x-model="filterRegion" class="gov-input cursor-pointer text-[10px]">
+                    <option value="">All Regions</option>
+                    <template x-for="region in getUniqueRegions()" :key="region">
+                      <option :value="region" x-text="region"></option>
+                    </template>
+                </select>
             </div>
           </div>
 
@@ -100,66 +112,43 @@
             <table class="w-full text-left border-collapse">
               <thead class="bg-slate-100 border-b border-slate-300 sticky top-0 z-10">
                 <tr>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Category</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">COA Account</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Revenue Type</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Tax</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Budget Code</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center">Actions</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Invoice ID</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Payer Email</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-right">Amount</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Method</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Status</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Region</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Municipality</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center">Date</th>
                 </tr>
               </thead>
               <tbody id="categoryTable" class="text-[10px] divide-y divide-slate-100">
-                
-                <tr class="hover:bg-slate-50 transition" data-revenue="permit">
-                  <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Permit Application Fees</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-mono font-bold text-slate-800">4101</span> <span class="text-slate-500 ml-0.5">— Permit Revenue</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 text-[8px]">Permit Fees</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-slate-100 text-slate-700 border-slate-300 text-[8px]">No Tax</span>
-                  </td>
-                  <td class="px-3 py-1.5 font-mono text-slate-600 text-center border-r border-slate-100">REV-001</td>
-                  <td class="px-3 py-1.5 text-center">
-                    <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-1">Edit</button>
-                    <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
-                  </td>
-                </tr>
-
-                {% for c in deposit_categories %}
-                <tr class="hover:bg-slate-50 transition" data-revenue="{{ c.revenue_type|lower }}">
-                  <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">{{ c.name }}</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-mono font-bold text-slate-800">{{ c.coa_code }}</span> <span class="text-slate-500 ml-0.5">— {{ c.coa_name }}</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 text-[8px]">{{ c.revenue_type }}</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border text-[8px]
-                      {% if c.tax_type == 'VAT' %} bg-blue-50 text-blue-700 border-blue-200
-                      {% elif c.tax_type == 'Withholding' %} bg-amber-50 text-amber-700 border-amber-200
-                      {% else %} bg-slate-100 text-slate-700 border-slate-300 {% endif %}">
-                      {{ c.tax_type }}{% if c.tax_rate %} ({{ c.tax_rate }}%){% endif %}
-                    </span>
-                  </td>
-                  <td class="px-3 py-1.5 font-mono text-slate-600 text-center border-r border-slate-100">{{ c.budget_code or '—' }}</td>
-                  <td class="px-3 py-1.5 text-center">
-                    <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-1">Edit</button>
-                    <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
-                  </td>
-                </tr>
-                {% endfor %}
-
+                <template x-for="deposit in filteredDeposits" :key="deposit.id">
+                  <tr class="hover:bg-slate-50 transition">
+                    <td class="px-3 py-1.5 font-mono font-bold text-slate-800 border-r border-slate-100" x-text="deposit.invoice_id || deposit.id.substring(0,12)">-</td>
+                    <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100 font-bold" x-text="deposit.payer_email">-</td>
+                    <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100 text-right" x-text="`₱ ${deposit.amount.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2})}`">₱ 0</td>
+                    <td class="px-3 py-1.5 text-slate-600 border-r border-slate-100" x-text="deposit.payment_method">-</td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                      <span :class="getStatusClass(deposit.status)" class="px-1.5 py-0.5 rounded-[2px] font-black text-[8px] uppercase border inline-block" x-text="deposit.status">-</span>
+                    </td>
+                    <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100" x-text="deposit.region || 'N/A'">-</td>
+                    <td class="px-3 py-1.5 text-slate-600 border-r border-slate-100" x-text="deposit.municipality || 'N/A'">-</td>
+                    <td class="px-3 py-1.5 text-slate-500 text-center" x-text="formatDate(deposit.created_at)">-</td>
+                  </tr>
+                </template>
+                <template x-if="filteredDeposits.length === 0">
+                  <tr>
+                    <td colspan="8" class="px-3 py-6 text-center text-slate-400 text-[10px]">No payment deposits found</td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
 
           <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex items-center justify-between text-[9px] text-slate-500 shrink-0">
-            <span>Filter by revenue type to quickly find COA mappings.</span>
-            <button class="font-bold uppercase text-teal-700 hover:underline">Export CSV</button>
+            <span>All payment deposits from users across regions. Filter by status or region to analyze payment trends.</span>
+            <button class="font-bold uppercase text-teal-700 hover:underline" @click="exportTableAsCSV()">Export CSV</button>
           </div>
 
         </section>
@@ -244,78 +233,216 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    function openCategoryModal(){ document.getElementById('categoryModal').classList.remove('hidden'); }
-    function closeCategoryModal(){ document.getElementById('categoryModal').classList.add('hidden'); }
+    function depositDashboard() {
+      return {
+        deposits: [],
+        categories: [],
+        searchQuery: '',
+        filterStatus: '',
+        filterRegion: '',
+        
+        async loadDeposits() {
+          try {
+            console.log('[DEBUG] Loading payment deposits...');
+            const resp = await fetch('/national/api/deposits/payments');
+            if (resp.ok) {
+              this.deposits = await resp.json();
+              console.log('[DEBUG] Loaded', this.deposits.length, 'deposits');
+              this.updateCharts();
+            }
+          } catch (error) {
+            console.error('[ERROR] Failed to load deposits:', error);
+          }
+        },
 
-    // Disable tax rate if "No Tax" is selected
-    document.getElementById('taxType').addEventListener('change', function(){
-      const r = document.getElementById('taxRate');
-      if(this.value === 'none'){ r.value=''; r.disabled=true; }
-      else { r.disabled=false; }
-    });
+        async loadCategories() {
+          try {
+            console.log('[DEBUG] Loading expense categories...');
+            const resp = await fetch('/national/api/expense-categories');
+            if (resp.ok) {
+              this.categories = await resp.json();
+              console.log('[DEBUG] Loaded', this.categories.length, 'categories');
+            }
+          } catch (error) {
+            console.error('[ERROR] Failed to load categories:', error);
+          }
+        },
 
-    // Filtering Logic
-    const search = document.getElementById('searchCategory');
-    const filterRevenue = document.getElementById('filterRevenue');
-    const rows = () => Array.from(document.querySelectorAll('#categoryTable tr'));
+        get totalAmount() {
+          return this.deposits.reduce((sum, d) => sum + (d.amount || 0), 0);
+        },
 
-    function applyFilters(){
-      const q = (search.value || '').toLowerCase().trim();
-      const rev = filterRevenue.value;
+        get completedCount() {
+          return this.deposits.filter(d => ['PAID', 'COMPLETED', 'SETTLED', 'SUCCESS'].includes(d.status)).length;
+        },
 
-      rows().forEach(tr=>{
-        const text = tr.innerText.toLowerCase();
-        const matchText = text.includes(q);
-        const rowRev = tr.getAttribute('data-revenue') || '';
-        const matchRev = !rev || rowRev === rev;
-        tr.style.display = (matchText && matchRev) ? '' : 'none';
-      });
+        get filteredDeposits() {
+          return this.deposits.filter(deposit => {
+            const matchSearch = !this.searchQuery || 
+              (deposit.invoice_id || '').toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+              (deposit.payer_email || '').toLowerCase().includes(this.searchQuery.toLowerCase());
+            const matchStatus = !this.filterStatus || (deposit.status || '').includes(this.filterStatus);
+            const matchRegion = !this.filterRegion || deposit.region === this.filterRegion;
+            return matchSearch && matchStatus && matchRegion;
+          });
+        },
+
+        formatCurrency(amount) {
+          return (amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+
+        formatDate(dateStr) {
+          if (!dateStr) return '-';
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+        },
+
+        getStatusClass(status) {
+          const classes = {
+            'PAID': 'bg-green-50 text-green-700 border-green-200',
+            'COMPLETED': 'bg-green-50 text-green-700 border-green-200',
+            'SETTLED': 'bg-green-50 text-green-700 border-green-200',
+            'SUCCESS': 'bg-green-50 text-green-700 border-green-200',
+            'PENDING': 'bg-amber-50 text-amber-700 border-amber-200',
+            'FAILED': 'bg-red-50 text-red-700 border-red-200',
+            'CANCELLED': 'bg-slate-100 text-slate-600 border-slate-200'
+          };
+          return classes[status] || 'bg-slate-100 text-slate-600 border-slate-200';
+        },
+
+        getTaxTypeClass(taxType) {
+          const classes = {
+            'VAT': 'bg-blue-50 text-blue-700 border-blue-200',
+            'Withholding Tax': 'bg-amber-50 text-amber-700 border-amber-200',
+            'Percentage Tax': 'bg-green-50 text-green-700 border-green-200',
+            'None': 'bg-slate-100 text-slate-600 border-slate-200'
+          };
+          return classes[taxType] || 'bg-slate-100 text-slate-600 border-slate-200';
+        },
+
+        getUniqueRegions() {
+          const regions = new Set();
+          this.deposits.forEach(d => {
+            if (d.region && d.region !== 'Unknown' && d.region !== 'N/A') {
+              regions.add(d.region);
+            }
+          });
+          return Array.from(regions).sort();
+        },
+
+        editCategory(cat) {
+          console.log('[DEBUG] Edit category:', cat);
+        },
+
+        deleteCategory(id) {
+          if (confirm('Delete this category?')) {
+            console.log('[DEBUG] Delete category:', id);
+          }
+        },
+
+        exportTableAsCSV() {
+          const csv = [
+            ['Invoice ID', 'Payer Email', 'Amount', 'Method', 'Status', 'Region', 'Municipality', 'Date'],
+            ...this.filteredDeposits.map(d => [
+              d.invoice_id || d.id.substring(0,12),
+              d.payer_email,
+              d.amount,
+              d.payment_method,
+              d.status,
+              d.region,
+              d.municipality,
+              this.formatDate(d.created_at)
+            ])
+          ].map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `deposits_${new Date().toISOString().split('T')[0]}.csv`;
+          a.click();
+          window.URL.revokeObjectURL(url);
+        },
+
+        updateCharts() {
+          // Status distribution chart
+          const statusCounts = {};
+          this.deposits.forEach(d => {
+            statusCounts[d.status] = (statusCounts[d.status] || 0) + 1;
+          });
+
+          const statusChart = Chart.getChart('depositTrendChart');
+          if (statusChart) statusChart.destroy();
+
+          new Chart(document.getElementById('depositTrendChart'), {
+            type: 'doughnut',
+            data: {
+              labels: Object.keys(statusCounts),
+              datasets: [{
+                data: Object.values(statusCounts),
+                backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#cbd5e1'],
+                borderWidth: 0
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: '65%',
+              plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8 } } } }
+            }
+          });
+
+          // Region distribution chart
+          const regionCounts = {};
+          this.deposits.forEach(d => {
+            const r = d.region || 'Unknown';
+            regionCounts[r] = (regionCounts[r] || 0) + 1;
+          });
+
+          const regionChart = Chart.getChart('revenueMixChart');
+          if (regionChart) regionChart.destroy();
+
+          new Chart(document.getElementById('revenueMixChart'), {
+            type: 'bar',
+            data: {
+              labels: Object.keys(regionCounts),
+              datasets: [{
+                label: 'Payments',
+                data: Object.values(regionCounts),
+                backgroundColor: '#0f766e',
+                borderWidth: 0
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              indexAxis: 'y',
+              plugins: { legend: { display: false } },
+              scales: { x: { ticks: { font: { size: 8 } } }, y: { ticks: { font: { size: 8 } } } }
+            }
+          });
+        }
+      };
     }
 
-    function resetFilters(){
-      search.value = '';
-      filterRevenue.value = '';
-      applyFilters();
-    }
-
-    search.addEventListener('input', applyFilters);
-    filterRevenue.addEventListener('change', applyFilters);
-
-    // Chart.js Configuration
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
     Chart.defaults.font.size = 9;
     Chart.defaults.color = "#64748b";
-    
-    const chartConfig = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 } };
+
+    // Modal functions
+    function openCategoryModal(){ document.getElementById('categoryModal').classList.remove('hidden'); }
+    function closeCategoryModal(){ document.getElementById('categoryModal').classList.add('hidden'); }
 
     document.addEventListener('DOMContentLoaded', function(){
-      // Deposit Trend Line Chart
-      new Chart(document.getElementById('depositTrendChart'),{
-        type:'line',
-        data:{
-          labels:['J','J','A','S','O','N','D','J'],
-          datasets:[{
-              label:'Deposits',
-              data:[120,130,125,140,135,150,155,160],
-              borderColor: '#0f766e', // Teal-700
-              backgroundColor: 'rgba(15, 118, 110, 0.1)',
-              borderWidth: 1.5,
-              fill:true,
-              pointRadius: 0
-          }]
-        },
-        options:{ ...chartConfig, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{display:false}} }
-      });
-
-      // Revenue Mix Doughnut Chart
-      new Chart(document.getElementById('revenueMixChart'),{
-        type:'doughnut',
-        data:{
-          labels:['Service','Permits','Grants','Other'],
-          datasets:[{data:[60,30,20,10], backgroundColor:['#0f766e', '#4f46e5', '#10b981', '#cbd5e1'], borderWidth:0}]
-        },
-        options:{ ...chartConfig, cutout: '65%', plugins:{legend:{position:'right', labels:{boxWidth:8, font:{size:8}}}} }
-      });
+      // Disable tax rate if "No Tax" is selected
+      const taxType = document.getElementById('taxType');
+      if (taxType) {
+        taxType.addEventListener('change', function(){
+          const r = document.getElementById('taxRate');
+          if(this.value === 'none'){ r.value=''; r.disabled=true; }
+          else { r.disabled=false; }
+        });
+      }
     });
   </script>
 

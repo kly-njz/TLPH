@@ -87,7 +87,7 @@
           </div>
         </div>
         <div class="flex items-center gap-1.5 mt-2 sm:mt-0">
-            <span id="asOfDate" class="text-[9px] font-black text-slate-400 italic mr-2 uppercase">Loading...</span>
+            <span id="asOfDate" class="text-[9px] font-black text-slate-400 italic mr-2 uppercase">Data as of {{ as_of }}</span>
             <button onclick="window.print()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-sm">
               <span class="material-icons-round text-[14px]">print</span> Print
             </button>
@@ -144,14 +144,14 @@
             <p class="text-[9px] font-black uppercase text-slate-500 m-0">App Registry</p>
             <span class="material-icons-round text-slate-300 text-[18px]">description</span>
           </div>
-          <h3 id="kpi-apps" class="text-2xl font-black text-slate-900 mt-1 leading-none">{{ applications|length }}</h3>
+          <h3 id="kpi-apps" class="text-2xl font-black text-slate-900 mt-1 leading-none">{{ total_applications }}</h3>
         </div>
         <div class="gov-card p-3 border-t-4 border-t-blue-800 justify-center transition-all">
           <div class="flex justify-between items-center">
             <p class="text-[9px] font-black uppercase text-slate-500 m-0">Service Req</p>
             <span class="material-icons-round text-blue-200 text-[18px]">room_service</span>
           </div>
-          <h3 id="kpi-services" class="text-2xl font-black text-slate-900 mt-1 leading-none">{{ service_requests|length }}</h3>
+          <h3 id="kpi-services" class="text-2xl font-black text-slate-900 mt-1 leading-none">{{ total_service_requests }}</h3>
         </div>
         <div class="gov-card p-3 border-t-4 border-t-amber-700 justify-center transition-all">
           <div class="flex justify-between items-center">
@@ -195,15 +195,17 @@
             <table class="w-full text-left border-collapse filterable-table" id="table-finance">
               <thead><tr><th>Ref & Date</th><th>Payor</th><th class="text-right">Amount</th></tr></thead>
               <tbody class="text-[10px] uppercase font-bold">
+                {% for txn in transactions %}
                 <tr class="hover:bg-slate-50 transition data-row" data-region="all">
                     <td class="leading-tight border-r border-slate-100">
-                      <span class="font-mono text-blue-900 font-black italic block">TXN-004182</span>
-                      <span class="text-[8px] text-slate-500 date-cell">Feb 12, 2026</span>
+                      <span class="font-mono text-blue-900 font-black italic block">{{ txn.ref }}</span>
+                      <span class="text-[8px] text-slate-500 date-cell">{{ txn.date }}</span>
                     </td>
-                    <td class="border-r border-slate-100 truncate max-w-[80px]">Dela Cruz, Juan<br><span class="text-[8px] font-normal text-slate-400">Application Fee</span></td>
-                    <td class="text-right font-mono text-emerald-700 amount-cell">1250.00</td>
+                    <td class="border-r border-slate-100 truncate max-w-[80px]">{{ txn.payor[:20] if txn.payor else 'N/A' }}<br><span class="text-[8px] font-normal text-slate-400">{{ txn.description[:18] if txn.description else '' }}</span></td>
+                    <td class="text-right font-mono {% if txn.status == 'PAID' %}text-emerald-700{% else %}text-amber-700{% endif %} amount-cell">{{ txn.amount }}</td>
                 </tr>
-                <tr class="empty-state-row" style="display:none;"><td colspan="3" class="text-center py-6 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
+                {% endfor %}
+                <tr class="empty-state-row" {% if transactions %}style="display:none;"{% endif %}><td colspan="3" class="text-center py-6 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
               </tbody>
             </table>
           </div>
@@ -225,7 +227,7 @@
         <div class="gov-card flex flex-col overflow-hidden">
           <div class="gov-header-ribbon">
             <span>1. Application Registry</span>
-            <span id="badge-apps" class="bg-blue-800 px-2 py-0.5 rounded-[2px] text-[8px]">{{ applications|length }} Total</span>
+            <span id="badge-apps" class="bg-blue-800 px-2 py-0.5 rounded-[2px] text-[8px]">{{ total_applications }} Total</span>
           </div>
           <div class="scrollable-table-container custom-scrollbar">
             <table class="w-full text-left border-collapse filterable-table" id="table-apps">
@@ -263,7 +265,7 @@
         <div class="gov-card flex flex-col overflow-hidden">
           <div class="gov-header-ribbon">
             <span>2. Service Requests</span>
-            <span id="badge-services" class="bg-blue-800 px-2 py-0.5 rounded-[2px] text-[8px]">{{ service_requests|length }} Total</span>
+            <span id="badge-services" class="bg-blue-800 px-2 py-0.5 rounded-[2px] text-[8px]">{{ total_service_requests }} Total</span>
           </div>
           <div class="scrollable-table-container custom-scrollbar">
             <table class="w-full text-left border-collapse filterable-table" id="table-services">
@@ -272,14 +274,14 @@
                 {% if service_requests and service_requests|length > 0 %}
                   {% for req in service_requests %}
                   <tr class="hover:bg-blue-50 transition data-row" data-region="{{ req.region|lower }}">
-                    <td class="font-mono text-slate-500 uppercase border-r border-slate-100 date-cell">N/A</td>
+                    <td class="font-mono text-slate-500 uppercase border-r border-slate-100 date-cell">{{ req.date_filed }}</td>
                     <td class="leading-tight border-r border-slate-100">
                         <span class="font-black text-blue-900 font-mono uppercase block">SR-{{ req.reference_id }}</span>
                         <span class="text-[9px] text-slate-500 font-bold uppercase truncate max-w-[120px] inline-block">{{ req.service_type }}</span>
                     </td>
                     <td class="border-r border-slate-100">
                       <span class="font-bold text-slate-700 uppercase text-[9px] block mb-1">{{ req.region }}</span>
-                      <span class="status-badge {% if req.status == 'approved' %} bg-emerald-50 text-emerald-800 border-emerald-200 {% else %} bg-blue-50 text-blue-800 border-blue-200 {% endif %}">
+                      <span class="status-badge {% if req.status == 'approved' %} bg-emerald-50 text-emerald-800 border-emerald-200 {% elif req.status == 'rejected' %} bg-rose-50 text-rose-800 border-rose-200 {% else %} bg-amber-50 text-amber-800 border-amber-200 {% endif %}">
                         {{ req.status[:3]|upper }}
                       </span>
                     </td>
@@ -303,8 +305,10 @@
                 <table class="w-full text-left border-collapse filterable-table" id="table-assets">
                     <thead><tr><th>Category</th><th class="text-center">Qty</th><th>Hub</th></tr></thead>
                     <tbody class="text-[10px] uppercase font-bold">
-                        <tr class="hover:bg-slate-50 data-row" data-region="r4a"><td class="text-slate-700">Chemicals</td><td class="text-center font-mono">120</td><td class="text-[8px]">Reg IV-A</td></tr>
-                        <tr class="empty-state-row" style="display:none;"><td colspan="3" class="text-center py-4 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
+                        {% for item in inventory_items %}
+                        <tr class="hover:bg-slate-50 data-row" data-region="{{ item.hub|lower }}"><td class="text-slate-700">{{ item.category }}</td><td class="text-center font-mono">{{ item.quantity }}</td><td class="text-[8px]">{{ item.hub }}</td></tr>
+                        {% endfor %}
+                        <tr class="empty-state-row" {% if inventory_items %}style="display:none;"{% endif %}><td colspan="3" class="text-center py-4 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -316,8 +320,10 @@
                 <table class="w-full text-left border-collapse filterable-table" id="table-stock">
                     <thead><tr><th>Resource</th><th class="text-center">On-Hand</th><th>Admin</th></tr></thead>
                     <tbody class="text-[10px] uppercase font-bold">
-                        <tr class="hover:bg-slate-50 data-row" data-region="ncr"><td class="text-slate-700 truncate max-w-[80px]">Pesticide Alpha</td><td class="text-rose-700 text-center font-mono font-black">18</td><td class="text-[8px]">Santos, M.</td></tr>
-                        <tr class="empty-state-row" style="display:none;"><td colspan="3" class="text-center py-4 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
+                        {% for item in inventory_items[:8] %}
+                        <tr class="hover:bg-slate-50 data-row" data-region="{{ item.hub|lower }}"><td class="text-slate-700 truncate max-w-[80px]">{{ item.category }}</td><td class="text-center font-mono {{ 'text-rose-700 font-black' if item.quantity|int < 10 else 'text-slate-700' }}">{{ item.quantity }}</td><td class="text-[8px]">{{ item.hub }}</td></tr>
+                        {% endfor %}
+                        <tr class="empty-state-row" {% if inventory_items %}style="display:none;"{% endif %}><td colspan="3" class="text-center py-4 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -329,12 +335,14 @@
                 <table class="w-full text-left border-collapse filterable-table" id="table-permits">
                     <thead><tr><th>License Ref</th><th>Region</th><th class="text-center">Status</th></tr></thead>
                     <tbody class="text-[10px] uppercase font-bold">
-                        <tr class="hover:bg-slate-50 data-row" data-region="r4a">
-                          <td class="font-mono text-blue-900 truncate max-w-[80px]">LIC-2026-0118</td>
-                          <td class="text-[8px]">Reg IV-A</td>
-                          <td class="text-center"><span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200">Valid</span></td>
+                        {% for permit in permits %}
+                        <tr class="hover:bg-slate-50 data-row" data-region="{{ permit.region|lower }}">
+                          <td class="font-mono text-blue-900 truncate max-w-[80px]">{{ permit.ref }}</td>
+                          <td class="text-[8px]">{{ permit.region }}</td>
+                          <td class="text-center"><span class="status-badge {% if permit.status == 'Valid' %}bg-emerald-50 text-emerald-800 border-emerald-200{% elif permit.status == 'Expired' %}bg-rose-50 text-rose-800 border-rose-200{% else %}bg-amber-50 text-amber-800 border-amber-200{% endif %}">{{ permit.status }}</span></td>
                         </tr>
-                        <tr class="empty-state-row" style="display:none;"><td colspan="3" class="text-center py-4 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
+                        {% endfor %}
+                        <tr class="empty-state-row" {% if permits %}style="display:none;"{% endif %}><td colspan="3" class="text-center py-4 text-slate-400 font-bold italic text-[9px]">No records match</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -358,27 +366,11 @@
     window.myRegionalChart = null;
     let totalInitialRows = 0;
 
-    // Dynamic "As of" date
-    (function() {
-        const el = document.getElementById('asOfDate');
-        if (el) {
-            const now = new Date();
-            el.textContent = 'As of ' + now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-        }
-    })();
+    // Dynamic "As of" date is already set server-side via Jinja {{ as_of }}
 
     // Compute last 6 month labels dynamically
-    const baseTrendLabels = (function() {
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        const now = new Date();
-        const labels = [];
-        for (let i = 5; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            labels.push(months[d.getMonth()] + ' ' + d.getFullYear());
-        }
-        return labels;
-    })();
-    const baseTrendData = [38, 55, 72, 61, 89, 104];
+    const baseTrendLabels = {{ trend_labels | tojson }};
+    const baseTrendData = {{ trend_data | tojson }};
 
     // --- Chart Initialization ---
     window.addEventListener('load', function() {
@@ -413,8 +405,9 @@
             });
         }
 
-        const approvedCount = parseInt("{{ approved_count|default(75) }}", 10) || 75;
-        const pendingCount = parseInt("{{ pending_count|default(20) }}", 10) || 20;
+        const approvedCount = parseInt("{{ approved_count }}", 10) || 0;
+        const pendingCount = parseInt("{{ pending_count }}", 10) || 0;
+        const rejectedCount = parseInt("{{ rejected_count }}", 10) || 0;
 
         const statusCtx = document.getElementById('statusChart');
         if (statusCtx) {
@@ -423,7 +416,7 @@
                 data: {
                     labels: ['Approved', 'Pending', 'Rejected'],
                     datasets: [{
-                        data: [approvedCount, pendingCount, 5],
+                        data: [approvedCount, pendingCount, rejectedCount],
                         backgroundColor: ['#047857', '#b45309', '#be123c'],
                         borderWidth: 0,
                         cutout: '80%'
@@ -445,10 +438,10 @@
             window.myCategoryChart = new Chart(categoryCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Farm Visit', 'Chemical/Fert.', 'Financial Aid', 'Seminar', 'Wildlife', 'Fisheries', 'Forestry'],
+                    labels: {{ category_labels | tojson }},
                     datasets: [{
                         label: 'Requests',
-                        data: [42, 31, 27, 19, 14, 11, 8],
+                        data: {{ category_data | tojson }},
                         backgroundColor: ['#047857','#0369a1','#b45309','#7c3aed','#065f46','#0e7490','#6b7280'],
                         borderRadius: 3,
                         borderSkipped: false
@@ -472,10 +465,10 @@
             window.myRegionalChart = new Chart(regionalCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['NCR', 'Region I', 'Region II', 'Region III', 'Region IV-A', 'Region V', 'Region VI', 'Region VII'],
+                    labels: {{ region_labels | tojson }},
                     datasets: [{
                         label: 'Activity',
-                        data: [58, 34, 28, 47, 62, 21, 39, 30],
+                        data: {{ region_data | tojson }},
                         backgroundColor: '#1e40af',
                         borderRadius: 3,
                         borderSkipped: false

@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Transaction Registry | National Admin</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <style>
     /* Government Standard Typography & Layout */
@@ -37,7 +35,7 @@
   </style>
 </head>
 
-<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col" x-data="transactionDashboard()" x-init="loadTransactions()">
   <div class="flex-1 flex overflow-hidden">
   <aside class="sidebar-container hidden lg:block">
     {% include 'national/sidenav-national.html' %}
@@ -53,7 +51,7 @@
             </div>
           </div>
           <div class="flex gap-2">
-            <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+            <button @click="exportTableAsCSV()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
               <span class="material-icons-round text-[14px]">download</span> Export CSV
             </button>
           </div>
@@ -62,48 +60,52 @@
         <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
           <div class="gov-card p-2 px-3 border-l-4 border-l-slate-600">
             <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Count</span>
-            <div id="kpiTxnCount" class="text-lg font-black text-slate-800 mt-0.5 leading-none">—</div>
+            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="filteredTransactions.length">—</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 bg-emerald-50/30">
             <span class="text-[9px] font-black uppercase text-emerald-700 tracking-widest">Total Paid</span>
-            <div id="kpiPaid" class="text-lg font-black text-emerald-800 mt-0.5 leading-none font-mono">—</div>
+            <div class="text-lg font-black text-emerald-800 mt-0.5 leading-none font-mono" x-text="formatCurrency(paidTotal)">—</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600 bg-rose-50/30">
             <span class="text-[9px] font-black uppercase text-rose-700 tracking-widest">Total Refunded</span>
-            <div id="kpiRefunded" class="text-lg font-black text-rose-800 mt-0.5 leading-none font-mono">—</div>
+            <div class="text-lg font-black text-rose-800 mt-0.5 leading-none font-mono" x-text="formatCurrency(refundedTotal)">—</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-blue-800 bg-blue-50/30">
             <span class="text-[9px] font-black uppercase text-blue-800 tracking-widest">Net Revenue</span>
-            <div id="kpiNet" class="text-lg font-black text-blue-900 mt-0.5 leading-none font-mono">—</div>
+            <div class="text-lg font-black text-blue-900 mt-0.5 leading-none font-mono" x-text="formatCurrency(paidTotal - refundedTotal)">—</div>
           </div>
         </section>
 
         <section class="gov-card p-2 px-3 shrink-0 flex flex-wrap items-center gap-2 bg-slate-50 border-b border-slate-300">
             <span class="material-icons-round text-slate-400 text-[14px]">filter_alt</span>
             <div class="flex items-center gap-1 border-r border-slate-300 pr-2">
-                <input id="fFrom" type="date" class="gov-input cursor-pointer text-[9px]" title="Date From" />
+                <input x-model="filterFromDate" type="date" class="gov-input cursor-pointer text-[9px]" title="Date From" />
                 <span class="text-[9px] text-slate-500 font-bold uppercase">to</span>
-                <input id="fTo" type="date" class="gov-input cursor-pointer text-[9px]" title="Date To" />
+                <input x-model="filterToDate" type="date" class="gov-input cursor-pointer text-[9px]" title="Date To" />
             </div>
-            <select id="fType" class="gov-input cursor-pointer">
-                <option value="ALL">All Trans. Types</option>
-                <option>Application</option><option>Service Request</option><option>Licensing/Permit</option>
+            <select x-model="filterType" class="gov-input cursor-pointer">
+                <option value="">All Trans. Types</option>
+                <option value="Application">Application</option>
+                <option value="Service Request">Service Request</option>
+                <option value="Licensing/Permit">Licensing/Permit</option>
             </select>
-            <select id="fRegion" class="gov-input cursor-pointer">
-                <option value="ALL">All Regions</option>
-                <option>NCR</option><option>Region IV-A</option><option>Region VII</option>
-                <option>Region III</option><option>BARMM</option><option>CAR</option>
+            <select x-model="filterRegion" class="gov-input cursor-pointer">
+                <option value="">All Regions</option>
+                <template x-for="region in getUniqueRegions()" :key="region">
+                  <option :value="region" x-text="region"></option>
+                </template>
             </select>
-            <select id="fStatus" class="gov-input cursor-pointer">
-                <option value="ALL">All Status</option>
-                <option>Paid</option><option>Refunded</option>
+            <select x-model="filterStatus" class="gov-input cursor-pointer">
+                <option value="">All Status</option>
+                <option value="Paid">Paid</option>
+                <option value="Refunded">Refunded</option>
             </select>
             <div class="relative flex-1 min-w-[120px]">
                 <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-                <input id="fSearch" type="text" placeholder="Search ref/name..." class="gov-input pl-6 w-full">
+                <input x-model="searchQuery" type="text" placeholder="Search ref/name..." class="gov-input pl-6 w-full">
             </div>
-            <button onclick="applyTxnFilters()" class="px-3 py-1 bg-blue-900 text-white font-bold uppercase text-[9px] rounded-[2px] hover:bg-blue-800 transition shadow-sm">Apply</button>
-            <button onclick="resetTxnFilters()" class="px-3 py-1 bg-slate-200 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] hover:bg-slate-300 transition shadow-sm border border-slate-300">Reset</button>
+            <button @click="updateCharts()" class="px-3 py-1 bg-blue-900 text-white font-bold uppercase text-[9px] rounded-[2px] hover:bg-blue-800 transition shadow-sm">Apply</button>
+            <button @click="resetFilters()" class="px-3 py-1 bg-slate-200 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] hover:bg-slate-300 transition shadow-sm border border-slate-300">Reset</button>
         </section>
 
         <div class="flex-1 flex flex-col xl:flex-row gap-2 min-h-0">
@@ -147,56 +149,29 @@
                             </tr>
                         </thead>
                         <tbody id="txnTbody" class="text-[10px] divide-y divide-slate-100">
-                            
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="font-bold text-slate-900 border-r border-slate-100 font-mono">TXN-004182</td>
-                                <td class="font-bold border-r border-slate-100 uppercase">Dela Cruz, Juan</td>
-                                <td class="text-[9px] text-slate-600 border-r border-slate-100 uppercase">Application</td>
-                                <td class="text-[9px] text-slate-600 border-r border-slate-100 font-mono">2026-02-12</td>
-                                <td class="text-[9px] text-slate-600 border-r border-slate-100 uppercase">NCR, QC</td>
-                                <td class="text-center border-r border-slate-100">
-                                    <span class="status-pill border-emerald-200 bg-emerald-50 text-emerald-800">Paid</span>
-                                </td>
-                                <td class="text-right font-bold font-mono border-r border-slate-100" data-amount="1250">₱1,250</td>
-                                <td class="text-center">
-                                    <button onclick="viewThisRow(this)" class="text-blue-700 hover:text-blue-900" title="View Details">
+                            <template x-for="txn in filteredTransactions" :key="txn.id">
+                              <tr class="hover:bg-slate-50 transition">
+                                  <td class="font-bold text-slate-900 border-r border-slate-100 font-mono" x-text="txn.reference">-</td>
+                                  <td class="font-bold border-r border-slate-100 uppercase" x-text="txn.name">-</td>
+                                  <td class="text-[9px] text-slate-600 border-r border-slate-100 uppercase" x-text="txn.type">-</td>
+                                  <td class="text-[9px] text-slate-600 border-r border-slate-100 font-mono" x-text="formatDate(txn.created_at)">-</td>
+                                  <td class="text-[9px] text-slate-600 border-r border-slate-100 uppercase" x-text="txn.location">-</td>
+                                  <td class="text-center border-r border-slate-100">
+                                    <span :class="getStatusClass(txn.status)" class="status-pill border" x-text="txn.status">-</span>
+                                  </td>
+                                  <td class="text-right font-bold font-mono border-r border-slate-100" x-text="formatCurrency(txn.amount)">₱0</td>
+                                  <td class="text-center">
+                                    <button @click="viewTransaction(txn)" class="text-blue-700 hover:text-blue-900" title="View Details">
                                         <span class="material-icons-round text-[16px] align-middle">visibility</span>
                                     </button>
-                                </td>
-                            </tr>
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="font-bold text-slate-900 border-r border-slate-100 font-mono">TXN-004170</td>
-                                <td class="font-bold border-r border-slate-100 uppercase">Santos, Maria</td>
-                                <td class="text-[9px] text-slate-600 border-r border-slate-100 uppercase">Licensing/Permit</td>
-                                <td class="text-[9px] text-slate-600 border-r border-slate-100 font-mono">2026-02-10</td>
-                                <td class="text-[9px] text-slate-600 border-r border-slate-100 uppercase">R4A, Calamba</td>
-                                <td class="text-center border-r border-slate-100">
-                                    <span class="status-pill border-rose-200 bg-rose-50 text-rose-800">Refunded</span>
-                                </td>
-                                <td class="text-right font-bold font-mono border-r border-slate-100" data-amount="850">₱850</td>
-                                <td class="text-center">
-                                    <button onclick="viewThisRow(this)" class="text-blue-700 hover:text-blue-900" title="View Details">
-                                        <span class="material-icons-round text-[16px] align-middle">visibility</span>
-                                    </button>
-                                </td>
-                            </tr>
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="font-bold text-slate-900 border-r border-slate-100 font-mono">TXN-004155</td>
-                                <td class="font-bold border-r border-slate-100 uppercase">Rivera, Liza</td>
-                                <td class="text-[9px] text-slate-600 border-r border-slate-100 uppercase">Service Request</td>
-                                <td class="text-[9px] text-slate-600 border-r border-slate-100 font-mono">2026-02-09</td>
-                                <td class="text-[9px] text-slate-600 border-r border-slate-100 uppercase">R7, Cebu City</td>
-                                <td class="text-center border-r border-slate-100">
-                                    <span class="status-pill border-emerald-200 bg-emerald-50 text-emerald-800">Paid</span>
-                                </td>
-                                <td class="text-right font-bold font-mono border-r border-slate-100" data-amount="600">₱600</td>
-                                <td class="text-center">
-                                    <button onclick="viewThisRow(this)" class="text-blue-700 hover:text-blue-900" title="View Details">
-                                        <span class="material-icons-round text-[16px] align-middle">visibility</span>
-                                    </button>
-                                </td>
-                            </tr>
-                            
+                                  </td>
+                              </tr>
+                            </template>
+                            <template x-if="filteredTransactions.length === 0">
+                              <tr>
+                                <td colspan="8" class="px-3 py-6 text-center text-slate-400 text-[10px]">No transactions found</td>
+                              </tr>
+                            </template>
                         </tbody>
                     </table>
                 </div>
@@ -205,154 +180,253 @@
     </main>
   </div>
 
-  <div id="txnViewModal" class="fixed inset-0 hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm z-[3000] p-4">
-    <div class="bg-white rounded-[2px] w-full max-w-md border border-slate-400 shadow-2xl overflow-hidden">
+  <div id="txnViewModal" class="fixed inset-0 hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm z-[3000] p-4" x-show="selectedTransaction !== null" @click.self="closeTransaction()">
+    <div class="bg-white rounded-[2px] w-full max-w-md border border-slate-400 shadow-2xl overflow-hidden" @click.stop>
       <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white">
         <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-1">
             <span class="material-icons-round text-[14px]">receipt</span> Transaction Summary
         </h3>
-        <button onclick="closeTxnView()" class="text-slate-400 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
+        <button @click="closeTransaction()" class="text-slate-400 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
       </div>
-      <div id="txnViewContent" class="p-4 bg-slate-50 grid grid-cols-2 gap-x-4 gap-y-3"></div>
+      <template x-if="selectedTransaction">
+        <div class="p-4 bg-slate-50 grid grid-cols-2 gap-x-4 gap-y-3">
+          <div class="p-2 border border-slate-200 rounded-[2px] bg-white">
+            <p class="text-[8px] text-slate-400 font-bold uppercase tracking-tight">Reference #</p>
+            <p class="text-[10px] font-black text-slate-800 uppercase mt-0.5" x-text="selectedTransaction.reference">-</p>
+          </div>
+          <div class="p-2 border border-slate-200 rounded-[2px] bg-white">
+            <p class="text-[8px] text-slate-400 font-bold uppercase tracking-tight">Status</p>
+            <p class="text-[10px] font-black text-slate-800 uppercase mt-0.5" x-text="selectedTransaction.status">-</p>
+          </div>
+          <div class="p-2 border border-slate-200 rounded-[2px] bg-white">
+            <p class="text-[8px] text-slate-400 font-bold uppercase tracking-tight">Customer Name</p>
+            <p class="text-[10px] font-black text-slate-800 uppercase mt-0.5" x-text="selectedTransaction.name">-</p>
+          </div>
+          <div class="p-2 border border-slate-200 rounded-[2px] bg-white">
+            <p class="text-[8px] text-slate-400 font-bold uppercase tracking-tight">Transaction Type</p>
+            <p class="text-[10px] font-black text-slate-800 uppercase mt-0.5" x-text="selectedTransaction.type">-</p>
+          </div>
+          <div class="p-2 border border-slate-200 rounded-[2px] bg-white">
+            <p class="text-[8px] text-slate-400 font-bold uppercase tracking-tight">Date</p>
+            <p class="text-[10px] font-black text-slate-800 uppercase mt-0.5" x-text="formatDate(selectedTransaction.created_at)">-</p>
+          </div>
+          <div class="p-2 border border-slate-200 rounded-[2px] bg-white">
+            <p class="text-[8px] text-slate-400 font-bold uppercase tracking-tight">Amount</p>
+            <p class="text-[10px] font-black text-slate-800 uppercase mt-0.5" x-text="formatCurrency(selectedTransaction.amount)">₱0</p>
+          </div>
+          <div class="p-2 border border-slate-200 rounded-[2px] bg-white col-span-2">
+            <p class="text-[8px] text-slate-400 font-bold uppercase tracking-tight">Location</p>
+            <p class="text-[10px] font-black text-slate-800 uppercase mt-0.5" x-text="selectedTransaction.location">-</p>
+          </div>
+          <div class="p-2 border border-slate-200 rounded-[2px] bg-white col-span-2">
+            <p class="text-[8px] text-slate-400 font-bold uppercase tracking-tight">Payment Method</p>
+            <p class="text-[10px] font-black text-slate-800 uppercase mt-0.5" x-text="selectedTransaction.payment_method || '-'">-</p>
+          </div>
+        </div>
+      </template>
       <div class="px-4 py-2 border-t bg-white flex justify-end">
-        <button onclick="closeTxnView()" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50">Close Document</button>
+        <button @click="closeTransaction()" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50">Close Document</button>
       </div>
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <script>
-    // --- EXACT LOGIC RESTORED & CHART FIX APPLIED ---
-    const tbody = document.getElementById('txnTbody');
-    const fFrom = document.getElementById('fFrom');
-    const fTo = document.getElementById('fTo');
-    const fType = document.getElementById('fType');
-    const fRegion = document.getElementById('fRegion');
-    const fStatus = document.getElementById('fStatus');
-    const fSearch = document.getElementById('fSearch');
-    let charts = {};
+    function transactionDashboard() {
+      return {
+        transactions: [],
+        selectedTransaction: null,
+        filterFromDate: '',
+        filterToDate: '',
+        filterType: '',
+        filterRegion: '',
+        filterStatus: '',
+        searchQuery: '',
+        charts: {},
 
-    function peso(n){ return "₱ " + new Intl.NumberFormat('en-US', { minimumFractionDigits: 0 }).format(Number(n || 0)); }
-    function getAmount(td){ 
-        // Handles "₱1,250" string manipulation safely
-        return Number(td.getAttribute('data-amount')) || 0; 
-    }
+        async loadTransactions() {
+          try {
+            console.log('[DEBUG] Loading all transactions...');
+            const resp = await fetch('/national/api/transactions/all');
+            if (resp.ok) {
+              this.transactions = await resp.json();
+              console.log('[DEBUG] Loaded', this.transactions.length, 'transactions');
+              this.updateCharts();
+            }
+          } catch (error) {
+            console.error('[ERROR] Failed to load transactions:', error);
+          }
+        },
 
-    function applyTxnFilters(){
-      const type = fType.value.toUpperCase();
-      const region = fRegion.value.toUpperCase();
-      const status = fStatus.value.toUpperCase();
-      const q = fSearch.value.trim().toLowerCase();
-      const from = fFrom.value ? new Date(fFrom.value + "T00:00:00") : null;
-      const to = fTo.value ? new Date(fTo.value + "T23:59:59") : null;
+        get paidTotal() {
+          return this.filteredTransactions
+            .filter(t => t.status === 'Paid')
+            .reduce((sum, t) => sum + (t.amount || 0), 0);
+        },
 
-      [...tbody.querySelectorAll('tr')].forEach(tr => {
-        const c = tr.cells;
-        const hay = (c[0].innerText + " " + c[1].innerText + " " + c[4].innerText).toLowerCase();
-        const d = new Date(c[3].innerText + "T12:00:00");
+        get refundedTotal() {
+          return this.filteredTransactions
+            .filter(t => t.status === 'Refunded')
+            .reduce((sum, t) => sum + (t.amount || 0), 0);
+        },
 
-        const okType = (type === "ALL") || (c[2].innerText.trim().toUpperCase() === type);
-        const okRegion = (region === "ALL") || (c[4].innerText.toUpperCase().includes(region));
-        const okStatus = (status === "ALL") || (c[5].innerText.trim().toUpperCase() === status);
-        const okQ = (!q) || hay.includes(q);
-        let okDate = true;
-        if(from && d < from) okDate = false;
-        if(to && d > to) okDate = false;
+        get filteredTransactions() {
+          return this.transactions.filter(txn => {
+            const matchSearch = !this.searchQuery || 
+              (txn.reference || '').toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+              (txn.name || '').toLowerCase().includes(this.searchQuery.toLowerCase());
+            const matchType = !this.filterType || (txn.type || '') === this.filterType;
+            const matchRegion = !this.filterRegion || (txn.region || '') === this.filterRegion;
+            const matchStatus = !this.filterStatus || (txn.status || '') === this.filterStatus;
+            
+            let matchDate = true;
+            if (this.filterFromDate || this.filterToDate) {
+              const txnDate = new Date(txn.created_at);
+              if (this.filterFromDate && txnDate < new Date(this.filterFromDate + 'T00:00:00')) matchDate = false;
+              if (this.filterToDate && txnDate > new Date(this.filterToDate + 'T23:59:59')) matchDate = false;
+            }
+            
+            return matchSearch && matchType && matchRegion && matchStatus && matchDate;
+          });
+        },
 
-        tr.style.display = (okType && okRegion && okStatus && okQ && okDate) ? "" : "none";
-      });
-      updateTxnAnalytics();
-    }
+        formatCurrency(amount) {
+          return '₱ ' + (amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        },
 
-    function resetTxnFilters(){
-      fFrom.value = fTo.value = fSearch.value = "";
-      fType.value = fRegion.value = fStatus.value = "ALL";
-      [...tbody.querySelectorAll('tr')].forEach(tr => tr.style.display = "");
-      updateTxnAnalytics();
-    }
+        formatDate(dateStr) {
+          if (!dateStr) return '-';
+          try {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-PH', { year: 'numeric', month: '2-digit', day: '2-digit' });
+          } catch (e) {
+            return '-';
+          }
+        },
 
-    function updateTxnAnalytics(){
-      const rows = [...tbody.querySelectorAll('tr')].filter(tr => tr.style.display !== "none");
-      let paidSum = 0, refundedSum = 0, paidCount = 0, refundedCount = 0;
-      const byType = {}, byRegion = {};
+        getStatusClass(status) {
+          if (status === 'Paid') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+          if (status === 'Refunded') return 'border-rose-200 bg-rose-50 text-rose-800';
+          return 'border-slate-200 bg-slate-50 text-slate-600';
+        },
 
-      rows.forEach(tr => {
-        const c = tr.cells;
-        const type = c[2].innerText.trim();
-        const reg = c[4].innerText.split(',')[0].trim();
-        const st = c[5].innerText.trim().toUpperCase();
-        const amt = getAmount(c[6]);
+        getUniqueRegions() {
+          const regions = new Set();
+          this.transactions.forEach(t => {
+            if (t.region && t.region !== 'N/A') {
+              regions.add(t.region);
+            }
+          });
+          return Array.from(regions).sort();
+        },
 
-        if(st === "PAID"){
-          paidSum += amt; paidCount++;
-          byType[type] = (byType[type] || 0) + amt;
-          byRegion[reg] = (byRegion[reg] || 0) + amt;
-        } else {
-          refundedSum += amt; refundedCount++;
-        }
-      });
+        resetFilters() {
+          this.filterFromDate = '';
+          this.filterToDate = '';
+          this.filterType = '';
+          this.filterRegion = '';
+          this.filterStatus = '';
+          this.searchQuery = '';
+          this.updateCharts();
+        },
 
-      document.getElementById('kpiTxnCount').textContent = rows.length;
-      document.getElementById('kpiPaid').textContent = peso(paidSum);
-      document.getElementById('kpiRefunded').textContent = peso(refundedSum);
-      document.getElementById('kpiNet').textContent = peso(paidSum - refundedSum);
+        viewTransaction(txn) {
+          this.selectedTransaction = txn;
+          document.getElementById('txnViewModal').classList.add('flex');
+        },
 
-      updateCompactChart('chartStatus', 'doughnut', ['Paid', 'Refunded'], [paidCount, refundedCount], { backgroundColor: ['#059669', '#e11d48'] });
-      updateCompactChart('chartType', 'bar', Object.keys(byType), Object.values(byType), { label: 'Paid (PHP)' });
-      updateCompactChart('chartRegion', 'bar', Object.keys(byRegion), Object.values(byRegion), { label: 'Income (PHP)' });
-    }
+        closeTransaction() {
+          this.selectedTransaction = null;
+          document.getElementById('txnViewModal').classList.remove('flex');
+        },
 
-    function updateCompactChart(id, type, labels, data, extra = {}){
-      Chart.defaults.font.family = "Verdana, Arial, sans-serif";
-      Chart.defaults.font.size = 8;
-      Chart.defaults.color = "#64748b";
+        exportTableAsCSV() {
+          const csv = [
+            ['Reference', 'Name', 'Type', 'Date', 'Location', 'Region', 'Status', 'Amount'],
+            ...this.filteredTransactions.map(t => [
+              t.reference,
+              t.name,
+              t.type,
+              this.formatDate(t.created_at),
+              t.location,
+              t.region,
+              t.status,
+              t.amount
+            ])
+          ].map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
 
-      if(charts[id]) charts[id].destroy();
-      charts[id] = new Chart(document.getElementById(id), {
-        type, 
-        data: { 
-            labels, 
-            datasets: [{ 
-                data, 
-                backgroundColor: extra.backgroundColor || ['#1e40af', '#3b82f6', '#93c5fd'], 
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
+          a.click();
+          window.URL.revokeObjectURL(url);
+        },
+
+        updateCharts() {
+          const filtered = this.filteredTransactions;
+          
+          // Status breakdown
+          const paidCount = filtered.filter(t => t.status === 'Paid').length;
+          const refundedCount = filtered.filter(t => t.status === 'Refunded').length;
+          
+          // Amount by type
+          const byType = {};
+          filtered.forEach(t => {
+            if (t.status === 'Paid') {
+              byType[t.type] = (byType[t.type] || 0) + t.amount;
+            }
+          });
+          
+          // Amount by region
+          const byRegion = {};
+          filtered.forEach(t => {
+            if (t.status === 'Paid') {
+              byRegion[t.region] = (byRegion[t.region] || 0) + t.amount;
+            }
+          });
+
+          this.createChart('chartStatus', 'doughnut', ['Paid', 'Refunded'], [paidCount, refundedCount], 
+            { backgroundColor: ['#059669', '#e11d48'] });
+          this.createChart('chartType', 'bar', Object.keys(byType), Object.values(byType), 
+            { label: 'Paid (PHP)' });
+          this.createChart('chartRegion', 'bar', Object.keys(byRegion), Object.values(byRegion), 
+            { label: 'Income (PHP)' });
+        },
+
+        createChart(id, type, labels, data, extra = {}) {
+          Chart.defaults.font.family = "Verdana, Arial, sans-serif";
+          Chart.defaults.font.size = 8;
+          Chart.defaults.color = "#64748b";
+
+          const canvasEl = document.getElementById(id);
+          if (!canvasEl) return;
+
+          if (this.charts[id]) this.charts[id].destroy();
+          this.charts[id] = new Chart(canvasEl, {
+            type,
+            data: {
+              labels,
+              datasets: [{
+                data,
+                backgroundColor: extra.backgroundColor || ['#1e40af', '#3b82f6', '#93c5fd'],
                 label: extra.label,
                 borderWidth: 0,
                 borderRadius: type === 'bar' ? 2 : 0
-            }] 
-        },
-        options: { 
-          responsive: true, 
-          maintainAspectRatio: false, 
-          plugins: { legend: { display: type==='doughnut', position: 'bottom', labels: { boxWidth: 6, font: { weight: 'bold' } } } },
-          scales: type === 'bar' ? { y: { beginAtZero: true, display: false }, x: { grid: {display: false} } } : {}
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: type === 'doughnut', position: 'bottom', labels: { boxWidth: 6, font: { weight: 'bold' } } } },
+              scales: type === 'bar' ? { y: { beginAtZero: true, display: false }, x: { grid: { display: false } } } : {}
+            }
+          });
         }
-      });
-    }
-
-    function viewThisRow(btn){
-      const c = btn.closest('tr').cells;
-      const data = { 
-          "Reference #": c[0].innerText, 
-          "Customer Name": c[1].innerText, 
-          "Trans. Type": c[2].innerText, 
-          "Date Filed": c[3].innerText, 
-          "Location": c[4].innerText, 
-          "Status": c[5].innerText, 
-          "Amount": c[6].innerText 
       };
-      
-      document.getElementById('txnViewContent').innerHTML = Object.entries(data).map(([k,v]) => `
-        <div class="p-2 border border-slate-200 rounded-[2px] bg-white">
-          <p class="text-[8px] text-slate-400 font-bold uppercase tracking-tight">${k}</p>
-          <p class="text-[10px] font-black text-slate-800 uppercase mt-0.5">${v}</p>
-        </div>
-      `).join('');
-      document.getElementById('txnViewModal').classList.replace('hidden', 'flex');
     }
-
-    function closeTxnView(){ document.getElementById('txnViewModal').classList.replace('flex', 'hidden'); }
-
-    // Init
-    updateTxnAnalytics();
   </script>
 </body>
 </html>

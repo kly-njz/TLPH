@@ -8,6 +8,9 @@
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
   <!-- Icons + Font -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
@@ -30,7 +33,7 @@
   </style>
 </head>
 
-<body class="text-slate-800 h-screen overflow-hidden flex flex-col">
+<body class="text-slate-800 h-screen overflow-hidden flex flex-col" x-data="coaManagement()" x-init="loadTemplates(), loadAccounts()">
 
   <!-- ✅ Stable layout wrapper -->
   <div class="flex-1 flex overflow-hidden">
@@ -56,10 +59,10 @@
           </div>
 
           <div class="flex gap-2">
-            <button onclick="openTemplateModal()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 flex items-center gap-1">
+            <button @click="openTemplateModal()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 flex items-center gap-1">
               <span class="material-icons-round text-[14px]">add</span> Create
             </button>
-            <button onclick="exportTemplate()" class="gov-btn border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1">
+            <button @click="exportTemplate()" class="gov-btn border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1">
               <span class="material-icons-round text-[14px]">download</span> Export
             </button>
           </div>
@@ -72,28 +75,28 @@
               <span class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Templates</span>
               <span class="material-icons-round text-slate-300 text-[16px]">layers</span>
             </div>
-            <div class="text-lg font-black text-slate-800 mt-0.5" id="statTemplates">2</div>
+            <div class="text-lg font-black text-slate-800 mt-0.5" x-text="templates.length">0</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
             <div class="flex items-center justify-between">
               <span class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Accounts</span>
               <span class="material-icons-round text-blue-200 text-[16px]">format_list_numbered</span>
             </div>
-            <div class="text-lg font-black text-blue-700 mt-0.5" id="statAccounts">125</div>
+            <div class="text-lg font-black text-blue-700 mt-0.5" x-text="accounts.length">0</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600">
             <div class="flex items-center justify-between">
               <span class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Locked</span>
               <span class="material-icons-round text-rose-200 text-[16px]">lock</span>
             </div>
-            <div class="text-lg font-black text-rose-700 mt-0.5" id="statLocked">38</div>
+            <div class="text-lg font-black text-rose-700 mt-0.5" x-text="accounts.filter(a => a.locked).length">0</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
             <div class="flex items-center justify-between">
               <span class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Applied</span>
               <span class="material-icons-round text-emerald-200 text-[16px]">domain</span>
             </div>
-            <div class="text-lg font-black text-emerald-700 mt-0.5" id="statEntities">47</div>
+            <div class="text-lg font-black text-emerald-700 mt-0.5" x-text="filteredAccounts.length">0</div>
           </div>
         </section>
 
@@ -103,38 +106,29 @@
           <!-- Template List -->
           <div class="gov-card flex flex-col overflow-hidden">
             <div class="gov-header flex justify-between items-center">
-              <span class="text-[10px] font-black uppercase text-slate-600 tracking-widest">Templates</span>
+              <span class="text-[10px] font-black uppercase text-slate-600 tracking-widest">Templates (<span x-text="templates.length">0</span>)</span>
             </div>
             <div class="p-2 border-b border-slate-100">
-              <input id="templateSearch" type="text" placeholder="Search..." class="gov-input w-full bg-slate-50">
+              <input type="text" x-model="searchTemplate" placeholder="Search..." class="gov-input w-full bg-slate-50">
             </div>
-            <div id="templateList" class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
-               <!-- Template Items -->
-               <button class="w-full text-left border border-blue-600 bg-blue-50 rounded-[2px] p-2 hover:bg-blue-100 transition group" onclick="selectTemplate('standard')">
-                 <div class="flex justify-between items-start">
-                   <div>
-                     <div class="text-[11px] font-black text-blue-900 uppercase">DENR Standard v2.1</div>
-                     <div class="text-[9px] text-blue-700 font-medium mt-0.5">Default Master</div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
+               <template x-for="template in filteredTemplates" :key="template.id">
+                 <button @click="selectTemplate(template)" :class="{ 'border-blue-600 bg-blue-50': selectedTemplate?.id === template.id, 'border-slate-200 bg-white': selectedTemplate?.id !== template.id }" class="w-full text-left border rounded-[2px] p-2 hover:bg-blue-100 transition group">
+                   <div class="flex justify-between items-start">
+                     <div>
+                       <div class="text-[11px] font-black text-slate-900 uppercase" x-text="template.name">Template</div>
+                       <div class="text-[9px] text-slate-600 font-medium mt-0.5" x-text="template.description || 'No description'">Description</div>
+                     </div>
+                     <span :class="{ 'bg-blue-700': template.status === 'active', 'bg-slate-200': template.status !== 'active' }" class="text-[8px] font-black text-white px-1.5 py-0.5 rounded-[2px] uppercase" x-text="template.status || 'Inactive'">Status</span>
                    </div>
-                   <span class="text-[8px] font-black bg-blue-700 text-white px-1.5 py-0.5 rounded-[2px] uppercase">Active</span>
-                 </div>
-                 <div class="flex gap-2 mt-2 text-[9px] text-blue-800 font-mono">
-                   <span><b>125</b> Accts</span> • <span><b>38</b> Locked</span>
-                 </div>
-               </button>
-
-               <button class="w-full text-left border border-slate-200 bg-white rounded-[2px] p-2 hover:bg-slate-50 transition group" onclick="selectTemplate('regional')">
-                 <div class="flex justify-between items-start">
-                   <div>
-                     <div class="text-[11px] font-black text-slate-700 uppercase">Regional Custom</div>
-                     <div class="text-[9px] text-slate-500 font-medium mt-0.5">Extended Set</div>
+                   <div class="flex gap-2 mt-2 text-[9px] text-slate-600 font-mono">
+                     <span x-text="`${template.account_count || 0} Accts`"><b>0</b> Accts</span>
                    </div>
-                   <span class="text-[8px] font-black bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-[2px] uppercase">Inactive</span>
-                 </div>
-                 <div class="flex gap-2 mt-2 text-[9px] text-slate-500 font-mono">
-                   <span><b>156</b> Accts</span> • <span><b>52</b> Locked</span>
-                 </div>
-               </button>
+                 </button>
+               </template>
+               <template x-if="filteredTemplates.length === 0">
+                 <div class="text-center py-6 text-slate-400 text-[10px]">No templates found</div>
+               </template>
             </div>
           </div>
 
@@ -142,12 +136,12 @@
           <div class="gov-card flex flex-col overflow-hidden">
             <div class="gov-header flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <span class="text-[10px] font-black uppercase text-slate-600 tracking-widest">Accounts: <span id="selectedTemplateName" class="text-blue-700">DENR Standard v2.1</span></span>
+                <span class="text-[10px] font-black uppercase text-slate-600 tracking-widest">Accounts: <span class="text-blue-700" x-text="selectedTemplate?.name || 'Select Template'">Select Template</span></span>
               </div>
               <div class="flex gap-1.5">
-                <input id="accountSearch" type="text" placeholder="Search code/name..." class="gov-input w-32">
-                <select id="typeFilter" class="gov-input bg-white"><option value="">All Types</option><option value="asset">Asset</option><option value="liability">Liability</option></select>
-                <button onclick="openAccountModal()" class="gov-btn bg-emerald-700 text-white hover:bg-emerald-800 flex items-center gap-1"><span class="material-icons-round text-[12px]">add</span> Add</button>
+                <input type="text" x-model="searchAccount" placeholder="Search code/name..." title="Search accounts" class="gov-input w-32">
+                <select x-model="filterType" title="Filter by account type" class="gov-input bg-white"><option value="">All Types</option><option value="asset">Asset</option><option value="liability">Liability</option><option value="revenue">Revenue</option><option value="expense">Expense</option></select>
+                <button @click="openAccountModal()" class="gov-btn bg-emerald-700 text-white hover:bg-emerald-800 flex items-center gap-1"><span class="material-icons-round text-[12px]">add</span> Add</button>
               </div>
             </div>
 
@@ -162,41 +156,36 @@
                     <th class="text-center">Actions</th>
                   </tr>
                 </thead>
-                <tbody id="accountTable" class="text-[10px]">
-                  <!-- Rows -->
-                  <tr class="hover:bg-slate-50 group border-b border-slate-100" data-type="asset" data-status="locked">
-                    <td class="font-mono font-bold text-slate-700">1001</td>
-                    <td class="font-bold text-slate-900">Cash on Hand</td>
-                    <td><span class="px-1.5 py-0.5 rounded-[2px] bg-blue-50 text-blue-700 border border-blue-100 font-bold text-[9px] uppercase">Asset</span></td>
-                    <td><span class="px-1.5 py-0.5 rounded-[2px] bg-slate-100 text-slate-600 border border-slate-200 font-bold text-[9px] uppercase flex items-center w-fit gap-1"><span class="material-icons-round text-[10px]">lock</span> Locked</span></td>
-                    <td class="text-center">
-                      <button class="text-slate-400 hover:text-blue-700 transition"><span class="material-icons-round text-[16px]">edit</span></button>
-                    </td>
-                  </tr>
-                  <!-- More rows... -->
-                  {% for a in coa_accounts %}
-                  <tr class="hover:bg-slate-50 group border-b border-slate-100" data-type="{{ a.type|lower }}" data-status="{{ 'locked' if a.locked else 'editable' }}">
-                    <td class="font-mono font-bold text-slate-700">{{ a.code }}</td>
-                    <td class="font-bold text-slate-900">{{ a.name }}</td>
-                    <td><span class="px-1.5 py-0.5 rounded-[2px] bg-slate-50 text-slate-600 border border-slate-200 font-bold text-[9px] uppercase">{{ a.type }}</span></td>
-                    <td>
-                      {% if a.locked %}
-                      <span class="px-1.5 py-0.5 rounded-[2px] bg-slate-100 text-slate-600 border border-slate-200 font-bold text-[9px] uppercase flex items-center w-fit gap-1"><span class="material-icons-round text-[10px]">lock</span> Locked</span>
-                      {% else %}
-                      <span class="px-1.5 py-0.5 rounded-[2px] bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold text-[9px] uppercase">Editable</span>
-                      {% endif %}
-                    </td>
-                    <td class="text-center">
-                      <button class="text-slate-400 hover:text-blue-700 transition"><span class="material-icons-round text-[16px]">edit</span></button>
-                    </td>
-                  </tr>
-                  {% endfor %}
+                <tbody class="text-[10px]">
+                  <template x-for="account in filteredAccounts" :key="account.id">
+                    <tr class="hover:bg-slate-50 group border-b border-slate-100">
+                      <td class="font-mono font-bold text-slate-700" x-text="account.code">1001</td>
+                      <td class="font-bold text-slate-900" x-text="account.name">Account</td>
+                      <td><span class="px-1.5 py-0.5 rounded-[2px] bg-slate-50 text-slate-600 border border-slate-200 font-bold text-[9px] uppercase" x-text="account.type">Type</span></td>
+                      <td>
+                        <template x-if="account.locked">
+                          <span class="px-1.5 py-0.5 rounded-[2px] bg-slate-100 text-slate-600 border border-slate-200 font-bold text-[9px] uppercase flex items-center w-fit gap-1"><span class="material-icons-round text-[10px]">lock</span> Locked</span>
+                        </template>
+                        <template x-if="!account.locked">
+                          <span class="px-1.5 py-0.5 rounded-[2px] bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold text-[9px] uppercase">Editable</span>
+                        </template>
+                      </td>
+                      <td class="text-center">
+                        <button @click="editAccount(account)" class="text-slate-400 hover:text-blue-700 transition"><span class="material-icons-round text-[16px]">edit</span></button>
+                      </td>
+                    </tr>
+                  </template>
+                  <template x-if="filteredAccounts.length === 0">
+                    <tr>
+                      <td colspan="5" class="text-center py-6 text-slate-400 text-[10px]">No accounts found</td>
+                    </tr>
+                  </template>
                 </tbody>
               </table>
             </div>
             <div class="p-2 border-t border-slate-200 bg-slate-50 flex justify-between items-center text-[9px] text-slate-500">
-              <span>Showing all records</span>
-              <button onclick="resetAccountFilters()" class="hover:text-blue-700 font-bold uppercase">Reset Filters</button>
+              <span x-text="`Showing ${filteredAccounts.length} of ${accounts.length} accounts`">Showing all records</span>
+              <button @click="resetFilters()" class="hover:text-blue-700 font-bold uppercase">Reset</button>
             </div>
           </div>
 
@@ -211,20 +200,20 @@
     <div class="bg-white rounded-[2px] shadow-xl w-full max-w-md border border-slate-300">
       <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
         <h3 class="text-xs font-black uppercase text-slate-700">New Template</h3>
-        <button onclick="closeTemplateModal()" class="text-slate-400 hover:text-rose-600"><span class="material-icons-round text-sm">close</span></button>
+        <button @click="closeTemplateModal()" class="text-slate-400 hover:text-rose-600"><span class="material-icons-round text-sm">close</span></button>
       </div>
       <div class="p-4 space-y-3">
         <div>
           <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Name</label>
-          <input type="text" class="gov-input w-full" placeholder="e.g. DENR 2026 Master">
+          <input type="text" x-model="newTemplate.name" class="gov-input w-full" placeholder="e.g. DENR 2026 Master">
         </div>
         <div>
           <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Description</label>
-          <textarea class="gov-input w-full" rows="2"></textarea>
+          <textarea x-model="newTemplate.description" title="Template description" placeholder="Enter description..." class="gov-input w-full" rows="2"></textarea>
         </div>
         <div class="flex justify-end gap-2 pt-2">
-          <button onclick="closeTemplateModal()" class="gov-btn border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button class="gov-btn bg-blue-800 text-white hover:bg-blue-900">Save</button>
+          <button @click="closeTemplateModal()" class="gov-btn border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button @click="saveTemplate()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900">Save</button>
         </div>
       </div>
     </div>
@@ -234,98 +223,247 @@
   <div id="accountModal" class="hidden fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-[2px] shadow-xl w-full max-w-md border border-slate-300">
       <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
-        <h3 class="text-xs font-black uppercase text-slate-700">Add Account</h3>
-        <button onclick="closeAccountModal()" class="text-slate-400 hover:text-rose-600"><span class="material-icons-round text-sm">close</span></button>
+        <h3 class="text-xs font-black uppercase text-slate-700" x-text="editingAccount ? 'Edit Account' : 'Add Account'">Add Account</h3>
+        <button @click="closeAccountModal()" class="text-slate-400 hover:text-rose-600"><span class="material-icons-round text-sm">close</span></button>
       </div>
       <div class="p-4 space-y-3">
         <div class="grid grid-cols-3 gap-3">
           <div class="col-span-1">
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Code</label>
-            <input type="text" class="gov-input w-full" placeholder="1001">
+            <input type="text" x-model="newAccount.code" class="gov-input w-full" placeholder="1001">
           </div>
           <div class="col-span-2">
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Type</label>
-            <select class="gov-input w-full bg-white"><option>Asset</option><option>Liability</option></select>
+            <select x-model="newAccount.type" title="Account type" class="gov-input w-full bg-white"><option value="Asset">Asset</option><option value="Liability">Liability</option><option value="Revenue">Revenue</option><option value="Expense">Expense</option></select>
           </div>
         </div>
         <div>
           <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Account Name</label>
-          <input type="text" class="gov-input w-full" placeholder="Cash on Hand">
+          <input type="text" x-model="newAccount.name" class="gov-input w-full" placeholder="Cash on Hand">
         </div>
         <div class="flex items-center gap-2 pt-1">
-          <input type="checkbox" id="lockCheck" class="rounded border-slate-300">
+          <input type="checkbox" id="lockCheck" x-model="newAccount.locked" class="rounded border-slate-300">
           <label for="lockCheck" class="text-[10px] font-bold text-slate-600">Lock Account (Prevent Modification)</label>
         </div>
         <div class="flex justify-end gap-2 pt-2">
-          <button onclick="closeAccountModal()" class="gov-btn border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button class="gov-btn bg-blue-800 text-white hover:bg-blue-900">Save</button>
+          <button @click="closeAccountModal()" class="gov-btn border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button @click="saveAccount()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900" x-text="editingAccount ? 'Update' : 'Save'">Save</button>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    // modals
-    function openTemplateModal(){ document.getElementById('templateModal').classList.remove('hidden'); }
-    function closeTemplateModal(){ document.getElementById('templateModal').classList.add('hidden'); }
-    function openAccountModal(){ document.getElementById('accountModal').classList.remove('hidden'); }
-    function closeAccountModal(){ document.getElementById('accountModal').classList.add('hidden'); }
+    function coaManagement() {
+      return {
+        templates: [],
+        accounts: [],
+        selectedTemplate: null,
+        newTemplate: { name: '', description: '' },
+        newAccount: { code: '', name: '', type: 'Asset', locked: false },
+        editingAccount: null,
+        searchTemplate: '',
+        searchAccount: '',
+        filterType: '',
 
-    // dummy actions
-    function exportTemplate(){ alert('Export (demo)'); }
+        async loadTemplates() {
+          try {
+            // Fetch from municipal endpoints
+            const municipalRes = await fetch('/api/municipal/coa-templates');
+            const municipalData = await municipalRes.json();
+            
+            // Fetch from regional endpoints
+            const regionalRes = await fetch('/regional/api/coa-templates');
+            const regionalData = await regionalRes.json();
+            
+            // Combine and deduplicate
+            const combined = [
+              ...Array.isArray(municipalData) ? municipalData : municipalData.templates || [],
+              ...Array.isArray(regionalData) ? regionalData : regionalData.templates || []
+            ];
+            
+            this.templates = Array.from(
+              new Map(combined.map(t => [t.id, t])).values()
+            );
+            
+            console.log('Loaded templates:', this.templates);
+          } catch (error) {
+            console.error('Error loading templates:', error);
+            // Fallback: create sample templates
+            this.templates = [
+              { id: 'standard', name: 'DENR Standard v2.1', description: 'Default Master', status: 'active', account_count: 0 },
+              { id: 'regional', name: 'Regional Custom', description: 'Extended Set', status: 'inactive', account_count: 0 }
+            ];
+          }
+        },
 
-    // selecting template (demo)
-    function selectTemplate(id){
-      const nameEl = document.getElementById('selectedTemplateName');
-      if(id === 'standard') nameEl.textContent = 'DENR Standard v2.1';
-      if(id === 'regional') nameEl.textContent = 'Regional Custom';
-      // in real app: fetch accounts by template id
+        async loadAccounts() {
+          try {
+            // Fetch from municipal endpoints
+            const municipalRes = await fetch('/api/municipal/coa-accounts');
+            const municipalData = await municipalRes.json();
+            
+            // Fetch from regional endpoints
+            const regionalRes = await fetch('/regional/api/coa-accounts');
+            const regionalData = await regionalRes.json();
+            
+            // Combine and deduplicate
+            const combined = [
+              ...Array.isArray(municipalData) ? municipalData : municipalData.accounts || [],
+              ...Array.isArray(regionalData) ? regionalData : regionalData.accounts || []
+            ];
+            
+            this.accounts = Array.from(
+              new Map(combined.map(a => [a.id, a])).values()
+            );
+            
+            console.log('Loaded accounts:', this.accounts);
+          } catch (error) {
+            console.error('Error loading accounts:', error);
+            this.accounts = [];
+          }
+        },
+
+        get filteredTemplates() {
+          return this.templates.filter(t => 
+            t.name.toLowerCase().includes(this.searchTemplate.toLowerCase()) ||
+            t.description.toLowerCase().includes(this.searchTemplate.toLowerCase())
+          );
+        },
+
+        get filteredAccounts() {
+          return this.accounts.filter(a => {
+            const matchSearch = !this.searchAccount || 
+              a.code.toLowerCase().includes(this.searchAccount.toLowerCase()) ||
+              a.name.toLowerCase().includes(this.searchAccount.toLowerCase());
+            
+            const matchType = !this.filterType || a.type.toLowerCase() === this.filterType.toLowerCase();
+            
+            return matchSearch && matchType;
+          });
+        },
+
+        selectTemplate(template) {
+          this.selectedTemplate = template;
+          // Filter accounts by selected template if needed
+          this.loadAccountsForTemplate(template.id);
+        },
+
+        async loadAccountsForTemplate(templateId) {
+          try {
+            const municipalRes = await fetch(`/api/municipal/coa-accounts?template=${templateId}`);
+            const municipalData = await municipalRes.json();
+            
+            const regionalRes = await fetch(`/regional/api/coa-accounts?template=${templateId}`);
+            const regionalData = await regionalRes.json();
+            
+            const combined = [
+              ...Array.isArray(municipalData) ? municipalData : municipalData.accounts || [],
+              ...Array.isArray(regionalData) ? regionalData : regionalData.accounts || []
+            ];
+            
+            this.accounts = Array.from(
+              new Map(combined.map(a => [a.id, a])).values()
+            );
+          } catch (error) {
+            console.error('Error loading accounts for template:', error);
+          }
+        },
+
+        openTemplateModal() {
+          this.newTemplate = { name: '', description: '' };
+          document.getElementById('templateModal').classList.remove('hidden');
+        },
+
+        closeTemplateModal() {
+          document.getElementById('templateModal').classList.add('hidden');
+        },
+
+        async saveTemplate() {
+          if (!this.newTemplate.name) {
+            alert('Please enter a template name');
+            return;
+          }
+          
+          try {
+            // POST to municipal endpoint
+            const res = await fetch('/api/municipal/coa-templates', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.newTemplate)
+            });
+            
+            if (res.ok) {
+              await this.loadTemplates();
+              this.closeTemplateModal();
+              alert('Template created successfully');
+            }
+          } catch (error) {
+            console.error('Error saving template:', error);
+            alert('Error saving template');
+          }
+        },
+
+        openAccountModal() {
+          this.newAccount = { code: '', name: '', type: 'Asset', locked: false };
+          this.editingAccount = null;
+          document.getElementById('accountModal').classList.remove('hidden');
+        },
+
+        closeAccountModal() {
+          document.getElementById('accountModal').classList.add('hidden');
+        },
+
+        editAccount(account) {
+          this.editingAccount = account;
+          this.newAccount = { ...account };
+          this.openAccountModal();
+        },
+
+        async saveAccount() {
+          if (!this.newAccount.code || !this.newAccount.name) {
+            alert('Please fill in all fields');
+            return;
+          }
+          
+          try {
+            const method = this.editingAccount ? 'PUT' : 'POST';
+            const url = this.editingAccount 
+              ? `/api/municipal/coa-accounts/${this.editingAccount.id}`
+              : '/api/municipal/coa-accounts';
+            
+            const res = await fetch(url, {
+              method: method,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.newAccount)
+            });
+            
+            if (res.ok) {
+              await this.loadAccounts();
+              this.closeAccountModal();
+              alert(this.editingAccount ? 'Account updated' : 'Account created');
+            }
+          } catch (error) {
+            console.error('Error saving account:', error);
+            alert('Error saving account');
+          }
+        },
+
+        exportTemplate() {
+          if (!this.selectedTemplate) {
+            alert('Please select a template first');
+            return;
+          }
+          alert(`Exporting ${this.selectedTemplate.name}...`);
+        },
+
+        resetFilters() {
+          this.searchTemplate = '';
+          this.searchAccount = '';
+          this.filterType = '';
+        }
+      };
     }
-
-    // template search
-    const templateSearch = document.getElementById('templateSearch');
-    templateSearch.addEventListener('input', () => {
-      const q = templateSearch.value.toLowerCase().trim();
-      document.querySelectorAll('#templateList button').forEach(btn => {
-        const t = btn.innerText.toLowerCase();
-        btn.style.display = t.includes(q) ? '' : 'none';
-      });
-    });
-
-    // account filters
-    const accountSearch = document.getElementById('accountSearch');
-    const typeFilter = document.getElementById('typeFilter');
-    const statusFilter = document.getElementById('statusFilter');
-
-    function applyAccountFilters(){
-      const q = (accountSearch.value || '').toLowerCase().trim();
-      const type = typeFilter.value;
-      const status = statusFilter.value;
-
-      document.querySelectorAll('#accountTable tr').forEach(tr => {
-        const text = tr.innerText.toLowerCase();
-        const matchText = text.includes(q);
-
-        const trType = tr.getAttribute('data-type') || '';
-        const trStatus = tr.getAttribute('data-status') || '';
-
-        const matchType = !type || trType === type;
-        const matchStatus = !status || trStatus === status;
-
-        tr.style.display = (matchText && matchType && matchStatus) ? '' : 'none';
-      });
-    }
-
-    function resetAccountFilters(){
-      accountSearch.value = '';
-      typeFilter.value = '';
-      statusFilter.value = '';
-      applyAccountFilters();
-    }
-
-    accountSearch.addEventListener('input', applyAccountFilters);
-    typeFilter.addEventListener('change', applyAccountFilters);
-    statusFilter.addEventListener('change', applyAccountFilters);
   </script>
 </body>
 </html>

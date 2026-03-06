@@ -251,16 +251,12 @@
         };
 
         const DATA = {
-            applications: [
-                { date: "2026-02-13", ref: "DENR-APP-2026-001", entity: "MIMAROPA Dev Corp", sector: "Forestry Management", region: "IV-B", lgu: "Calapan City", status: "PENDING" },
-                { date: "2026-02-12", ref: "DENR-APP-2026-002", entity: "Naujan NGO", sector: "Biodiversity", region: "IV-B", lgu: "Naujan", status: "APPROVED" },
-                { date: "2026-02-11", ref: "DENR-APP-2026-003", entity: "NCR Project", sector: "Lands", region: "NCR", lgu: "Quezon City", status: "APPROVED" }
-            ],
-            requests: [{ date: "2026-02-13", ref: "SR-9910-B", entity: "Mindoro Cooperative", sector: "Inspection", region: "IV-B", lgu: "Victoria", status: "FOR REVIEW" }],
-            inventory: [{ cat: "Seedlings", desc: "Narra Saplings", qty: 5000, region: "IV-B", lgu: "Baco" }],
-            permits: [{ ref: "PMT-CITES-882", entity: "Nature Exporters", sector: "Wildlife Trade", region: "IV-B", lgu: "San Teodoro", status: "ACTIVE" }],
-            transactions: [{ ref: "OR-10291-TX", entity: "MIMAROPA Corp", type: "Permit Fee", date: "2026-02-13", region: "IV-B", status: "PAID", amount: 15400 }],
-            users: [{ name: "Maria Santos", email: "maria@denr.gov.ph", type: "Regional Director", region: "IV-B", lgu: "Calapan", status: "ACTIVE" }]
+            applications: [],
+            requests: [],
+            inventory: [],
+            permits: [],
+            transactions: [],
+            users: []
         };
 
         const HEADERS = {
@@ -319,7 +315,7 @@
                 data: { labels: ['07','08','09','10','11','12','13'], datasets: [{ label:'Submissions', data:[450, 620, 580, 890, 720, 950, 1100], borderColor:'#0038a8', backgroundColor: 'rgba(0, 56, 168, 0.05)', pointRadius: 2, fill: true, tension: 0.3, borderWidth: 2 }] },
                 options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}, ticks:{font:chartFont}},y:{grid:{color:'#f1f5f9'}, ticks:{font:chartFont}}}}
             });
-            myBarChart = new Chart($('barChart'), { 
+            window.myBarChart = new Chart($('barChart'), { 
                 type: 'bar', 
                 data: { labels: ['NCR','IV-A','IV-B','III','VII'], datasets: [{ data:[92, 85, 95, 78, 88], backgroundColor:['#004d00','#006400','#0038a8','#f59e0b','#ce1126'], borderRadius: 2 }] },
                 options: { indexAxis: 'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}, max:100,ticks:{font:chartFont}},y:{grid:{display:false}, ticks:{font:chartFont}}} }
@@ -406,13 +402,152 @@
         $("searchInput").addEventListener("input", renderTable);
         $("categorySelect").addEventListener("change", renderTable);
         $("scopeSelect").addEventListener("change", renderTable);
+        window.renderTable = renderTable;
 
-        window.onload = () => { 
-            initCharts(); populateCategories(); renderTable(); 
-            ["apps","reqs","permits","inv","uinv","txn","users"].forEach(k => {
-                $( `kpi-${k}`).textContent = DATA[k === "uinv" ? "applications" : k === "txn" ? "transactions" : k]?.length || 0;
-            });
-        };
+        window.onload = () => { initCharts(); populateCategories(); renderTable(); };
+    </script>
+
+    <script type="module">
+        import { auth } from '/static/js/firebase-config.js';
+        import { getFirestore, collection, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const db = getFirestore();
+
+        async function fetchSuperAdminData() {
+            try {
+                // 1. Fetch service_requests (latest 300)
+                const srSnap = await getDocs(query(collection(db, 'service_requests'), orderBy('createdAt', 'desc'), limit(300)));
+                const srDocs = [];
+                srSnap.forEach(doc => srDocs.push({ id: doc.id, ...doc.data() }));
+
+                // Populate applications tab (all SRs)
+                DATA.applications = srDocs.map(r => ({
+                    date: r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString('en-CA') : (r.createdAt || '—'),
+                    ref: r.id.slice(0, 14).toUpperCase(),
+                    entity: r.fullName || r.applicantName || r.name || '—',
+                    sector: r.serviceType || '—',
+                    region: r.region || '—',
+                    lgu: r.municipality || r.lgu || '—',
+                    status: (r.status || 'PENDING').toUpperCase()
+                }));
+
+                // Populate requests tab (service/inspection types)
+                DATA.requests = srDocs.filter(r => {
+                    const t = (r.serviceType || '').toLowerCase();
+                    return t.includes('inspection') || t.includes('audit') || t.includes('clearance') ||
+                           t.includes('certification') || t.includes('farm') || t.includes('visit') ||
+                           t.includes('recommendation') || t.includes('registration');
+                }).map(r => ({
+                    date: r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString('en-CA') : (r.createdAt || '—'),
+                    ref: r.id.slice(0, 14).toUpperCase(),
+                    entity: r.fullName || r.applicantName || r.name || '—',
+                    sector: r.serviceType || '—',
+                    region: r.region || '—',
+                    lgu: r.municipality || '—',
+                    status: (r.status || 'PENDING').toUpperCase()
+                }));
+                // Populate permits tab (permit/license types)
+                DATA.permits = srDocs.filter(r => {
+                    const t = (r.serviceType || '').toLowerCase();
+                    return t.includes('permit') || t.includes('license') || t.includes('cites') ||
+                           t.includes('cutting') || t.includes('wildlife') || t.includes('forest') ||
+                           t.includes('ecc') || t.includes('pto');
+                }).map(r => ({
+                    ref: r.id.slice(0, 14).toUpperCase(),
+                    entity: r.fullName || r.applicantName || r.name || '—',
+                    sector: r.serviceType || '—',
+                    region: r.region || '—',
+                    lgu: r.municipality || '—',
+                    status: (r.status || 'PENDING').toUpperCase()
+                }));
+
+                // KPI — apps, reqs, permits
+                document.getElementById('kpi-apps').textContent = srDocs.length.toLocaleString();
+                document.getElementById('kpi-reqs').textContent = DATA.requests.length.toLocaleString();
+                document.getElementById('kpi-permits').textContent = DATA.permits.length.toLocaleString();
+
+                // lineChart — nationwide trend by last 7 days
+                const dayKeys = [];
+                for (let i = 6; i >= 0; i--) {
+                    const d = new Date(); d.setDate(d.getDate() - i);
+                    dayKeys.push(d.toISOString().slice(0, 10));
+                }
+                const dayCounts = {};
+                dayKeys.forEach(k => dayCounts[k] = 0);
+                srDocs.forEach(r => {
+                    const d = r.createdAt?.toDate ? r.createdAt.toDate().toISOString().slice(0, 10) : null;
+                    if (d && Object.prototype.hasOwnProperty.call(dayCounts, d)) dayCounts[d]++;
+                });
+                if (window.myLineChart) {
+                    window.myLineChart.data.labels = dayKeys.map(k => new Date(k + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                    window.myLineChart.data.datasets[0].data = dayKeys.map(k => dayCounts[k]);
+                    window.myLineChart.update();
+                }
+
+                // barChart — regional rank top 5 by SR count
+                const regionCounts = {};
+                srDocs.forEach(r => {
+                    const reg = r.region || 'Unknown';
+                    regionCounts[reg] = (regionCounts[reg] || 0) + 1;
+                });
+                const topRegions = Object.entries(regionCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                if (window.myBarChart) {
+                    window.myBarChart.data.labels = topRegions.map(x => x[0]);
+                    window.myBarChart.data.datasets[0].data = topRegions.map(x => x[1]);
+                    window.myBarChart.update();
+                }
+
+                // transactions tab + kpi-txn (total revenue)
+                let totalRevenue = 0;
+                DATA.transactions = srDocs.filter(r => r.serviceFee || r.amount || r.fee).map(r => {
+                    const amt = parseFloat(r.serviceFee || r.amount || r.fee || 0);
+                    totalRevenue += amt;
+                    return {
+                        ref: r.id.slice(0, 12).toUpperCase(),
+                        entity: r.fullName || r.applicantName || r.name || '—',
+                        type: r.serviceType || 'Service Fee',
+                        date: r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString('en-CA') : (r.createdAt || '—'),
+                        region: r.region || '—',
+                        status: (r.paymentStatus || (r.serviceFee ? 'PAID' : 'PENDING')).toUpperCase(),
+                        amount: amt
+                    };
+                });
+                document.getElementById('kpi-txn').textContent = '₱' + totalRevenue.toLocaleString('en-PH', { maximumFractionDigits: 0 });
+
+            } catch(e) { console.error('[SuperAdmin] SR fetch error:', e); }
+
+            // 2. Fetch users collection
+            try {
+                const usersSnap = await getDocs(collection(db, 'users'));
+                const userDocs = [];
+                usersSnap.forEach(doc => userDocs.push({ id: doc.id, ...doc.data() }));
+                DATA.users = userDocs.map(u => ({
+                    name: u.displayName || u.username || u.name || u.email || '—',
+                    email: u.email || '—',
+                    type: u.role || u.designation || '—',
+                    region: u.region || u.regionName || '—',
+                    lgu: u.municipality || u.lgu || '—',
+                    status: (u.status || (u.disabled ? 'DISABLED' : 'ACTIVE')).toUpperCase()
+                }));
+                document.getElementById('kpi-users').textContent = userDocs.length.toLocaleString();
+            } catch(e) { console.error('[SuperAdmin] Users fetch error:', e); }
+
+            // 3. Fetch entities collection for assets KPI
+            try {
+                const entSnap = await getDocs(collection(db, 'entities'));
+                document.getElementById('kpi-uinv').textContent = entSnap.size.toLocaleString();
+                document.getElementById('kpi-inv').textContent = entSnap.size.toLocaleString();
+            } catch(e) { console.error('[SuperAdmin] Entities fetch error:', e); }
+
+            // 4. Re-render current table with real data
+            if (typeof window.renderTable === 'function') window.renderTable();
+
+            // 5. Update last-synced timestamp
+            const ls = document.getElementById('lastSyncedSA');
+            if (ls) ls.textContent = new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        auth.onAuthStateChanged(user => { if (user) fetchSuperAdminData(); });
     </script>
 </body>
 </html>

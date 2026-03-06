@@ -16,6 +16,38 @@ def _normalize_scope(value):
     return ' '.join(str(value or '').strip().lower().split())
 
 
+REGION_MAPPING = {
+    'MIMAROPA': 'REGION-IV-B',
+    'CALABARZON': 'REGION-IV-A',
+    'BICOL': 'REGION-V',
+    'WESTERN-VISAYAS': 'REGION-VI',
+    'EASTERN-VISAYAS': 'REGION-VIII',
+    'CENTRAL-VISAYAS': 'REGION-VII',
+    'DAVAO': 'REGION-XI',
+    'SOCCSKSARGEN': 'REGION-XII',
+    'ZAMBOANGA': 'REGION-IX',
+    'CARAGA': 'REGION-XIII',
+    'CORDILLERA': 'CAR',
+    'ILOCOS': 'REGION-I',
+    'CAGAYAN-VALLEY': 'REGION-II',
+    'CENTRAL-LUZON': 'REGION-III',
+    'NCR': 'NCR',
+    'ARMM': 'REGION-BANGSAMORO'
+}
+
+
+def _canonical_region_name(value):
+    if not value:
+        return ''
+    region = str(value).strip().upper()
+    if region in REGION_MAPPING:
+        return REGION_MAPPING[region]
+    reverse_mapping = {v: k for k, v in REGION_MAPPING.items()}
+    if region in reverse_mapping:
+        return region
+    return region
+
+
 def _resolve_user_municipality_by_email(email):
     if not email:
         return None
@@ -37,13 +69,12 @@ def _resolve_municipality_from_user_context():
     print(f"\n[DEBUG] _resolve_municipality_from_user_context starting")
     print(f"[DEBUG] Session user_id: {session.get('user_id')}")
     print(f"[DEBUG] Session user_email: {session.get('user_email')}")
-    
+
     try:
         db = get_firestore_db()
         user_id = session.get('user_id')
         user_email = session.get('user_email')
-        
-        # PRIMARY: Try user_id first (most reliable)
+
         if user_id:
             print(f"[DEBUG] Looking up user document by user_id: {user_id}")
             try:
@@ -52,7 +83,7 @@ def _resolve_municipality_from_user_context():
                     user_data = user_doc.to_dict() or {}
                     print(f"[DEBUG] Found user document by user_id")
                     print(f"[DEBUG] User document municipality field: {user_data.get('municipality')}")
-                    
+
                     municipality = user_data.get('municipality') or user_data.get('municipality_name')
                     if municipality:
                         municipality = str(municipality).strip()
@@ -65,18 +96,17 @@ def _resolve_municipality_from_user_context():
             except Exception as e:
                 print(f"[ERROR] Error looking up user_id: {e}")
 
-        # FALLBACK: Try user_email (if user_id failed)
         if user_email:
             print(f"[DEBUG] Looking up user document by user_email: {user_email}")
             try:
                 query = db.collection('users').where('email', '==', user_email).limit(1)
                 docs = list(query.stream())
-                
+
                 if docs:
                     user_data = docs[0].to_dict() or {}
                     print(f"[DEBUG] Found user document by user_email")
                     print(f"[DEBUG] User document municipality field: {user_data.get('municipality')}")
-                    
+
                     municipality = user_data.get('municipality') or user_data.get('municipality_name')
                     if municipality:
                         municipality = str(municipality).strip()
@@ -88,15 +118,46 @@ def _resolve_municipality_from_user_context():
                     print(f"[ERROR] No user document found for email: {user_email}")
             except Exception as e:
                 print(f"[ERROR] Error looking up user_email: {e}")
-        
+
         print(f"[ERROR] Could not resolve municipality - no valid user_id or user_email in session")
         return None
-        
     except Exception as e:
         print(f"[ERROR] Critical error in municipality resolution: {e}")
         import traceback
         traceback.print_exc()
         return None
+
+
+def _resolve_region_from_user_context():
+    if session.get('region'):
+        return str(session.get('region')).strip()
+    if session.get('user_region'):
+        return str(session.get('user_region')).strip()
+
+    try:
+        db = get_firestore_db()
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+
+        if user_id:
+            user_doc = db.collection('users').document(user_id).get()
+            if user_doc.exists:
+                user_data = user_doc.to_dict() or {}
+                region = user_data.get('region') or user_data.get('region_name') or user_data.get('regionName')
+                if region:
+                    return str(region).strip()
+
+        if user_email:
+            docs = db.collection('users').where('email', '==', user_email).limit(1).stream()
+            for doc in docs:
+                user_data = doc.to_dict() or {}
+                region = user_data.get('region') or user_data.get('region_name') or user_data.get('regionName')
+                if region:
+                    return str(region).strip()
+    except Exception as e:
+        print(f"[WARN] Could not resolve user region by context: {e}")
+
+    return None
 
 
 def _get_current_municipality_scope():
@@ -311,6 +372,260 @@ def api_add_deposit():
         print(f"[ERROR] Adding deposit: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+
+# =============================================
+# MUNICIPAL PAYMENT DEPOSITS TRACKING
+# =============================================
+@bp.route('/deposits/payments', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_municipal_payment_deposits():
+    """Get all payment transactions/deposits for the municipality (from transactions collection)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        region_scope = _resolve_region_from_user_context()
+        if not municipality_scope:
+            return jsonify({'success': False, 'error': 'Cannot determine municipality'}), 403
+
+        normalized_municipality_scope = _normalize_scope(municipality_scope)
+        normalized_region_scope = _normalize_scope(_canonical_region_name(region_scope))
+        
+        print(f"[DEBUG] Fetching payment deposits for municipality: '{municipality_scope}', region: '{region_scope}'")
+        
+        db = get_firestore_db()
+        
+        # Step 1: Get all users that belong to this municipality
+        user_emails = set()
+        user_ids = set()
+        try:
+            users_docs = db.collection('users').limit(1000).stream()
+            
+            for user_doc in users_docs:
+                user_data = user_doc.to_dict() or {}
+                user_municipality = _normalize_scope(user_data.get('municipality') or user_data.get('municipality_name'))
+                user_region = _normalize_scope(_canonical_region_name(
+                    user_data.get('region') or user_data.get('region_name') or user_data.get('regionName')
+                ))
+
+                if user_municipality != normalized_municipality_scope:
+                    continue
+                if normalized_region_scope and user_region and user_region != normalized_region_scope:
+                    continue
+
+                email = user_data.get('email')
+                if email:
+                    user_emails.add(email.lower())
+
+                user_ids.add(str(user_doc.id))
+                for uid in [user_data.get('uid'), user_data.get('user_id'), user_data.get('userId'), user_data.get('id')]:
+                    if uid:
+                        user_ids.add(str(uid))
+            
+            print(f"[DEBUG] Found {len(user_emails)} users for municipality '{municipality_scope}' under region '{region_scope}'")
+        except Exception as e:
+            print(f"[WARNING] Failed to fetch municipality users: {e}")
+        
+        deposits = []
+        paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
+
+        def parse_amount(raw_value):
+            try:
+                return float(raw_value or 0)
+            except (ValueError, TypeError):
+                return 0.0
+
+        def is_paid(status_value):
+            return str(status_value or '').strip().lower() in paid_markers
+
+        def in_scope(email_value=None, user_id_value=None, muni_value=None, region_value=None):
+            normalized_email = str(email_value or '').strip().lower()
+            normalized_uid = str(user_id_value or '').strip()
+            normalized_muni = _normalize_scope(muni_value)
+            normalized_region = _normalize_scope(_canonical_region_name(region_value))
+
+            by_user = (normalized_email in user_emails) or (normalized_uid and normalized_uid in user_ids)
+            by_fields = (
+                normalized_muni == normalized_municipality_scope
+                and (not normalized_region_scope or not normalized_region or normalized_region == normalized_region_scope)
+            )
+            return by_user or by_fields
+
+        def append_deposit(record_id, invoice_id, external_id, amount, description, payer_email, payment_method, status, created_at, paid_at, reference, source, municipality_name, region_name):
+            deposits.append({
+                'id': record_id,
+                'transaction_type': 'Payment Deposit',
+                'payment_type': 'Online Payment',
+                'invoice_id': invoice_id,
+                'external_id': external_id,
+                'amount': amount,
+                'description': description,
+                'payer_email': payer_email,
+                'payment_method': payment_method,
+                'status': str(status or '').strip().upper(),
+                'created_at': created_at,
+                'paid_at': paid_at,
+                'reference': reference,
+                'source': source,
+                'municipality': municipality_name,
+                'region': region_name,
+            })
+        
+        # Step 2: Fetch all transactions from 'transactions' collection
+        try:
+            all_transactions = db.collection('transactions').limit(1000).stream()
+            
+            transaction_count = 0
+            for doc in all_transactions:
+                trans = doc.to_dict()
+                user_email = (trans.get('user_email') or '').lower()
+                user_id = trans.get('userId') or trans.get('user_id') or trans.get('uid')
+
+                if in_scope(
+                    user_email,
+                    user_id,
+                    trans.get('municipality') or trans.get('municipality_name'),
+                    trans.get('region') or trans.get('region_name') or trans.get('regionName')
+                ):
+                    status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status')
+                    paid_by_status = is_paid(status)
+                    paid_by_method = bool(trans.get('payment_method')) and str(status or '').strip().lower() not in {'pending', 'failed', 'expired', 'cancelled'}
+                    amount = parse_amount(trans.get('amount'))
+
+                    if amount > 0 and (paid_by_status or paid_by_method):
+                        append_deposit(
+                            doc.id,
+                            trans.get('invoice_id', ''),
+                            trans.get('external_id', ''),
+                            amount,
+                            trans.get('description', trans.get('transaction_name', 'Payment')),
+                            user_email,
+                            trans.get('payment_method', 'Online Payment'),
+                            status or 'PAID',
+                            trans.get('created_at'),
+                            trans.get('paid_at'),
+                            trans.get('reference', trans.get('external_id', '')),
+                            'transactions',
+                            trans.get('municipality') or trans.get('municipality_name') or municipality_scope,
+                            _canonical_region_name(trans.get('region') or trans.get('region_name') or trans.get('regionName') or region_scope)
+                        )
+                    transaction_count += 1
+            
+            print(f"[DEBUG] Loaded {transaction_count} payment deposits for municipality '{municipality_scope}'")
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch transactions: {e}")
+            import traceback
+            traceback.print_exc()
+
+        # Step 3: Merge paid applications and service requests that may not exist in transactions collection
+        try:
+            application_docs = db.collection('applications').limit(3000).stream()
+            for doc in application_docs:
+                app = doc.to_dict() or {}
+                payer_email = (app.get('userEmail') or app.get('user_email') or app.get('email') or '').lower()
+                app_user_id = app.get('userId') or app.get('user_id') or app.get('uid')
+
+                if not in_scope(
+                    payer_email,
+                    app_user_id,
+                    app.get('municipality') or app.get('municipality_name'),
+                    app.get('region') or app.get('region_name') or app.get('regionName')
+                ):
+                    continue
+
+                status = app.get('paymentStatus') or app.get('payment_status') or app.get('status')
+                amount = parse_amount(app.get('amount') or app.get('paymentAmount') or app.get('serviceFee') or app.get('processingFee'))
+                if amount <= 0 or not is_paid(status):
+                    continue
+
+                append_deposit(
+                    doc.id,
+                    app.get('invoiceId') or app.get('invoice_id') or app.get('externalId') or app.get('external_id') or doc.id,
+                    app.get('externalId') or app.get('external_id') or '',
+                    amount,
+                    app.get('description') or app.get('applicationType') or app.get('permitType') or 'Application Payment',
+                    payer_email,
+                    app.get('paymentMethod') or app.get('payment_method') or 'Online Payment',
+                    status,
+                    app.get('createdAt') or app.get('created_at') or app.get('dateFiled'),
+                    app.get('updatedAt') or app.get('updated_at'),
+                    app.get('reference') or '',
+                    'applications',
+                    app.get('municipality') or app.get('municipality_name') or municipality_scope,
+                    _canonical_region_name(app.get('region') or app.get('region_name') or app.get('regionName') or region_scope)
+                )
+        except Exception as e:
+            print(f"[WARNING] Failed to merge applications payment records: {e}")
+
+        try:
+            service_docs = db.collection('service_requests').limit(3000).stream()
+            for doc in service_docs:
+                service = doc.to_dict() or {}
+                payer_email = (service.get('userEmail') or service.get('user_email') or service.get('email') or '').lower()
+                service_user_id = service.get('userId') or service.get('user_id') or service.get('uid')
+
+                if not in_scope(
+                    payer_email,
+                    service_user_id,
+                    service.get('municipality') or service.get('municipality_name'),
+                    service.get('region') or service.get('region_name') or service.get('regionName')
+                ):
+                    continue
+
+                status = service.get('paymentStatus') or service.get('payment_status') or service.get('status')
+                amount = parse_amount(service.get('amount') or service.get('paymentAmount') or service.get('serviceFee') or service.get('fee'))
+                if amount <= 0 or not is_paid(status):
+                    continue
+
+                append_deposit(
+                    doc.id,
+                    service.get('invoiceId') or service.get('invoice_id') or service.get('externalId') or service.get('external_id') or doc.id,
+                    service.get('externalId') or service.get('external_id') or '',
+                    amount,
+                    service.get('serviceType') or service.get('description') or 'Service Payment',
+                    payer_email,
+                    service.get('paymentMethod') or service.get('payment_method') or 'Online Payment',
+                    status,
+                    service.get('createdAt') or service.get('created_at') or service.get('submittedAt'),
+                    service.get('updatedAt') or service.get('updated_at'),
+                    service.get('reference') or '',
+                    'service_requests',
+                    service.get('municipality') or service.get('municipality_name') or municipality_scope,
+                    _canonical_region_name(service.get('region') or service.get('region_name') or service.get('regionName') or region_scope)
+                )
+        except Exception as e:
+            print(f"[WARNING] Failed to merge service payment records: {e}")
+
+        # Deduplicate by invoice/reference/id
+        deduped = {}
+        for row in deposits:
+            dedupe_key = str(row.get('invoice_id') or row.get('reference') or row.get('id'))
+            deduped[dedupe_key] = row
+        deposits = list(deduped.values())
+        
+        # Sort by date (most recent first)
+        try:
+            deposits.sort(
+                key=lambda x: str(x.get('created_at', '')) or '',
+                reverse=True
+            )
+        except Exception as e:
+            print(f"[WARNING] Failed to sort deposits: {e}")
+        
+        print(f"[DEBUG] Returning {len(deposits)} total deposits for municipality '{municipality_scope}'")
+        
+        return jsonify({
+            'success': True,
+            'municipality': municipality_scope,
+            'region': region_scope,
+            'deposits': deposits,
+            'count': len(deposits)
+        }), 200
+        
+    except Exception as e:
+        print(f"[ERROR] Fetching municipal payment deposits: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @bp.route('/deposits/<category_id>', methods=['DELETE'])
 @role_required('municipal','municipal_admin')
 def api_delete_deposit(category_id):
@@ -519,6 +834,9 @@ def api_get_entities():
     """Get all entities for the municipality"""
     try:
         municipality_scope = _get_current_municipality_scope()
+        if not municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Municipality scope is missing'}), 400
+
         entities = entities_storage.list_entities(municipality_scope)
         stats = entities_storage.get_entity_stats(municipality_scope)
         return jsonify({
@@ -537,8 +855,11 @@ def api_create_entity():
     """Create a new entity"""
     try:
         municipality_scope = _get_current_municipality_scope()
-        data = request.get_json()
-        
+        if not municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Municipality scope is missing'}), 400
+
+        data = request.get_json() or {}
+
         result = entities_storage.add_entity(
             municipality=municipality_scope,
             name=data.get('name'),
@@ -756,3 +1077,447 @@ def api_get_system_logs_by_action(action):
     except Exception as e:
         print(f"[ERROR] Getting system logs by action: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# ==================== COA TEMPLATES API (Frontend-compatible) ====================
+
+@bp.route('/coa-templates', methods=['GET'])
+def api_get_coa_templates_frontend():
+    """Get all COA templates for the municipality (frontend-compatible endpoint)"""
+    try:
+        # Try to get municipality scope
+        municipality_scope = _get_current_municipality_scope()
+        
+        # If no municipality scope, fetch ALL templates (for national admin)
+        if not municipality_scope:
+            try:
+                db = get_firestore_db()
+                templates = []
+                print(f"[INFO] Fetching ALL COA templates from Firestore...")
+                query_result = db.collection('coa_templates').stream()
+                for doc in query_result:
+                    data = doc.to_dict() or {}
+                    templates.append({
+                        'id': doc.id,
+                        'name': data.get('name'),
+                        'description': data.get('description', ''),
+                        'status': data.get('status', 'active'),
+                        'account_count': data.get('account_count', 0),
+                        'municipality': data.get('municipality')
+                    })
+                print(f"[INFO] Fetched {len(templates)} COA templates")
+                return jsonify(templates), 200
+            except Exception as e:
+                print(f"[ERROR] Getting all COA templates: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify([]), 200
+        
+        # Municipality-specific fetch
+        templates = coa_storage.list_coa_templates(municipality_scope)
+        
+        # Normalize response format
+        result = []
+        for t in templates:
+            result.append({
+                'id': t.get('id'),
+                'name': t.get('name'),
+                'description': t.get('description', ''),
+                'status': t.get('status', 'active'),
+                'account_count': t.get('account_count', 0),
+                'municipality': t.get('municipality')
+            })
+        
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"[ERROR] Getting COA templates: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify([]), 200
+
+@bp.route('/coa-templates', methods=['POST'])
+def api_create_coa_template_frontend():
+    """Create a new COA template (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        data = request.get_json()
+        
+        result = coa_storage.add_coa_template(
+            municipality=municipality_scope,
+            name=data.get('name'),
+            description=data.get('description', ''),
+            status=data.get('status', 'active')
+        )
+        
+        return jsonify({
+            'id': result.get('id'),
+            'name': result.get('name'),
+            'description': result.get('description'),
+            'status': result.get('status'),
+            'account_count': 0
+        }), 201
+    except Exception as e:
+        print(f"[ERROR] Creating COA template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== COA ACCOUNTS API (Frontend-compatible) ====================
+
+@bp.route('/coa-accounts', methods=['GET'])
+def api_get_coa_accounts_frontend():
+    """Get COA accounts, optionally filtered by template (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        template_id = request.args.get('template')
+        
+        # If no municipality scope, fetch ALL accounts (for national admin)
+        if not municipality_scope:
+            try:
+                db = get_firestore_db()
+                accounts = []
+                print(f"[INFO] Fetching ALL COA accounts from Firestore...")
+                
+                if template_id:
+                    # Get accounts for specific template
+                    query_result = db.collection('coa_accounts').where('template_id', '==', template_id).stream()
+                    for doc in query_result:
+                        data = doc.to_dict() or {}
+                        accounts.append({
+                            'id': doc.id,
+                            'code': data.get('code'),
+                            'name': data.get('name'),
+                            'type': data.get('account_type', 'Asset'),
+                            'locked': data.get('locked', False),
+                            'description': data.get('description', '')
+                        })
+                else:
+                    # Get all accounts
+                    query_result = db.collection('coa_accounts').stream()
+                    for doc in query_result:
+                        data = doc.to_dict() or {}
+                        accounts.append({
+                            'id': doc.id,
+                            'code': data.get('code'),
+                            'name': data.get('name'),
+                            'type': data.get('account_type', 'Asset'),
+                            'locked': data.get('locked', False),
+                            'description': data.get('description', '')
+                        })
+                print(f"[INFO] Fetched {len(accounts)} COA accounts")
+                return jsonify(accounts), 200
+            except Exception as e:
+                print(f"[ERROR] Getting all COA accounts: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify([]), 200
+        
+        # Municipality-specific fetch
+        if template_id:
+            # Get accounts for specific template
+            accounts = coa_storage.list_coa_accounts(template_id)
+        else:
+            # Get all accounts for the municipality
+            templates = coa_storage.list_coa_templates(municipality_scope)
+            accounts = []
+            for t in templates:
+                template_accounts = coa_storage.list_coa_accounts(t.get('id'))
+                accounts.extend(template_accounts)
+        
+        # Normalize response format
+        result = []
+        for a in accounts:
+            result.append({
+                'id': a.get('id'),
+                'code': a.get('code'),
+                'name': a.get('name'),
+                'type': a.get('account_type', 'Asset'),
+                'locked': a.get('locked', False),
+                'description': a.get('description', '')
+            })
+        
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"[ERROR] Getting COA accounts: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify([]), 200
+
+@bp.route('/coa-accounts', methods=['POST'])
+def api_create_coa_account_frontend():
+    """Create a new COA account (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        data = request.get_json()
+        
+        # If no template_id provided, create a default template first
+        template_id = data.get('template_id')
+        if not template_id:
+            # Create a default template
+            templates = coa_storage.list_coa_templates(municipality_scope)
+            if templates:
+                template_id = templates[0].get('id')
+            else:
+                template = coa_storage.add_coa_template(
+                    municipality=municipality_scope,
+                    name=f"{municipality_scope} Default COA",
+                    description="Default Chart of Accounts",
+                    status='active'
+                )
+                template_id = template.get('id')
+        
+        result = coa_storage.add_coa_account(
+            template_id=template_id,
+            code=data.get('code'),
+            name=data.get('name'),
+            account_type=data.get('type', 'Asset'),
+            locked=data.get('locked', False),
+            description=data.get('description', '')
+        )
+        
+        return jsonify({
+            'id': result.get('id'),
+            'code': result.get('code'),
+            'name': result.get('name'),
+            'type': result.get('account_type'),
+            'locked': result.get('locked'),
+            'description': result.get('description')
+        }), 201
+    except Exception as e:
+        print(f"[ERROR] Creating COA account: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/coa-accounts/<account_id>', methods=['PUT'])
+def api_update_coa_account_frontend(account_id):
+    """Update a COA account (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        data = request.get_json()
+        
+        # Verify account belongs to municipality
+        account = coa_storage.get_coa_account(account_id)
+        if not account:
+            return jsonify({'error': 'Account not found'}), 404
+        
+        # Get template to verify municipality scope
+        template = coa_storage.get_coa_template(account.get('template_id'))
+        if not template or template.get('municipality') != municipality_scope:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        # Update the account with kwargs
+        update_kwargs = {}
+        if 'code' in data:
+            update_kwargs['code'] = data.get('code')
+        if 'name' in data:
+            update_kwargs['name'] = data.get('name')
+        if 'type' in data:
+            update_kwargs['account_type'] = data.get('type')
+        if 'locked' in data:
+            update_kwargs['locked'] = data.get('locked')
+        
+        result = coa_storage.update_coa_account(account_id, **update_kwargs)
+        
+        return jsonify({
+            'id': result.get('id'),
+            'code': result.get('code'),
+            'name': result.get('name'),
+            'type': result.get('account_type'),
+            'locked': result.get('locked')
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Updating COA account: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== EXPENSE CATEGORIES API (Frontend-compatible) ====================
+
+@bp.route('/expense-categories', methods=['GET'])
+def api_get_expense_categories_frontend():
+    """Get all expense categories (frontend-compatible endpoint)"""
+    try:
+        # Try to get municipality scope
+        municipality_scope = _get_current_municipality_scope()
+        
+        # If no municipality scope, fetch ALL categories (for national admin)
+        if not municipality_scope:
+            try:
+                db = get_firestore_db()
+                categories = []
+                print(f"[INFO] Fetching ALL expense categories from Firestore...")
+                query_result = db.collection('expense_categories').stream()
+                for doc in query_result:
+                    data = doc.to_dict() or {}
+                    categories.append({
+                        'id': doc.id,
+                        'name': data.get('name'),
+                        'coa_code': data.get('coa_code'),
+                        'tax_type': data.get('tax_type', 'None'),
+                        'default_rate': data.get('default_rate', 0),
+                        'status': data.get('status', 'active'),
+                        'municipality': data.get('municipality')
+                    })
+                print(f"[INFO] Fetched {len(categories)} expense categories")
+                return jsonify(categories), 200
+            except Exception as e:
+                print(f"[ERROR] Getting all expense categories: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify([]), 200
+        
+        # Municipality-specific fetch
+        db = get_firestore_db()
+        categories = []
+        try:
+            query_result = db.collection('expense_categories').where('municipality', '==', municipality_scope).stream()
+            for doc in query_result:
+                data = doc.to_dict() or {}
+                categories.append({
+                    'id': doc.id,
+                    'name': data.get('name'),
+                    'coa_code': data.get('coa_code'),
+                    'tax_type': data.get('tax_type', 'None'),
+                    'default_rate': data.get('default_rate', 0),
+                    'status': data.get('status', 'active'),
+                    'municipality': data.get('municipality')
+                })
+        except Exception as e:
+            print(f"[WARN] Error querying municipality-specific categories: {e}")
+        
+        return jsonify(categories), 200
+    except Exception as e:
+        print(f"[ERROR] Getting expense categories: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify([]), 200
+
+@bp.route('/expense-categories', methods=['POST'])
+def api_create_expense_category_frontend():
+    """Create a new expense category (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        data = request.get_json()
+        db = get_firestore_db()
+        
+        category_data = {
+            'name': data.get('name'),
+            'coa_code': data.get('coa_code'),
+            'tax_type': data.get('tax_type', 'None'),
+            'default_rate': data.get('default_rate', 0),
+            'status': data.get('status', 'active'),
+            'municipality': municipality_scope,
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }
+        
+        result = db.collection('expense_categories').add(category_data)
+        doc_id = result[1].id
+        
+        return jsonify({
+            'id': doc_id,
+            'name': category_data['name'],
+            'coa_code': category_data['coa_code'],
+            'tax_type': category_data['tax_type'],
+            'default_rate': category_data['default_rate'],
+            'status': category_data['status']
+        }), 201
+    except Exception as e:
+        print(f"[ERROR] Creating expense category: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/expense-categories/<category_id>', methods=['PUT'])
+def api_update_expense_category_frontend(category_id):
+    """Update an expense category (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        data = request.get_json()
+        db = get_firestore_db()
+        
+        # Verify category belongs to municipality
+        category_doc = db.collection('expense_categories').document(category_id).get()
+        if not category_doc.exists:
+            return jsonify({'error': 'Category not found'}), 404
+        
+        category = category_doc.to_dict() or {}
+        if category.get('municipality') != municipality_scope:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        # Update the category
+        update_data = {
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }
+        if 'name' in data:
+            update_data['name'] = data.get('name')
+        if 'coa_code' in data:
+            update_data['coa_code'] = data.get('coa_code')
+        if 'tax_type' in data:
+            update_data['tax_type'] = data.get('tax_type')
+        if 'default_rate' in data:
+            update_data['default_rate'] = data.get('default_rate')
+        if 'status' in data:
+            update_data['status'] = data.get('status')
+        
+        db.collection('expense_categories').document(category_id).update(update_data)
+        
+        # Get updated document
+        updated_doc = db.collection('expense_categories').document(category_id).get()
+        updated_data = updated_doc.to_dict() or {}
+        
+        return jsonify({
+            'id': updated_doc.id,
+            'name': updated_data.get('name'),
+            'coa_code': updated_data.get('coa_code'),
+            'tax_type': updated_data.get('tax_type'),
+            'default_rate': updated_data.get('default_rate'),
+            'status': updated_data.get('status')
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Updating expense category: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/expense-categories/<category_id>', methods=['DELETE'])
+def api_delete_expense_category_frontend(category_id):
+    """Delete an expense category (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        db = get_firestore_db()
+        
+        # Verify category belongs to municipality
+        category_doc = db.collection('expense_categories').document(category_id).get()
+        if not category_doc.exists:
+            return jsonify({'error': 'Category not found'}), 404
+        
+        category = category_doc.to_dict() or {}
+        if category.get('municipality') != municipality_scope:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        db.collection('expense_categories').document(category_id).delete()
+        
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        print(f"[ERROR] Deleting expense category: {e}")
+        return jsonify({'error': str(e)}), 500

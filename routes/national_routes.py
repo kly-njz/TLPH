@@ -1,7 +1,9 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, jsonify
 from firebase_config import get_firestore_db
 from datetime import datetime
 from firebase_auth_middleware import role_required
+from entities_storage import list_entities
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -707,6 +709,513 @@ def accounting_dashboard():
     return render_template('national/accounting/accounting-dashboard.html')
 
 
+@bp.route('/api/entities', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_entities():
+    """Fetch all entities from regional and municipal levels for national dashboard"""
+    try:
+        db = get_firestore_db()
+        
+        # Get all entities from all municipalities and regions
+        entities_ref = db.collection("entities")
+        docs = entities_ref.stream()
+        
+        entities = []
+        for doc in docs:
+            entity = doc.to_dict()
+            if entity:
+                entities.append(entity)
+        
+        # Calculate stats - include all entities regardless of level
+        active_count = sum(1 for e in entities if e.get('status', '').lower() in ['active', 'enabled'])
+        total_count = len(entities)
+        
+        # Group by type
+        by_type = {}
+        by_municipality = {}
+        
+        for e in entities:
+            entity_type = e.get('type', 'Unknown')
+            municipality = e.get('municipality', 'Regional')
+            
+            # Count by type
+            if entity_type not in by_type:
+                by_type[entity_type] = 0
+            by_type[entity_type] += 1
+            
+            # Count by municipality
+            if municipality not in by_municipality:
+                by_municipality[municipality] = {'count': 0, 'active': 0}
+            by_municipality[municipality]['count'] += 1
+            if e.get('status', '').lower() in ['active', 'enabled']:
+                by_municipality[municipality]['active'] += 1
+        
+        return jsonify({
+            'success': True,
+            'entities': entities,
+            'stats': {
+                'total_entities': total_count,
+                'active_entities': active_count,
+                'by_type': by_type,
+                'by_municipality': by_municipality
+            }
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch national entities: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/deposits', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_deposits():
+    """Fetch all deposits from transactions, applications, and service_requests across all municipalities/regions"""
+    try:
+        db = get_firestore_db()
+        total_deposits = 0.0
+        deposits_by_type = {'transactions': 0, 'applications': 0, 'service_requests': 0}
+        deposit_records = []
+        
+        # Helper to check if status indicates paid
+        paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
+        
+        def is_paid(status_value):
+            return str(status_value or '').strip().lower() in paid_markers
+        
+        # 1. Get paid transactions
+        try:
+            trans_ref = db.collection('transactions')
+            trans_docs = trans_ref.stream()
+            for doc in trans_docs:
+                trans = doc.to_dict()
+                if trans:
+                    # Check status in multiple field name variations
+                    status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status') or ''
+                    amount = float(trans.get('amount', 0) or 0)
+                    
+                    # Check if either status indicates paid OR payment_method is present + status not failed
+                    paid_by_status = is_paid(status)
+                    paid_by_method = bool(trans.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'}
+                    
+                    if amount > 0 and (paid_by_status or paid_by_method):
+                        total_deposits += amount
+                        deposits_by_type['transactions'] += amount
+                        deposit_records.append({
+                            'id': doc.id,
+                            'source': 'transactions',
+                            'amount': amount,
+                            'description': trans.get('description', trans.get('name', 'Transaction')),
+                            'date': trans.get('paid_at', trans.get('created_at')),
+                            'municipality': trans.get('municipality', 'N/A')
+                        })
+        except Exception as e:
+            print(f'[WARN] Error fetching transactions: {e}')
+        
+        # 2. Get paid applications
+        try:
+            app_ref = db.collection('applications')
+            app_docs = app_ref.stream()
+            for doc in app_docs:
+                app = doc.to_dict()
+                if app:
+                    status = app.get('paymentStatus') or app.get('payment_status') or app.get('status') or ''
+                    amount = float(app.get('amount', 0) or 0)
+                    
+                    if amount > 0 and (is_paid(status) or (bool(app.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'})):
+                        total_deposits += amount
+                        deposits_by_type['applications'] += amount
+                        deposit_records.append({
+                            'id': doc.id,
+                            'source': 'applications',
+                            'amount': amount,
+                            'description': app.get('application_type', 'Application'),
+                            'date': app.get('paid_at', app.get('created_at')),
+                            'municipality': app.get('municipality', 'N/A')
+                        })
+        except Exception as e:
+            print(f'[WARN] Error fetching applications: {e}')
+        
+        # 3. Get paid service requests
+        try:
+            sr_ref = db.collection('service_requests')
+            sr_docs = sr_ref.stream()
+            for doc in sr_docs:
+                sr = doc.to_dict()
+                if sr:
+                    status = sr.get('paymentStatus') or sr.get('payment_status') or sr.get('status') or ''
+                    amount = float(sr.get('service_fee', 0) or 0)
+                    
+                    if amount > 0 and (is_paid(status) or (bool(sr.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'})):
+                        total_deposits += amount
+                        deposits_by_type['service_requests'] += amount
+                        deposit_records.append({
+                            'id': doc.id,
+                            'source': 'service_requests',
+                            'amount': amount,
+                            'description': sr.get('service_type', 'Service Request'),
+                            'date': sr.get('paid_at', sr.get('created_at')),
+                            'municipality': sr.get('municipality', 'N/A')
+                        })
+        except Exception as e:
+            print(f'[WARN] Error fetching service_requests: {e}')
+        
+        return jsonify({
+            'success': True,
+            'total_deposits': round(total_deposits, 2),
+            'by_type': deposits_by_type,
+            'records': deposit_records,
+            'record_count': len(deposit_records)
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch national deposits: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/expenses', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_expenses():
+    """Fetch all expenses (fund transfers) from national to regions and municipalities"""
+    try:
+        db = get_firestore_db()
+        total_expenses = 0.0
+        expense_records = []
+        
+        # 1. Fetch regional fund distributions (national → regions)
+        try:
+            fund_ref = db.collection('regional_fund_distribution')
+            docs = fund_ref.stream()
+            for doc in docs:
+                fund = doc.to_dict()
+                if fund:
+                    amount = float(fund.get('amount', 0) or 0)
+                    if amount > 0:
+                        total_expenses += amount
+                        expense_records.append({
+                            'id': doc.id,
+                            'type': 'regional_distribution',
+                            'amount': amount,
+                            'description': fund.get('fund_type', 'Regional Fund Transfer'),
+                            'recipient': fund.get('region', 'N/A'),
+                            'date': fund.get('date', fund.get('created_at')),
+                            'status': fund.get('status', 'completed')
+                        })
+        except Exception as e:
+            print(f'[WARN] Error fetching regional_fund_distribution: {e}')
+        
+        # 2. Fetch municipal fund distributions (regions/national → municipalities)
+        try:
+            fund_ref = db.collection('municipal_fund_distribution')
+            docs = fund_ref.stream()
+            for doc in docs:
+                fund = doc.to_dict()
+                if fund:
+                    amount = float(fund.get('amount', 0) or 0)
+                    if amount > 0:
+                        total_expenses += amount
+                        expense_records.append({
+                            'id': doc.id,
+                            'type': 'municipal_distribution',
+                            'amount': amount,
+                            'description': fund.get('fund_type', 'Municipal Fund Transfer'),
+                            'recipient': fund.get('municipality', 'N/A'),
+                            'date': fund.get('timestamp', fund.get('created_at')),
+                            'status': fund.get('status', 'completed')
+                        })
+        except Exception as e:
+            print(f'[WARN] Error fetching municipal_fund_distribution: {e}')
+        
+        return jsonify({
+            'success': True,
+            'total_expenses': round(total_expenses, 2),
+            'records': expense_records,
+            'record_count': len(expense_records)
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch national expenses: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/growth-rate', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_growth_rate():
+    """Calculate growth rate: (current deposits - previous period deposits) / previous period deposits * 100"""
+    try:
+        db = get_firestore_db()
+        from datetime import datetime, timedelta
+        
+        # Define periods (e.g., current month and previous month)
+        today = datetime.now()
+        current_month_start = datetime(today.year, today.month, 1)
+        if today.month == 1:
+            prev_month_start = datetime(today.year - 1, 12, 1)
+            prev_month_end = datetime(today.year - 1, 12, 31)
+        else:
+            prev_month_start = datetime(today.year, today.month - 1, 1)
+            prev_month_end = datetime(today.year, today.month - 1 if today.month > 1 else 12, 
+                                     28 if today.month - 1 == 2 else (30 if today.month - 1 in [4,6,9,11] else 31))
+        
+        # Helper to check if status indicates paid
+        paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
+        
+        def is_paid(status_value):
+            return str(status_value or '').strip().lower() in paid_markers
+        
+        def get_deposits_for_period(period_start, period_end):
+            """Sum deposits within period"""
+            total = 0.0
+            try:
+                # Check transactions
+                trans_docs = db.collection('transactions').stream()
+                for doc in trans_docs:
+                    trans = doc.to_dict()
+                    if trans:
+                        status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status') or ''
+                        amount = float(trans.get('amount', 0) or 0)
+                        
+                        # Get transaction date
+                        tx_date = None
+                        paid_at = trans.get('paid_at')
+                        if paid_at:
+                            if hasattr(paid_at, 'timestamp'):
+                                tx_date = datetime.fromtimestamp(paid_at.timestamp())
+                            elif isinstance(paid_at, datetime):
+                                tx_date = paid_at
+                        
+                        if tx_date and period_start <= tx_date <= period_end:
+                            paid_by_status = is_paid(status)
+                            paid_by_method = bool(trans.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'}
+                            if amount > 0 and (paid_by_status or paid_by_method):
+                                total += amount
+            except Exception as e:
+                print(f'[WARN] Error in period transactions: {e}')
+            
+            try:
+                # Check applications
+                app_docs = db.collection('applications').stream()
+                for doc in app_docs:
+                    app = doc.to_dict()
+                    if app:
+                        status = app.get('paymentStatus') or app.get('payment_status') or app.get('status') or ''
+                        amount = float(app.get('amount', 0) or 0)
+                        
+                        # Get application date
+                        app_date = None
+                        paid_at = app.get('paid_at')
+                        if paid_at:
+                            if hasattr(paid_at, 'timestamp'):
+                                app_date = datetime.fromtimestamp(paid_at.timestamp())
+                            elif isinstance(paid_at, datetime):
+                                app_date = paid_at
+                        
+                        if app_date and period_start <= app_date <= period_end:
+                            if amount > 0 and (is_paid(status) or (bool(app.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'})):
+                                total += amount
+            except Exception as e:
+                print(f'[WARN] Error in period applications: {e}')
+            
+            try:
+                # Check service requests
+                sr_docs = db.collection('service_requests').stream()
+                for doc in sr_docs:
+                    sr = doc.to_dict()
+                    if sr:
+                        status = sr.get('paymentStatus') or sr.get('payment_status') or sr.get('status') or ''
+                        amount = float(sr.get('service_fee', 0) or 0)
+                        
+                        # Get service request date
+                        sr_date = None
+                        paid_at = sr.get('paid_at')
+                        if paid_at:
+                            if hasattr(paid_at, 'timestamp'):
+                                sr_date = datetime.fromtimestamp(paid_at.timestamp())
+                            elif isinstance(paid_at, datetime):
+                                sr_date = paid_at
+                        
+                        if sr_date and period_start <= sr_date <= period_end:
+                            if amount > 0 and (is_paid(status) or (bool(sr.get('payment_method')) and status.lower() not in {'pending', 'failed', 'expired', 'cancelled'})):
+                                total += amount
+            except Exception as e:
+                print(f'[WARN] Error in period service requests: {e}')
+            
+            return total
+        
+        # Get current and previous period deposits
+        current_deposits = get_deposits_for_period(current_month_start, today)
+        previous_deposits = get_deposits_for_period(prev_month_start, prev_month_end)
+        
+        # Calculate growth rate
+        growth_rate = 0.0
+        if previous_deposits > 0:
+            growth_rate = ((current_deposits - previous_deposits) / previous_deposits) * 100
+        
+        return jsonify({
+            'success': True,
+            'growth_rate': round(growth_rate, 2),
+            'current_period': current_deposits,
+            'previous_period': previous_deposits,
+            'growth_percentage': f"{'+' if growth_rate >= 0 else ''}{round(growth_rate, 2)}%"
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to calculate growth rate: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/entities-management', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_entities_management():
+    """Fetch all entities (regional and municipal) for management"""
+    try:
+        db = get_firestore_db()
+        entities_data = []
+
+        docs = db.collection('entities').stream()
+        for doc in docs:
+            entity = doc.to_dict() or {}
+            raw_level = str(entity.get('entity_level') or entity.get('level') or '').strip().lower()
+            name = entity.get('entity_name') or entity.get('name') or entity.get('office_name') or 'N/A'
+            region_name = entity.get('region_name') or entity.get('region') or ''
+            municipality_name = entity.get('municipality_name') or entity.get('municipality') or ''
+
+            if raw_level in ('regional', 'region'):
+                normalized_level = 'Regional'
+            elif raw_level in ('municipal', 'municipality', 'city'):
+                normalized_level = 'Municipal'
+            else:
+                normalized_level = 'Municipal' if municipality_name else 'Regional'
+
+            entities_data.append({
+                'id': doc.id,
+                'name': name,
+                'level': normalized_level,
+                'parent_region': region_name or ('—' if normalized_level == 'Regional' else 'N/A'),
+                'bank_account': entity.get('bank_account_number') or entity.get('bank_account') or 'N/A',
+                'status': entity.get('status') or 'Unknown',
+                'municipality': municipality_name or 'N/A'
+            })
+
+        # Fallback: if no records exist in entities collection, derive from municipal_offices
+        if not entities_data:
+            municipal_docs = db.collection('municipal_offices').stream()
+            seen_regions = set()
+            for doc in municipal_docs:
+                office = doc.to_dict() or {}
+                municipality_name = office.get('municipality_name') or office.get('municipality') or office.get('name')
+                region_name = office.get('region_name') or office.get('region') or 'Unknown Region'
+                status = office.get('status') or ('Active' if office.get('is_active') is True else 'Unknown')
+
+                if municipality_name:
+                    entities_data.append({
+                        'id': doc.id,
+                        'name': municipality_name,
+                        'level': 'Municipal',
+                        'parent_region': region_name,
+                        'bank_account': office.get('bank_account_number') or office.get('bank_account') or 'N/A',
+                        'status': status,
+                        'municipality': municipality_name
+                    })
+
+                if region_name and region_name not in seen_regions:
+                    seen_regions.add(region_name)
+
+            # Add synthetic regional entries for management visibility
+            for region_name in sorted(seen_regions):
+                region_id = f"region_{str(region_name).lower().replace(' ', '_').replace('-', '_')}"
+                entities_data.append({
+                    'id': region_id,
+                    'name': region_name,
+                    'level': 'Regional',
+                    'parent_region': '—',
+                    'bank_account': 'N/A',
+                    'status': 'Active',
+                    'municipality': 'N/A'
+                })
+
+        entities_data.sort(key=lambda x: (x.get('parent_region', ''), x.get('name', '')))
+
+        regional_count = sum(1 for e in entities_data if e.get('level') == 'Regional')
+        municipal_count = sum(1 for e in entities_data if e.get('level') == 'Municipal')
+        active_count = sum(
+            1 for e in entities_data
+            if str(e.get('status', '')).strip().lower() in ['active', 'enabled', 'approved']
+        )
+
+        status_dist = {}
+        for e in entities_data:
+            status = str(e.get('status') or 'Unknown').strip() or 'Unknown'
+            status_dist[status] = status_dist.get(status, 0) + 1
+
+        return jsonify({
+            'success': True,
+            'entities': entities_data,
+            'stats': {
+                'regional_count': regional_count,
+                'municipal_count': municipal_count,
+                'total_count': len(entities_data),
+                'active_count': active_count,
+                'status_distribution': status_dist
+            }
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch entities for management: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/entities-management', methods=['PUT'])
+@role_required('national', 'national_admin')
+def api_update_entity():
+    """Update entity details"""
+    try:
+        from flask import request
+        db = get_firestore_db()
+        data = request.get_json() or {}
+
+        entity_id = data.get('id')
+        if not entity_id:
+            return jsonify({'success': False, 'error': 'Entity ID required'}), 400
+
+        update_data = {
+            'entity_name': data.get('name', ''),
+            'bank_account_number': data.get('bank_account', ''),
+            'status': data.get('status', 'active'),
+            'updated_at': datetime.now()
+        }
+
+        db.collection('entities').document(entity_id).update(update_data)
+        return jsonify({'success': True, 'message': 'Entity updated successfully'})
+    except Exception as e:
+        print(f'[ERROR] Failed to update entity: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/entities-management', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_create_entity():
+    """Create new entity"""
+    try:
+        from flask import request
+        db = get_firestore_db()
+        data = request.get_json() or {}
+        level = str(data.get('level') or '').strip().lower()
+
+        normalized_level = 'regional' if level in ('regional', 'region') else 'municipal'
+
+        new_entity = {
+            'entity_name': data.get('name', ''),
+            'entity_level': normalized_level,
+            'region_name': data.get('parent_region', ''),
+            'municipality_name': data.get('municipality', '') if normalized_level == 'municipal' else '',
+            'bank_account_number': data.get('bank_account', ''),
+            'status': 'active',
+            'created_at': datetime.now(),
+            'updated_at': datetime.now()
+        }
+
+        db.collection('entities').add(new_entity)
+        return jsonify({'success': True, 'message': 'Entity created successfully'})
+    except Exception as e:
+        print(f'[ERROR] Failed to create entity: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/accounting/entities')
 @role_required('national', 'national_admin')
 def accounting_entities():
@@ -918,3 +1427,427 @@ def user_inventory_national():
 @role_required('national', 'national_admin')
 def system_logs_national():
     return render_template('national/system/system-logs.html')
+
+@bp.route('/accounting/deposits')
+@role_required('national', 'national_admin')
+def national_deposits_view():
+    """National level payment deposits dashboard (all regions/municipalities)"""
+    return render_template('national/accounting/payment-deposits-national.html')
+
+# ---------------------------------
+# EXPENSE CATEGORIES (National)
+# ---------------------------------
+@bp.route('/api/expense-categories', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_expense_categories():
+    """Get ALL expense categories from all municipalities (National view)"""
+    try:
+        db = get_firestore_db()
+        categories = []
+        
+        # Fetch all expense categories without any filtering
+        query_result = db.collection('expense_categories').stream()
+        
+        for doc in query_result:
+            data = doc.to_dict() or {}
+            categories.append({
+                'id': doc.id,
+                'name': data.get('name', 'Unnamed'),
+                'coa_code': data.get('coa_code', 'N/A'),
+                'tax_type': data.get('tax_type', 'None'),
+                'default_rate': data.get('default_rate', 0),
+                'status': data.get('status', 'active'),
+                'municipality': data.get('municipality', 'National')
+            })
+        
+        print(f'[INFO] National: Retrieved {len(categories)} expense categories')
+        return jsonify(categories), 200
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to get expense categories: {e}')
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/expense-categories', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_create_national_expense_category():
+    """Create a new expense category (National admin only)"""
+    try:
+        from flask import request
+        data = request.get_json()
+        
+        db = get_firestore_db()
+        new_category = {
+            'name': data.get('name', 'Unnamed'),
+            'coa_code': data.get('coa_code', ''),
+            'tax_type': data.get('tax_type', 'None'),
+            'default_rate': data.get('default_rate', 0),
+            'status': data.get('status', 'active'),
+            'municipality': 'National',
+            'created_at': datetime.utcnow()
+        }
+        
+        doc_ref = db.collection('expense_categories').document()
+        doc_ref.set(new_category)
+        
+        print(f'[INFO] National: Created expense category {doc_ref.id}')
+        return jsonify({'id': doc_ref.id, **new_category}), 201
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to create category: {e}')
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/expense-categories/<category_id>', methods=['PUT'])
+@role_required('national', 'national_admin')
+def api_update_national_expense_category(category_id):
+    """Update an expense category"""
+    try:
+        from flask import request
+        data = request.get_json()
+        
+        db = get_firestore_db()
+        doc_ref = db.collection('expense_categories').document(category_id)
+        
+        update_data = {
+            'name': data.get('name'),
+            'coa_code': data.get('coa_code'),
+            'tax_type': data.get('tax_type'),
+            'default_rate': data.get('default_rate'),
+            'status': data.get('status'),
+            'updated_at': datetime.utcnow()
+        }
+        
+        doc_ref.update(update_data)
+        
+        print(f'[INFO] National: Updated expense category {category_id}')
+        return jsonify({'id': category_id, **update_data}), 200
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to update category: {e}')
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/expense-categories/<category_id>', methods=['DELETE'])
+@role_required('national', 'national_admin')
+def api_delete_national_expense_category(category_id):
+    """Delete an expense category"""
+    try:
+        db = get_firestore_db()
+        db.collection('expense_categories').document(category_id).delete()
+        
+        print(f'[INFO] National: Deleted expense category {category_id}')
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to delete category: {e}')
+        return jsonify({'error': str(e)}), 500
+
+# ---------------------------------
+# PAYMENT DEPOSITS (National)
+# ---------------------------------
+@bp.route('/api/deposits/payments', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_payment_deposits():
+    """Get ALL payment transactions from all regions/municipalities (National view)"""
+    try:
+        print('[DEBUG] National: Fetching ALL payment deposits')
+        
+        db = get_firestore_db()
+        deposits = []
+        
+        paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
+        
+        def parse_amount(raw_value):
+            try:
+                return float(raw_value or 0)
+            except (ValueError, TypeError):
+                return 0.0
+        
+        def is_paid(status_value):
+            return str(status_value or '').strip().lower() in paid_markers
+        
+        # Fetch ALL transactions without any filtering
+        try:
+            all_transactions = db.collection('transactions').limit(5000).stream()
+            
+            for doc in all_transactions:
+                trans = doc.to_dict()
+                if not trans:
+                    continue
+                
+                status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status')
+                paid_by_status = is_paid(status)
+                paid_by_method = bool(trans.get('payment_method')) and str(status or '').strip().lower() not in {'pending', 'failed', 'expired', 'cancelled'}
+                amount = parse_amount(trans.get('amount'))
+                
+                # Only include paid/completed transactions
+                if amount > 0 and (paid_by_status or paid_by_method):
+                    deposits.append({
+                        'id': doc.id,
+                        'transaction_type': 'Payment Deposit',
+                        'payment_type': 'Online Payment',
+                        'invoice_id': trans.get('invoice_id', ''),
+                        'external_id': trans.get('external_id', ''),
+                        'amount': amount,
+                        'description': trans.get('description', trans.get('transaction_name', 'Payment')),
+                        'payer_email': trans.get('user_email', '').lower(),
+                        'payment_method': trans.get('payment_method', 'Unknown'),
+                        'status': str(status or '').strip().upper(),
+                        'created_at': trans.get('created_at', trans.get('createdAt', '')),
+                        'paid_at': trans.get('paid_at', trans.get('paidAt', '')),
+                        'reference': trans.get('reference_id', doc.id[:12]),
+                        'source': trans.get('source', 'Online Portal'),
+                        'municipality': trans.get('municipality', trans.get('municipality_name', 'N/A')),
+                        'region': trans.get('region', trans.get('region_name', trans.get('regionName', 'N/A'))),
+                    })
+        except Exception as e:
+            print(f'[ERROR] National: Failed to fetch transactions: {e}')
+            return jsonify({'error': str(e)}), 500
+        
+        print(f'[INFO] National: Retrieved {len(deposits)} payment deposits from ALL regions/municipalities')
+        return jsonify(deposits), 200
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to get payment deposits: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/api/transactions/all', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_all_national_transactions():
+    """Get ALL transactions from all regions/municipalities with region, type, and user details (National Transaction Registry)"""
+    try:
+        print('[DEBUG] National: Fetching ALL transactions (paid & refunded)')
+
+        db = get_firestore_db()
+        transactions = []
+
+        def parse_amount(raw_value):
+            try:
+                return float(raw_value or 0)
+            except (ValueError, TypeError):
+                return 0.0
+
+        def first_non_empty(values):
+            for value in values:
+                text = str(value or '').strip()
+                if text:
+                    return text
+            return ''
+
+        def get_transaction_type(description, trans_type=None):
+            """Infer transaction type from description or field"""
+            if trans_type:
+                return str(trans_type).title()
+            desc = str(description or '').lower()
+            if 'permit' in desc or 'license' in desc:
+                return 'Licensing/Permit'
+            if 'service' in desc:
+                return 'Service Request'
+            if 'application' in desc:
+                return 'Application'
+            return 'General Payment'
+
+        def get_transaction_status(status_field):
+            """Determine if transaction is Paid or Refunded"""
+            status_str = str(status_field or '').strip().lower()
+            paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
+            refunded_markers = {'refunded', 'cancelled', 'rejected'}
+
+            if status_str in refunded_markers:
+                return 'Refunded'
+            elif status_str in paid_markers:
+                return 'Paid'
+            else:
+                return 'Pending'
+
+        user_cache = {}
+
+        def get_user_profile(email, user_id):
+            cache_key = (str(email or '').lower(), str(user_id or ''))
+            if cache_key in user_cache:
+                return user_cache[cache_key]
+
+            profile = None
+            email_value = str(email or '').strip().lower()
+            user_id_value = str(user_id or '').strip()
+
+            try:
+                if email_value:
+                    doc = db.collection('users').document(email_value).get()
+                    if doc.exists:
+                        profile = doc.to_dict() or {}
+
+                if not profile and user_id_value:
+                    doc = db.collection('users').document(user_id_value).get()
+                    if doc.exists:
+                        profile = doc.to_dict() or {}
+
+                if not profile and email_value:
+                    docs = db.collection('users').where(filter=FieldFilter('email', '==', email_value)).limit(1).stream()
+                    for item in docs:
+                        profile = item.to_dict() or {}
+                        break
+            except Exception as user_lookup_error:
+                print(f"[DEBUG] User lookup failed for {email_value or user_id_value}: {user_lookup_error}")
+
+            user_cache[cache_key] = profile or {}
+            return user_cache[cache_key]
+
+        def get_user_info(trans_data):
+            """Extract comprehensive user information from transaction"""
+            user_email = first_non_empty([
+                trans_data.get('user_email'),
+                trans_data.get('email'),
+                trans_data.get('payer_email'),
+                trans_data.get('customer_email')
+            ]).lower()
+            user_name = first_non_empty([
+                trans_data.get('user_name'),
+                trans_data.get('userName'),
+                trans_data.get('fullName'),
+                trans_data.get('name'),
+                trans_data.get('customer_name')
+            ])
+            user_id = first_non_empty([
+                trans_data.get('user_id'),
+                trans_data.get('userId'),
+                trans_data.get('uid')
+            ])
+
+            if not user_name and user_email:
+                user_name = user_email.split('@')[0]
+
+            user_profile = get_user_profile(user_email, user_id)
+            if user_profile:
+                profile_name = first_non_empty([
+                    user_profile.get('display_name'),
+                    user_profile.get('fullName'),
+                    user_profile.get('name'),
+                    f"{str(user_profile.get('firstName', '')).strip()} {str(user_profile.get('lastName', '')).strip()}".strip(),
+                ])
+                if profile_name:
+                    user_name = profile_name
+
+            return user_email, user_name or 'Unknown User', user_profile
+
+        def get_location_info(trans_data, user_profile):
+            """Resolve location from transaction, metadata, user profile, then related docs."""
+            metadata = trans_data.get('metadata') if isinstance(trans_data.get('metadata'), dict) else {}
+
+            region = first_non_empty([
+                trans_data.get('region'),
+                trans_data.get('region_name'),
+                trans_data.get('regionName'),
+                trans_data.get('user_region'),
+                metadata.get('region'),
+                metadata.get('region_name'),
+                metadata.get('regionName'),
+            ])
+            municipality = first_non_empty([
+                trans_data.get('municipality'),
+                trans_data.get('municipality_name'),
+                trans_data.get('municipalityName'),
+                trans_data.get('user_municipality'),
+                metadata.get('municipality'),
+                metadata.get('municipality_name'),
+                metadata.get('municipalityName'),
+            ])
+
+            if user_profile and (not region or not municipality):
+                region = region or first_non_empty([
+                    user_profile.get('region'),
+                    user_profile.get('region_name'),
+                    user_profile.get('regionName'),
+                    user_profile.get('user_region'),
+                ])
+                municipality = municipality or first_non_empty([
+                    user_profile.get('municipality'),
+                    user_profile.get('municipality_name'),
+                    user_profile.get('municipalityName'),
+                    user_profile.get('user_municipality'),
+                ])
+
+            related_id = first_non_empty([
+                trans_data.get('related_id'),
+                trans_data.get('applicationId'),
+                trans_data.get('application_id'),
+                trans_data.get('service_request_id'),
+                metadata.get('application_id'),
+                metadata.get('service_request_id'),
+            ])
+            if related_id and (not region or not municipality):
+                for collection_name in ['applications', 'service_requests', 'licenses', 'permits']:
+                    try:
+                        rel_doc = db.collection(collection_name).document(related_id).get()
+                        if not rel_doc.exists:
+                            continue
+                        rel_data = rel_doc.to_dict() or {}
+                        region = region or first_non_empty([
+                            rel_data.get('region'),
+                            rel_data.get('region_name'),
+                            rel_data.get('regionName'),
+                        ])
+                        municipality = municipality or first_non_empty([
+                            rel_data.get('municipality'),
+                            rel_data.get('municipality_name'),
+                            rel_data.get('municipalityName'),
+                        ])
+                        if region and municipality:
+                            break
+                    except Exception:
+                        continue
+
+            return region or 'N/A', municipality or 'N/A'
+
+        try:
+            # Fetch ALL transactions (no filtering)
+            all_trans = db.collection('transactions').limit(5000).stream()
+
+            for doc in all_trans:
+                trans = doc.to_dict()
+                if not trans:
+                    continue
+
+                amount = parse_amount(trans.get('amount'))
+                if amount <= 0:
+                    continue
+
+                status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status') or 'pending'
+                trans_status = get_transaction_status(status)
+
+                user_email, user_name, user_profile = get_user_info(trans)
+                region, municipality = get_location_info(trans, user_profile)
+
+                created_at = trans.get('created_at') or trans.get('createdAt') or ''
+                if isinstance(created_at, object) and hasattr(created_at, 'timestamp'):
+                    created_at = created_at.timestamp() * 1000
+
+                transactions.append({
+                    'id': doc.id,
+                    'reference': trans.get('invoice_id', trans.get('reference_id', doc.id[:12])),
+                    'name': user_name,
+                    'email': user_email,
+                    'type': get_transaction_type(trans.get('description'), trans.get('transaction_type')),
+                    'created_at': created_at,
+                    'date': trans.get('date', created_at),
+                    'location': f"{region}, {municipality}",
+                    'region': region,
+                    'municipality': municipality,
+                    'status': trans_status,
+                    'amount': amount,
+                    'description': trans.get('description', ''),
+                    'payment_method': trans.get('payment_method', 'Unknown'),
+                })
+
+        except Exception as e:
+            print(f'[ERROR] National: Failed to fetch transactions: {e}')
+            return jsonify({'error': str(e)}), 500
+
+        # Sort by date descending
+        transactions.sort(key=lambda x: x['created_at'], reverse=True)
+
+        print(f'[INFO] National: Retrieved {len(transactions)} transactions from ALL regions/municipalities')
+        return jsonify(transactions), 200
+
+    except Exception as e:
+        print(f'[ERROR] National: Failed to get transactions: {e}')
+        return jsonify({'error': str(e)}), 500
