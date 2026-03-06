@@ -1058,142 +1058,127 @@ def api_get_national_growth_rate():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-    @bp.route('/api/entities-management', methods=['GET'])
-    @role_required('national', 'national_admin')
-    def api_get_entities_management():
-        """Fetch all entities (regional and municipal) for management"""
-        try:
-            db = get_firestore_db()
-        
-            entities_data = []
-        
-            # Fetch regional entities
-            try:
-                regional_docs = db.collection('entities').where('entity_level', '==', 'regional').stream()
-                for doc in regional_docs:
-                    entity = doc.to_dict()
-                    if entity:
-                        entity['id'] = doc.id
-                        entity['doc_type'] = 'Regional'
-                        entity['parent_region'] = entity.get('region_name', 'N/A')
-                        entities_data.append(entity)
-            except Exception as e:
-                print(f'[WARN] Error fetching regional entities: {e}')
-        
-            # Fetch municipal entities
-            try:
-                municipal_docs = db.collection('entities').where('entity_level', '==', 'municipal').stream()
-                for doc in municipal_docs:
-                    entity = doc.to_dict()
-                    if entity:
-                        entity['id'] = doc.id
-                        entity['doc_type'] = 'Municipal'
-                        entity['parent_region'] = entity.get('region_name', 'N/A')
-                        entities_data.append(entity)
-            except Exception as e:
-                print(f'[WARN] Error fetching municipal entities: {e}')
-        
-            # Sort by region then name
-            entities_data.sort(key=lambda x: (x.get('parent_region', 'Z'), x.get('entity_name', '')))
-        
-            # Calculate statistics
-            regional_count = sum(1 for e in entities_data if e.get('doc_type') == 'Regional')
-            municipal_count = sum(1 for e in entities_data if e.get('doc_type') == 'Municipal')
-            active_count = sum(1 for e in entities_data if e.get('status', '').lower() in ['active', 'enabled', 'approved'])
-        
-            # Status distribution
-            status_dist = {}
-            for e in entities_data:
-                status = e.get('status', 'Unknown').strip()
-                status_dist[status] = status_dist.get(status, 0) + 1
-        
-            return jsonify({
-                'success': True,
-                'entities': [
-                    {
-                        'id': e.get('id', ''),
-                        'name': e.get('entity_name', 'N/A'),
-                        'level': e.get('doc_type', 'Unknown'),
-                        'parent_region': e.get('parent_region', 'N/A'),
-                        'bank_account': e.get('bank_account_number', 'N/A'),
-                        'status': e.get('status', 'Unknown'),
-                        'municipality': e.get('municipality_name', 'N/A')
-                    }
-                    for e in entities_data
-                ],
-                'stats': {
-                    'regional_count': regional_count,
-                    'municipal_count': municipal_count,
-                    'total_count': len(entities_data),
-                    'active_count': active_count,
-                    'status_distribution': status_dist
-                }
+@bp.route('/api/entities-management', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_entities_management():
+    """Fetch all entities (regional and municipal) for management"""
+    try:
+        db = get_firestore_db()
+        entities_data = []
+
+        docs = db.collection('entities').stream()
+        for doc in docs:
+            entity = doc.to_dict() or {}
+            raw_level = str(entity.get('entity_level') or entity.get('level') or '').strip().lower()
+            name = entity.get('entity_name') or entity.get('name') or entity.get('office_name') or 'N/A'
+            region_name = entity.get('region_name') or entity.get('region') or ''
+            municipality_name = entity.get('municipality_name') or entity.get('municipality') or ''
+
+            if raw_level in ('regional', 'region'):
+                normalized_level = 'Regional'
+            elif raw_level in ('municipal', 'municipality', 'city'):
+                normalized_level = 'Municipal'
+            else:
+                normalized_level = 'Municipal' if municipality_name else 'Regional'
+
+            entities_data.append({
+                'id': doc.id,
+                'name': name,
+                'level': normalized_level,
+                'parent_region': region_name or ('—' if normalized_level == 'Regional' else 'N/A'),
+                'bank_account': entity.get('bank_account_number') or entity.get('bank_account') or 'N/A',
+                'status': entity.get('status') or 'Unknown',
+                'municipality': municipality_name or 'N/A'
             })
-        except Exception as e:
-            print(f'[ERROR] Failed to fetch entities for management: {e}')
-            return jsonify({'success': False, 'error': str(e)}), 500
 
+        entities_data.sort(key=lambda x: (x.get('parent_region', ''), x.get('name', '')))
 
-    @bp.route('/api/entities-management', methods=['PUT'])
-    @role_required('national', 'national_admin')
-    def api_update_entity():
-        """Update entity details"""
-        try:
-            from flask import request
-            db = get_firestore_db()
-            data = request.get_json()
-        
-            entity_id = data.get('id')
-        
-            if not entity_id:
-                return jsonify({'success': False, 'error': 'Entity ID required'}), 400
-        
-            # Update entity
-            update_data = {
-                'entity_name': data.get('name', ''),
-                'bank_account_number': data.get('bank_account', ''),
-                'status': data.get('status', 'active'),
-                'updated_at': datetime.now()
+        regional_count = sum(1 for e in entities_data if e.get('level') == 'Regional')
+        municipal_count = sum(1 for e in entities_data if e.get('level') == 'Municipal')
+        active_count = sum(
+            1 for e in entities_data
+            if str(e.get('status', '')).strip().lower() in ['active', 'enabled', 'approved']
+        )
+
+        status_dist = {}
+        for e in entities_data:
+            status = str(e.get('status') or 'Unknown').strip() or 'Unknown'
+            status_dist[status] = status_dist.get(status, 0) + 1
+
+        return jsonify({
+            'success': True,
+            'entities': entities_data,
+            'stats': {
+                'regional_count': regional_count,
+                'municipal_count': municipal_count,
+                'total_count': len(entities_data),
+                'active_count': active_count,
+                'status_distribution': status_dist
             }
-        
-            db.collection('entities').document(entity_id).update(update_data)
-        
-            return jsonify({'success': True, 'message': 'Entity updated successfully'})
-        except Exception as e:
-            print(f'[ERROR] Failed to update entity: {e}')
-            return jsonify({'success': False, 'error': str(e)}), 500
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch entities for management: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
-    @bp.route('/api/entities-management', methods=['POST'])
-    @role_required('national', 'national_admin')
-    def api_create_entity():
-        """Create new entity"""
-        try:
-            from flask import request
-            db = get_firestore_db()
-            data = request.get_json()
-        
-            new_entity = {
-                'entity_name': data.get('name', ''),
-                'entity_level': data.get('level', 'municipal'),
-                'region_name': data.get('parent_region', ''),
-                'municipality_name': data.get('municipality', '') if data.get('level') == 'municipal' else '',
-                'bank_account_number': data.get('bank_account', ''),
-                'status': 'active',
-                'created_at': datetime.now(),
-                'updated_at': datetime.now()
-            }
-        
-            # Save to entities collection
-            db.collection('entities').add(new_entity)
-        
-            return jsonify({'success': True, 'message': 'Entity created successfully'})
-        except Exception as e:
-            print(f'[ERROR] Failed to create entity: {e}')
-            return jsonify({'success': False, 'error': str(e)}), 500
+@bp.route('/api/entities-management', methods=['PUT'])
+@role_required('national', 'national_admin')
+def api_update_entity():
+    """Update entity details"""
+    try:
+        from flask import request
+        db = get_firestore_db()
+        data = request.get_json() or {}
+
+        entity_id = data.get('id')
+        if not entity_id:
+            return jsonify({'success': False, 'error': 'Entity ID required'}), 400
+
+        update_data = {
+            'entity_name': data.get('name', ''),
+            'bank_account_number': data.get('bank_account', ''),
+            'status': data.get('status', 'active'),
+            'updated_at': datetime.now()
+        }
+
+        db.collection('entities').document(entity_id).update(update_data)
+        return jsonify({'success': True, 'message': 'Entity updated successfully'})
+    except Exception as e:
+        print(f'[ERROR] Failed to update entity: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
-    @bp.route('/accounting/entities')
+@bp.route('/api/entities-management', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_create_entity():
+    """Create new entity"""
+    try:
+        from flask import request
+        db = get_firestore_db()
+        data = request.get_json() or {}
+        level = str(data.get('level') or '').strip().lower()
+
+        normalized_level = 'regional' if level in ('regional', 'region') else 'municipal'
+
+        new_entity = {
+            'entity_name': data.get('name', ''),
+            'entity_level': normalized_level,
+            'region_name': data.get('parent_region', ''),
+            'municipality_name': data.get('municipality', '') if normalized_level == 'municipal' else '',
+            'bank_account_number': data.get('bank_account', ''),
+            'status': 'active',
+            'created_at': datetime.now(),
+            'updated_at': datetime.now()
+        }
+
+        db.collection('entities').add(new_entity)
+        return jsonify({'success': True, 'message': 'Entity created successfully'})
+    except Exception as e:
+        print(f'[ERROR] Failed to create entity: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/accounting/entities')
 @role_required('national', 'national_admin')
 def accounting_entities():
     return render_template('national/accounting/accounting-entities.html')
