@@ -258,16 +258,102 @@
     </div>
 
     <script>
-        const APP_CATEGORIES = ["Forestry", "Biodiversity", "Lands", "Mining", "Environmental Services"];
-        const MOCK_DATA = [
-            { date: "2026-02-13", ref: "APP-2026-001", name: "MIMAROPA Dev Corp", sector: "Forestry", reg: "IV-B", status: "Pending" },
-            { date: "2026-02-12", ref: "APP-2026-002", name: "Green Foundation", sector: "Biodiversity", reg: "NCR", status: "Approved" },
-            { date: "2026-02-13", ref: "APP-2026-004", name: "Oriental Mindoro Co", sector: "Lands", reg: "IV-B", status: "To Review" },
-            { date: "2026-02-12", ref: "APP-2026-005", name: "Eco Builders Inc", sector: "Mining", reg: "III", status: "Approved" },
-            { date: "2026-02-11", ref: "APP-2026-006", name: "Oceanic Resources", sector: "Environmental", reg: "VII", status: "Rejected" }
-        ];
+        const APP_CATEGORIES = {{ categories | tojson }};
+        const APP_REGIONS = {{ regions | tojson }};
 
+        let ALL_DATA = [];
         let myTrendChart, myRegionalChart, myCategoryChart, modalChartInstance = null;
+
+        // ---- DATA FETCH ----
+        async function loadApplications() {
+            try {
+                const res = await fetch('/api/superadmin/applications');
+                const json = await res.json();
+                if (json.success) {
+                    ALL_DATA = json.data;
+                    renderTable();
+                } else {
+                    showTableError('Failed to load applications: ' + (json.message || 'Unknown error'));
+                }
+            } catch (e) {
+                showTableError('Network error: ' + e.message);
+            }
+        }
+
+        function showTableError(msg) {
+            document.getElementById('appTableBody').innerHTML =
+                `<tr><td colspan="6" class="py-10 text-center text-rose-400 font-bold uppercase tracking-widest text-[9px]"><i class="fa-solid fa-triangle-exclamation mr-1"></i>${msg}</td></tr>`;
+            document.getElementById('resCount').textContent = '0';
+        }
+
+        // ---- TABLE RENDER ----
+        function renderTable() {
+            const body = document.getElementById('appTableBody');
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const category = document.getElementById('catFilter').value;
+            const region = document.getElementById('regionFilter').value;
+            const statusV = document.getElementById('statusFilter').value;
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+
+            const filtered = ALL_DATA.filter(item => {
+                const matchSearch = Object.values(item).join(' ').toLowerCase().includes(search);
+                const matchCat = category === 'all' || item.sector === category;
+                const matchReg = region === 'all' || item.region === region;
+                const matchStatus = statusV === 'all' || item.status === statusV;
+                const matchFrom = !dateFrom || item.date >= dateFrom;
+                const matchTo = !dateTo || item.date <= dateTo;
+                return matchSearch && matchCat && matchReg && matchStatus && matchFrom && matchTo;
+            });
+
+            body.innerHTML = '';
+            document.getElementById('resCount').textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No records found.</td></tr>';
+                return;
+            }
+
+            filtered.forEach(row => {
+                const s = (row.status || '').toLowerCase();
+                const statusColor = s === 'approved'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : s === 'rejected'
+                    ? 'bg-rose-50 text-rose-800 border-rose-200'
+                    : s === 'to review' || s === 'review'
+                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200';
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors data-row';
+                tr.innerHTML = `
+                    <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap font-bold text-[9px]">${row.date || 'N/A'}</td>
+                    <td class="px-3 py-1.5 border-r border-slate-100">
+                        <div class="font-black text-slate-900 uppercase leading-tight tracking-tight">${row.ref}</div>
+                        <div class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">${row.name}</div>
+                    </td>
+                    <td class="px-3 py-1.5 font-bold uppercase text-slate-700 border-r border-slate-100 tracking-widest text-[9px]">${row.sector || 'N/A'}</td>
+                    <td class="px-3 py-1.5 font-black text-slate-800 border-r border-slate-100 whitespace-nowrap uppercase tracking-widest text-[9px]">${row.region || 'N/A'}${row.municipality && row.municipality !== 'N/A' ? '<br><span class="text-[8px] text-slate-400 font-bold">' + row.municipality + '</span>' : ''}</td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                        <span class="status-badge ${statusColor}">${s.toUpperCase()}</span>
+                        ${row.regional_status && row.regional_status !== s ? '<br><span class="text-[7px] text-slate-400 font-bold uppercase mt-0.5 block">Regional: ' + row.regional_status + '</span>' : ''}
+                    </td>
+                    <td class="px-3 py-1.5 text-center no-print">
+                        <a href="/superadmin/user-application/view/${row.id}" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">View</a>
+                    </td>`;
+                body.appendChild(tr);
+            });
+        }
+
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('catFilter').value = 'all';
+            document.getElementById('regionFilter').value = 'all';
+            document.getElementById('statusFilter').value = 'all';
+            document.getElementById('dateFrom').value = '';
+            document.getElementById('dateTo').value = '';
+            renderTable();
+        }
 
         function initCharts() {
             const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
@@ -318,131 +404,103 @@
             });
         }
 
-        // --- MODAL LOGIC (FIXED REFERENCES) ---
+        // ---- CHARTS: initialized with real API data ----
+        async function initCharts() {
+            const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+
+            // Placeholder empty charts first
+            myTrendChart = new Chart(document.getElementById('trendChart'), {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderColor: '#1e3a8a', backgroundColor: 'rgba(30,58,138,0.1)', fill: true, tension: 0.3, borderWidth: 2 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: chartFont }, grid: { display: false } }, y: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' }, beginAtZero: true } } }
+            });
+            myRegionalChart = new Chart(document.getElementById('regionalChart'), {
+                type: 'bar',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: '#be123c', borderRadius: 2 }] },
+                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' }, beginAtZero: true }, y: { ticks: { font: chartFont }, grid: { display: false } } } }
+            });
+            myCategoryChart = new Chart(document.getElementById('categoryChart'), {
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: ['#15803d','#1e3a8a','#d97706','#be123c','#0891b2','#7c3aed'], borderWidth: 0 }] },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } }
+            });
+
+            // Fetch real chart data
+            try {
+                const res = await fetch('/api/superadmin/applications/charts');
+                const json = await res.json();
+                if (json.success) {
+                    myTrendChart.data.labels = json.trend.labels;
+                    myTrendChart.data.datasets[0].data = json.trend.data;
+                    myTrendChart.update();
+
+                    myRegionalChart.data.labels = json.regions.labels;
+                    myRegionalChart.data.datasets[0].data = json.regions.data;
+                    myRegionalChart.update();
+
+                    myCategoryChart.data.labels = json.categories.labels;
+                    myCategoryChart.data.datasets[0].data = json.categories.data;
+                    myCategoryChart.update();
+                }
+            } catch (e) {
+                console.warn('Chart API error:', e);
+            }
+        }
+
+        // --- MODAL LOGIC ---
         function openChartModal(type) {
             const modalWrapper = document.getElementById('chartModalWrapper');
             const modalBody = document.getElementById('chartModalBody');
             const modalTitle = document.getElementById('modalChartTitle');
-            
+
             modalWrapper.classList.remove('hidden');
             setTimeout(() => { modalWrapper.classList.add('flex'); modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
-            
-            if (modalChartInstance) modalChartInstance.destroy();
 
+            if (modalChartInstance) modalChartInstance.destroy();
             const ctx = document.getElementById('modalCanvas').getContext('2d');
             const modalFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
 
             if (type === 'trend') {
                 modalTitle.innerHTML = '<i class="fa-solid fa-chart-line text-gov-blue mr-2"></i> Weekly Trend (Detailed View)';
-                modalChartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: myTrendChart.data,
-                    options: { 
-                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
-                        plugins: { legend: { display: false } },
-                        scales: { x: { grid: {display:false}, ticks: { font: modalFont } }, y: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont }, beginAtZero: true } }
-                    }
-                });
+                modalChartInstance = new Chart(ctx, { type: 'line', data: myTrendChart.data, options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: modalFont } }, y: { grid: { color: '#e2e8f0' }, ticks: { font: modalFont }, beginAtZero: true } } } });
             } else if (type === 'regional') {
                 modalTitle.innerHTML = '<i class="fa-solid fa-chart-column text-gov-red mr-2"></i> Regional Rank (Detailed View)';
-                modalChartInstance = new Chart(ctx, {
-                    type: 'bar',
-                    data: myRegionalChart.data,
-                    options: { 
-                        indexAxis: 'y', 
-                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
-                        plugins: { legend: { display: false } },
-                        scales: { x: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont }, beginAtZero: true }, y: { grid: {display:false}, ticks: { font: modalFont } } }
-                    }
-                });
+                modalChartInstance = new Chart(ctx, { type: 'bar', data: myRegionalChart.data, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#e2e8f0' }, ticks: { font: modalFont }, beginAtZero: true }, y: { grid: { display: false }, ticks: { font: modalFont } } } } });
             } else if (type === 'category') {
                 modalTitle.innerHTML = '<i class="fa-solid fa-chart-pie text-denr-green mr-2"></i> Classification Distribution (Detailed View)';
-                modalChartInstance = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: myCategoryChart.data,
-                    options: { 
-                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, 
-                        cutout: '60%', 
-                        plugins: { legend: { position: 'right', labels: {font: modalFont} } } 
-                    }
-                });
+                modalChartInstance = new Chart(ctx, { type: 'doughnut', data: myCategoryChart.data, options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, cutout: '60%', plugins: { legend: { position: 'right', labels: { font: modalFont } } } } });
             }
         }
 
         function closeChartModal() {
             const modalWrapper = document.getElementById('chartModalWrapper');
             const modalBody = document.getElementById('chartModalBody');
-            
             modalWrapper.classList.remove('flex');
             modalBody.classList.remove('scale-100');
             modalBody.classList.add('scale-95');
-            setTimeout(() => { modalWrapper.classList.add('hidden'); if(modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } }, 300);
+            setTimeout(() => { modalWrapper.classList.add('hidden'); if (modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } }, 300);
         }
 
-        // --- TABLE LOGIC ---
-        function renderTable() {
-            const body = document.getElementById('appTableBody');
-            const search = document.getElementById('searchInput').value.toLowerCase();
-            const category = document.getElementById('catFilter').value;
-            const region = document.getElementById('regionFilter').value;
-            
-            const filtered = MOCK_DATA.filter(item => {
-                const matchSearch = Object.values(item).join(" ").toLowerCase().includes(search);
-                const matchCat = category === 'all' || item.sector === category;
-                const matchReg = region === 'all' || item.reg === region;
-                return matchSearch && matchCat && matchReg;
-            });
-
-            body.innerHTML = '';
-            document.getElementById('resCount').textContent = filtered.length;
-
-            if(filtered.length === 0) {
-                body.innerHTML = '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No records found.</td></tr>';
-                return;
-            }
-
-            filtered.forEach(row => {
-                const statusColor = row.status === 'Approved' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 
-                                   row.status === 'Rejected' ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200';
-                
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition-colors data-row";
-                
-                tr.innerHTML = `
-                    <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap font-bold text-[9px]">${row.date}</td>
-                    <td class="px-3 py-1.5 border-r border-slate-100">
-                        <div class="font-black text-slate-900 uppercase leading-tight tracking-tight">${row.ref}</div>
-                        <div class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">${row.name}</div>
-                    </td>
-                    <td class="px-3 py-1.5 font-bold uppercase text-slate-700 border-r border-slate-100 tracking-widest text-[9px]">${row.sector}</td>
-                    <td class="px-3 py-1.5 font-black text-slate-800 border-r border-slate-100 whitespace-nowrap uppercase tracking-widest text-[9px]">Region ${row.reg}</td>
-                    <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                        <span class="status-badge ${statusColor}">${row.status}</span>
-                    </td>
-                    <td class="px-3 py-1.5 text-center no-print">
-                        <button class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">View Profile</button>
-                    </td>
-                `;
-                body.appendChild(tr);
-            });
-        }
-
-        function clearFilters() {
-            document.getElementById('searchInput').value = "";
-            document.getElementById('catFilter').value = "all";
-            document.getElementById('regionFilter').value = "all";
-            renderTable();
-        }
-
-        window.onload = () => {
+        window.onload = async () => {
+            // Populate category filter from real server data
             const catFilter = document.getElementById('catFilter');
-            catFilter.innerHTML = '<option value="all">-- ALL SECTORS --</option>';
             APP_CATEGORIES.forEach(c => {
                 const opt = document.createElement('option');
                 opt.value = c; opt.textContent = c.toUpperCase(); catFilter.appendChild(opt);
             });
-            initCharts(); 
-            renderTable();
+
+            // Populate region filter with real regions
+            const regFilter = document.getElementById('regionFilter');
+            // Keep existing hardcoded options, but add any extra from server
+            APP_REGIONS.forEach(r => {
+                if (!regFilter.querySelector(`option[value="${r}"]`)) {
+                    const opt = document.createElement('option');
+                    opt.value = r; opt.textContent = r.toUpperCase();
+                    regFilter.appendChild(opt);
+                }
+            });
+
+            await Promise.all([initCharts(), loadApplications(), loadAuditTrail()]);
         };
     </script>
 </body>
