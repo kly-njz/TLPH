@@ -834,6 +834,9 @@ def api_get_entities():
     """Get all entities for the municipality"""
     try:
         municipality_scope = _get_current_municipality_scope()
+        if not municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Municipality scope is missing'}), 400
+
         entities = entities_storage.list_entities(municipality_scope)
         stats = entities_storage.get_entity_stats(municipality_scope)
         return jsonify({
@@ -852,8 +855,11 @@ def api_create_entity():
     """Create a new entity"""
     try:
         municipality_scope = _get_current_municipality_scope()
-        data = request.get_json()
-        
+        if not municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Municipality scope is missing'}), 400
+
+        data = request.get_json() or {}
+
         result = entities_storage.add_entity(
             municipality=municipality_scope,
             name=data.get('name'),
