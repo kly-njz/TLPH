@@ -1709,16 +1709,21 @@ def api_get_all_national_transactions():
                     for user_doc in user_docs:
                         user_data = user_doc.to_dict()
                         if user_data:
-                            region = region or user_data.get('region') or user_data.get('region_name') or ''
-                            municipality = municipality or user_data.get('municipality') or user_data.get('municipality_name') or ''
+                            # Log all available fields for debugging
+                            print(f'[DEBUG] User data fields: {list(user_data.keys())}')
+                            
+                            # Try multiple field name variations
+                            region = region or user_data.get('region') or user_data.get('region_name') or user_data.get('regionName') or user_data.get('user_region') or ''
+                            municipality = municipality or user_data.get('municipality') or user_data.get('municipality_name') or user_data.get('municipalityName') or user_data.get('user_municipality') or ''
+                            
+                            print(f'[DEBUG] From user profile - Region: {region}, Municipality: {municipality}')
                             if region and municipality:
-                                print(f'[DEBUG] Got location from user profile: {region}, {municipality}')
                                 break
                 except Exception as e:
                     print(f'[DEBUG] Could not lookup user by email {user_email}: {e}')
             
             # Try to get from related document if still missing
-            related_id = trans_data.get('related_id') or trans_data.get('applicationId') or trans_data.get('application_id')
+            related_id = trans_data.get('related_id') or trans_data.get('applicationId') or trans_data.get('application_id') or trans_data.get('service_request_id')
             
             if related_id and not (region and municipality):
                 try:
@@ -1729,8 +1734,8 @@ def api_get_all_national_transactions():
                             rel_doc = db.collection(coll).document(related_id).get()
                             if rel_doc.exists:
                                 rel_data = rel_doc.to_dict()
-                                region = region or rel_data.get('region') or rel_data.get('regionName') or ''
-                                municipality = municipality or rel_data.get('municipality') or rel_data.get('municipality_name') or ''
+                                region = region or rel_data.get('region') or rel_data.get('regionName') or rel_data.get('user_region') or ''
+                                municipality = municipality or rel_data.get('municipality') or rel_data.get('municipality_name') or rel_data.get('municipalityName') or rel_data.get('user_municipality') or ''
                                 if region and municipality:
                                     print(f'[DEBUG] Got location from {coll}: {region}, {municipality}')
                                     break
