@@ -251,78 +251,142 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    function openCategoryModal(){ document.getElementById('categoryModal').classList.remove('hidden'); }
-    function closeCategoryModal(){ document.getElementById('categoryModal').classList.add('hidden'); }
+    function depositDashboard() {
+      return {
+        deposits: [],
+        
+        async loadDeposits() {
+          try {
+            console.log('[DEBUG] Loading payment deposits...');
+            const resp = await fetch('/national/api/deposits/payments');
+            if (resp.ok) {
+              this.deposits = await resp.json();
+              console.log('[DEBUG] Loaded', this.deposits.length, 'deposits');
+              this.updateCharts();
+            }
+          } catch (error) {
+            console.error('[ERROR] Failed to load deposits:', error);
+          }
+        },
 
-    // Disable tax rate if "No Tax" is selected
-    document.getElementById('taxType').addEventListener('change', function(){
-      const r = document.getElementById('taxRate');
-      if(this.value === 'none'){ r.value=''; r.disabled=true; }
-      else { r.disabled=false; }
-    });
+        get totalAmount() {
+          return this.deposits.reduce((sum, d) => sum + (d.amount || 0), 0);
+        },
 
-    // Filtering Logic
-    const search = document.getElementById('searchCategory');
-    const filterRevenue = document.getElementById('filterRevenue');
-    const rows = () => Array.from(document.querySelectorAll('#categoryTable tr'));
+        get completedCount() {
+          return this.deposits.filter(d => ['PAID', 'COMPLETED', 'SETTLED', 'SUCCESS'].includes(d.status)).length;
+        },
 
-    function applyFilters(){
-      const q = (search.value || '').toLowerCase().trim();
-      const rev = filterRevenue.value;
+        formatCurrency(amount) {
+          return (amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
 
-      rows().forEach(tr=>{
-        const text = tr.innerText.toLowerCase();
-        const matchText = text.includes(q);
-        const rowRev = tr.getAttribute('data-revenue') || '';
-        const matchRev = !rev || rowRev === rev;
-        tr.style.display = (matchText && matchRev) ? '' : 'none';
-      });
+        updateCharts() {
+          // Status distribution chart
+          const statusCounts = {};
+          this.deposits.forEach(d => {
+            statusCounts[d.status] = (statusCounts[d.status] || 0) + 1;
+          });
+
+          const statusChart = Chart.getChart('depositTrendChart');
+          if (statusChart) statusChart.destroy();
+
+          new Chart(document.getElementById('depositTrendChart'), {
+            type: 'doughnut',
+            data: {
+              labels: Object.keys(statusCounts),
+              datasets: [{
+                data: Object.values(statusCounts),
+                backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#cbd5e1'],
+                borderWidth: 0
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: '65%',
+              plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { size: 8 } } } }
+            }
+          });
+
+          // Region distribution chart
+          const regionCounts = {};
+          this.deposits.forEach(d => {
+            const r = d.region || 'Unknown';
+            regionCounts[r] = (regionCounts[r] || 0) + 1;
+          });
+
+          const regionChart = Chart.getChart('revenueMixChart');
+          if (regionChart) regionChart.destroy();
+
+          new Chart(document.getElementById('revenueMixChart'), {
+            type: 'bar',
+            data: {
+              labels: Object.keys(regionCounts),
+              datasets: [{
+                label: 'Payments',
+                data: Object.values(regionCounts),
+                backgroundColor: '#0f766e',
+                borderWidth: 0
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              indexAxis: 'y',
+              plugins: { legend: { display: false } },
+              scales: { x: { ticks: { font: { size: 8 } } }, y: { ticks: { font: { size: 8 } } } }
+            }
+          });
+        }
+      };
     }
 
-    function resetFilters(){
-      search.value = '';
-      filterRevenue.value = '';
-      applyFilters();
-    }
-
-    search.addEventListener('input', applyFilters);
-    filterRevenue.addEventListener('change', applyFilters);
-
-    // Chart.js Configuration
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
     Chart.defaults.font.size = 9;
     Chart.defaults.color = "#64748b";
-    
-    const chartConfig = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 } };
+
+    // Original filtering logic
+    function openCategoryModal(){ document.getElementById('categoryModal').classList.remove('hidden'); }
+    function closeCategoryModal(){ document.getElementById('categoryModal').classList.add('hidden'); }
 
     document.addEventListener('DOMContentLoaded', function(){
-      // Deposit Trend Line Chart
-      new Chart(document.getElementById('depositTrendChart'),{
-        type:'line',
-        data:{
-          labels:['J','J','A','S','O','N','D','J'],
-          datasets:[{
-              label:'Deposits',
-              data:[120,130,125,140,135,150,155,160],
-              borderColor: '#0f766e', // Teal-700
-              backgroundColor: 'rgba(15, 118, 110, 0.1)',
-              borderWidth: 1.5,
-              fill:true,
-              pointRadius: 0
-          }]
-        },
-        options:{ ...chartConfig, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{display:false}} }
-      });
+      // Disable tax rate if "No Tax" is selected
+      const taxType = document.getElementById('taxType');
+      if (taxType) {
+        taxType.addEventListener('change', function(){
+          const r = document.getElementById('taxRate');
+          if(this.value === 'none'){ r.value=''; r.disabled=true; }
+          else { r.disabled=false; }
+        });
+      }
 
-      // Revenue Mix Doughnut Chart
-      new Chart(document.getElementById('revenueMixChart'),{
-        type:'doughnut',
-        data:{
-          labels:['Service','Permits','Grants','Other'],
-          datasets:[{data:[60,30,20,10], backgroundColor:['#0f766e', '#4f46e5', '#10b981', '#cbd5e1'], borderWidth:0}]
-        },
-        options:{ ...chartConfig, cutout: '65%', plugins:{legend:{position:'right', labels:{boxWidth:8, font:{size:8}}}} }
-      });
+      // Filtering Logic
+      const search = document.getElementById('searchCategory');
+      const filterRevenue = document.getElementById('filterRevenue');
+      const rows = () => Array.from(document.querySelectorAll('#categoryTable tr'));
+
+      function applyFilters(){
+        const q = (search.value || '').toLowerCase().trim();
+        const rev = filterRevenue.value;
+
+        rows().forEach(tr=>{
+          const text = tr.innerText.toLowerCase();
+          const matchText = text.includes(q);
+          const rowRev = tr.getAttribute('data-revenue') || '';
+          const matchRev = !rev || rowRev === rev;
+          tr.style.display = (matchText && matchRev) ? '' : 'none';
+        });
+      }
+
+      window.resetFilters = function(){
+        search.value = '';
+        filterRevenue.value = '';
+        applyFilters();
+      };
+
+      search.addEventListener('input', applyFilters);
+      filterRevenue.addEventListener('change', applyFilters);
     });
   </script>
 
