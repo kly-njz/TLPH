@@ -144,7 +144,7 @@
                         <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-gov-blue pl-1.5 m-0 leading-none">Weekly Trend</h4>
                         <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-blue transition-colors">open_in_full</span>
                     </div>
-                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="trendChart"></canvas></div>
+                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="trendChart"></canvas><span id="trendChartLoading" class="absolute inset-0 flex items-center justify-center text-[8px] font-black uppercase tracking-widest text-slate-400 animate-pulse bg-white/80">Loading...</span></div>
                 </div>
 
                 <div class="col-span-1 md:col-span-3 gov-card p-2 cursor-pointer hover:border-gov-red transition-colors group relative" onclick="openChartModal('regional')">
@@ -152,7 +152,7 @@
                         <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-gov-red pl-1.5 m-0 leading-none">Regional Rank</h4>
                         <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-red transition-colors">open_in_full</span>
                     </div>
-                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="regionalChart"></canvas></div>
+                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="regionalChart"></canvas><span id="regionalChartLoading" class="absolute inset-0 flex items-center justify-center text-[8px] font-black uppercase tracking-widest text-slate-400 animate-pulse bg-white/80">Loading...</span></div>
                 </div>
 
                 <div class="col-span-1 md:col-span-2 gov-card p-2 cursor-pointer hover:border-denr-green transition-colors group relative" onclick="openChartModal('category')">
@@ -160,7 +160,7 @@
                         <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-denr-green pl-1.5 m-0 leading-none">Class</h4>
                         <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-denr-green transition-colors">open_in_full</span>
                     </div>
-                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="categoryChart"></canvas></div>
+                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="categoryChart"></canvas><span id="categoryChartLoading" class="absolute inset-0 flex items-center justify-center text-[8px] font-black uppercase tracking-widest text-slate-400 animate-pulse bg-white/80">Loading...</span></div>
                 </div>
 
                 <div class="col-span-1 md:col-span-3 bg-slate-900 text-slate-300 gov-card border-slate-800 flex flex-col h-[165px]">
@@ -370,55 +370,6 @@
             renderTable();
         }
 
-        function initCharts() {
-            const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
-
-            // 1. Trend Chart (Line)
-            myTrendChart = new Chart(document.getElementById('trendChart'), { 
-                type: 'line', 
-                data: { 
-                    labels: ['07','08','09','10','11','12','13'], 
-                    datasets: [{ data: [120, 150, 90, 210, 180, 240, 280], borderColor: '#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.1)', fill: true, tension: 0.3, borderWidth: 2 }] 
-                }, 
-                options: { 
-                    responsive: true, maintainAspectRatio: false, 
-                    plugins: { legend: { display: false } }, 
-                    scales: { x: { ticks: { font: chartFont }, grid: { display: false } }, y: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' }, beginAtZero: true } } 
-                } 
-            });
-
-            // 2. Regional Chart (Bar) - SEPARATE CONFIGURATION FIX
-            myRegionalChart = new Chart(document.getElementById('regionalChart'), { 
-                type: 'bar', 
-                data: { 
-                    labels: ['IV-B', 'III', 'NCR', 'IV-A', 'VII'], 
-                    datasets: [{ data: [840, 620, 580, 450, 350], backgroundColor: '#be123c', borderRadius: 2 }] 
-                }, 
-                options: { 
-                    indexAxis: 'y', 
-                    responsive: true, maintainAspectRatio: false, 
-                    plugins: { legend: { display: false } }, 
-                    scales: { 
-                        x: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' }, beginAtZero: true }, 
-                        y: { ticks: { font: chartFont }, grid: { display: false } } 
-                    } 
-                } 
-            });
-
-            // 3. Category Chart (Doughnut)
-            myCategoryChart = new Chart(document.getElementById('categoryChart'), { 
-                type: 'doughnut', 
-                data: { 
-                    labels: ['For', 'Bio', 'Land', 'Min'], 
-                    datasets: [{ data: [45, 25, 20, 10], backgroundColor: ['#15803d', '#1e3a8a', '#d97706', '#be123c'], borderWidth: 0 }] 
-                }, 
-                options: { 
-                    responsive: true, maintainAspectRatio: false, cutout: '75%', 
-                    plugins: { legend: { display: false } } 
-                } 
-            });
-        }
-
         // ---- CHARTS: initialized with real API data ----
         async function initCharts() {
             const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
@@ -456,9 +407,19 @@
                     myCategoryChart.data.labels = json.categories.labels;
                     myCategoryChart.data.datasets[0].data = json.categories.data;
                     myCategoryChart.update();
+
+                    // Hide loading overlays after data loads
+                    ['trendChartLoading','regionalChartLoading','categoryChartLoading'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.remove();
+                    });
                 }
             } catch (e) {
                 console.warn('Chart API error:', e);
+                ['trendChartLoading','regionalChartLoading','categoryChartLoading'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) { el.textContent = 'No data'; el.classList.remove('animate-pulse'); el.classList.add('text-slate-300'); }
+                });
             }
         }
 
