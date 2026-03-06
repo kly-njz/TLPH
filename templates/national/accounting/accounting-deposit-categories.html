@@ -116,50 +116,31 @@
                 </tr>
               </thead>
               <tbody id="categoryTable" class="text-[10px] divide-y divide-slate-100">
-                
-                <tr class="hover:bg-slate-50 transition" data-revenue="permit">
-                  <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">Permit Application Fees</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-mono font-bold text-slate-800">4101</span> <span class="text-slate-500 ml-0.5">— Permit Revenue</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 text-[8px]">Permit Fees</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-slate-100 text-slate-700 border-slate-300 text-[8px]">No Tax</span>
-                  </td>
-                  <td class="px-3 py-1.5 font-mono text-slate-600 text-center border-r border-slate-100">REV-001</td>
-                  <td class="px-3 py-1.5 text-center">
-                    <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-1">Edit</button>
-                    <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
-                  </td>
-                </tr>
-
-                {% for c in deposit_categories %}
-                <tr class="hover:bg-slate-50 transition" data-revenue="{{ c.revenue_type|lower }}">
-                  <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">{{ c.name }}</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-mono font-bold text-slate-800">{{ c.coa_code }}</span> <span class="text-slate-500 ml-0.5">— {{ c.coa_name }}</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 text-[8px]">{{ c.revenue_type }}</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border text-[8px]
-                      {% if c.tax_type == 'VAT' %} bg-blue-50 text-blue-700 border-blue-200
-                      {% elif c.tax_type == 'Withholding' %} bg-amber-50 text-amber-700 border-amber-200
-                      {% else %} bg-slate-100 text-slate-700 border-slate-300 {% endif %}">
-                      {{ c.tax_type }}{% if c.tax_rate %} ({{ c.tax_rate }}%){% endif %}
-                    </span>
-                  </td>
-                  <td class="px-3 py-1.5 font-mono text-slate-600 text-center border-r border-slate-100">{{ c.budget_code or '—' }}</td>
-                  <td class="px-3 py-1.5 text-center">
-                    <button class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-1">Edit</button>
-                    <button class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
-                  </td>
-                </tr>
-                {% endfor %}
-
+                <template x-for="cat in filteredCategories" :key="cat.id">
+                  <tr class="hover:bg-slate-50 transition" :data-revenue="(cat.tax_type || 'none').toLowerCase()">
+                    <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100" x-text="cat.name">-</td>
+                    <td class="px-3 py-1.5 border-r border-slate-100">
+                      <span class="font-mono font-bold text-slate-800" x-text="cat.coa_code || 'N/A'">-</span> 
+                      <span class="text-slate-500 ml-0.5" x-text="`— ${cat.coa_code || 'COA'}`">—</span>
+                    </td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                      <span class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 text-[8px]" x-text="cat.tax_type || 'N/A'">-</span>
+                    </td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                      <span :class="getTaxTypeClass(cat.tax_type)" class="px-1.5 py-0.5 rounded-[2px] font-black uppercase border text-[8px]" x-text="`${cat.tax_type || 'None'}${cat.default_rate ? ' (' + cat.default_rate + '%)' : ''}`">-</span>
+                    </td>
+                    <td class="px-3 py-1.5 font-mono text-slate-600 text-center border-r border-slate-100" x-text="cat.municipality || 'National'">-</td>
+                    <td class="px-3 py-1.5 text-center">
+                      <button @click="editCategory(cat)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] mr-1">Edit</button>
+                      <button @click="deleteCategory(cat.id)" class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Delete</button>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="filteredCategories.length === 0">
+                  <tr>
+                    <td colspan="6" class="px-3 py-6 text-center text-slate-400 text-[10px]">No categories found</td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
@@ -254,6 +235,9 @@
     function depositDashboard() {
       return {
         deposits: [],
+        categories: [],
+        searchCategory: '',
+        filterRevenue: '',
         
         async loadDeposits() {
           try {
@@ -269,6 +253,19 @@
           }
         },
 
+        async loadCategories() {
+          try {
+            console.log('[DEBUG] Loading expense categories...');
+            const resp = await fetch('/national/api/expense-categories');
+            if (resp.ok) {
+              this.categories = await resp.json();
+              console.log('[DEBUG] Loaded', this.categories.length, 'categories');
+            }
+          } catch (error) {
+            console.error('[ERROR] Failed to load categories:', error);
+          }
+        },
+
         get totalAmount() {
           return this.deposits.reduce((sum, d) => sum + (d.amount || 0), 0);
         },
@@ -277,8 +274,40 @@
           return this.deposits.filter(d => ['PAID', 'COMPLETED', 'SETTLED', 'SUCCESS'].includes(d.status)).length;
         },
 
+        get filteredCategories() {
+          return this.categories.filter(cat => {
+            const matchSearch = !this.searchCategory || 
+              cat.name.toLowerCase().includes(this.searchCategory.toLowerCase()) ||
+              (cat.coa_code || '').toLowerCase().includes(this.searchCategory.toLowerCase());
+            const matchRevenue = !this.filterRevenue || (cat.tax_type || '').toLowerCase() === this.filterRevenue.toLowerCase();
+            return matchSearch && matchRevenue;
+          });
+        },
+
         formatCurrency(amount) {
           return (amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+
+        getTaxTypeClass(taxType) {
+          const classes = {
+            'VAT': 'bg-blue-50 text-blue-700 border-blue-200',
+            'Withholding Tax': 'bg-amber-50 text-amber-700 border-amber-200',
+            'Percentage Tax': 'bg-green-50 text-green-700 border-green-200',
+            'None': 'bg-slate-100 text-slate-600 border-slate-200'
+          };
+          return classes[taxType] || 'bg-slate-100 text-slate-600 border-slate-200';
+        },
+
+        editCategory(cat) {
+          console.log('[DEBUG] Edit category:', cat);
+          // TODO: Implement edit functionality
+        },
+
+        deleteCategory(id) {
+          if (confirm('Delete this category?')) {
+            console.log('[DEBUG] Delete category:', id);
+            // TODO: Implement delete functionality
+          }
         },
 
         updateCharts() {
