@@ -2626,6 +2626,39 @@ def api_get_regional_entities():
                 stats['by_status'][entity_status] = stats['by_status'].get(entity_status, 0) + 1
         
         stats['total'] = len(entities)
+
+        # Fallback: if entities collection has no records for this region, derive from municipal_offices
+        if stats['total'] == 0:
+            office_docs = db.collection('municipal_offices').limit(5000).stream()
+            for doc in office_docs:
+                office = doc.to_dict() or {}
+                municipality_name = office.get('municipality_name') or office.get('municipality') or office.get('name')
+                office_region = office.get('region_name') or office.get('region')
+                status = office.get('status') or ('ACTIVE' if office.get('is_active') is True else 'UNKNOWN')
+
+                include_row = False
+                if municipalities and municipality_name in municipalities:
+                    include_row = True
+                elif not municipalities and office_region and str(office_region).strip().upper() in str(session_region or '').strip().upper():
+                    include_row = True
+
+                if not include_row:
+                    continue
+
+                entity = {
+                    'id': doc.id,
+                    'name': municipality_name or 'N/A',
+                    'type': 'OFFICE',
+                    'municipality': municipality_name or 'N/A',
+                    'status': status,
+                    'bank_account': office.get('bank_account_number') or office.get('bank_account') or 'N/A'
+                }
+                entities.append(entity)
+
+                stats['by_type']['OFFICE'] = stats['by_type'].get('OFFICE', 0) + 1
+                stats['by_status'][status] = stats['by_status'].get(status, 0) + 1
+
+            stats['total'] = len(entities)
     except Exception as e:
         print(f"[ERROR] Failed to fetch entities: {e}")
     

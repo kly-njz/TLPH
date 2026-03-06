@@ -1091,6 +1091,43 @@ def api_get_entities_management():
                 'municipality': municipality_name or 'N/A'
             })
 
+        # Fallback: if no records exist in entities collection, derive from municipal_offices
+        if not entities_data:
+            municipal_docs = db.collection('municipal_offices').stream()
+            seen_regions = set()
+            for doc in municipal_docs:
+                office = doc.to_dict() or {}
+                municipality_name = office.get('municipality_name') or office.get('municipality') or office.get('name')
+                region_name = office.get('region_name') or office.get('region') or 'Unknown Region'
+                status = office.get('status') or ('Active' if office.get('is_active') is True else 'Unknown')
+
+                if municipality_name:
+                    entities_data.append({
+                        'id': doc.id,
+                        'name': municipality_name,
+                        'level': 'Municipal',
+                        'parent_region': region_name,
+                        'bank_account': office.get('bank_account_number') or office.get('bank_account') or 'N/A',
+                        'status': status,
+                        'municipality': municipality_name
+                    })
+
+                if region_name and region_name not in seen_regions:
+                    seen_regions.add(region_name)
+
+            # Add synthetic regional entries for management visibility
+            for region_name in sorted(seen_regions):
+                region_id = f"region_{str(region_name).lower().replace(' ', '_').replace('-', '_')}"
+                entities_data.append({
+                    'id': region_id,
+                    'name': region_name,
+                    'level': 'Regional',
+                    'parent_region': '—',
+                    'bank_account': 'N/A',
+                    'status': 'Active',
+                    'municipality': 'N/A'
+                })
+
         entities_data.sort(key=lambda x: (x.get('parent_region', ''), x.get('name', '')))
 
         regional_count = sum(1 for e in entities_data if e.get('level') == 'Regional')
