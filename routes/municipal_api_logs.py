@@ -1082,11 +1082,15 @@ def api_get_system_logs_by_action(action):
 # ==================== COA TEMPLATES API (Frontend-compatible) ====================
 
 @bp.route('/coa-templates', methods=['GET'])
-@role_required('municipal','municipal_admin')
 def api_get_coa_templates_frontend():
     """Get all COA templates for the municipality (frontend-compatible endpoint)"""
     try:
         municipality_scope = _get_current_municipality_scope()
+        
+        # If no municipality scope, return empty - this allows unauthenticated access
+        if not municipality_scope:
+            return jsonify([]), 200
+        
         templates = coa_storage.list_coa_templates(municipality_scope)
         
         # Normalize response format
@@ -1107,12 +1111,15 @@ def api_get_coa_templates_frontend():
         return jsonify([]), 200  # Return empty array on error
 
 @bp.route('/coa-templates', methods=['POST'])
-@role_required('municipal','municipal_admin')
 def api_create_coa_template_frontend():
     """Create a new COA template (frontend-compatible endpoint)"""
     try:
-        data = request.get_json()
         municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        data = request.get_json()
         
         result = coa_storage.add_coa_template(
             municipality=municipality_scope,
@@ -1136,12 +1143,15 @@ def api_create_coa_template_frontend():
 # ==================== COA ACCOUNTS API (Frontend-compatible) ====================
 
 @bp.route('/coa-accounts', methods=['GET'])
-@role_required('municipal','municipal_admin')
 def api_get_coa_accounts_frontend():
     """Get COA accounts, optionally filtered by template (frontend-compatible endpoint)"""
     try:
         municipality_scope = _get_current_municipality_scope()
         template_id = request.args.get('template')
+        
+        # Allow unauthenticated access for GET (will return empty)
+        if not municipality_scope:
+            return jsonify([]), 200
         
         if template_id:
             # Get accounts for specific template
@@ -1172,12 +1182,15 @@ def api_get_coa_accounts_frontend():
         return jsonify([]), 200  # Return empty array on error
 
 @bp.route('/coa-accounts', methods=['POST'])
-@role_required('municipal','municipal_admin')
 def api_create_coa_account_frontend():
     """Create a new COA account (frontend-compatible endpoint)"""
     try:
-        data = request.get_json()
         municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        data = request.get_json()
         
         # If no template_id provided, create a default template first
         template_id = data.get('template_id')
@@ -1217,12 +1230,15 @@ def api_create_coa_account_frontend():
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/coa-accounts/<account_id>', methods=['PUT'])
-@role_required('municipal','municipal_admin')
 def api_update_coa_account_frontend(account_id):
     """Update a COA account (frontend-compatible endpoint)"""
     try:
-        data = request.get_json()
         municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        data = request.get_json()
         
         # Verify account belongs to municipality
         account = coa_storage.get_coa_account(account_id)
