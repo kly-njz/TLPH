@@ -11,7 +11,64 @@ def inventory_view():
 @bp.route('/user-application')
 @role_required('super-admin','superadmin')
 def user_application_view():
-    return render_template('super-admin/application-superadmin/application-superadmin.html')
+    from firebase_config import get_firestore_db
+    from collections import defaultdict
+    from datetime import datetime
+
+    stats = {
+        'total': 0, 'pending': 0, 'approved': 0,
+        'rejected': 0, 'to_review': 0, 'approval_rate': 0,
+    }
+    categories = []
+    regions = []
+
+    try:
+        db = get_firestore_db()
+        docs = db.collection('applications').limit(5000).stream()
+
+        cat_set = set()
+        reg_count = defaultdict(int)
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+            stats['total'] += 1
+
+            national_status = (data.get('nationalStatus') or '').lower()
+            status = (data.get('status') or 'pending').lower()
+            effective = national_status if national_status else status
+
+            if effective in ['approved']:
+                stats['approved'] += 1
+            elif effective in ['rejected']:
+                stats['rejected'] += 1
+            elif effective in ['to review', 'review']:
+                stats['to_review'] += 1
+            else:
+                stats['pending'] += 1
+
+            cat = (data.get('category') or data.get('applicantCategory') or '').strip()
+            if cat:
+                cat_set.add(cat)
+
+            reg = (data.get('region') or data.get('regionName') or '').strip()
+            if reg:
+                reg_count[reg] += 1
+
+        if stats['total'] > 0:
+            stats['approval_rate'] = round(stats['approved'] / stats['total'] * 100, 1)
+
+        categories = sorted(cat_set)
+        regions = sorted(reg_count.keys())
+
+    except Exception as e:
+        print(f'[ERROR] user_application_view: {e}')
+
+    return render_template(
+        'super-admin/application-superadmin/application-superadmin.html',
+        stats=stats,
+        categories=categories,
+        regions=regions,
+    )
 
 @bp.route('/user-service-request')
 @role_required('super-admin','superadmin')
