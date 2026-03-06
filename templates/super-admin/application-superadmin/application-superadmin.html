@@ -102,6 +102,9 @@
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-1.5 mt-2 sm:mt-0">
+                    <button onclick="exportCSV()" class="gov-btn bg-denr-green text-white hover:bg-emerald-800 shadow-sm no-print">
+                        <i class="fa-solid fa-file-csv"></i> Export
+                    </button>
                     <button onclick="window.print()" class="gov-btn bg-slate-800 text-white hover:bg-slate-900 shadow-sm">
                         <i class="fa-solid fa-print"></i> Report
                     </button>
@@ -469,6 +472,36 @@
                 modalTitle.innerHTML = '<i class="fa-solid fa-chart-pie text-denr-green mr-2"></i> Classification Distribution (Detailed View)';
                 modalChartInstance = new Chart(ctx, { type: 'doughnut', data: myCategoryChart.data, options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, cutout: '60%', plugins: { legend: { position: 'right', labels: { font: modalFont } } } } });
             }
+        }
+
+        function exportCSV() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const category = document.getElementById('catFilter').value;
+            const region = document.getElementById('regionFilter').value;
+            const statusV = document.getElementById('statusFilter').value;
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+            const filtered = ALL_DATA.filter(item => {
+                const matchSearch = Object.values(item).join(' ').toLowerCase().includes(search);
+                const matchCat = category === 'all' || item.sector === category;
+                const matchReg = region === 'all' || item.region === region;
+                const matchStatus = statusV === 'all' || item.status === statusV;
+                const matchFrom = !dateFrom || item.date >= dateFrom;
+                const matchTo = !dateTo || item.date <= dateTo;
+                return matchSearch && matchCat && matchReg && matchStatus && matchFrom && matchTo;
+            });
+            if (!filtered.length) { showToast('No records to export', 'info'); return; }
+            const headers = ['Ref','Date','Name','Sector','Region','Municipality','Status','Regional Status'];
+            const rows = filtered.map(r => [r.ref,r.date,r.name,r.sector,r.region,r.municipality,r.status,r.regional_status].map(v => `"${(v||'').toString().replace(/"/g,'""')}"`));
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `applications_export_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(`Exported ${filtered.length} records`, 'success');
         }
 
         function closeChartModal() {
