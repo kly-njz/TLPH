@@ -1087,9 +1087,32 @@ def api_get_coa_templates_frontend():
     try:
         municipality_scope = _get_current_municipality_scope()
         
-        # If no municipality scope, return empty - this allows unauthenticated access
+        # If no municipality scope, check if user is national admin
         if not municipality_scope:
-            return jsonify([]), 200
+            user_role = session.get('role', '')
+            # National admins can see all templates
+            if 'national' not in user_role.lower():
+                return jsonify([]), 200
+            
+            # National admin: return all templates from all municipalities
+            try:
+                db = get_firestore_db()
+                templates = []
+                query_result = db.collection('coa_templates').limit(5000).stream()
+                for doc in query_result:
+                    data = doc.to_dict() or {}
+                    templates.append({
+                        'id': doc.id,
+                        'name': data.get('name'),
+                        'description': data.get('description', ''),
+                        'status': data.get('status', 'active'),
+                        'account_count': data.get('account_count', 0),
+                        'municipality': data.get('municipality')
+                    })
+                return jsonify(templates), 200
+            except Exception as e:
+                print(f"[ERROR] Getting all COA templates: {e}")
+                return jsonify([]), 200
         
         templates = coa_storage.list_coa_templates(municipality_scope)
         
@@ -1108,7 +1131,7 @@ def api_get_coa_templates_frontend():
         return jsonify(result), 200
     except Exception as e:
         print(f"[ERROR] Getting COA templates: {e}")
-        return jsonify([]), 200  # Return empty array on error
+        return jsonify([]), 200
 
 @bp.route('/coa-templates', methods=['POST'])
 def api_create_coa_template_frontend():
@@ -1149,9 +1172,48 @@ def api_get_coa_accounts_frontend():
         municipality_scope = _get_current_municipality_scope()
         template_id = request.args.get('template')
         
-        # Allow unauthenticated access for GET (will return empty)
+        # If no municipality scope, check if user is national admin
         if not municipality_scope:
-            return jsonify([]), 200
+            user_role = session.get('role', '')
+            # National admins can see all accounts
+            if 'national' not in user_role.lower():
+                return jsonify([]), 200
+            
+            # National admin: return all accounts from all templates
+            try:
+                db = get_firestore_db()
+                accounts = []
+                
+                if template_id:
+                    # Get accounts for specific template
+                    query_result = db.collection('coa_accounts').where('template_id', '==', template_id).limit(1000).stream()
+                    for doc in query_result:
+                        data = doc.to_dict() or {}
+                        accounts.append({
+                            'id': doc.id,
+                            'code': data.get('code'),
+                            'name': data.get('name'),
+                            'type': data.get('account_type', 'Asset'),
+                            'locked': data.get('locked', False),
+                            'description': data.get('description', '')
+                        })
+                else:
+                    # Get all accounts
+                    query_result = db.collection('coa_accounts').limit(5000).stream()
+                    for doc in query_result:
+                        data = doc.to_dict() or {}
+                        accounts.append({
+                            'id': doc.id,
+                            'code': data.get('code'),
+                            'name': data.get('name'),
+                            'type': data.get('account_type', 'Asset'),
+                            'locked': data.get('locked', False),
+                            'description': data.get('description', '')
+                        })
+                return jsonify(accounts), 200
+            except Exception as e:
+                print(f"[ERROR] Getting all COA accounts: {e}")
+                return jsonify([]), 200
         
         if template_id:
             # Get accounts for specific template
@@ -1179,7 +1241,7 @@ def api_get_coa_accounts_frontend():
         return jsonify(result), 200
     except Exception as e:
         print(f"[ERROR] Getting COA accounts: {e}")
-        return jsonify([]), 200  # Return empty array on error
+        return jsonify([]), 200
 
 @bp.route('/coa-accounts', methods=['POST'])
 def api_create_coa_account_frontend():
