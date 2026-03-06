@@ -121,27 +121,18 @@
             </div>
           
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-2 shrink-0 no-print">
-                <div class="gov-card p-2 flex flex-col h-[140px]">
-                    <h3 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-slate-800 pl-1.5 mb-1.5 shrink-0">Top Products by Volume</h3>
-                    <div class="flex-1 overflow-auto custom-scrollbar border border-slate-200">
-                        <table class="w-full text-left text-xs m-0 border-collapse">
-                            <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
-                                <tr>
-                                    <th class="py-1 px-2 font-black text-slate-600 uppercase text-[8px] border-r border-slate-200">Product</th>
-                                    <th class="py-1 px-2 font-black text-slate-600 uppercase text-[8px] border-r border-slate-200 text-right">Quantity</th>
-                                    <th class="py-1 px-2 font-black text-slate-600 uppercase text-[8px]">Depot</th>
-                                </tr>
-                            </thead>
-                            <tbody id="topProductsBody" class="divide-y divide-slate-100">
-                                </tbody>
-                        </table>
+                <section onclick="openChartModal('top')" class="gov-card p-2 cursor-pointer hover:border-slate-800 transition-all relative h-[140px] group">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-1 mb-1 shrink-0">
+                        <h3 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-slate-800 pl-1.5">Top Products by Volume</h3>
+                        <span class="material-icons-round text-[12px] text-slate-400 group-hover:text-slate-800 transition-colors">open_in_full</span>
                     </div>
-                </div>
+                    <div class="relative flex-1 w-full pointer-events-none"><canvas id="topProductsChart"></canvas></div>
+                </section>
 
-                <section onclick="openChartModal()" class="gov-card p-2 cursor-pointer hover:border-denr-green transition-all relative h-[140px]">
+                <section onclick="openChartModal('dist')" class="gov-card p-2 cursor-pointer hover:border-denr-green transition-all relative h-[140px] group">
                     <div class="flex justify-between items-center border-b border-slate-100 pb-1 mb-1 shrink-0">
                         <h3 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-denr-green pl-1.5">Distribution counts by Region</h3>
-                        <span class="material-icons-round text-[12px] text-slate-400">open_in_full</span>
+                        <span class="material-icons-round text-[12px] text-slate-400 group-hover:text-denr-green transition-colors">open_in_full</span>
                     </div>
                     <div class="relative flex-1 w-full pointer-events-none"><canvas id="productsChart"></canvas></div>
                 </section>
@@ -233,16 +224,16 @@
 
     <div id="chartModal" class="hidden fixed inset-0 z-[2060] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0 no-print">
         <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
-        <div id="modalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-3xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+        <div id="modalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
             <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
-                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
-                    <i class="fa-solid fa-chart-bar text-emerald-400"></i> Regional Distribution - Expanded
+                <h3 id="modalChartTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-bar text-emerald-400"></i> Chart Detailed View
                 </h3>
                 <button onclick="closeChartModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
                     <span class="material-icons-round text-sm">close</span>
                 </button>
             </div>
-            <div class="p-6 bg-slate-50 flex-1 h-[400px] relative">
+            <div class="p-6 bg-slate-50 flex-1 h-[50vh] min-h-[350px] relative">
                 <canvas id="modalCanvas"></canvas>
             </div>
         </div>
@@ -257,6 +248,8 @@
             {sku: 'SKU-DRN-102', name: 'Surveying Drone Unit', cat: 'Equipment', stock: 12, status: 'In Stock'},
             {sku: 'SKU-PPE-552', name: 'Field Operations Gear', cat: 'Supplies', stock: 450, status: 'In Stock'}
         ];
+
+        let topProductsChartInstance, distributionChartInstance, modalChartInstance = null;
 
         // 2. LIVE SEARCH & RENDERING LOGIC
         function filterProducts() {
@@ -287,7 +280,7 @@
                         </span>
                     </td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <button class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer">Manage</button>
+                        <button class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">Manage</button>
                     </td>
                 </tr>
             `).join('') : '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No products match your criteria.</td></tr>';
@@ -300,20 +293,16 @@
             document.getElementById('statHighVol').innerText = data.filter(p => p.stock > 1000).length;
             document.getElementById('statAlerts').innerText = data.filter(p => p.status === 'Low Stock').length;
 
-            // Update Top Products mini-table
-            const sorted = [...data].sort((a,b) => b.stock - a.stock).slice(0, 3);
-            document.getElementById('topProductsBody').innerHTML = sorted.map(p => `
-                <tr class="hover:bg-slate-50 transition-colors">
-                    <td class="py-1 px-2 font-bold text-[9px] text-slate-800 border-r border-slate-100 leading-tight">${p.name}</td>
-                    <td class="py-1 px-2 text-right font-mono font-black text-[9px] text-slate-700 border-r border-slate-100">${p.stock.toLocaleString()}</td>
-                    <td class="py-1 px-2 text-center border-r border-slate-100">
-                        <span class="px-1.5 py-0.5 border border-slate-200 bg-slate-100 text-slate-700 text-[8px] font-black rounded-[1px]">HQ</span>
-                    </td>
-                </tr>
-            `).join('');
+            // Dynamically update Top Products Chart based on filters
+            if (topProductsChartInstance) {
+                const sorted = [...data].sort((a,b) => b.stock - a.stock).slice(0, 5);
+                topProductsChartInstance.data.labels = sorted.map(p => p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name);
+                topProductsChartInstance.data.datasets[0].data = sorted.map(p => p.stock);
+                topProductsChartInstance.update();
+            }
         }
 
-        // 3. UI CONTROLS
+        // 3. UI CONTROLS & DRAWER
         document.getElementById('productSearch').addEventListener('input', filterProducts);
         document.getElementById('categoryFilter').addEventListener('change', filterProducts);
 
@@ -344,54 +333,100 @@
             document.getElementById('newProductForm').reset();
         });
 
-        // 4. CHARTS
-        const chartData = {
-            labels: ['IV-B','VII','IV-A','III', 'VI', 'CAR'],
-            datasets: [{
-                label: 'Units', data: [5000, 2400, 1800, 1200, 900, 600],
-                backgroundColor: ['#15803d', '#1e3a8a', '#be123c', '#d97706', '#64748b', '#0f172a'], borderRadius: 2
-            }]
-        };
-
-        let mainChart, modalChart;
+        // 4. CHARTS INIT
         window.onload = () => {
-            filterProducts();
-            const chartFont = { size: 9, weight: 'bold' };
+            const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
 
-            mainChart = new Chart(document.getElementById('productsChart').getContext('2d'), {
-                type: 'bar', data: chartData,
+            // Initialize Distribution Chart (Bar)
+            distributionChartInstance = new Chart(document.getElementById('productsChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['IV-B','VII','IV-A','III', 'VI', 'CAR'],
+                    datasets: [{
+                        label: 'Units Distributed', 
+                        data: [5000, 2400, 1800, 1200, 900, 600],
+                        backgroundColor: ['#15803d', '#1e3a8a', '#be123c', '#d97706', '#64748b', '#0f172a'], 
+                        borderRadius: 2
+                    }]
+                },
                 options: { 
-                    responsive: true, maintainAspectRatio: false, devicePixelRatio: 2,
-                    plugins: { legend: {display: false}, tooltip: {enabled: false} },
+                    responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                    plugins: { legend: {display: false} },
                     scales: { 
                         y: {beginAtZero: true, grid: {color: '#f1f5f9'}, ticks: {font: chartFont}}, 
                         x: {grid: {display: false}, ticks: {font: chartFont}} 
                     }
                 }
             });
+
+            // Initialize Top Products Chart (Horizontal Bar)
+            topProductsChartInstance = new Chart(document.getElementById('topProductsChart').getContext('2d'), {
+                type: 'bar',
+                data: { 
+                    labels: [], // Injected dynamically via updateStats
+                    datasets: [{ 
+                        label: 'Stock Quantity', 
+                        data: [], 
+                        backgroundColor: '#1e3a8a', 
+                        borderRadius: 2 
+                    }] 
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                    plugins: { legend: {display: false} },
+                    scales: {
+                        x: {beginAtZero: true, grid: {display: false}, ticks: {font: chartFont, display: false}},
+                        y: {grid: {display: false}, ticks: {font: chartFont}}
+                    }
+                }
+            });
+
+            // Trigger initial render & chart injection
+            filterProducts(); 
         };
 
-        function openChartModal() {
+        // 5. CHART MODAL LOGIC
+        function openChartModal(type) {
             const m = document.getElementById('chartModal');
             m.classList.remove('hidden');
             setTimeout(() => { m.classList.add('opacity-100'); document.getElementById('modalBody').classList.replace('scale-95', 'scale-100'); }, 10);
             
-            if (modalChart) modalChart.destroy();
-            const chartFont = { size: 10, weight: 'bold' };
+            if (modalChartInstance) modalChartInstance.destroy();
+            
+            const chartFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
 
-            modalChart = new Chart(document.getElementById('modalCanvas').getContext('2d'), {
-                type: 'bar', data: chartData, 
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    devicePixelRatio: 2,
-                    plugins: { legend: {display: false} },
-                    scales: { 
-                        y: {beginAtZero: true, grid: {color: '#f1f5f9'}, ticks: {font: chartFont}}, 
-                        x: {grid: {display: false}, ticks: {font: chartFont}} 
-                    } 
-                }
-            });
+            if (type === 'top') {
+                document.getElementById('modalChartTitle').innerHTML = '<i class="fa-solid fa-chart-bar text-gov-blue mr-2"></i> Top Products by Volume (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'bar', 
+                    data: topProductsChartInstance.data, 
+                    options: { 
+                        indexAxis: 'y',
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                        plugins: { legend: {display: false} },
+                        scales: { 
+                            x: {beginAtZero: true, grid: {color: '#e2e8f0'}, ticks: {font: chartFont}}, 
+                            y: {grid: {display: false}, ticks: {font: chartFont}} 
+                        } 
+                    }
+                });
+            } else if (type === 'dist') {
+                document.getElementById('modalChartTitle').innerHTML = '<i class="fa-solid fa-chart-column text-denr-green mr-2"></i> Distribution Counts by Region (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'bar', 
+                    data: distributionChartInstance.data, 
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                        plugins: { legend: {display: false} },
+                        scales: { 
+                            y: {beginAtZero: true, grid: {color: '#e2e8f0'}, ticks: {font: chartFont}}, 
+                            x: {grid: {display: false}, ticks: {font: chartFont}} 
+                        } 
+                    }
+                });
+            }
         }
 
         function closeChartModal() {

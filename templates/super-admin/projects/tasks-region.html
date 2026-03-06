@@ -8,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
         /* Government Standard Typography & Layout (STRICT COMPACT) */
@@ -24,7 +25,7 @@
         /* Gov UI Utilities */
         .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; margin-bottom: 0; }
         .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; color: #1e293b; box-sizing: border-box; }
-        .gov-input:focus { border-color: #0f766e; } /* Teal focus */
+        .gov-input:focus { border-color: #0f766e; }
         .gov-input:disabled { background-color: #f1f5f9; color: #94a3b8; cursor: not-allowed; border-color: #e2e8f0; }
         
         .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: none; }
@@ -36,7 +37,7 @@
         .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; }
 
         /* Modal Styles */
-        .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 2050; backdrop-filter: blur(2px); padding: 16px; }
+        .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 6000; backdrop-filter: blur(2px); padding: 16px; }
         .gov-modal.show { display: flex !important; animation: fadeIn 0.15s ease-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -47,7 +48,7 @@
         }
     </style>
 </head>
-<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50">
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50 relative">
 
     <div class="gov-strip no-print"></div>
 
@@ -59,7 +60,7 @@
         {% include 'super-admin/header-superadmin.html' %}
     </div>
 
-    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar transition-all duration-300 flex flex-col">
+    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar transition-all duration-300 flex flex-col z-10">
         
         <div class="max-w-[1700px] w-full mx-auto flex flex-col gap-2 h-full min-h-0">
 
@@ -68,7 +69,7 @@
                     <div class="w-8 h-8 rounded-[2px] bg-slate-800 flex items-center justify-center text-white shrink-0 shadow-sm">
                         <span class="material-icons-round text-[18px]">task</span>
                     </div>
-                    <div class="leading-tight">
+                    <div class="leading-tight border-l border-slate-300 pl-3">
                         <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Community Project Tasks Report</h1>
                         <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0 mt-0.5">Regional requests, approvals, and delivery tracking</p>
                     </div>
@@ -107,14 +108,17 @@
             </section>
 
             <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0">
-                <div class="gov-card p-2">
-                    <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 mb-2 border-b border-slate-100 pb-1">Project Categories</h2>
+                <div class="gov-card p-2 cursor-pointer hover:border-emerald-600 transition-colors group relative" onclick="openChartModal('category')">
+                    <div class="flex justify-between items-center mb-2 border-b border-slate-100 pb-1 shrink-0">
+                        <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-emerald-600 pl-1.5">Project Categories</h2>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-emerald-600 transition-colors">open_in_full</span>
+                    </div>
                     <div class="space-y-2 flex flex-col justify-center flex-1">
                         <div class="flex items-center gap-2">
                             <div class="flex-1">
                                 <p class="text-[8px] font-black uppercase text-slate-600 leading-none m-0">Reforestation</p>
-                                <div class="mt-1 h-1.5 w-full rounded-sm bg-slate-100">
-                                    <div id="barReforestation" class="h-1.5 rounded-sm bg-emerald-600 transition-all duration-500" style="width:0%"></div>
+                                <div class="mt-1 h-1.5 w-full rounded-[1px] bg-slate-100">
+                                    <div id="barReforestation" class="h-1.5 rounded-[1px] bg-emerald-600 transition-all duration-500" style="width:0%"></div>
                                 </div>
                             </div>
                             <span class="text-[10px] font-black text-slate-900 w-4 text-right" id="catReforestation">0</span>
@@ -122,8 +126,8 @@
                         <div class="flex items-center gap-2">
                             <div class="flex-1">
                                 <p class="text-[8px] font-black uppercase text-slate-600 leading-none m-0">Waste Management</p>
-                                <div class="mt-1 h-1.5 w-full rounded-sm bg-slate-100">
-                                    <div id="barWaste" class="h-1.5 rounded-sm bg-amber-500 transition-all duration-500" style="width:0%"></div>
+                                <div class="mt-1 h-1.5 w-full rounded-[1px] bg-slate-100">
+                                    <div id="barWaste" class="h-1.5 rounded-[1px] bg-amber-500 transition-all duration-500" style="width:0%"></div>
                                 </div>
                             </div>
                             <span class="text-[10px] font-black text-slate-900 w-4 text-right" id="catWaste">0</span>
@@ -131,8 +135,8 @@
                         <div class="flex items-center gap-2">
                             <div class="flex-1">
                                 <p class="text-[8px] font-black uppercase text-slate-600 leading-none m-0">Waterways</p>
-                                <div class="mt-1 h-1.5 w-full rounded-sm bg-slate-100">
-                                    <div id="barWater" class="h-1.5 rounded-sm bg-blue-600 transition-all duration-500" style="width:0%"></div>
+                                <div class="mt-1 h-1.5 w-full rounded-[1px] bg-slate-100">
+                                    <div id="barWater" class="h-1.5 rounded-[1px] bg-blue-600 transition-all duration-500" style="width:0%"></div>
                                 </div>
                             </div>
                             <span class="text-[10px] font-black text-slate-900 w-4 text-right" id="catWater">0</span>
@@ -140,8 +144,8 @@
                         <div class="flex items-center gap-2">
                             <div class="flex-1">
                                 <p class="text-[8px] font-black uppercase text-slate-600 leading-none m-0">Coastal</p>
-                                <div class="mt-1 h-1.5 w-full rounded-sm bg-slate-100">
-                                    <div id="barCoastal" class="h-1.5 rounded-sm bg-cyan-600 transition-all duration-500" style="width:0%"></div>
+                                <div class="mt-1 h-1.5 w-full rounded-[1px] bg-slate-100">
+                                    <div id="barCoastal" class="h-1.5 rounded-[1px] bg-cyan-600 transition-all duration-500" style="width:0%"></div>
                                 </div>
                             </div>
                             <span class="text-[10px] font-black text-slate-900 w-4 text-right" id="catCoastal">0</span>
@@ -149,8 +153,8 @@
                         <div class="flex items-center gap-2">
                             <div class="flex-1">
                                 <p class="text-[8px] font-black uppercase text-slate-600 leading-none m-0">Infrastructure</p>
-                                <div class="mt-1 h-1.5 w-full rounded-sm bg-slate-100">
-                                    <div id="barInfra" class="h-1.5 rounded-sm bg-slate-700 transition-all duration-500" style="width:0%"></div>
+                                <div class="mt-1 h-1.5 w-full rounded-[1px] bg-slate-100">
+                                    <div id="barInfra" class="h-1.5 rounded-[1px] bg-slate-700 transition-all duration-500" style="width:0%"></div>
                                 </div>
                             </div>
                             <span class="text-[10px] font-black text-slate-900 w-4 text-right" id="catInfra">0</span>
@@ -158,8 +162,11 @@
                     </div>
                 </div>
 
-                <div class="gov-card p-2">
-                    <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 mb-2 border-b border-slate-100 pb-1">Regional Top 5</h2>
+                <div class="gov-card p-2 cursor-pointer hover:border-blue-700 transition-colors group relative" onclick="openChartModal('region')">
+                    <div class="flex justify-between items-center mb-2 border-b border-slate-100 pb-1 shrink-0">
+                        <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-blue-700 pl-1.5">Regional Top 5</h2>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-blue-700 transition-colors">open_in_full</span>
+                    </div>
                     <div class="space-y-2 flex flex-col justify-center flex-1" id="regionalGraphContainer">
                         </div>
                 </div>
@@ -206,7 +213,7 @@
                                 <th class="border-r border-slate-200 text-center">Date Entry</th>
                                 <th class="border-r border-slate-200 text-center">Target Date</th>
                                 <th class="border-r border-slate-200 text-center">Permission</th>
-                                <th class="text-center no-print">Action</th>
+                                <th class="text-center no-print w-[60px]">Action</th>
                             </tr>
                         </thead>
                         <tbody id="projectTable" class="text-[10px] divide-y divide-slate-100">
@@ -276,11 +283,11 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Start Date *</label>
-                            <input id="projStart" type="date" required class="gov-input w-full h-8 cursor-pointer">
+                            <input id="projStart" type="date" required class="gov-input w-full h-8 cursor-pointer font-mono">
                         </div>
                         <div>
                             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Target Date *</label>
-                            <input id="projTarget" type="date" required class="gov-input w-full h-8 cursor-pointer">
+                            <input id="projTarget" type="date" required class="gov-input w-full h-8 cursor-pointer font-mono">
                         </div>
                     </div>
 
@@ -298,6 +305,23 @@
                         <button type="button" onclick="closeProjectModal()" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="chartModalWrapper" class="gov-modal no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="chartModalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 id="modalChartTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-bar text-slate-400"></i> Chart Detailed View
+                </h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-6 bg-slate-50 flex-1 h-[50vh] min-h-[350px] relative">
+                <canvas id="modalCanvas"></canvas>
             </div>
         </div>
     </div>
@@ -328,7 +352,6 @@
                 const res = await fetch(`${PSGC_API_BASE}/regions`);
                 let regions = await res.json();
                 
-                // Sort alphabetically
                 regions.sort((a,b) => a.name.localeCompare(b.name));
 
                 const filterRegEl = document.getElementById('regionFilter');
@@ -361,7 +384,6 @@
             targetEl.innerHTML = '<option value="">Loading API Data...</option>';
 
             try {
-                // Fetching combined cities and municipalities from PSGC
                 const res = await fetch(`${PSGC_API_BASE}/regions/${regionCode}/cities-municipalities`);
                 let munis = await res.json();
                 
@@ -380,7 +402,6 @@
             }
         }
 
-        // DEPENDENT DROPDOWN EVENT LISTENERS
         document.getElementById('regionFilter').addEventListener('change', function() {
             const code = this.options[this.selectedIndex].getAttribute('data-code');
             fetchMunicipalities(code, 'municipalFilter', true);
@@ -391,10 +412,8 @@
             const code = this.options[this.selectedIndex].getAttribute('data-code');
             fetchMunicipalities(code, 'projMunicipal', false);
         });
-        // -----------------------------
 
-
-        // UI LOGIC
+        // --- UI & FORM LOGIC ---
         function openProjectModal() {
             const modal = document.getElementById('projectModal');
             modal.classList.remove('hidden');
@@ -416,13 +435,13 @@
             const query = document.getElementById('projSearch').value.toLowerCase();
             const status = document.getElementById('statusFilter').value;
             const region = document.getElementById('regionFilter').value;
-            const municipal = document.getElementById('municipalFilter').value; // Dropdown value
+            const municipal = document.getElementById('municipalFilter').value; 
 
             return projectData.filter(p => {
                 const matchSearch = p.title.toLowerCase().includes(query);
                 const matchStatus = !status || p.status === status;
                 const matchRegion = region === 'all' || !region || p.region === region;
-                const matchMunicipal = !municipal || p.municipal === municipal; // Exact match since it's an API dropdown
+                const matchMunicipal = !municipal || p.municipal === municipal; 
                 
                 return matchSearch && matchStatus && matchRegion && matchMunicipal;
             });
@@ -432,10 +451,10 @@
             const tbody = document.getElementById('projectTable');
             tbody.innerHTML = data.length ? data.map(p => `
                 <tr class="hover:bg-slate-50 transition-colors data-row">
-                    <td class="py-2.5 px-4 font-black text-slate-900 border-r border-slate-100">${p.title}</td>
+                    <td class="py-2.5 px-4 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight">${p.title}</td>
                     <td class="py-2.5 px-4 text-slate-600 text-[9px] font-bold uppercase tracking-wider border-r border-slate-100">${p.category}</td>
-                    <td class="py-2.5 px-4 text-slate-700 font-bold border-r border-slate-100 whitespace-nowrap truncate max-w-[150px]" title="${p.region}">${p.region}</td>
-                    <td class="py-2.5 px-4 text-slate-700 font-bold border-r border-slate-100">${p.municipal}</td>
+                    <td class="py-2.5 px-4 text-slate-700 font-bold border-r border-slate-100 whitespace-nowrap truncate max-w-[150px] uppercase text-[9px]" title="${p.region}">${p.region}</td>
+                    <td class="py-2.5 px-4 text-slate-700 font-bold border-r border-slate-100 uppercase text-[9px]">${p.municipal}</td>
                     <td class="py-2.5 px-4 text-center border-r border-slate-100">
                         <span class="px-2 py-0.5 border rounded-[1px] font-black text-[8px] uppercase tracking-widest ${getStatusColor(p.status)}">${statusMap[p.status]}</span>
                     </td>
@@ -444,8 +463,8 @@
                     <td class="py-2.5 px-4 text-center border-r border-slate-100">
                         <span class="px-1.5 py-0.5 border border-slate-200 bg-slate-50 text-slate-600 text-[8px] font-black uppercase rounded-[1px]">${p.permission}</span>
                     </td>
-                    <td class="py-2.5 px-4 text-center print:hidden">
-                        <button class="text-blue-700 font-black text-[9px] uppercase hover:underline cursor-pointer tracking-widest">View</button>
+                    <td class="py-2.5 px-4 text-center print:hidden w-[60px]">
+                        <button class="text-gov-blue font-black text-[9px] uppercase hover:underline cursor-pointer tracking-widest bg-transparent border-none">View</button>
                     </td>
                 </tr>
             `).join('') : '<tr><td colspan="9" class="py-10 text-center text-slate-400 font-bold border-none uppercase tracking-widest text-[9px]">No projects matching criteria.</td></tr>';
@@ -481,13 +500,23 @@
                 counts['Infrastructure'] || 0
             );
 
+            // FIXED MAPPING: Ensured the map points perfectly to the correct HTML id
             ['Reforestation', 'Waste Management', 'Waterways', 'Coastal', 'Infrastructure'].forEach(cat => {
-                const catIdMap = {'Waste Management': 'Waste', 'Infrastructure': 'Infra'};
+                const catIdMap = {
+                    'Waste Management': 'Waste', 
+                    'Infrastructure': 'Infra',
+                    'Waterways': 'Water' // Fixed mapping error that caused execution to break
+                };
                 const idExt = catIdMap[cat] || cat;
                 const count = counts[cat] || 0;
                 
-                document.getElementById(`cat${idExt}`).innerText = count;
-                document.getElementById(`bar${idExt}`).style.width = `${Math.round((count / maxCount) * 100)}%`;
+                const catElement = document.getElementById(`cat${idExt}`);
+                const barElement = document.getElementById(`bar${idExt}`);
+                
+                if (catElement && barElement) {
+                    catElement.innerText = count;
+                    barElement.style.width = `${Math.round((count / maxCount) * 100)}%`;
+                }
             });
         }
 
@@ -520,6 +549,93 @@
             `).join('');
         }
 
+        // --- CHART MODAL LOGIC (CONSISTENT HORIZONTAL BARS) ---
+        let modalChartInstance = null;
+
+        function openChartModal(type) {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            const modalTitle = document.getElementById('modalChartTitle');
+            
+            modalWrapper.classList.remove('hidden');
+            modalWrapper.classList.add('show');
+            setTimeout(() => { modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
+            
+            if (modalChartInstance) modalChartInstance.destroy();
+
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            const modalFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+
+            const currentData = filterProjects();
+
+            if (type === 'category') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-bar text-emerald-600 mr-2"></i> Project Categories (Detailed View)';
+                
+                const counts = currentData.reduce((acc, p) => { acc[p.category] = (acc[p.category] || 0) + 1; return acc; }, {});
+                const orderedCats = ['Reforestation', 'Waste Management', 'Waterways', 'Coastal', 'Infrastructure'];
+                const dataArray = orderedCats.map(cat => counts[cat] || 0);
+
+                modalChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: orderedCats,
+                        datasets: [{ 
+                            label: 'Projects', 
+                            data: dataArray, 
+                            backgroundColor: ['#059669', '#f59e0b', '#2563eb', '#0891b2', '#334155'], 
+                            borderRadius: 2 
+                        }]
+                    },
+                    options: { 
+                        indexAxis: 'y', 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                        plugins: { legend: { display: false } },
+                        scales: { 
+                            x: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont, stepSize: 1 }, beginAtZero: true }, 
+                            y: { grid: {display:false}, ticks: { font: modalFont } } 
+                        } 
+                    }
+                });
+
+            } else if (type === 'region') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-bar text-blue-700 mr-2"></i> Regional Top 5 (Detailed View)';
+                
+                const counts = currentData.reduce((acc, p) => { acc[p.region] = (acc[p.region] || 0) + 1; return acc; }, {});
+                const sorted = Object.entries(counts).sort((a,b) => b[1] - a[1]);
+                
+                modalChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: sorted.map(i => i[0]),
+                        datasets: [{ label: 'Projects', data: sorted.map(i => i[1]), backgroundColor: '#1d4ed8', borderRadius: 2 }]
+                    },
+                    options: { 
+                        indexAxis: 'y', 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                        plugins: { legend: { display: false } },
+                        scales: { 
+                            x: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont, stepSize: 1 }, beginAtZero: true }, 
+                            y: { grid: {display:false}, ticks: { font: modalFont } } 
+                        } 
+                    }
+                });
+            }
+        }
+
+        function closeChartModal() {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            
+            modalBody.classList.remove('scale-100');
+            modalBody.classList.add('scale-95');
+            setTimeout(() => { 
+                modalWrapper.classList.remove('show'); 
+                modalWrapper.classList.add('hidden');
+                if(modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } 
+            }, 300);
+        }
+
+        // --- MASTER UPDATE ---
         function renderAll() {
             const filtered = filterProjects();
             renderTable(filtered);
@@ -531,10 +647,8 @@
         function resetFilters() {
             document.getElementById('projSearch').value = '';
             document.getElementById('statusFilter').value = '';
-            
             document.getElementById('regionFilter').value = 'all';
             
-            // Reset dependent filter API dropdown
             const filterMun = document.getElementById('municipalFilter');
             filterMun.innerHTML = '<option value="">All Municipalities</option>';
             filterMun.disabled = true;
@@ -542,6 +656,7 @@
             renderAll();
         }
 
+        // --- BINDINGS ---
         document.getElementById('projSearch').addEventListener('input', renderAll);
         document.getElementById('statusFilter').addEventListener('change', renderAll);
         document.getElementById('municipalFilter').addEventListener('change', renderAll);
@@ -565,9 +680,10 @@
             closeProjectModal();
         });
 
-        // Initialize view and fetch API regions
-        initRegions();
-        renderAll();
+        window.onload = () => {
+            initRegions();
+            renderAll();
+        };
     </script>
 </body>
 </html>

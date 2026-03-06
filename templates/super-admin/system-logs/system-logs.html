@@ -50,8 +50,13 @@
         .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; }
 
         /* Charts */
-        .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; margin-top: 4px; }
+        .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; margin-top: 4px; pointer-events: none; }
         .chart-container { position: absolute; inset: 0; }
+
+        /* Modal Transitions */
+        .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 6000; backdrop-filter: blur(2px); padding: 16px; }
+        .gov-modal.show { display: flex !important; animation: fadeIn 0.15s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         @media print {
             .no-print { display: none !important; }
@@ -122,12 +127,18 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-12 gap-2 shrink-0 no-print">
-                <section class="col-span-1 md:col-span-8 gov-card p-2 relative flex flex-col h-[150px]">
-                    <h3 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-gov-red pl-1.5 shrink-0">Hourly Activity Frequency</h3>
+                <section class="col-span-1 md:col-span-8 gov-card p-2 relative flex flex-col h-[150px] cursor-pointer hover:border-gov-red transition-colors group" onclick="openChartModal('trend')">
+                    <div class="flex justify-between items-center mb-1 shrink-0 border-b border-slate-100 pb-1">
+                        <h3 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-gov-red pl-1.5">Hourly Activity Frequency</h3>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-red transition-colors">open_in_full</span>
+                    </div>
                     <div class="chart-safe-zone"><div class="chart-container"><canvas id="auditTrendChart"></canvas></div></div>
                 </section>
-                <section class="col-span-1 md:col-span-4 gov-card p-2 relative flex flex-col h-[150px]">
-                    <h3 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-gov-navy pl-1.5 shrink-0">Severity Mix</h3>
+                <section class="col-span-1 md:col-span-4 gov-card p-2 relative flex flex-col h-[150px] cursor-pointer hover:border-gov-navy transition-colors group" onclick="openChartModal('severity')">
+                    <div class="flex justify-between items-center mb-1 shrink-0 border-b border-slate-100 pb-1">
+                        <h3 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-gov-navy pl-1.5">Severity Mix</h3>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-navy transition-colors">open_in_full</span>
+                    </div>
                     <div class="chart-safe-zone"><div class="chart-container"><canvas id="severityChart"></canvas></div></div>
                 </section>
             </div>
@@ -188,8 +199,24 @@
         </div>
     </main>
 
+    <div id="chartModalWrapper" class="gov-modal no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="chartModalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 id="modalChartTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-line text-slate-400"></i> Chart Detailed View
+                </h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-6 bg-slate-50 flex-1 h-[50vh] min-h-[350px] relative">
+                <canvas id="modalCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // FIXED TYPO: Kept variable name consistent
         const SYSTEM_DATA = [
           { time: "2026-02-13 14:04:22", admin: "Dave Alqz", action: "Privilege Delegation", mod: "Privileges", ip: "192.168.1.42", sev: "Warning", msg: "Cross-Jurisdiction Access Granted" },
           { time: "2026-02-13 11:20:00", admin: "Elena Cruz", action: "Record Deleted", mod: "Inventory", ip: "122.53.11.204", sev: "Critical", msg: "Permanently removed Asset #402" },
@@ -197,7 +224,8 @@
           { time: "2026-02-12 09:30:15", admin: "System", action: "Database Backup", mod: "Security", ip: "127.0.0.1", sev: "Info", msg: "Daily automated backup successful" }
         ];
 
-        // FILTER LOGIC
+        let myTrendChart, mySeverityChart, modalChartInstance = null;
+
         function applyFilters() {
             const searchTerm = document.getElementById('tableSearch').value.toLowerCase();
             const severityTerm = document.getElementById('severityFilter').value;
@@ -247,8 +275,8 @@
                         <span class="status-badge ${sevClass}">${row.sev}</span>
                     </td>
                     <td class="text-center no-print">
-                        <button onclick="alert('${row.msg}')" class="text-slate-400 hover:text-gov-blue transition-colors flex justify-center items-center w-full" title="View Message">
-                            <span class="material-icons-round text-[14px]">info</span>
+                        <button onclick="alert('${row.msg}')" class="text-slate-400 hover:text-gov-blue transition-colors flex justify-center items-center w-full bg-transparent border-none cursor-pointer" title="View Message">
+                            <span class="material-icons-round text-[16px]">info</span>
                         </button>
                     </td>
                 `;
@@ -259,7 +287,7 @@
         function initAuditCharts() {
             const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
 
-            new Chart(document.getElementById('auditTrendChart'), {
+            myTrendChart = new Chart(document.getElementById('auditTrendChart'), {
                 type: 'line',
                 data: {
                     labels: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00'],
@@ -267,16 +295,11 @@
                         data: [450, 620, 840, 310, 420, 980], 
                         borderColor: '#be123c', /* gov-red */
                         backgroundColor: 'rgba(190, 18, 60, 0.05)', 
-                        fill: true, 
-                        tension: 0.3, 
-                        borderWidth: 2, 
-                        pointRadius: 2 
+                        fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 
                     }]
                 },
                 options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    plugins: { legend: { display: false } }, 
+                    responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, 
                     scales: { 
                         x: { grid: { display: false }, ticks: { font: chartFont, color: '#64748b' } }, 
                         y: { grid: { color: '#f1f5f9' }, ticks: { font: chartFont, color: '#64748b' } } 
@@ -284,7 +307,7 @@
                 }
             });
 
-            new Chart(document.getElementById('severityChart'), {
+            mySeverityChart = new Chart(document.getElementById('severityChart'), {
                 type: 'doughnut',
                 data: {
                     labels: ['Info', 'Warning', 'Critical'],
@@ -295,14 +318,63 @@
                     }]
                 },
                 options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    cutout: '70%', 
-                    plugins: { 
-                        legend: { position: 'right', labels: { boxWidth: 8, font: chartFont, color: '#475569' } } 
-                    } 
+                    responsive: true, maintainAspectRatio: false, cutout: '70%', 
+                    plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: chartFont, color: '#475569' } } } 
                 }
             });
+        }
+
+        // --- MODAL LOGIC ---
+        function openChartModal(type) {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            const modalTitle = document.getElementById('modalChartTitle');
+            
+            modalWrapper.classList.remove('hidden');
+            modalWrapper.classList.add('show');
+            setTimeout(() => { modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
+            
+            if (modalChartInstance) modalChartInstance.destroy();
+
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            const modalFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+
+            if (type === 'trend') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-line text-gov-red mr-2"></i> Hourly Activity Frequency (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: myTrendChart.data,
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { grid: {display:false}, ticks: { font: modalFont } }, y: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont } } }
+                    }
+                });
+            } else if (type === 'severity') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-pie text-gov-navy mr-2"></i> Severity Mix (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: mySeverityChart.data,
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, 
+                        cutout: '60%', 
+                        plugins: { legend: { display:true, position: 'right', labels: {font: modalFont, boxWidth: 12} } } 
+                    }
+                });
+            }
+        }
+
+        function closeChartModal() {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            
+            modalBody.classList.remove('scale-100');
+            modalBody.classList.add('scale-95');
+            setTimeout(() => { 
+                modalWrapper.classList.remove('show'); 
+                modalWrapper.classList.add('hidden');
+                if(modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } 
+            }, 300);
         }
 
         window.onload = () => { 
