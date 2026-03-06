@@ -1427,6 +1427,12 @@ def user_inventory_national():
 def system_logs_national():
     return render_template('national/system/system-logs.html')
 
+@bp.route('/accounting/deposits')
+@role_required('national', 'national_admin')
+def national_deposits_view():
+    """National level payment deposits dashboard (all regions/municipalities)"""
+    return render_template('national/accounting/payment-deposits-national.html')
+
 # ---------------------------------
 # EXPENSE CATEGORIES (National)
 # ---------------------------------
