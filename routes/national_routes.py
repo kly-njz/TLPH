@@ -1651,6 +1651,59 @@ def api_get_all_national_transactions():
             else:
                 return 'Pending'
         
+        def get_user_info(trans_data):
+            """Extract comprehensive user information from transaction"""
+            user_email = trans_data.get('user_email', '').strip().lower()
+            user_name = trans_data.get('user_name', '').strip()
+            user_id = trans_data.get('user_id', '').strip()
+            
+            # Try direct from transaction first
+            if not user_name and user_email:
+                user_name = trans_data.get('userName') or trans_data.get('email_name') or user_email.split('@')[0]
+            
+            # Try to lookup from users collection
+            if user_email or user_id:
+                try:
+                    lookup_key = user_email if user_email else user_id
+                    user_doc = db.collection('users').document(lookup_key).get()
+                    if user_doc.exists:
+                        user_data = user_doc.to_dict()
+                        user_name = user_name or user_data.get('display_name') or user_data.get('firstName', '') + ' ' + user_data.get('lastName', '')
+                        user_name = user_name.strip() if user_name else user_email.split('@')[0]
+                except Exception as e:
+                    print(f'[DEBUG] Could not lookup user {lookup_key}: {e}')
+            
+            return user_email, user_name or 'Unknown User'
+        
+        def get_location_info(trans_data):
+            """Extract region and municipality from transaction or related collections"""
+            region = (trans_data.get('region') or trans_data.get('regionName') or '').strip()
+            municipality = (trans_data.get('municipality') or trans_data.get('municipality_name') or '').strip()
+            
+            # Try to get from related document if available
+            related_id = trans_data.get('related_id') or trans_data.get('applicationId') or trans_data.get('application_id')
+            collection_name = trans_data.get('relation_type') or 'applications'
+            
+            if related_id and not (region and municipality):
+                try:
+                    # Try common collection names
+                    collections_to_try = ['applications', 'service_requests', 'licenses', 'permits']
+                    for coll in collections_to_try:
+                        try:
+                            rel_doc = db.collection(coll).document(related_id).get()
+                            if rel_doc.exists:
+                                rel_data = rel_doc.to_dict()
+                                region = region or rel_data.get('region') or rel_data.get('regionName') or ''
+                                municipality = municipality or rel_data.get('municipality') or rel_data.get('municipality_name') or ''
+                                if region and municipality:
+                                    break
+                        except:
+                            continue
+                except Exception as e:
+                    print(f'[DEBUG] Could not lookup related document: {e}')
+            
+            return region or 'N/A', municipality or 'N/A'
+        
         try:
             # Fetch ALL transactions (no filtering)
             all_trans = db.collection('transactions').limit(5000).stream()
@@ -1667,19 +1720,9 @@ def api_get_all_national_transactions():
                 status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status') or 'pending'
                 trans_status = get_transaction_status(status)
                 
-                # Get user details
-                user_email = trans.get('user_email', '')
-                user_name = trans.get('user_name', 'Unknown User')
-                
-                # Try to get user full name from users collection if available
-                try:
-                    if user_email:
-                        user_doc = db.collection('users').document(user_email).get()
-                        if user_doc.exists:
-                            user_data = user_doc.to_dict()
-                            user_name = user_data.get('display_name', user_data.get('name', user_name))
-                except:
-                    pass  # Use fallback name
+                # Get user and location details
+                user_email, user_name = get_user_info(trans)
+                region, municipality = get_location_info(trans)
                 
                 created_at = trans.get('created_at') or trans.get('createdAt') or ''
                 if isinstance(created_at, object) and hasattr(created_at, 'timestamp'):
@@ -1693,9 +1736,9 @@ def api_get_all_national_transactions():
                     'type': get_transaction_type(trans.get('description'), trans.get('transaction_type')),
                     'created_at': created_at,
                     'date': trans.get('date', created_at),
-                    'location': f"{trans.get('region', 'N/A')}, {trans.get('municipality', 'N/A')}",
-                    'region': trans.get('region', 'N/A'),
-                    'municipality': trans.get('municipality', 'N/A'),
+                    'location': f"{region}, {municipality}",
+                    'region': region,
+                    'municipality': municipality,
                     'status': trans_status,
                     'amount': amount,
                     'description': trans.get('description', ''),
