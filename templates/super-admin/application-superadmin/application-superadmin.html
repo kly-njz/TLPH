@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DENR | Application Master Registry Console</title>
 
+    <style>html{visibility:hidden;opacity:0}html.show{visibility:visible;opacity:1}</style>
+    <script>
+      (function() {
+        fetch('/api/check-session', {method: 'GET', credentials: 'same-origin'})
+          .then(r => r.json())
+          .then(d => {
+            if (d.authenticated && (d.role === 'super-admin' || d.role === 'superadmin')) {
+              document.documentElement.classList.add('show');
+            } else {
+              window.location.replace('/login');
+            }
+          })
+          .catch(() => window.location.replace('/login'));
+      })();
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
@@ -15,8 +31,8 @@
             theme: {
                 extend: {
                     colors: { 
-                        'denr-dark': '#14532d', /* Slate Green */
-                        'denr-green': '#15803d', /* Base Green */
+                        'denr-dark': '#14532d', 
+                        'denr-green': '#15803d', 
                         'gov-blue': '#1e3a8a', 
                         'gov-red': '#be123c' 
                     }
@@ -50,6 +66,11 @@
 
         .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; }
 
+        /* Modal Transitions */
+        .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 6000; backdrop-filter: blur(2px); padding: 16px; }
+        .gov-modal.flex { display: flex !important; animation: fadeIn 0.15s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
         @media print { 
             .no-print { display: none !important; } 
             main { margin-left: 0 !important; padding-top: 0 !important; position: static !important; overflow: visible !important; } 
@@ -58,7 +79,7 @@
     </style>
 </head>
 
-<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50">
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50 relative">
     <div class="gov-strip no-print"></div>
 
     <div class="fixed left-0 top-0 h-full z-[1060] hidden lg:block w-[260px] no-print">
@@ -69,7 +90,7 @@
         {% include 'super-admin/header-superadmin.html' %}
     </div>
 
-    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar transition-all duration-300 flex flex-col">
+    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar transition-all duration-300 flex flex-col z-10">
         <div class="max-w-[1800px] mx-auto w-full flex flex-col flex-1 min-h-0 gap-2"> 
             
             <header class="gov-card p-2 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 border-b-4 border-b-denr-dark no-print">
@@ -118,19 +139,31 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-12 gap-2 shrink-0 no-print">
-                <div class="col-span-1 md:col-span-4 gov-card p-2">
-                    <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-gov-blue pl-1.5 mb-1.5 m-0">Weekly Trend</h4>
-                    <div class="h-[100px] w-full relative"><canvas id="trendChart"></canvas></div>
+                <div class="col-span-1 md:col-span-4 gov-card p-2 cursor-pointer hover:border-gov-blue transition-colors group relative" onclick="openChartModal('trend')">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-1 mb-1.5 shrink-0">
+                        <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-gov-blue pl-1.5 m-0 leading-none">Weekly Trend</h4>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-blue transition-colors">open_in_full</span>
+                    </div>
+                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="trendChart"></canvas></div>
                 </div>
-                <div class="col-span-1 md:col-span-3 gov-card p-2">
-                    <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-gov-red pl-1.5 mb-1.5 m-0">Regional Rank</h4>
-                    <div class="h-[100px] w-full relative"><canvas id="regionalChart"></canvas></div>
+
+                <div class="col-span-1 md:col-span-3 gov-card p-2 cursor-pointer hover:border-gov-red transition-colors group relative" onclick="openChartModal('regional')">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-1 mb-1.5 shrink-0">
+                        <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-gov-red pl-1.5 m-0 leading-none">Regional Rank</h4>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-red transition-colors">open_in_full</span>
+                    </div>
+                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="regionalChart"></canvas></div>
                 </div>
-                <div class="col-span-1 md:col-span-2 gov-card p-2">
-                    <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-denr-green pl-1.5 mb-1.5 m-0">Class</h4>
-                    <div class="h-[100px] w-full relative"><canvas id="categoryChart"></canvas></div>
+
+                <div class="col-span-1 md:col-span-2 gov-card p-2 cursor-pointer hover:border-denr-green transition-colors group relative" onclick="openChartModal('category')">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-1 mb-1.5 shrink-0">
+                        <h4 class="text-[9px] font-black text-slate-700 uppercase tracking-widest border-l-2 border-denr-green pl-1.5 m-0 leading-none">Class</h4>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-denr-green transition-colors">open_in_full</span>
+                    </div>
+                    <div class="h-[130px] w-full relative pointer-events-none"><canvas id="categoryChart"></canvas></div>
                 </div>
-                <div class="col-span-1 md:col-span-3 bg-slate-900 text-slate-300 gov-card border-slate-800 flex flex-col h-[135px]">
+
+                <div class="col-span-1 md:col-span-3 bg-slate-900 text-slate-300 gov-card border-slate-800 flex flex-col h-[165px]">
                     <div class="p-1.5 bg-slate-950 border-b border-slate-800 flex justify-between items-center shrink-0">
                         <h4 class="text-[8px] font-black text-emerald-400 uppercase tracking-widest m-0">Live Audit Trail</h4>
                         <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_5px_#10b981]"></span>
@@ -179,7 +212,7 @@
                 </div>
 
                 <div class="flex-1 overflow-auto custom-scrollbar table-wrapper bg-white relative">
-                    <table id="masterTable" class="w-full text-left border-collapse m-0">
+                    <table class="w-full text-left border-collapse m-0">
                         <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th class="border-r border-slate-200">Date Filed</th>
@@ -207,6 +240,23 @@
         </div>
     </main>
 
+    <div id="chartModalWrapper" class="gov-modal no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="chartModalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 id="modalChartTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-line text-slate-400"></i> Chart Detailed View
+                </h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-6 bg-slate-50 flex-1 h-[50vh] min-h-[350px] relative">
+                <canvas id="modalCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
     <script>
         const APP_CATEGORIES = ["Forestry", "Biodiversity", "Lands", "Mining", "Environmental Services"];
         const MOCK_DATA = [
@@ -217,15 +267,119 @@
             { date: "2026-02-11", ref: "APP-2026-006", name: "Oceanic Resources", sector: "Environmental", reg: "VII", status: "Rejected" }
         ];
 
-        function initCharts() {
-            const chartFont = { size: 8, weight: 'bold' };
-            const opt = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: chartFont }, grid: { display: false } }, y: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' } } } };
+        let myTrendChart, myRegionalChart, myCategoryChart, modalChartInstance = null;
 
-            new Chart(document.getElementById('trendChart'), { type: 'line', data: { labels: ['07','08','09','10','11','12','13'], datasets: [{ data: [120, 150, 90, 210, 180, 240, 280], borderColor: '#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.1)', fill: true, tension: 0.3, borderWidth: 2 }] }, options: opt });
-            new Chart(document.getElementById('regionalChart'), { type: 'bar', data: { labels: ['IV-B', 'III', 'NCR', 'IV-A', 'VII'], datasets: [{ data: [840, 620, 580, 450, 350], backgroundColor: '#be123c', borderRadius: 2 }] }, options: { ...opt, indexAxis: 'y' } });
-            new Chart(document.getElementById('categoryChart'), { type: 'doughnut', data: { labels: ['For', 'Bio', 'Land', 'Min'], datasets: [{ data: [45, 25, 20, 10], backgroundColor: ['#15803d', '#1e3a8a', '#d97706', '#be123c'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%' } });
+        function initCharts() {
+            const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+
+            // 1. Trend Chart (Line)
+            myTrendChart = new Chart(document.getElementById('trendChart'), { 
+                type: 'line', 
+                data: { 
+                    labels: ['07','08','09','10','11','12','13'], 
+                    datasets: [{ data: [120, 150, 90, 210, 180, 240, 280], borderColor: '#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.1)', fill: true, tension: 0.3, borderWidth: 2 }] 
+                }, 
+                options: { 
+                    responsive: true, maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } }, 
+                    scales: { x: { ticks: { font: chartFont }, grid: { display: false } }, y: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' }, beginAtZero: true } } 
+                } 
+            });
+
+            // 2. Regional Chart (Bar) - SEPARATE CONFIGURATION FIX
+            myRegionalChart = new Chart(document.getElementById('regionalChart'), { 
+                type: 'bar', 
+                data: { 
+                    labels: ['IV-B', 'III', 'NCR', 'IV-A', 'VII'], 
+                    datasets: [{ data: [840, 620, 580, 450, 350], backgroundColor: '#be123c', borderRadius: 2 }] 
+                }, 
+                options: { 
+                    indexAxis: 'y', 
+                    responsive: true, maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } }, 
+                    scales: { 
+                        x: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' }, beginAtZero: true }, 
+                        y: { ticks: { font: chartFont }, grid: { display: false } } 
+                    } 
+                } 
+            });
+
+            // 3. Category Chart (Doughnut)
+            myCategoryChart = new Chart(document.getElementById('categoryChart'), { 
+                type: 'doughnut', 
+                data: { 
+                    labels: ['For', 'Bio', 'Land', 'Min'], 
+                    datasets: [{ data: [45, 25, 20, 10], backgroundColor: ['#15803d', '#1e3a8a', '#d97706', '#be123c'], borderWidth: 0 }] 
+                }, 
+                options: { 
+                    responsive: true, maintainAspectRatio: false, cutout: '75%', 
+                    plugins: { legend: { display: false } } 
+                } 
+            });
         }
 
+        // --- MODAL LOGIC (FIXED REFERENCES) ---
+        function openChartModal(type) {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            const modalTitle = document.getElementById('modalChartTitle');
+            
+            modalWrapper.classList.remove('hidden');
+            setTimeout(() => { modalWrapper.classList.add('flex'); modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
+            
+            if (modalChartInstance) modalChartInstance.destroy();
+
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            const modalFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+
+            if (type === 'trend') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-line text-gov-blue mr-2"></i> Weekly Trend (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: myTrendChart.data,
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { grid: {display:false}, ticks: { font: modalFont } }, y: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont }, beginAtZero: true } }
+                    }
+                });
+            } else if (type === 'regional') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-column text-gov-red mr-2"></i> Regional Rank (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: myRegionalChart.data,
+                    options: { 
+                        indexAxis: 'y', 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont }, beginAtZero: true }, y: { grid: {display:false}, ticks: { font: modalFont } } }
+                    }
+                });
+            } else if (type === 'category') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-pie text-denr-green mr-2"></i> Classification Distribution (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: myCategoryChart.data,
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, 
+                        cutout: '60%', 
+                        plugins: { legend: { position: 'right', labels: {font: modalFont} } } 
+                    }
+                });
+            }
+        }
+
+        function closeChartModal() {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            
+            modalWrapper.classList.remove('flex');
+            modalBody.classList.remove('scale-100');
+            modalBody.classList.add('scale-95');
+            setTimeout(() => { modalWrapper.classList.add('hidden'); if(modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } }, 300);
+        }
+
+        // --- TABLE LOGIC ---
         function renderTable() {
             const body = document.getElementById('appTableBody');
             const search = document.getElementById('searchInput').value.toLowerCase();
@@ -242,27 +396,31 @@
             body.innerHTML = '';
             document.getElementById('resCount').textContent = filtered.length;
 
+            if(filtered.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No records found.</td></tr>';
+                return;
+            }
+
             filtered.forEach(row => {
                 const statusColor = row.status === 'Approved' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 
                                    row.status === 'Rejected' ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200';
                 
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-blue-50 transition-colors data-row";
+                tr.className = "hover:bg-slate-50 transition-colors data-row";
                 
-                // Using Compact Government Style UI classes for the injected HTML
                 tr.innerHTML = `
-                    <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">${row.date}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap font-bold text-[9px]">${row.date}</td>
                     <td class="px-3 py-1.5 border-r border-slate-100">
-                        <div class="font-black text-slate-900 uppercase leading-tight">${row.ref}</div>
-                        <div class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">${row.name}</div>
+                        <div class="font-black text-slate-900 uppercase leading-tight tracking-tight">${row.ref}</div>
+                        <div class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">${row.name}</div>
                     </td>
-                    <td class="px-3 py-1.5 font-bold uppercase text-slate-700 border-r border-slate-100">${row.sector}</td>
-                    <td class="px-3 py-1.5 font-black text-slate-800 border-r border-slate-100 whitespace-nowrap">Region ${row.reg}</td>
+                    <td class="px-3 py-1.5 font-bold uppercase text-slate-700 border-r border-slate-100 tracking-widest text-[9px]">${row.sector}</td>
+                    <td class="px-3 py-1.5 font-black text-slate-800 border-r border-slate-100 whitespace-nowrap uppercase tracking-widest text-[9px]">Region ${row.reg}</td>
                     <td class="px-3 py-1.5 text-center border-r border-slate-100">
                         <span class="status-badge ${statusColor}">${row.status}</span>
                     </td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <button class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest">View Profile</button>
+                        <button class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">View Profile</button>
                     </td>
                 `;
                 body.appendChild(tr);

@@ -51,6 +51,11 @@
 
         .chart-container { position: relative; height: 100%; width: 100%; }
 
+        /* Modal Transitions */
+        .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 6000; backdrop-filter: blur(2px); padding: 16px; }
+        .gov-modal.flex { display: flex !important; animation: fadeIn 0.15s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
         @media print {
             .no-print { display: none !important; }
             main { margin: 0 !important; padding: 0 !important; height: auto !important; position: static !important; overflow: visible !important; left: 0 !important; top: 0 !important; }
@@ -87,7 +92,7 @@
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-1.5 mt-2 sm:mt-0">
-                    <button class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">
+                    <button class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm" onclick="window.print()">
                         <i class="fa-solid fa-file-invoice-dollar"></i> Financial Export
                     </button>
                     <button class="gov-btn bg-fin-emerald text-white hover:bg-emerald-800 shadow-sm">
@@ -120,19 +125,25 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-12 gap-2 shrink-0 h-[140px] no-print">
-                <div class="md:col-span-8 gov-card p-2 flex flex-col">
-                    <h4 class="text-[9px] font-black text-slate-500 uppercase tracking-widest border-l-4 border-fin-emerald pl-2 mb-2 leading-none">Daily Revenue Stream (National Intake)</h4>
-                    <div class="flex-1 min-h-0"><canvas id="revenueTrendChart"></canvas></div>
+                <div class="md:col-span-8 gov-card p-2 flex flex-col cursor-pointer hover:border-fin-emerald transition-colors group relative" onclick="openChartModal('line')">
+                    <div class="flex justify-between items-center mb-1 border-b border-slate-100 pb-1 shrink-0">
+                        <h4 class="text-[9px] font-black text-slate-500 uppercase tracking-widest border-l-4 border-fin-emerald pl-2 leading-none m-0">Daily Revenue Stream (National Intake)</h4>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-fin-emerald transition-colors">open_in_full</span>
+                    </div>
+                    <div class="flex-1 min-h-0 pointer-events-none"><canvas id="revenueTrendChart"></canvas></div>
                 </div>
-                <div class="md:col-span-4 gov-card p-2 flex flex-col">
-                    <h4 class="text-[9px] font-black text-slate-500 uppercase tracking-widest border-l-4 border-slate-800 pl-2 mb-2 leading-none">Revenue Module Distribution</h4>
-                    <div class="flex-1 min-h-0"><canvas id="typeDistributionChart"></canvas></div>
+                <div class="md:col-span-4 gov-card p-2 flex flex-col cursor-pointer hover:border-slate-800 transition-colors group relative" onclick="openChartModal('bar')">
+                    <div class="flex justify-between items-center mb-1 border-b border-slate-100 pb-1 shrink-0">
+                        <h4 class="text-[9px] font-black text-slate-500 uppercase tracking-widest border-l-4 border-slate-800 pl-2 leading-none m-0">Revenue Module Distribution</h4>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-slate-800 transition-colors">open_in_full</span>
+                    </div>
+                    <div class="flex-1 min-h-0 pointer-events-none"><canvas id="typeDistributionChart"></canvas></div>
                 </div>
             </div>
 
             <div class="gov-card flex-1 flex flex-col min-h-[300px] w-full overflow-hidden">
                 <div class="bg-slate-50 border-b border-slate-200 p-2 flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0 no-print">
-                    <div class="flex flex-wrap items-center gap-2 w-full max-w-6xl">
+                    <div class="flex flex-wrap items-center gap-2 w-full max-w-4xl">
                         <div class="relative flex-1 sm:flex-none sm:w-48">
                             <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
                             <input id="tableSearch" oninput="renderTable()" type="text" placeholder="Reference or Payor..." class="gov-input w-full pl-6 h-7">
@@ -200,8 +211,24 @@
         </div>
     </main>
 
+    <div id="chartModalWrapper" class="gov-modal no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="chartModalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 id="modalChartTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-line text-slate-400"></i> Chart Detailed View
+                </h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-6 bg-slate-50 flex-1 h-[50vh] min-h-[350px] relative">
+                <canvas id="modalCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Updated Mock Data to test multiple regions
         const MOCK_DATA = [
             { ref: "TXN-2026-001", name: "Alqz Dave", type: "Licensing/Permit", date: "2026-02-13", reg: "IV-B", status: "Paid", amount: 2500.00 },
             { ref: "TXN-2026-002", name: "Oriental Mindoro Coop", type: "Service Request", date: "2026-02-13", reg: "IV-B", status: "Paid", amount: 1200.00 },
@@ -209,6 +236,8 @@
             { ref: "TXN-2026-004", name: "BuildCorp Phil", type: "Application Fee", date: "2026-02-11", reg: "III", status: "Paid", amount: 15000.00 },
             { ref: "TXN-2026-005", name: "Baguio Mining", type: "Licensing/Permit", date: "2026-02-10", reg: "CAR", status: "Paid", amount: 8400.00 }
         ];
+
+        let myLineChart, myBarChart, modalChartInstance = null;
 
         function renderTable() {
             const body = document.getElementById('txnTableBody');
@@ -255,33 +284,73 @@
 
         function initCharts() {
             const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
-            const opt = { 
-                responsive: true, 
-                maintainAspectRatio: false, 
-                plugins: { legend: { display: false } }, 
-                scales: { 
-                    x: { ticks: { font: chartFont, color: '#64748b' }, grid: { display: false } }, 
-                    y: { ticks: { font: chartFont, color: '#64748b' }, grid: { color: '#f1f5f9' } } 
-                } 
-            };
-
-            new Chart(document.getElementById('revenueTrendChart'), {
+            
+            myLineChart = new Chart(document.getElementById('revenueTrendChart'), {
                 type: 'line',
                 data: {
                     labels: ['07','08','09','10','11','12','13'],
                     datasets: [{ data: [12000, 19000, 30000, 25000, 45000, 38000, 52000], borderColor: '#059669', backgroundColor: 'rgba(5, 150, 105, 0.05)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }]
                 },
-                options: opt
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: chartFont, color: '#64748b' }, grid: { display: false } }, y: { ticks: { font: chartFont, color: '#64748b' }, grid: { color: '#f1f5f9' } } } }
             });
 
-            new Chart(document.getElementById('typeDistributionChart'), {
+            myBarChart = new Chart(document.getElementById('typeDistributionChart'), {
                 type: 'bar',
                 data: {
                     labels: ['Apps', 'Srvc', 'Prmt'],
                     datasets: [{ data: [450000, 320000, 480000], backgroundColor: ['#1e293b', '#059669', '#d97706'], borderRadius: 2 }]
                 },
-                options: { ...opt, indexAxis: 'y' }
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { font: chartFont, color: '#64748b' }, grid: { display: false } }, y: { ticks: { font: chartFont, color: '#64748b' }, grid: { color: '#f1f5f9' } } } }
             });
+        }
+
+        // --- MODAL LOGIC ---
+        function openChartModal(type) {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            const modalTitle = document.getElementById('modalChartTitle');
+            
+            modalWrapper.classList.remove('hidden');
+            setTimeout(() => { modalWrapper.classList.add('flex'); modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
+            
+            if (modalChartInstance) modalChartInstance.destroy();
+
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            const modalFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+
+            if (type === 'line') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-line text-fin-emerald mr-2"></i> Daily Revenue Stream (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: myLineChart.data,
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { grid: {display:false}, ticks: { font: modalFont } }, y: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont } } }
+                    }
+                });
+            } else if (type === 'bar') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-column text-slate-800 mr-2"></i> Revenue Module Distribution (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: myBarChart.data,
+                    options: { 
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont } }, y: { grid: {display:false}, ticks: { font: modalFont } } }
+                    }
+                });
+            }
+        }
+
+        function closeChartModal() {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            
+            modalWrapper.classList.remove('flex');
+            modalBody.classList.remove('scale-100');
+            modalBody.classList.add('scale-95');
+            setTimeout(() => { modalWrapper.classList.add('hidden'); if(modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } }, 300);
         }
 
         window.onload = () => { initCharts(); renderTable(); };
