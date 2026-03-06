@@ -852,49 +852,55 @@ def api_get_national_deposits():
 @bp.route('/api/expenses', methods=['GET'])
 @role_required('national', 'national_admin')
 def api_get_national_expenses():
-    """Fetch all expenses (fund transfers/distributions) from national to regions/municipalities"""
+    """Fetch all expenses (fund transfers) from national to regions and municipalities"""
     try:
         db = get_firestore_db()
         total_expenses = 0.0
         expense_records = []
         
-        # Try to fetch from fund_transfers collection or similar
-        # These would be fund distributions sent to regions/municipalities
+        # 1. Fetch regional fund distributions (national → regions)
         try:
-            # Check for fund_transfers collection
-            fund_ref = db.collection('fund_transfers')
+            fund_ref = db.collection('regional_fund_distribution')
             docs = fund_ref.stream()
             for doc in docs:
                 fund = doc.to_dict()
                 if fund:
                     amount = float(fund.get('amount', 0) or 0)
-                    total_expenses += amount
-                    expense_records.append({
-                        'id': doc.id,
-                        'type': 'fund_transfer',
-                        'amount': amount,
-                        'description': fund.get('description', 'Fund Transfer'),
-                        'recipient': fund.get('region', fund.get('municipality', 'N/A')),
-                        'date': fund.get('created_at'),
-                        'status': fund.get('status', 'completed')
-                    })
-        except Exception as e:
-            print(f'[WARN] Error fetching fund_transfers: {e}')
-        
-        # Also check for budget_allocation or distribution records in system_logs
-        try:
-            logs_ref = db.collection('system_logs')
-            docs = logs_ref.where('action_type', '==', 'FUND_TRANSFER').stream()
-            for doc in docs:
-                log = doc.to_dict()
-                if log and log.get('metadata'):
-                    amount = float(log['metadata'].get('amount', 0) or 0)
-                    # Check if this amount is already counted above
                     if amount > 0:
-                        # You could add deduplication logic here if needed
-                        pass
+                        total_expenses += amount
+                        expense_records.append({
+                            'id': doc.id,
+                            'type': 'regional_distribution',
+                            'amount': amount,
+                            'description': fund.get('fund_type', 'Regional Fund Transfer'),
+                            'recipient': fund.get('region', 'N/A'),
+                            'date': fund.get('date', fund.get('created_at')),
+                            'status': fund.get('status', 'completed')
+                        })
         except Exception as e:
-            print(f'[WARN] Error fetching system logs: {e}')
+            print(f'[WARN] Error fetching regional_fund_distribution: {e}')
+        
+        # 2. Fetch municipal fund distributions (regions/national → municipalities)
+        try:
+            fund_ref = db.collection('municipal_fund_distribution')
+            docs = fund_ref.stream()
+            for doc in docs:
+                fund = doc.to_dict()
+                if fund:
+                    amount = float(fund.get('amount', 0) or 0)
+                    if amount > 0:
+                        total_expenses += amount
+                        expense_records.append({
+                            'id': doc.id,
+                            'type': 'municipal_distribution',
+                            'amount': amount,
+                            'description': fund.get('fund_type', 'Municipal Fund Transfer'),
+                            'recipient': fund.get('municipality', 'N/A'),
+                            'date': fund.get('timestamp', fund.get('created_at')),
+                            'status': fund.get('status', 'completed')
+                        })
+        except Exception as e:
+            print(f'[WARN] Error fetching municipal_fund_distribution: {e}')
         
         return jsonify({
             'success': True,
