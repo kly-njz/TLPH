@@ -1424,10 +1424,11 @@ def api_create_expense_category_frontend():
             'updated_at': firestore.SERVER_TIMESTAMP
         }
         
-        doc_ref = db.collection('expense_categories').add(category_data)
+        write_result, doc_ref = db.collection('expense_categories').add(category_data)
+        doc_id = doc_ref.id
         
         return jsonify({
-            'id': doc_ref[1].id,
+            'id': doc_id,
             'name': category_data['name'],
             'coa_code': category_data['coa_code'],
             'tax_type': category_data['tax_type'],
@@ -1436,6 +1437,8 @@ def api_create_expense_category_frontend():
         }), 201
     except Exception as e:
         print(f"[ERROR] Creating expense category: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/expense-categories/<category_id>', methods=['PUT'])

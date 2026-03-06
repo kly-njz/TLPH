@@ -174,21 +174,29 @@ function expenseCategoriesApp() {
 
     async loadCategories() {
       try {
-        const responses = await Promise.all([
-          fetch('/api/municipal/expense-categories'),
-          fetch('/regional/api/expense-categories')
-        ]);
+        console.log('[DEBUG] Starting to load categories...');
         
-        const [municipal, regional] = await Promise.all(responses.map(r => r.json()));
+        // Try municipal endpoint
+        const resp1 = await fetch('/api/municipal/expense-categories');
+        console.log('[DEBUG] Municipal response status:', resp1.status);
+        const municipal = resp1.ok ? await resp1.json() : [];
+        console.log('[DEBUG] Municipal data:', municipal);
+        
+        // Try regional endpoint
+        const resp2 = await fetch('/regional/api/expense-categories');
+        console.log('[DEBUG] Regional response status:', resp2.status);
+        const regional = resp2.ok ? await resp2.json() : [];
+        console.log('[DEBUG] Regional data:', regional);
         
         // Combine and deduplicate
         const combined = [...(Array.isArray(municipal) ? municipal : []), ...(Array.isArray(regional) ? regional : [])];
         this.categories = Array.from(new Map(combined.map(c => [c.id, c])).values());
         
-        console.log('Loaded expense categories:', this.categories);
+        console.log('[DEBUG] Final categories:', this.categories);
+        console.log('[DEBUG] Total categories:', this.categories.length);
         this.updateCharts();
       } catch (error) {
-        console.error('Error loading categories:', error);
+        console.error('[ERROR] Failed to load categories:', error);
       }
     },
 
