@@ -1607,3 +1607,111 @@ def api_get_national_payment_deposits():
     except Exception as e:
         print(f'[ERROR] National: Failed to get payment deposits: {e}')
         return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/api/transactions/all', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_all_national_transactions():
+    """Get ALL transactions from all regions/municipalities with region, type, and user details (National Transaction Registry)"""
+    try:
+        print('[DEBUG] National: Fetching ALL transactions (paid & refunded)')
+        
+        db = get_firestore_db()
+        transactions = []
+        
+        def parse_amount(raw_value):
+            try:
+                return float(raw_value or 0)
+            except (ValueError, TypeError):
+                return 0.0
+        
+        def get_transaction_type(description, trans_type=None):
+            """Infer transaction type from description or field"""
+            if trans_type:
+                return str(trans_type).title()
+            desc = str(description or '').lower()
+            if 'permit' in desc or 'license' in desc:
+                return 'Licensing/Permit'
+            if 'service' in desc:
+                return 'Service Request'
+            if 'application' in desc:
+                return 'Application'
+            return 'General Payment'
+        
+        def get_transaction_status(status_field):
+            """Determine if transaction is Paid or Refunded"""
+            status_str = str(status_field or '').strip().lower()
+            paid_markers = {'paid', 'completed', 'settled', 'approved', 'success', 'succeeded'}
+            refunded_markers = {'refunded', 'cancelled', 'rejected'}
+            
+            if status_str in refunded_markers:
+                return 'Refunded'
+            elif status_str in paid_markers:
+                return 'Paid'
+            else:
+                return 'Pending'
+        
+        try:
+            # Fetch ALL transactions (no filtering)
+            all_trans = db.collection('transactions').limit(5000).stream()
+            
+            for doc in all_trans:
+                trans = doc.to_dict()
+                if not trans:
+                    continue
+                
+                amount = parse_amount(trans.get('amount'))
+                if amount <= 0:
+                    continue
+                
+                status = trans.get('status') or trans.get('paymentStatus') or trans.get('payment_status') or 'pending'
+                trans_status = get_transaction_status(status)
+                
+                # Get user details
+                user_email = trans.get('user_email', '')
+                user_name = trans.get('user_name', 'Unknown User')
+                
+                # Try to get user full name from users collection if available
+                try:
+                    if user_email:
+                        user_doc = db.collection('users').document(user_email).get()
+                        if user_doc.exists:
+                            user_data = user_doc.to_dict()
+                            user_name = user_data.get('display_name', user_data.get('name', user_name))
+                except:
+                    pass  # Use fallback name
+                
+                created_at = trans.get('created_at') or trans.get('createdAt') or ''
+                if isinstance(created_at, object) and hasattr(created_at, 'timestamp'):
+                    created_at = created_at.timestamp() * 1000
+                
+                transactions.append({
+                    'id': doc.id,
+                    'reference': trans.get('invoice_id', trans.get('reference_id', doc.id[:12])),
+                    'name': user_name,
+                    'email': user_email,
+                    'type': get_transaction_type(trans.get('description'), trans.get('transaction_type')),
+                    'created_at': created_at,
+                    'date': trans.get('date', created_at),
+                    'location': f"{trans.get('region', 'N/A')}, {trans.get('municipality', 'N/A')}",
+                    'region': trans.get('region', 'N/A'),
+                    'municipality': trans.get('municipality', 'N/A'),
+                    'status': trans_status,
+                    'amount': amount,
+                    'description': trans.get('description', ''),
+                    'payment_method': trans.get('payment_method', 'Unknown'),
+                })
+        
+        except Exception as e:
+            print(f'[ERROR] National: Failed to fetch transactions: {e}')
+            return jsonify({'error': str(e)}), 500
+        
+        # Sort by date descending
+        transactions.sort(key=lambda x: x['created_at'], reverse=True)
+        
+        print(f'[INFO] National: Retrieved {len(transactions)} transactions from ALL regions/municipalities')
+        return jsonify(transactions), 200
+        
+    except Exception as e:
+        print(f'[ERROR] National: Failed to get transactions: {e}')
+        return jsonify({'error': str(e)}), 500
