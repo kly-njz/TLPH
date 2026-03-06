@@ -3177,7 +3177,6 @@ def debug_collections():
 # ==================== COA ENDPOINTS (Frontend-compatible paths) ====================
 
 @bp.route('/api/coa-templates', methods=['GET'])
-@role_required('regional', 'regional_admin')
 def api_get_coa_templates_wrapped():
     """Wrapper for /api/coa/templates with normalized response"""
     try:
@@ -3247,7 +3246,6 @@ def api_get_coa_templates_wrapped():
 
 
 @bp.route('/api/coa-accounts', methods=['GET'])
-@role_required('regional', 'regional_admin')
 def api_get_coa_accounts_wrapped():
     """Get COA accounts for the region"""
     try:
