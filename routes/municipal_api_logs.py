@@ -1338,3 +1338,183 @@ def api_update_coa_account_frontend(account_id):
     except Exception as e:
         print(f"[ERROR] Updating COA account: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# ==================== EXPENSE CATEGORIES API (Frontend-compatible) ====================
+
+@bp.route('/expense-categories', methods=['GET'])
+def api_get_expense_categories_frontend():
+    """Get all expense categories (frontend-compatible endpoint)"""
+    try:
+        # Try to get municipality scope
+        municipality_scope = _get_current_municipality_scope()
+        
+        # If no municipality scope, fetch ALL categories (for national admin)
+        if not municipality_scope:
+            try:
+                db = get_firestore_db()
+                categories = []
+                print(f"[INFO] Fetching ALL expense categories from Firestore...")
+                query_result = db.collection('expense_categories').stream()
+                for doc in query_result:
+                    data = doc.to_dict() or {}
+                    categories.append({
+                        'id': doc.id,
+                        'name': data.get('name'),
+                        'coa_code': data.get('coa_code'),
+                        'tax_type': data.get('tax_type', 'None'),
+                        'default_rate': data.get('default_rate', 0),
+                        'status': data.get('status', 'active'),
+                        'municipality': data.get('municipality')
+                    })
+                print(f"[INFO] Fetched {len(categories)} expense categories")
+                return jsonify(categories), 200
+            except Exception as e:
+                print(f"[ERROR] Getting all expense categories: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify([]), 200
+        
+        # Municipality-specific fetch
+        db = get_firestore_db()
+        categories = []
+        try:
+            query_result = db.collection('expense_categories').where('municipality', '==', municipality_scope).stream()
+            for doc in query_result:
+                data = doc.to_dict() or {}
+                categories.append({
+                    'id': doc.id,
+                    'name': data.get('name'),
+                    'coa_code': data.get('coa_code'),
+                    'tax_type': data.get('tax_type', 'None'),
+                    'default_rate': data.get('default_rate', 0),
+                    'status': data.get('status', 'active'),
+                    'municipality': data.get('municipality')
+                })
+        except Exception as e:
+            print(f"[WARN] Error querying municipality-specific categories: {e}")
+        
+        return jsonify(categories), 200
+    except Exception as e:
+        print(f"[ERROR] Getting expense categories: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify([]), 200
+
+@bp.route('/expense-categories', methods=['POST'])
+def api_create_expense_category_frontend():
+    """Create a new expense category (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        data = request.get_json()
+        db = get_firestore_db()
+        
+        category_data = {
+            'name': data.get('name'),
+            'coa_code': data.get('coa_code'),
+            'tax_type': data.get('tax_type', 'None'),
+            'default_rate': data.get('default_rate', 0),
+            'status': data.get('status', 'active'),
+            'municipality': municipality_scope,
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }
+        
+        doc_ref = db.collection('expense_categories').add(category_data)
+        
+        return jsonify({
+            'id': doc_ref[1].id,
+            'name': category_data['name'],
+            'coa_code': category_data['coa_code'],
+            'tax_type': category_data['tax_type'],
+            'default_rate': category_data['default_rate'],
+            'status': category_data['status']
+        }), 201
+    except Exception as e:
+        print(f"[ERROR] Creating expense category: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/expense-categories/<category_id>', methods=['PUT'])
+def api_update_expense_category_frontend(category_id):
+    """Update an expense category (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        data = request.get_json()
+        db = get_firestore_db()
+        
+        # Verify category belongs to municipality
+        category_doc = db.collection('expense_categories').document(category_id).get()
+        if not category_doc.exists:
+            return jsonify({'error': 'Category not found'}), 404
+        
+        category = category_doc.to_dict() or {}
+        if category.get('municipality') != municipality_scope:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        # Update the category
+        update_data = {
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }
+        if 'name' in data:
+            update_data['name'] = data.get('name')
+        if 'coa_code' in data:
+            update_data['coa_code'] = data.get('coa_code')
+        if 'tax_type' in data:
+            update_data['tax_type'] = data.get('tax_type')
+        if 'default_rate' in data:
+            update_data['default_rate'] = data.get('default_rate')
+        if 'status' in data:
+            update_data['status'] = data.get('status')
+        
+        db.collection('expense_categories').document(category_id).update(update_data)
+        
+        # Get updated document
+        updated_doc = db.collection('expense_categories').document(category_id).get()
+        updated_data = updated_doc.to_dict() or {}
+        
+        return jsonify({
+            'id': updated_doc.id,
+            'name': updated_data.get('name'),
+            'coa_code': updated_data.get('coa_code'),
+            'tax_type': updated_data.get('tax_type'),
+            'default_rate': updated_data.get('default_rate'),
+            'status': updated_data.get('status')
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Updating expense category: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/expense-categories/<category_id>', methods=['DELETE'])
+def api_delete_expense_category_frontend(category_id):
+    """Delete an expense category (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        
+        if not municipality_scope:
+            return jsonify({'error': 'Municipality scope required'}), 403
+        
+        db = get_firestore_db()
+        
+        # Verify category belongs to municipality
+        category_doc = db.collection('expense_categories').document(category_id).get()
+        if not category_doc.exists:
+            return jsonify({'error': 'Category not found'}), 404
+        
+        category = category_doc.to_dict() or {}
+        if category.get('municipality') != municipality_scope:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        db.collection('expense_categories').document(category_id).delete()
+        
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        print(f"[ERROR] Deleting expense category: {e}")
+        return jsonify({'error': str(e)}), 500
