@@ -2069,7 +2069,45 @@ def accounting_coa_templates_view():
 @bp.route('/accounting/accounting-entities')
 @role_required('regional','regional_admin')
 def accounting_entities_view():
-    return render_template('regional/accounting/entities-regional.html')
+    db = get_firestore_db()
+    
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region)
+    
+    if not user_region:
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+        try:
+            if user_id:
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+            if not user_region and user_email:
+                docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                for doc in docs:
+                    user_data = doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+                    break
+        except Exception as e:
+            print(f"[WARN] Unable to resolve region for entities view: {e}")
+    
+    municipalities = []
+    try:
+        if user_region:
+            muni_doc = db.collection('municipalities').document(user_region).get()
+            if muni_doc.exists:
+                municipalities = muni_doc.to_dict().get('municipalities', []) or []
+    except Exception as e:
+        print(f"[WARN] Unable to resolve municipalities for entities view: {e}")
+    
+    return render_template('regional/accounting/entities-regional.html',
+                         user_region=user_region,
+                         municipalities=municipalities)
 
 @bp.route('/accounting/accounting-deposits')
 @role_required('regional','regional_admin')
@@ -2393,6 +2431,84 @@ def accounting_deposits_view():
         total_amount=total_amount,
         unique_payers=unique_payers
     )
+
+@bp.route('/api/entities', methods=['GET'])
+@role_required('regional','regional_admin')
+def api_get_regional_entities():
+    """Get all entities across municipalities in the regional admin's region"""
+    db = get_firestore_db()
+    
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region)
+    
+    if not user_region:
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+        try:
+            if user_id:
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+            if not user_region and user_email:
+                docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                for doc in docs:
+                    user_data = doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+                    break
+        except Exception as e:
+            print(f"[WARN] Unable to resolve region for entities API: {e}")
+    
+    if not user_region:
+        return jsonify({'success': False, 'error': 'Cannot determine region'}), 403
+    
+    municipalities = []
+    try:
+        muni_doc = db.collection('municipalities').document(user_region).get()
+        if muni_doc.exists:
+            municipalities = muni_doc.to_dict().get('municipalities', []) or []
+    except Exception as e:
+        print(f"[WARN] Unable to resolve municipalities: {e}")
+    
+    entities = []
+    stats = {
+        'total': 0,
+        'by_type': {},
+        'by_status': {},
+        'municipalities_count': len(municipalities)
+    }
+    
+    try:
+        all_entities = db.collection('entities').limit(5000).stream()
+        
+        for doc in all_entities:
+            entity = doc.to_dict() or {}
+            entity_municipality = entity.get('municipality', '')
+            
+            if municipalities and entity_municipality in municipalities:
+                entity['id'] = doc.id
+                entities.append(entity)
+                
+                entity_type = entity.get('type', 'OFFICE')
+                entity_status = entity.get('status', 'ACTIVE')
+                
+                stats['by_type'][entity_type] = stats['by_type'].get(entity_type, 0) + 1
+                stats['by_status'][entity_status] = stats['by_status'].get(entity_status, 0) + 1
+        
+        stats['total'] = len(entities)
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch entities: {e}")
+    
+    return jsonify({
+        'success': True,
+        'region': user_region,
+        'entities': entities,
+        'stats': stats
+    }), 200
 
 @bp.route('/accounting/accounting-expenses')
 @role_required('regional','regional_admin')
