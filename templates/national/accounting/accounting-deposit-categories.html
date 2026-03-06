@@ -237,8 +237,9 @@
       return {
         deposits: [],
         categories: [],
-        searchCategory: '',
-        filterRevenue: '',
+        searchQuery: '',
+        filterStatus: '',
+        filterRegion: '',
         
         async loadDeposits() {
           try {
@@ -275,18 +276,38 @@
           return this.deposits.filter(d => ['PAID', 'COMPLETED', 'SETTLED', 'SUCCESS'].includes(d.status)).length;
         },
 
-        get filteredCategories() {
-          return this.categories.filter(cat => {
-            const matchSearch = !this.searchCategory || 
-              cat.name.toLowerCase().includes(this.searchCategory.toLowerCase()) ||
-              (cat.coa_code || '').toLowerCase().includes(this.searchCategory.toLowerCase());
-            const matchRevenue = !this.filterRevenue || (cat.tax_type || '').toLowerCase() === this.filterRevenue.toLowerCase();
-            return matchSearch && matchRevenue;
+        get filteredDeposits() {
+          return this.deposits.filter(deposit => {
+            const matchSearch = !this.searchQuery || 
+              (deposit.invoice_id || '').toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+              (deposit.payer_email || '').toLowerCase().includes(this.searchQuery.toLowerCase());
+            const matchStatus = !this.filterStatus || (deposit.status || '').includes(this.filterStatus);
+            const matchRegion = !this.filterRegion || deposit.region === this.filterRegion;
+            return matchSearch && matchStatus && matchRegion;
           });
         },
 
         formatCurrency(amount) {
           return (amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+
+        formatDate(dateStr) {
+          if (!dateStr) return '-';
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+        },
+
+        getStatusClass(status) {
+          const classes = {
+            'PAID': 'bg-green-50 text-green-700 border-green-200',
+            'COMPLETED': 'bg-green-50 text-green-700 border-green-200',
+            'SETTLED': 'bg-green-50 text-green-700 border-green-200',
+            'SUCCESS': 'bg-green-50 text-green-700 border-green-200',
+            'PENDING': 'bg-amber-50 text-amber-700 border-amber-200',
+            'FAILED': 'bg-red-50 text-red-700 border-red-200',
+            'CANCELLED': 'bg-slate-100 text-slate-600 border-slate-200'
+          };
+          return classes[status] || 'bg-slate-100 text-slate-600 border-slate-200';
         },
 
         getTaxTypeClass(taxType) {
@@ -299,15 +320,23 @@
           return classes[taxType] || 'bg-slate-100 text-slate-600 border-slate-200';
         },
 
+        getUniqueRegions() {
+          const regions = new Set();
+          this.deposits.forEach(d => {
+            if (d.region && d.region !== 'Unknown' && d.region !== 'N/A') {
+              regions.add(d.region);
+            }
+          });
+          return Array.from(regions).sort();
+        },
+
         editCategory(cat) {
           console.log('[DEBUG] Edit category:', cat);
-          // TODO: Implement edit functionality
         },
 
         deleteCategory(id) {
           if (confirm('Delete this category?')) {
             console.log('[DEBUG] Delete category:', id);
-            // TODO: Implement delete functionality
           }
         },
 
