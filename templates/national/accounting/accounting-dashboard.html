@@ -25,6 +25,9 @@
           total: 0,
           by_type: {}
         },
+        expenses: {
+          total: 0
+        },
 
         formatCurrency(amount) {
           return new Intl.NumberFormat('en-PH', {
@@ -36,6 +39,15 @@
 
         getDepositDisplay() {
           return this.formatCurrency(this.deposits.total);
+        },
+
+        getExpenseDisplay() {
+          return this.formatCurrency(this.expenses.total);
+        },
+
+        getNetMovementDisplay() {
+          const netMovement = this.deposits.total - this.expenses.total;
+          return this.formatCurrency(netMovement);
         },
 
         async loadEntities() {
@@ -72,6 +84,23 @@
           } catch (e) {
             console.error('[ERROR] Failed to fetch deposits:', e);
           }
+        },
+
+        async loadExpenses() {
+          try {
+            console.log('[DEBUG] Loading national expenses...');
+            const res = await fetch('/national/api/expenses');
+            const data = await res.json();
+            
+            if (data.success) {
+              this.expenses.total = data.total_expenses;
+              console.log(`[DEBUG] Loaded total expenses: ₱${this.expenses.total}`);
+            } else {
+              console.error('[ERROR] Failed to load expenses:', data.error);
+            }
+          } catch (e) {
+            console.error('[ERROR] Failed to fetch expenses:', e);
+          }
         }
       };
     };
@@ -87,7 +116,7 @@
   </style>
 </head>
 
-<body class="text-slate-800 text-xs bg-slate-50 h-screen overflow-hidden" x-data="dashboardData()" x-init="loadEntities(); loadDeposits()">
+<body class="text-slate-800 text-xs bg-slate-50 h-screen overflow-hidden" x-data="dashboardData()" x-init="loadEntities(); loadDeposits(); loadExpenses()">
 
   <div class="h-full lg:grid lg:grid-cols-[260px_1fr]">
 
@@ -182,13 +211,13 @@
 
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Expenses</p>
-            <div id="kpiTotalExpenses" class="mt-1 text-lg font-black text-rose-700 leading-none">₱ {{ finance['national']['total_expenses'] if finance['national'] else '—' }}</div>
-            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Current period</p>
+            <div class="mt-1 text-lg font-black text-rose-700 leading-none" x-text="getExpenseDisplay()">₱ 0.00</div>
+            <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Fund transfers to regions/municipalities</p>
           </div>
 
           <div class="md:col-span-1 bg-white border border-slate-300 rounded-sm p-2 shadow-sm">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Net Movement</p>
-            <div id="kpiNetMovement" class="mt-1 text-lg font-black text-slate-900 leading-none">₱ {{ finance['national']['net_movement'] if finance['national'] else '—' }}</div>
+            <div class="mt-1 text-lg font-black text-slate-900 leading-none" x-text="getNetMovementDisplay()">₱ 0.00</div>
             <p class="text-[9px] text-slate-500 mt-0.5 font-medium">Deposits - Expenses</p>
           </div>
 

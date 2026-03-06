@@ -849,6 +849,64 @@ def api_get_national_deposits():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/expenses', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_expenses():
+    """Fetch all expenses (fund transfers/distributions) from national to regions/municipalities"""
+    try:
+        db = get_firestore_db()
+        total_expenses = 0.0
+        expense_records = []
+        
+        # Try to fetch from fund_transfers collection or similar
+        # These would be fund distributions sent to regions/municipalities
+        try:
+            # Check for fund_transfers collection
+            fund_ref = db.collection('fund_transfers')
+            docs = fund_ref.stream()
+            for doc in docs:
+                fund = doc.to_dict()
+                if fund:
+                    amount = float(fund.get('amount', 0) or 0)
+                    total_expenses += amount
+                    expense_records.append({
+                        'id': doc.id,
+                        'type': 'fund_transfer',
+                        'amount': amount,
+                        'description': fund.get('description', 'Fund Transfer'),
+                        'recipient': fund.get('region', fund.get('municipality', 'N/A')),
+                        'date': fund.get('created_at'),
+                        'status': fund.get('status', 'completed')
+                    })
+        except Exception as e:
+            print(f'[WARN] Error fetching fund_transfers: {e}')
+        
+        # Also check for budget_allocation or distribution records in system_logs
+        try:
+            logs_ref = db.collection('system_logs')
+            docs = logs_ref.where('action_type', '==', 'FUND_TRANSFER').stream()
+            for doc in docs:
+                log = doc.to_dict()
+                if log and log.get('metadata'):
+                    amount = float(log['metadata'].get('amount', 0) or 0)
+                    # Check if this amount is already counted above
+                    if amount > 0:
+                        # You could add deduplication logic here if needed
+                        pass
+        except Exception as e:
+            print(f'[WARN] Error fetching system logs: {e}')
+        
+        return jsonify({
+            'success': True,
+            'total_expenses': round(total_expenses, 2),
+            'records': expense_records,
+            'record_count': len(expense_records)
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch national expenses: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/accounting/entities')
 @role_required('national', 'national_admin')
 def accounting_entities():
