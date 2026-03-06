@@ -1077,3 +1077,183 @@ def api_get_system_logs_by_action(action):
     except Exception as e:
         print(f"[ERROR] Getting system logs by action: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# ==================== COA TEMPLATES API (Frontend-compatible) ====================
+
+@bp.route('/coa-templates', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_coa_templates_frontend():
+    """Get all COA templates for the municipality (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        templates = coa_storage.list_coa_templates(municipality_scope)
+        
+        # Normalize response format
+        result = []
+        for t in templates:
+            result.append({
+                'id': t.get('id'),
+                'name': t.get('name'),
+                'description': t.get('description', ''),
+                'status': t.get('status', 'active'),
+                'account_count': t.get('account_count', 0),
+                'municipality': t.get('municipality')
+            })
+        
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"[ERROR] Getting COA templates: {e}")
+        return jsonify([]), 200  # Return empty array on error
+
+@bp.route('/coa-templates', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_create_coa_template_frontend():
+    """Create a new COA template (frontend-compatible endpoint)"""
+    try:
+        data = request.get_json()
+        municipality_scope = _get_current_municipality_scope()
+        
+        result = coa_storage.add_coa_template(
+            municipality=municipality_scope,
+            name=data.get('name'),
+            description=data.get('description', ''),
+            status=data.get('status', 'active')
+        )
+        
+        return jsonify({
+            'id': result.get('id'),
+            'name': result.get('name'),
+            'description': result.get('description'),
+            'status': result.get('status'),
+            'account_count': 0
+        }), 201
+    except Exception as e:
+        print(f"[ERROR] Creating COA template: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== COA ACCOUNTS API (Frontend-compatible) ====================
+
+@bp.route('/coa-accounts', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def api_get_coa_accounts_frontend():
+    """Get COA accounts, optionally filtered by template (frontend-compatible endpoint)"""
+    try:
+        municipality_scope = _get_current_municipality_scope()
+        template_id = request.args.get('template')
+        
+        if template_id:
+            # Get accounts for specific template
+            accounts = coa_storage.list_coa_accounts(template_id)
+        else:
+            # Get all accounts for the municipality
+            templates = coa_storage.list_coa_templates(municipality_scope)
+            accounts = []
+            for t in templates:
+                template_accounts = coa_storage.list_coa_accounts(t.get('id'))
+                accounts.extend(template_accounts)
+        
+        # Normalize response format
+        result = []
+        for a in accounts:
+            result.append({
+                'id': a.get('id'),
+                'code': a.get('code'),
+                'name': a.get('name'),
+                'type': a.get('account_type', 'Asset'),
+                'locked': a.get('locked', False),
+                'description': a.get('description', '')
+            })
+        
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"[ERROR] Getting COA accounts: {e}")
+        return jsonify([]), 200  # Return empty array on error
+
+@bp.route('/coa-accounts', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_create_coa_account_frontend():
+    """Create a new COA account (frontend-compatible endpoint)"""
+    try:
+        data = request.get_json()
+        municipality_scope = _get_current_municipality_scope()
+        
+        # If no template_id provided, create a default template first
+        template_id = data.get('template_id')
+        if not template_id:
+            # Create a default template
+            templates = coa_storage.list_coa_templates(municipality_scope)
+            if templates:
+                template_id = templates[0].get('id')
+            else:
+                template = coa_storage.add_coa_template(
+                    municipality=municipality_scope,
+                    name=f"{municipality_scope} Default COA",
+                    description="Default Chart of Accounts",
+                    status='active'
+                )
+                template_id = template.get('id')
+        
+        result = coa_storage.add_coa_account(
+            template_id=template_id,
+            code=data.get('code'),
+            name=data.get('name'),
+            account_type=data.get('type', 'Asset'),
+            locked=data.get('locked', False),
+            description=data.get('description', '')
+        )
+        
+        return jsonify({
+            'id': result.get('id'),
+            'code': result.get('code'),
+            'name': result.get('name'),
+            'type': result.get('account_type'),
+            'locked': result.get('locked'),
+            'description': result.get('description')
+        }), 201
+    except Exception as e:
+        print(f"[ERROR] Creating COA account: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/coa-accounts/<account_id>', methods=['PUT'])
+@role_required('municipal','municipal_admin')
+def api_update_coa_account_frontend(account_id):
+    """Update a COA account (frontend-compatible endpoint)"""
+    try:
+        data = request.get_json()
+        municipality_scope = _get_current_municipality_scope()
+        
+        # Verify account belongs to municipality
+        account = coa_storage.get_coa_account(account_id)
+        if not account:
+            return jsonify({'error': 'Account not found'}), 404
+        
+        # Get template to verify municipality scope
+        template = coa_storage.get_coa_template(account.get('template_id'))
+        if not template or template.get('municipality') != municipality_scope:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        # Update the account with kwargs
+        update_kwargs = {}
+        if 'code' in data:
+            update_kwargs['code'] = data.get('code')
+        if 'name' in data:
+            update_kwargs['name'] = data.get('name')
+        if 'type' in data:
+            update_kwargs['account_type'] = data.get('type')
+        if 'locked' in data:
+            update_kwargs['locked'] = data.get('locked')
+        
+        result = coa_storage.update_coa_account(account_id, **update_kwargs)
+        
+        return jsonify({
+            'id': result.get('id'),
+            'code': result.get('code'),
+            'name': result.get('name'),
+            'type': result.get('account_type'),
+            'locked': result.get('locked')
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Updating COA account: {e}")
+        return jsonify({'error': str(e)}), 500
