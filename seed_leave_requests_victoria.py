@@ -20,7 +20,7 @@ print("✓ Firebase initialized")
 
 # First, fetch employees from Victoria to create realistic leave requests
 try:
-    employees_query = db.collection('employees').where('municipality', '==', 'Victoria').limit(20).stream()
+    employees_query = db.collection('employees').where('municipality', '==', 'Victoria').stream()
     victoria_employees = []
     
     for doc in employees_query:
@@ -28,21 +28,12 @@ try:
         emp['id'] = doc.id
         victoria_employees.append(emp)
     
-    print(f"✓ Found {len(victoria_employees)} employees from Victoria")
+    print(f"✓ Found {len(victoria_employees)} employees from Victoria in employees collection")
     
-    if len(victoria_employees) < 10:
-        print(f"⚠ Only {len(victoria_employees)} employees found. Adding placeholder employees for demonstration...")
-        # Add placeholder employee data for leave requests
-        placeholder_employees = [
-            {'id': f'placeholder_{i}', 'employee_id': f'DENR-VIC-{2024100+i}', 
-             'first_name': name.split()[0], 'last_name': name.split()[1]}
-            for i, name in enumerate([
-                'Maria Santos', 'Juan Cruz', 'Rosa Garcia', 'Pedro Reyes',
-                'Ana Lopez', 'Carlos Mendoza', 'Elena Ramos', 'Jose Fernandez',
-                'Carmen Torres', 'Miguel Diaz', 'Sofia Rivera', 'Rafael Gomez'
-            ], 1)
-        ]
-        victoria_employees.extend(placeholder_employees)
+    if len(victoria_employees) == 0:
+        print("❌ ERROR: No employees found for Victoria!")
+        print("⚠ Please run 'py -3 seed_employees_victoria.py' first to create employee records")
+        exit(1)
     
     # Leave request template data
     leave_types = ['Sick Leave', 'Vacation Leave', 'Privilege Leave', 'Maternity Leave', 'Emergency Leave']
@@ -65,7 +56,7 @@ try:
         leave_requests = []
         
         # Create leave requests for each employee
-        for idx, emp in enumerate(victoria_employees[:15]):  # Use first 15 employees
+        for idx, emp in enumerate(victoria_employees):  # Use all available employees
             # Random leave dates in the past 3 months
             days_ago = random.randint(1, 90)
             start_date = datetime.now() - timedelta(days=days_ago)
