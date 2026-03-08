@@ -273,39 +273,18 @@
   <!-- Server-side data injection via data attribute -->
   <div id="server-data" data-companies="{{ companies_data|default([], true)|tojson|safe }}" style="display: none;"></div>
 
-  <script type="module">
-    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getFirestore, collection, query, orderBy, getDocs, updateDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-
-    // Parse server data from data attribute
-    const serverDataEl = document.getElementById('server-data');
-    const serverCompanies = serverDataEl ? JSON.parse(serverDataEl.getAttribute('data-companies') || '[]') : [];
-
-    // Firebase config from /static/js/firebase-config.js
-    const firebaseConfig = {
-      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
-      authDomain: "tlph-denr-system.firebaseapp.com",
-      projectId: "tlph-denr-system",
-      storageBucket: "tlph-denr-system.appspot.com",
-      messagingSenderId: "999028568640",
-      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
-      measurementId: "G-TXKQ1Z0J1X"
-    };
-
-    // Check if any Firebase app already exists
-    let db;
+  <!-- Parse data and define Alpine functions BEFORE Alpine.js loads -->
+  <script>
+    // Parse server data from data attribute with error handling
+    let serverCompanies = [];
     try {
-      const existingApps = getApps();
-      if (existingApps.length > 0) {
-        db = window.db || getFirestore(existingApps[0]);
-      } else {
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-      }
-      window.db = db;
+      const serverDataEl = document.getElementById('server-data');
+      const dataJson = serverDataEl ? serverDataEl.getAttribute('data-companies') : '[]';
+      serverCompanies = dataJson ? JSON.parse(dataJson) : [];
+      console.log('✓ Server companies loaded:', serverCompanies);
     } catch (error) {
-      console.error('Firebase initialization error:', error);
-      db = window.db;
+      console.error('Error parsing server data:', error);
+      serverCompanies = [];
     }
 
     // Notification component for header
@@ -315,7 +294,7 @@
         
         async loadNotifications() {
           try {
-            this.count = 0; // Default to 0 for now
+            this.count = 0;
           } catch (error) {
             console.error('Error loading notifications:', error);
             this.count = 0;
@@ -324,6 +303,7 @@
       }
     }
 
+    // Company page component
     window.companyPage = function() {
       return {
         company: {
@@ -356,6 +336,7 @@
             if (serverCompanies.length > 0) {
               this.company = serverCompanies[0];
               this.editCompany = { ...this.company };
+              console.log('✓ Company data loaded:', this.company);
             } else {
               // No company data from server - show empty state
               this.company = {
@@ -376,9 +357,10 @@
                 status: 'Inactive'
               };
               this.editCompany = { ...this.company };
+              console.warn('No company data available');
             }
             
-            // Load sample administrators (placeholder until admin collection is created)
+            // Load sample administrators
             this.administrators = [
               { id: 1, name: 'Maria Clara de los Santos', position: 'Environment & Natural Resources Officer', access_level: 'Master Level', status: 'Authorized' },
               { id: 2, name: 'Crisostomo Ibarra Jr.', position: 'Land Monitoring Specialist', access_level: 'Restricted Level', status: 'Authorized' },
@@ -408,6 +390,15 @@
               return;
             }
 
+            // Get db from window (initialized in module script)
+            const db = window.db;
+            if (!db) {
+              alert('Database connection not ready');
+              return;
+            }
+
+            // Import updateDoc dynamically when needed
+            const { updateDoc, doc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
             const companyRef = doc(db, 'companies', this.company.id);
             await updateDoc(companyRef, {
               ...this.editCompany,
@@ -424,6 +415,39 @@
           }
         }
       }
+    }
+  </script>
+
+  <!-- Firebase initialization -->
+  <script type="module">
+    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+      authDomain: "tlph-denr-system.firebaseapp.com",
+      projectId: "tlph-denr-system",
+      storageBucket: "tlph-denr-system.appspot.com",
+      messagingSenderId: "999028568640",
+      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
+      measurementId: "G-TXKQ1Z0J1X"
+    };
+
+    // Initialize Firebase
+    try {
+      const existingApps = getApps();
+      let db;
+      if (existingApps.length > 0) {
+        db = getFirestore(existingApps[0]);
+      } else {
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+      }
+      window.db = db;
+      console.log('✓ Firebase initialized');
+    } catch (error) {
+      console.error('Firebase initialization error:', error);
     }
   </script>
 
