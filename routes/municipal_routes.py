@@ -193,7 +193,40 @@ def hrm_designation():
 @bp.route('/office-shift')
 @role_required('municipal','municipal_admin')
 def hrm_office_shift():
-    return render_template('municipal/hrm/office-shift-municipal.html')
+    db = get_firestore_db()
+    shifts = []
+
+    try:
+        # Get the logged-in user's municipality
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        if user_municipality:
+            # Fetch shifts for the user's municipality
+            query = db.collection('office_shifts').where('municipality', '==', user_municipality).limit(10)
+            for doc in query.stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                shifts.append(item)
+            
+            if not shifts:
+                print(f"[WARN] No shifts found for municipality: {user_municipality}")
+        else:
+            print(f"[WARN] Could not resolve user municipality")
+    except Exception as e:
+        print(f"Error fetching shifts: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # Convert all datetime objects to ISO format strings
+    def json_serializer(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
+    
+    shifts_json = json.dumps(shifts, default=json_serializer, separators=(',', ':'))
+    print(f"[DEBUG] Shifts JSON length: {len(shifts_json)}")
+    
+    return render_template('municipal/hrm/office-shift-municipal.html', shifts_json=shifts_json)
 
 @bp.route('/employees')
 @role_required('municipal','municipal_admin')

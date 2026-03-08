@@ -44,7 +44,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="shiftPage()" @load="loadData()" x-cloak>
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="shiftPage()" x-init="loadData()" x-cloak>
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -195,9 +195,95 @@
     </main>
   </div>
 
+  <!-- Server-side data injection -->
+  <div id="server-data" data-shifts='{{ shifts_json|safe }}' style="display: none;"></div>
+
+  <script>
+    console.log('🔵 SHIFT SCRIPT STARTING - parsing data...');
+    
+    const serverDataEl = document.getElementById('server-data');
+    const dataJson = serverDataEl?.getAttribute('data-shifts') || '[]';
+    console.log('📊 Raw shifts data length:', dataJson.length);
+    
+    let serverShifts = [];
+    try {
+      serverShifts = JSON.parse(dataJson);
+      console.log('✅ Shifts JSON parsed:', serverShifts.length, 'shifts');
+    } catch (err) {
+      console.error('❌ JSON parse failed:', err.message);
+      serverShifts = [];
+    }
+
+    // Notification component for header
+    window.notificationData = function() {
+      return {
+        count: 0,
+        async loadNotifications() {
+          this.count = 0;
+        }
+      };
+    };
+
+    window.shiftPage = function() {
+      return {
+        shifts: [],
+        employees: [],
+        shiftEmployees: [],
+        currentShift: null,
+
+        async loadData() {
+          try {
+            // Use server-side shifts data
+            this.shifts = serverShifts && serverShifts.length > 0 ? serverShifts : [];
+            
+            if (this.shifts.length > 0) {
+              this.currentShift = this.shifts[0];
+              console.log('✅ Loaded shift:', this.currentShift.name);
+            } else {
+              // Fallback if no data
+              this.currentShift = {
+                id: '1',
+                code: 'SHFT-REG-01',
+                name: 'REGULAR DAY SHIFT (ADMINISTRATIVE STAFF)',
+                duty_type: 'Fixed Office Hours',
+                start_time: '08:00 AM',
+                end_time: '05:00 PM',
+                grace_period: 15,
+                municipality: 'Not Found'
+              };
+            }
+            
+            // Mock employees for shift assignment (you can replace with real API call)
+            this.employees = [
+              { id: 1, first_name: 'Maria', last_name: 'Santos', designation: 'Environment Officer', department_name: 'Administration' },
+              { id: 2, first_name: 'Juan', last_name: 'Dela Cruz', designation: 'Land Monitor', department_name: 'Field Operations' },
+              { id: 3, first_name: 'Rosa', last_name: 'Garcia', designation: 'Inspector', department_name: 'Field Operations' },
+              { id: 4, first_name: 'Pedro', last_name: 'Reyes', designation: 'Coordinator', department_name: 'Administration' },
+              { id: 5, first_name: 'Ana', last_name: 'Lopez', designation: 'Specialist', department_name: 'Administration' }
+            ];
+            
+            // Populate shift employees
+            this.shiftEmployees = this.employees.map((emp, idx) => ({
+              id: emp.id,
+              name: emp.first_name + ' ' + emp.last_name,
+              designation: emp.designation || 'Staff',
+              department: emp.department_name || 'Administration',
+              avg_in_time: ['08:15 AM', '08:00 AM', '08:20 AM', '08:10 AM', '08:05 AM'][idx % 5],
+              status: 'active'
+            }));
+          } catch (error) {
+            console.error('❌ Error in loadData:', error);
+          }
+        }
+      };
+    };
+
+    console.log('✅ SHIFT FUNCTIONS DEFINED - Ready for Alpine!');
+  </script>
+
   <script type="module">
     import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
@@ -209,7 +295,6 @@
       measurementId: "G-TXKQ1Z0J1X"
     };
 
-    // Check if any Firebase app already exists
     let db;
     try {
       const existingApps = getApps();
@@ -220,76 +305,11 @@
         db = getFirestore(app);
       }
       window.db = db;
+      console.log('✓ Firebase initialized');
     } catch (error) {
       console.error('Firebase initialization error:', error);
       db = window.db;
     }
-    // Notification component for header
-    window.notificationData = function() {
-      return {
-        count: 0,
-        
-        async loadNotifications() {
-          try {
-            this.count = 0; // Default to 0 for now
-          } catch (error) {
-            console.error('Error loading notifications:', error);
-            this.count = 0;
-          }
-        }
-      }
-    }
-    window.shiftPage = function() {
-      return {
-        shifts: [],
-        employees: [],
-        shiftEmployees: [],
-        currentShift: null,
-
-        async loadData() {
-          try {
-            // Load shifts
-            const shiftsRef = collection(db, 'shifts');
-            const shiftQ = query(shiftsRef);
-            const shiftSnapshot = await getDocs(shiftQ);
-            this.shifts = shiftSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            if (this.shifts.length === 0) {
-              this.currentShift = {
-                id: '1',
-                code: 'SHFT-REG-01',
-                name: 'REGULAR DAY SHIFT (ADMIN)',
-                duty_type: 'Fixed Office Hours',
-                start_time: '08:00 AM',
-                end_time: '05:00 PM',
-                grace_period: 15
-              };
-            } else {
-              this.currentShift = this.shifts[0];
-            }
-            
-            // Load employees
-            const employeesRef = collection(db, 'employees');
-            const empQ = query(employeesRef, orderBy('first_name'));
-            const empSnapshot = await getDocs(empQ);
-            this.employees = empSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // Populate shift employees
-            this.shiftEmployees = this.employees.slice(0, 5).map((emp, idx) => ({
-              id: emp.id,
-              name: emp.first_name + ' ' + emp.last_name,
-              designation: emp.designation || 'Staff',
-              department: emp.department_name || 'Administration',
-              avg_in_time: ['08:15 AM', '08:00 AM', '08:20 AM', '08:10 AM', '08:05 AM'][idx],
-              status: 'active'
-            }));
-          } catch (error) {
-            console.error('Error loading shift data:', error);
-          }
-        }
-      }
-    }
   </script>
 
-</body>
-</html>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
