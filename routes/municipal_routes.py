@@ -369,7 +369,40 @@ def update_holiday_office_status():
 @bp.route('/leave-request')
 @role_required('municipal','municipal_admin')
 def hrm_leave():
-    return render_template('municipal/hrm/leave-municipal.html')
+    db = get_firestore_db()
+    leave_records = []
+
+    try:
+        # Get the logged-in user's municipality
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        if user_municipality:
+            # Fetch leave requests for the user's municipality
+            query = db.collection('leave_requests').where('municipality', '==', user_municipality).limit(100)
+            for doc in query.stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                leave_records.append(item)
+            
+            if not leave_records:
+                print(f"[WARN] No leave requests found for municipality: {user_municipality}")
+        else:
+            print(f"[WARN] Could not resolve user municipality")
+    except Exception as e:
+        print(f"Error fetching leave requests: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # Convert all datetime objects to ISO format strings
+    def json_serializer(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
+    
+    leave_json = json.dumps(leave_records, default=json_serializer, separators=(',', ':'))
+    print(f"[DEBUG] Leave records JSON length: {len(leave_json)}")
+    
+    return render_template('municipal/hrm/leave-municipal.html', leave_json=leave_json)
 
 @bp.route('/payroll')
 @role_required('municipal','municipal_admin')

@@ -44,7 +44,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="leavePage()" @load="loadData()" x-cloak>
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="leavePage()" x-init="loadData()" x-cloak>
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -179,6 +179,80 @@
 
     </main>
   </div>
+
+  <!-- Server-side data injection -->
+  <div id="server-data" data-leave='{{ leave_json|safe }}' style="display: none;"></div>
+
+  <script>
+    console.log('🔵 LEAVE SCRIPT STARTING - parsing data...');
+    
+    const serverDataEl = document.getElementById('server-data');
+    const dataJson = serverDataEl?.getAttribute('data-leave') || '[]';
+    console.log('📊 Raw leave data length:', dataJson.length);
+    
+    let serverLeaveRecords = [];
+    try {
+      serverLeaveRecords = JSON.parse(dataJson);
+      console.log('✅ Leave records JSON parsed:', serverLeaveRecords.length, 'records');
+    } catch (err) {
+      console.error('❌ JSON parse failed:', err.message);
+      serverLeaveRecords = [];
+    }
+
+    // Notification component for header
+    window.notificationData = function() {
+      return {
+        count: 0,
+        async loadNotifications() {
+          this.count = 0;
+        }
+      };
+    };
+
+    window.leavePage = function() {
+      return {
+        employees: [],
+        leaveRecords: [],
+        searchQuery: '',
+        filterLeaveType: '',
+        pendingCount: 0,
+        activeCount: 0,
+
+        get filteredLeave() {
+          return this.leaveRecords.filter(record => {
+            const matchSearch = !this.searchQuery || 
+              record.employee_name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+              record.employee_id.includes(this.searchQuery);
+            const matchType = !this.filterLeaveType || record.leave_type === this.filterLeaveType;
+            return matchSearch && matchType;
+          });
+        },
+
+        async loadData() {
+          try {
+            // Use server-side leave records data
+            this.leaveRecords = serverLeaveRecords && serverLeaveRecords.length > 0 ? serverLeaveRecords : [];
+            
+            if (this.leaveRecords.length > 0) {
+              console.log('✅ Loaded', this.leaveRecords.length, 'leave records');
+            } else {
+              console.warn('⚠ No leave records available from server');
+            }
+            
+            // Calculate statistics
+            this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
+            this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
+            
+            console.log('📊 Statistics:', { pending: this.pendingCount, active: this.activeCount, total: this.leaveRecords.length });
+          } catch (error) {
+            console.error('❌ Error loading leave data:', error);
+          }
+        }
+      };
+    };
+
+    console.log('✅ LEAVE FUNCTIONS DEFINED - Ready for Alpine!');
+  </script>
 
   <script type="module">
     import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
