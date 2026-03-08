@@ -96,6 +96,13 @@ def hrm_company():
             for doc in query.stream():
                 item = doc.to_dict() or {}
                 item['id'] = doc.id
+                
+                # Convert Firestore timestamps to ISO format strings for JSON serialization
+                if 'created_at' in item and hasattr(item['created_at'], 'isoformat'):
+                    item['created_at'] = item['created_at'].isoformat()
+                if 'updated_at' in item and hasattr(item['updated_at'], 'isoformat'):
+                    item['updated_at'] = item['updated_at'].isoformat()
+                
                 companies.append(item)
             
             if not companies:
