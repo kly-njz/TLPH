@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, session
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
+from municipal_api_logs import _resolve_municipality_from_user_context
 
 bp = Blueprint('municipal', __name__, url_prefix='/municipal')
 
@@ -86,10 +87,21 @@ def hrm_company():
     companies = []
 
     try:
-        for doc in db.collection('companies').stream():
-            item = doc.to_dict() or {}
-            item['id'] = doc.id
-            companies.append(item)
+        # Get the logged-in user's municipality
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        if user_municipality:
+            # Fetch only the company for the user's municipality
+            query = db.collection('companies').where('municipality', '==', user_municipality).limit(1)
+            for doc in query.stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                companies.append(item)
+            
+            if not companies:
+                print(f"[WARN] No company found for municipality: {user_municipality}")
+        else:
+            print(f"[WARN] Could not resolve user municipality")
     except Exception as e:
         print(f"Error fetching companies: {e}")
 
