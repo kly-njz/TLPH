@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, session
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
-from municipal_api_logs import _resolve_municipality_from_user_context
+from .municipal_api_logs import _resolve_municipality_from_user_context
 
 bp = Blueprint('municipal', __name__, url_prefix='/municipal')
 
