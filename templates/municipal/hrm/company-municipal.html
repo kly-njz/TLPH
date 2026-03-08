@@ -273,8 +273,9 @@
   <!-- Server-side data injection via data attribute -->
   <div id="server-data" data-companies="{{ companies_data|default([], true)|tojson|safe }}" style="display: none;"></div>
 
-  <!-- Parse data and define Alpine functions BEFORE Alpine.js loads -->
   <script>
+    console.log('✓ Scripts initializing...');
+    
     // Parse server data from data attribute with error handling
     let serverCompanies = [];
     try {
@@ -284,7 +285,7 @@
         serverCompanies = [];
       } else {
         const dataJson = serverDataEl.getAttribute('data-companies');
-        console.log('Raw data attribute:', dataJson);
+        console.log('Raw data attribute:', dataJson ? dataJson.substring(0, 100) : 'empty');
         
         if (!dataJson || dataJson.trim() === '' || dataJson.trim() === '[]') {
           console.log('No company data provided');
@@ -296,27 +297,21 @@
       }
     } catch (error) {
       console.error('Error parsing server data:', error);
-      console.error('Attempted to parse:', serverDataEl?.getAttribute('data-companies'));
       serverCompanies = [];
     }
 
-    // Notification component for header
+    // Define notificationData FIRST
     window.notificationData = function() {
       return {
         count: 0,
-        
         async loadNotifications() {
-          try {
-            this.count = 0;
-          } catch (error) {
-            console.error('Error loading notifications:', error);
-            this.count = 0;
-          }
+          this.count = 0;
         }
       }
-    }
+    };
+    console.log('✓ notificationData defined');
 
-    // Company page component
+    // Define companyPage SECOND
     window.companyPage = function() {
       return {
         company: {
@@ -345,13 +340,11 @@
           try {
             this.loading = true;
             
-            // Use server data (municipality-specific) if available
-            if (serverCompanies.length > 0) {
-              this.company = serverCompanies[0];
+            if (serverCompanies && serverCompanies.length > 0) {
+              this.company = { ...serverCompanies[0] };
               this.editCompany = { ...this.company };
-              console.log('✓ Company data loaded:', this.company);
+              console.log('✓ Company data loaded from server');
             } else {
-              // No company data from server - show empty state
               this.company = {
                 id: null,
                 office_name: 'Municipality Office Information',
@@ -370,10 +363,9 @@
                 status: 'Inactive'
               };
               this.editCompany = { ...this.company };
-              console.warn('No company data available');
+              console.warn('No company data available from server');
             }
             
-            // Load sample administrators
             this.administrators = [
               { id: 1, name: 'Maria Clara de los Santos', position: 'Environment & Natural Resources Officer', access_level: 'Master Level', status: 'Authorized' },
               { id: 2, name: 'Crisostomo Ibarra Jr.', position: 'Land Monitoring Specialist', access_level: 'Restricted Level', status: 'Authorized' },
@@ -403,14 +395,12 @@
               return;
             }
 
-            // Get db from window (initialized in module script)
             const db = window.db;
             if (!db) {
               alert('Database connection not ready');
               return;
             }
 
-            // Import updateDoc dynamically when needed
             const { updateDoc, doc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
             const companyRef = doc(db, 'companies', this.company.id);
             await updateDoc(companyRef, {
@@ -418,7 +408,6 @@
               updated_at: new Date()
             });
 
-            // Update view
             this.company = { ...this.editCompany };
             this.closeEditModal();
             alert('Office information updated successfully');
@@ -428,7 +417,9 @@
           }
         }
       }
-    }
+    };
+    console.log('✓ companyPage defined');
+    console.log('✓ All Alpine functions ready!');
   </script>
 
   <!-- Firebase initialization -->
@@ -436,7 +427,6 @@
     import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
     import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
-    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
       authDomain: "tlph-denr-system.firebaseapp.com",
@@ -447,7 +437,6 @@
       measurementId: "G-TXKQ1Z0J1X"
     };
 
-    // Initialize Firebase
     try {
       const existingApps = getApps();
       let db;
