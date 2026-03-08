@@ -237,10 +237,25 @@ def hrm_employees():
     designations = []
 
     try:
-        for doc in db.collection('employees').stream():
-            item = doc.to_dict() or {}
-            item['id'] = doc.id
-            employees.append(item)
+        # Get the logged-in user's municipality
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        if user_municipality:
+            # Fetch employees for the user's municipality
+            query = db.collection('employees').where('municipality', '==', user_municipality)
+            for doc in query.stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                employees.append(item)
+            
+            if not employees:
+                print(f"[WARN] No employees found for municipality: {user_municipality}")
+        else:
+            # Fallback: fetch all employees if municipality can't be resolved
+            for doc in db.collection('employees').stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                employees.append(item)
     except Exception as e:
         print(f"Error fetching employees: {e}")
 
@@ -272,10 +287,22 @@ def hrm_attendance():
     employees = []
 
     try:
-        for doc in db.collection('employees').stream():
-            item = doc.to_dict() or {}
-            item['id'] = doc.id
-            employees.append(item)
+        # Get the logged-in user's municipality
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        if user_municipality:
+            # Fetch employees for the user's municipality
+            query = db.collection('employees').where('municipality', '==', user_municipality)
+            for doc in query.stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                employees.append(item)
+        else:
+            # Fallback: fetch all
+            for doc in db.collection('employees').stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                employees.append(item)
     except Exception:
         pass
 
