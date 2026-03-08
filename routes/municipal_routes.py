@@ -97,13 +97,19 @@ def hrm_company():
                 item = doc.to_dict() or {}
                 item['id'] = doc.id
                 
-                # Convert Firestore timestamps to ISO format strings for JSON serialization
-                if 'created_at' in item and hasattr(item['created_at'], 'isoformat'):
-                    item['created_at'] = item['created_at'].isoformat()
-                if 'updated_at' in item and hasattr(item['updated_at'], 'isoformat'):
-                    item['updated_at'] = item['updated_at'].isoformat()
+                # Convert all Firestore special types to JSON-serializable formats
+                for key, value in item.items():
+                    if value is None:
+                        continue
+                    # Convert timestamps to ISO format
+                    if hasattr(value, 'isoformat'):
+                        item[key] = value.isoformat()
+                    # Convert any other non-serializable objects to strings
+                    elif not isinstance(value, (str, int, float, bool, list, dict)):
+                        item[key] = str(value)
                 
                 companies.append(item)
+                print(f"[DEBUG] Company data prepared for JSON: {item}")
             
             if not companies:
                 print(f"[WARN] No company found for municipality: {user_municipality}")
@@ -111,7 +117,10 @@ def hrm_company():
             print(f"[WARN] Could not resolve user municipality")
     except Exception as e:
         print(f"Error fetching companies: {e}")
+        import traceback
+        traceback.print_exc()
 
+    print(f"[DEBUG] Final companies_data: {companies}")
     return render_template('municipal/hrm/company-municipal.html', companies_data=companies)
 
 @bp.route('/department')
