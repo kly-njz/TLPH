@@ -2,6 +2,8 @@ from flask import Blueprint, render_template, request, jsonify, session
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
 from .municipal_api_logs import _resolve_municipality_from_user_context
+import json
+from datetime import datetime
 
 bp = Blueprint('municipal', __name__, url_prefix='/municipal')
 
@@ -96,20 +98,7 @@ def hrm_company():
             for doc in query.stream():
                 item = doc.to_dict() or {}
                 item['id'] = doc.id
-                
-                # Convert all Firestore special types to JSON-serializable formats
-                for key, value in item.items():
-                    if value is None:
-                        continue
-                    # Convert timestamps to ISO format
-                    if hasattr(value, 'isoformat'):
-                        item[key] = value.isoformat()
-                    # Convert any other non-serializable objects to strings
-                    elif not isinstance(value, (str, int, float, bool, list, dict)):
-                        item[key] = str(value)
-                
                 companies.append(item)
-                print(f"[DEBUG] Company data prepared for JSON: {item}")
             
             if not companies:
                 print(f"[WARN] No company found for municipality: {user_municipality}")
@@ -120,8 +109,18 @@ def hrm_company():
         import traceback
         traceback.print_exc()
 
-    print(f"[DEBUG] Final companies_data: {companies}")
-    return render_template('municipal/hrm/company-municipal.html', companies_data=companies)
+    # Convert all datetime objects to ISO format strings and serialize with proper JSON encoder
+    def json_serializer(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
+    
+    # Convert companies to JSON string, then back to dict for Jinja2
+    companies_json = json.dumps(companies, default=json_serializer, separators=(',', ':'))
+    print(f"[DEBUG] Serialized JSON length: {len(companies_json)}")
+    print(f"[DEBUG] First 200 chars: {companies_json[:200]}")
+    
+    return render_template('municipal/hrm/company-municipal.html', companies_json=companies_json)
 
 @bp.route('/department')
 @role_required('municipal','municipal_admin')
