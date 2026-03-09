@@ -315,6 +315,53 @@
     </div>
   </div>
 
+  <!-- Project Details View Modal -->
+  <div id="projectViewModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/60">
+    <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
+      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
+        <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
+          <span class="material-icons-round text-[14px]">visibility</span>
+          Project Details
+        </h2>
+        <button id="projectViewCloseIcon" type="button" class="text-slate-300 hover:text-white">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <div class="p-3 space-y-2 text-[10px] text-slate-700">
+        <div>
+          <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Project Name</div>
+          <div id="viewProjectName" class="font-black uppercase text-slate-900"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Barangay / Area</div>
+            <div id="viewProjectBarangay" class="font-bold uppercase text-slate-900"></div>
+          </div>
+          <div>
+            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Municipality</div>
+            <div id="viewProjectMunicipality" class="font-bold uppercase text-slate-900"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Start Date</div>
+          <div id="viewProjectStartDate" class="font-mono text-slate-900"></div>
+        </div>
+
+        <div>
+          <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Status</div>
+          <span id="viewProjectStatus" class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-24 text-center border bg-slate-100 text-slate-600 border-slate-200"></span>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 px-3 py-2 border-t border-slate-200 bg-slate-50">
+        <button id="projectViewCloseBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Close</button>
+      </div>
+    </div>
+  </div>
+
 <script>
   // --- Chart Implementations ---
   Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -403,6 +450,16 @@
   const searchInput = document.getElementById('searchProject');
   const statusFilter = document.getElementById('statusFilter');
   const barangayFilter = document.getElementById('barangayFilter');
+  const projectTableBody = document.querySelector('#projectTable tbody');
+
+  const projectViewModal = document.getElementById('projectViewModal');
+  const projectViewCloseIcon = document.getElementById('projectViewCloseIcon');
+  const projectViewCloseBtn = document.getElementById('projectViewCloseBtn');
+  const viewProjectName = document.getElementById('viewProjectName');
+  const viewProjectBarangay = document.getElementById('viewProjectBarangay');
+  const viewProjectMunicipality = document.getElementById('viewProjectMunicipality');
+  const viewProjectStartDate = document.getElementById('viewProjectStartDate');
+  const viewProjectStatus = document.getElementById('viewProjectStatus');
 
   function filterTable() {
     const q = (searchInput.value || '').toLowerCase().trim();
@@ -437,6 +494,40 @@
     filterTable();
   }
 
+  function openProjectViewModal(row) {
+    if (!row || !projectViewModal) return;
+    const cells = row.querySelectorAll('td');
+    if (!cells.length) return;
+
+    const nameText = cells[0] ? cells[0].innerText.trim() : '';
+    const barangayText = cells[1] ? cells[1].innerText.trim() : '';
+    const municipalityText = cells[2] ? cells[2].innerText.trim() : '';
+    const startDateText = cells[3] ? cells[3].innerText.trim() : '';
+
+    if (viewProjectName) viewProjectName.innerText = nameText;
+    if (viewProjectBarangay) viewProjectBarangay.innerText = barangayText;
+    if (viewProjectMunicipality) viewProjectMunicipality.innerText = municipalityText;
+    if (viewProjectStartDate) viewProjectStartDate.innerText = startDateText;
+
+    if (viewProjectStatus) {
+      const statusCell = cells[4];
+      const badge = statusCell ? statusCell.querySelector('span') : null;
+      const statusText = badge ? badge.innerText.trim() : '';
+      const badgeClass = badge ? badge.className : 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-24 text-center border bg-slate-100 text-slate-600 border-slate-200';
+      viewProjectStatus.innerText = statusText;
+      viewProjectStatus.className = badgeClass;
+    }
+
+    projectViewModal.classList.remove('hidden');
+    projectViewModal.classList.add('flex');
+  }
+
+  function closeProjectViewModal() {
+    if (!projectViewModal) return;
+    projectViewModal.classList.add('hidden');
+    projectViewModal.classList.remove('flex');
+  }
+
   // Init
   document.addEventListener("DOMContentLoaded", () => {
       filterTable();
@@ -459,6 +550,29 @@
         });
 
         projectForm.addEventListener('submit', handleProjectSubmit);
+      }
+
+      if (projectTableBody) {
+        projectTableBody.addEventListener('click', (event) => {
+          const viewBtn = event.target.closest('.btn-view');
+          if (viewBtn) {
+            const row = viewBtn.closest('tr');
+            if (!row) return;
+            openProjectViewModal(row);
+            return;
+          }
+        });
+      }
+
+      if (projectViewModal && projectViewCloseIcon && projectViewCloseBtn) {
+        projectViewCloseIcon.addEventListener('click', closeProjectViewModal);
+        projectViewCloseBtn.addEventListener('click', closeProjectViewModal);
+
+        projectViewModal.addEventListener('click', (event) => {
+          if (event.target === projectViewModal) {
+            closeProjectViewModal();
+          }
+        });
       }
   });
 
