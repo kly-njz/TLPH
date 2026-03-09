@@ -69,7 +69,7 @@
         </div>
 
         <div class="flex gap-2">
-          <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
+          <button id="addReturnBtn" type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
             <span class="material-icons-round text-[14px]">add</span> Add Return
           </button>
         </div>
@@ -257,7 +257,72 @@
     </main>
   </div>
 
+  <!-- Add Return Modal -->
+  <div id="returnModal" class="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px] text-blue-900">undo</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black text-slate-900 uppercase tracking-tight m-0">Add Return</h2>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Log a new sales return</p>
+          </div>
+        </div>
+        <button id="returnCloseBtn" type="button" class="btn-action" title="Close">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <form id="returnForm" class="px-3 py-2 space-y-2">
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Customer</label>
+          <input id="returnCustomerInput" type="text" class="gov-input w-full" required />
+        </div>
+
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Product</label>
+          <input id="returnProductInput" type="text" class="gov-input w-full" required />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Quantity</label>
+            <input id="returnQuantityInput" type="number" min="1" class="gov-input w-full" required />
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Date</label>
+            <input id="returnDateInput" type="date" class="gov-input w-full" required />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Status</label>
+            <select id="returnStatusInput" class="gov-input w-full" required>
+              <option value="">Select status</option>
+              <option>Pending</option>
+              <option>Approved</option>
+              <option>Rejected</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Municipality</label>
+            <div class="gov-input w-full bg-slate-50 text-slate-700 font-black uppercase flex items-center">
+              {{ user_municipality or 'Quezon City' }}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-200 mt-2 mb-2">
+          <button id="returnCancelBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+          <button type="submit" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white">Save Return</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
+    const defaultMunicipality = "{{ user_municipality or 'Quezon City' }}";
     const searchInput = document.getElementById('searchInput');
     const statusSelect = document.getElementById('statusSelect');
     const resetBtn = document.getElementById('resetBtn');
@@ -305,6 +370,140 @@
       statusSelect.value = 'ALL';
       filterTable();
     });
+
+    const addReturnBtn = document.getElementById('addReturnBtn');
+    const returnModal = document.getElementById('returnModal');
+    const returnForm = document.getElementById('returnForm');
+    const returnCancelBtn = document.getElementById('returnCancelBtn');
+    const returnCloseBtn = document.getElementById('returnCloseBtn');
+    const tbodyReturns = document.getElementById('tbodyReturns');
+
+    function openReturnModal() {
+      if (!returnModal || !returnForm) return;
+      returnForm.reset();
+      const dateInput = document.getElementById('returnDateInput');
+      if (dateInput && !dateInput.value) {
+        dateInput.value = new Date().toISOString().slice(0, 10);
+      }
+      returnModal.classList.remove('hidden');
+      returnModal.classList.add('flex');
+    }
+
+    function closeReturnModal() {
+      if (!returnModal) return;
+      returnModal.classList.add('hidden');
+      returnModal.classList.remove('flex');
+    }
+
+    function handleReturnSubmit(event) {
+      event.preventDefault();
+
+      const customerInput = document.getElementById('returnCustomerInput');
+      const productInput = document.getElementById('returnProductInput');
+      const quantityInput = document.getElementById('returnQuantityInput');
+      const dateInput = document.getElementById('returnDateInput');
+      const statusInput = document.getElementById('returnStatusInput');
+
+      if (!customerInput || !productInput || !quantityInput || !dateInput || !statusInput) return;
+
+      const customer = customerInput.value.trim();
+      const product = productInput.value.trim();
+      const quantityValue = quantityInput.value.trim();
+      const date = dateInput.value.trim();
+      const status = statusInput.value.trim();
+
+      if (!customer || !product || !quantityValue || !date || !status) {
+        return;
+      }
+
+      const quantity = Number(quantityValue);
+      if (Number.isNaN(quantity) || quantity <= 0) {
+        return;
+      }
+
+      if (!tbodyReturns) return;
+
+      let statusClasses = 'bg-slate-100 text-slate-600 border-slate-200';
+      const upperStatus = status.toUpperCase();
+      if (upperStatus === 'APPROVED') {
+        statusClasses = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      } else if (upperStatus === 'PENDING') {
+        statusClasses = 'bg-amber-50 text-amber-700 border-amber-200';
+      } else if (upperStatus === 'REJECTED') {
+        statusClasses = 'bg-rose-50 text-rose-700 border-rose-200';
+      }
+
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-blue-50 transition ret-row';
+      tr.dataset.stat = upperStatus;
+
+      tr.innerHTML = `
+        <td class="px-4 py-3 align-middle font-bold text-slate-900 border-r border-slate-100 uppercase">${customer}</td>
+        <td class="px-4 py-3 align-middle text-slate-700 font-bold border-r border-slate-100 uppercase">${product}</td>
+        <td class="px-4 py-3 align-middle font-mono font-black text-blue-800 border-r border-slate-100 text-right">${quantity.toLocaleString('en-PH')}</td>
+        <td class="px-4 py-3 align-middle text-slate-700 font-bold border-r border-slate-100 uppercase text-center">${defaultMunicipality}</td>
+        <td class="px-4 py-3 align-middle text-slate-600 font-mono font-bold text-center border-r border-slate-100">${date}</td>
+        <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
+          <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${statusClasses}">${status}</span>
+        </td>
+        <td class="px-4 py-3 align-middle text-center">
+          <div class="flex justify-center gap-1">
+            <button class="btn-action btn-view" title="View Details"><span class="material-icons-round text-[14px]">visibility</span></button>
+            <button class="btn-action btn-approve" title="Approve Return"><span class="material-icons-round text-[14px]">check</span></button>
+            <button class="btn-action btn-delete" title="Delete Record"><span class="material-icons-round text-[14px]">delete</span></button>
+          </div>
+        </td>
+      `;
+
+      if (tbodyReturns.firstChild) {
+        tbodyReturns.insertBefore(tr, tbodyReturns.firstChild);
+      } else {
+        tbodyReturns.appendChild(tr);
+      }
+
+      closeReturnModal();
+      filterTable();
+    }
+
+    if (addReturnBtn && returnModal && returnForm && returnCancelBtn && returnCloseBtn) {
+      addReturnBtn.addEventListener('click', openReturnModal);
+      returnCancelBtn.addEventListener('click', closeReturnModal);
+      returnCloseBtn.addEventListener('click', closeReturnModal);
+
+      returnModal.addEventListener('click', (event) => {
+        if (event.target === returnModal) {
+          closeReturnModal();
+        }
+      });
+
+      returnForm.addEventListener('submit', handleReturnSubmit);
+    }
+
+    if (tbodyReturns) {
+      tbodyReturns.addEventListener('click', (event) => {
+        const approveBtn = event.target.closest('.btn-approve');
+        const deleteBtn = event.target.closest('.btn-delete');
+
+        if (approveBtn) {
+          const row = approveBtn.closest('tr');
+          if (!row) return;
+          row.dataset.stat = 'APPROVED';
+          const statusCell = row.querySelector('td:nth-child(6) span');
+          if (statusCell) {
+            statusCell.textContent = 'Approved';
+            statusCell.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-emerald-50 text-emerald-700 border-emerald-200';
+          }
+          filterTable();
+        }
+
+        if (deleteBtn) {
+          const row = deleteBtn.closest('tr');
+          if (!row) return;
+          row.remove();
+          filterTable();
+        }
+      });
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
         filterTable();
