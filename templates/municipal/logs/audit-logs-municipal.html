@@ -75,14 +75,14 @@
             <option value="THIS_MONTH">This Month</option>
           </select>
 
-          <button @click="exportCsv()"
+             <button @click="exportCsv()"
             class="inline-flex items-center justify-center gap-1 bg-blue-900 hover:bg-blue-800 transition
                    text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm">
             <span class="material-icons-round text-[14px]">download</span>
             Export CSV
           </button>
 
-          <button @click="openRetentionModal()"
+             <button id="retentionBtn" type="button"
             class="inline-flex items-center justify-center gap-1 border border-slate-300 bg-white hover:bg-slate-50 transition
                    text-slate-700 px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm">
             <span class="material-icons-round text-[14px]">tune</span>
@@ -469,12 +469,11 @@
       </div>
 
       <!-- Retention Modal -->
-      <div x-show="retentionOpen" style="display:none;"
-           class="fixed inset-0 z-[3600] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div @click.away="retentionOpen=false" class="bg-white w-full max-w-md border border-slate-400 rounded-[2px] shadow-2xl overflow-hidden">
+      <div id="retentionModal" class="fixed inset-0 z-[3600] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="bg-white w-full max-w-md border border-slate-400 rounded-[2px] shadow-2xl overflow-hidden">
           <div class="bg-slate-800 text-white px-4 py-2 flex items-center justify-between">
             <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Retention Policy (UI)</h3>
-            <button class="text-slate-300 hover:text-white" @click="retentionOpen=false">
+            <button id="retentionCloseBtn" type="button" class="text-slate-300 hover:text-white">
               <span class="material-icons-round text-[18px]">close</span>
             </button>
           </div>
@@ -483,7 +482,7 @@
             <div class="bg-white border border-slate-300 rounded-[2px] p-3">
               <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Current Policy</div>
               <div class="mt-1 text-[10px] font-bold text-slate-800">
-                Keep audit logs for <span class="text-blue-900">365 days</span>, then archive.
+                Keep audit logs for <span id="retentionDaysLabel" class="text-blue-900">365 days</span>, then archive.
               </div>
               <div class="mt-1 text-[10px] text-slate-600 font-medium">
                 Changes to retention should be restricted to authorized municipal admins.
@@ -492,16 +491,14 @@
 
             <div>
               <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Retention Days</label>
-              <input type="number" min="30" step="1" class="gov-input w-full" value="365" />
+              <input id="retentionDaysInput" type="number" min="30" step="1" class="gov-input w-full" value="365" />
             </div>
 
             <div class="flex justify-end gap-2">
-              <button class="px-4 py-1.5 rounded-[2px] border border-slate-300 bg-white hover:bg-slate-100 text-[9px] font-black uppercase"
-                      @click="retentionOpen=false">
+              <button id="retentionCloseBtnSecondary" type="button" class="px-4 py-1.5 rounded-[2px] border border-slate-300 bg-white hover:bg-slate-100 text-[9px] font-black uppercase">
                 Close
               </button>
-              <button class="px-4 py-1.5 rounded-[2px] bg-blue-900 hover:bg-blue-800 text-white text-[9px] font-black uppercase"
-                      @click="alert('Save retention policy (demo)'); retentionOpen=false;">
+              <button id="retentionSaveBtn" type="button" class="px-4 py-1.5 rounded-[2px] bg-blue-900 hover:bg-blue-800 text-white text-[9px] font-black uppercase">
                 Save
               </button>
             </div>
@@ -777,6 +774,71 @@
         }
       }
     }
+
+    // Vanilla JS wiring for Retention modal to ensure it always works
+    document.addEventListener('DOMContentLoaded', () => {
+      const retentionBtn = document.getElementById('retentionBtn');
+      const retentionModal = document.getElementById('retentionModal');
+      const retentionCloseBtn = document.getElementById('retentionCloseBtn');
+      const retentionCloseBtnSecondary = document.getElementById('retentionCloseBtnSecondary');
+      const retentionSaveBtn = document.getElementById('retentionSaveBtn');
+      const retentionDaysInput = document.getElementById('retentionDaysInput');
+      const retentionDaysLabel = document.getElementById('retentionDaysLabel');
+
+      if (!retentionModal || !retentionBtn) {
+        return;
+      }
+
+      let retentionDays = Number(retentionDaysInput && retentionDaysInput.value ? retentionDaysInput.value : 365) || 365;
+
+      function openRetentionModal() {
+        if (retentionDaysInput) {
+          retentionDaysInput.value = retentionDays;
+        }
+        retentionModal.classList.remove('hidden');
+      }
+
+      function closeRetentionModal() {
+        retentionModal.classList.add('hidden');
+      }
+
+      function saveRetention() {
+        if (!retentionDaysInput || !retentionDaysLabel) {
+          closeRetentionModal();
+          return;
+        }
+
+        const val = Number(retentionDaysInput.value);
+        if (!Number.isFinite(val) || val < 30) {
+          alert('Retention must be at least 30 days.');
+          return;
+        }
+
+        retentionDays = Math.round(val);
+        retentionDaysLabel.textContent = `${retentionDays} days`;
+        alert('Retention policy updated (UI only).');
+        closeRetentionModal();
+      }
+
+      retentionBtn.addEventListener('click', openRetentionModal);
+
+      if (retentionCloseBtn) {
+        retentionCloseBtn.addEventListener('click', closeRetentionModal);
+      }
+      if (retentionCloseBtnSecondary) {
+        retentionCloseBtnSecondary.addEventListener('click', closeRetentionModal);
+      }
+
+      retentionModal.addEventListener('click', (event) => {
+        if (event.target === retentionModal) {
+          closeRetentionModal();
+        }
+      });
+
+      if (retentionSaveBtn) {
+        retentionSaveBtn.addEventListener('click', saveRetention);
+      }
+    });
   </script>
 
 </body>
