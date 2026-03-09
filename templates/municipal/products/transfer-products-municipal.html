@@ -65,7 +65,7 @@
           </div>
         </div>
 
-        <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
+        <button id="addTransferBtn" type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
           <span class="material-icons-round text-[14px]">add</span> New Transfer
         </button>
       </header>
@@ -255,6 +255,74 @@
     </main>
   </div>
 
+  <!-- New Transfer Modal -->
+  <div id="transferModal" class="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px] text-blue-900">swap_horiz</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black text-slate-900 uppercase tracking-tight m-0">New Product Transfer</h2>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Log a new inter-entity transfer</p>
+          </div>
+        </div>
+        <button id="transferCloseBtn" type="button" class="btn-action" title="Close">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <form id="transferForm" class="px-3 py-2 space-y-2">
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Asset / Product Name</label>
+          <input id="transferProductInput" type="text" class="gov-input w-full" required />
+        </div>
+
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Origin (From)</label>
+          <input id="transferFromInput" type="text" class="gov-input w-full" placeholder="e.g. Warehouse - {{ user_municipality or 'Quezon City' }}" required />
+        </div>
+
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Destination (To)</label>
+          <input id="transferToInput" type="text" class="gov-input w-full" placeholder="e.g. Field Office - {{ user_municipality or 'Quezon City' }}" required />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Volume / Qty</label>
+            <input id="transferQuantityInput" type="number" min="1" class="gov-input w-full" required />
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Date Logged</label>
+            <input id="transferDateInput" type="date" class="gov-input w-full" required />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Municipality</label>
+            <div class="gov-input w-full bg-slate-50 text-slate-700 font-black uppercase flex items-center">
+              {{ user_municipality or 'Quezon City' }}
+            </div>
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Status</label>
+            <select id="transferStatusInput" class="gov-input w-full" required>
+              <option value="COMPLETED">Completed</option>
+              <option value="PENDING">Pending</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-200 mt-2 mb-2">
+          <button id="transferCancelBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+          <button type="submit" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white">Save Transfer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     const searchInput = document.getElementById('searchTransfer');
     const statusSelect = document.getElementById('statusFilter');
@@ -301,6 +369,138 @@
       searchInput.value = '';
       statusSelect.value = 'ALL';
       applyFilters();
+    }
+
+    const defaultMunicipality = "{{ user_municipality or 'Quezon City' }}";
+    const addTransferBtn = document.getElementById('addTransferBtn');
+    const transferModal = document.getElementById('transferModal');
+    const transferForm = document.getElementById('transferForm');
+    const transferCancelBtn = document.getElementById('transferCancelBtn');
+    const transferCloseBtn = document.getElementById('transferCloseBtn');
+    const transfersTbody = document.getElementById('tbodyTransfers');
+
+    function openTransferModal() {
+      if (!transferModal || !transferForm) return;
+      transferForm.reset();
+      const dateInput = document.getElementById('transferDateInput');
+      if (dateInput && !dateInput.value) {
+        dateInput.value = new Date().toISOString().slice(0, 10);
+      }
+      transferModal.classList.remove('hidden');
+      transferModal.classList.add('flex');
+    }
+
+    function closeTransferModal() {
+      if (!transferModal) return;
+      transferModal.classList.add('hidden');
+      transferModal.classList.remove('flex');
+    }
+
+    function createStatusBadge(statusText) {
+      const status = (statusText || '').toUpperCase();
+      let classes = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ';
+      if (status === 'COMPLETED') {
+        classes += 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      } else if (status === 'PENDING') {
+        classes += 'bg-amber-50 text-amber-700 border-amber-200';
+      } else if (status === 'CANCELLED') {
+        classes += 'bg-rose-50 text-rose-700 border-rose-200';
+      } else {
+        classes += 'bg-slate-100 text-slate-600 border-slate-200';
+      }
+      return { status, classes };
+    }
+
+    function handleTransferSubmit(event) {
+      event.preventDefault();
+
+      const productInput = document.getElementById('transferProductInput');
+      const fromInput = document.getElementById('transferFromInput');
+      const toInput = document.getElementById('transferToInput');
+      const quantityInput = document.getElementById('transferQuantityInput');
+      const dateInput = document.getElementById('transferDateInput');
+      const statusInput = document.getElementById('transferStatusInput');
+
+      if (!productInput || !fromInput || !toInput || !quantityInput || !dateInput || !statusInput) return;
+
+      const product = productInput.value.trim();
+      const from = fromInput.value.trim();
+      const to = toInput.value.trim();
+      const quantityValue = quantityInput.value.trim();
+      const date = dateInput.value.trim();
+      const statusRaw = statusInput.value.trim() || 'COMPLETED';
+
+      if (!product || !from || !to || !quantityValue || !date) {
+        return;
+      }
+
+      const quantity = Number(quantityValue);
+      if (Number.isNaN(quantity) || quantity <= 0) {
+        return;
+      }
+
+      if (!transfersTbody) return;
+
+      const tr = document.createElement('tr');
+
+      const badge = createStatusBadge(statusRaw);
+      tr.className = 'hover:bg-blue-50 transition trans-row';
+      tr.dataset.stat = badge.status;
+
+      const qtyDisplay = quantity.toLocaleString('en-PH');
+
+      tr.innerHTML = `
+        <td class="px-4 py-3 align-middle font-bold text-slate-900 border-r border-slate-100 uppercase">${product}</td>
+        <td class="px-4 py-3 align-middle text-slate-700 font-bold border-r border-slate-100 uppercase">${from}</td>
+        <td class="px-4 py-3 align-middle font-bold text-blue-800 border-r border-slate-100 uppercase">${to}</td>
+        <td class="px-4 py-3 align-middle font-mono font-black text-slate-900 border-r border-slate-100 text-right">${qtyDisplay}</td>
+        <td class="px-4 py-3 align-middle text-slate-700 font-bold border-r border-slate-100 uppercase text-center">${defaultMunicipality}</td>
+        <td class="px-4 py-3 align-middle text-slate-600 font-mono font-bold text-center border-r border-slate-100">${date}</td>
+        <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
+          <span class="${badge.classes}">${badge.status.charAt(0) + badge.status.slice(1).toLowerCase()}</span>
+        </td>
+        <td class="px-4 py-3 align-middle text-center">
+          <div class="flex justify-center gap-1">
+            <button class="btn-action btn-view" title="View Details"><span class="material-icons-round text-[14px]">visibility</span></button>
+            <button class="btn-action btn-delete" title="Cancel/Delete"><span class="material-icons-round text-[14px]">delete</span></button>
+          </div>
+        </td>
+      `;
+
+      if (transfersTbody.firstChild) {
+        transfersTbody.insertBefore(tr, transfersTbody.firstChild);
+      } else {
+        transfersTbody.appendChild(tr);
+      }
+
+      closeTransferModal();
+      applyFilters();
+    }
+
+    if (addTransferBtn && transferModal && transferForm && transferCancelBtn && transferCloseBtn) {
+      addTransferBtn.addEventListener('click', openTransferModal);
+      transferCancelBtn.addEventListener('click', closeTransferModal);
+      transferCloseBtn.addEventListener('click', closeTransferModal);
+
+      transferModal.addEventListener('click', (event) => {
+        if (event.target === transferModal) {
+          closeTransferModal();
+        }
+      });
+
+      transferForm.addEventListener('submit', handleTransferSubmit);
+    }
+
+    if (transfersTbody) {
+      transfersTbody.addEventListener('click', (event) => {
+        const deleteBtn = event.target.closest('.btn-delete');
+        if (deleteBtn) {
+          const row = deleteBtn.closest('tr');
+          if (!row) return;
+          row.remove();
+          applyFilters();
+        }
+      });
     }
 
     // Init
