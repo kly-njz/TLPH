@@ -35,7 +35,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-y-auto">
   
   <div
     class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]"
@@ -47,10 +47,10 @@
     {% include 'municipal/header.html' %}
   </div>
 
-  <div class="flex flex-1 overflow-hidden">
+  <div class="flex flex-1">
     {% include 'municipal/sidenav.html' %}
 
-    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden">
+    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-y-auto custom-scrollbar">
 
       <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-emerald-700 mb-2">
         <div class="flex items-center gap-3">
@@ -256,6 +256,66 @@
     </main>
   </div>
 
+  <!-- Sale Details Modal -->
+  <div id="saleViewModal" class="fixed inset-0 z-40 bg-slate-900/50 flex items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-lg border border-slate-300">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-emerald-800 text-white">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px]">sell</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black uppercase tracking-tight m-0">Sales Record Details</h2>
+            <p class="text-[9px] font-bold uppercase tracking-widest m-0 text-emerald-100">Read-only view of selected transaction</p>
+          </div>
+        </div>
+        <button id="saleViewCloseBtn" type="button" class="btn-action bg-emerald-700 border-emerald-600 text-emerald-50" title="Close">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <div class="px-4 py-3 bg-slate-50 space-y-2">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Customer / Entity</div>
+            <div id="viewCustomer" class="mt-1 text-[10px] font-black text-slate-900 uppercase"></div>
+          </div>
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Municipality</div>
+            <div id="viewMunicipality" class="mt-1 text-[10px] font-black text-slate-900 uppercase"></div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+          <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Product Description</div>
+          <div id="viewProduct" class="mt-1 text-[10px] font-bold text-slate-800 uppercase"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Quantity</div>
+            <div id="viewQuantity" class="mt-1 text-[10px] font-mono font-black text-blue-800"></div>
+          </div>
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Amount</div>
+            <div id="viewTotal" class="mt-1 text-[10px] font-mono font-black text-emerald-700"></div>
+          </div>
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Status</div>
+            <div id="viewStatus" class="mt-1 text-[9px] font-black uppercase inline-block px-1.5 py-0.5 rounded-[1px] border w-20 text-center"></div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+          <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Date Logged</div>
+          <div id="viewDate" class="mt-1 text-[10px] font-mono text-slate-700"></div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button id="saleViewCloseBtnSecondary" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Add Sale Modal -->
   <div id="saleModal" class="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4 hidden">
     <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
@@ -370,6 +430,16 @@
     const saleCancelBtn = document.getElementById('saleCancelBtn');
     const saleCloseBtn = document.getElementById('saleCloseBtn');
     const salesTableBody = document.querySelector('#salesTable tbody');
+    const saleViewModal = document.getElementById('saleViewModal');
+    const saleViewCloseBtn = document.getElementById('saleViewCloseBtn');
+    const saleViewCloseBtnSecondary = document.getElementById('saleViewCloseBtnSecondary');
+    const viewCustomerEl = document.getElementById('viewCustomer');
+    const viewProductEl = document.getElementById('viewProduct');
+    const viewQuantityEl = document.getElementById('viewQuantity');
+    const viewTotalEl = document.getElementById('viewTotal');
+    const viewMunicipalityEl = document.getElementById('viewMunicipality');
+    const viewStatusEl = document.getElementById('viewStatus');
+    const viewDateEl = document.getElementById('viewDate');
 
     function openSaleModal() {
       if (!saleModal || !saleForm) return;
@@ -386,6 +456,52 @@
       if (!saleModal) return;
       saleModal.classList.add('hidden');
       saleModal.classList.remove('flex');
+    }
+
+    function openSaleViewModal(row) {
+      if (!saleViewModal || !row) return;
+
+      const cells = row.querySelectorAll('td');
+      if (cells.length >= 7) {
+        const customer = cells[0].innerText.trim();
+        const product = cells[1].innerText.trim();
+        const quantity = cells[2].innerText.trim();
+        const total = cells[3].innerText.trim();
+        const municipality = cells[4].innerText.trim();
+        const date = cells[5].innerText.trim();
+        const statusSpan = cells[6].querySelector('span');
+        const statusText = statusSpan ? statusSpan.innerText.trim() : '';
+
+        if (viewCustomerEl) viewCustomerEl.textContent = customer;
+        if (viewProductEl) viewProductEl.textContent = product;
+        if (viewQuantityEl) viewQuantityEl.textContent = quantity;
+        if (viewTotalEl) viewTotalEl.textContent = total;
+        if (viewMunicipalityEl) viewMunicipalityEl.textContent = municipality;
+        if (viewDateEl) viewDateEl.textContent = date;
+        if (viewStatusEl) {
+          viewStatusEl.textContent = statusText;
+          viewStatusEl.className = 'mt-1 text-[9px] font-black uppercase inline-block px-1.5 py-0.5 rounded-[1px] border w-20 text-center ';
+          const s = (statusText || '').toLowerCase();
+          if (s === 'completed') {
+            viewStatusEl.className += 'bg-emerald-50 text-emerald-700 border-emerald-200';
+          } else if (s === 'pending') {
+            viewStatusEl.className += 'bg-amber-50 text-amber-700 border-amber-200';
+          } else if (s === 'cancelled') {
+            viewStatusEl.className += 'bg-rose-50 text-rose-700 border-rose-200';
+          } else {
+            viewStatusEl.className += 'bg-slate-100 text-slate-600 border-slate-200';
+          }
+        }
+      }
+
+      saleViewModal.classList.remove('hidden');
+      saleViewModal.classList.add('flex');
+    }
+
+    function closeSaleViewModal() {
+      if (!saleViewModal) return;
+      saleViewModal.classList.add('hidden');
+      saleViewModal.classList.remove('flex');
     }
 
     function handleSaleSubmit(event) {
@@ -477,6 +593,14 @@
 
     if (salesTableBody) {
       salesTableBody.addEventListener('click', (event) => {
+        const viewBtn = event.target.closest('.btn-view');
+        if (viewBtn) {
+          const row = viewBtn.closest('tr');
+          if (!row) return;
+          openSaleViewModal(row);
+          return;
+        }
+
         const deleteBtn = event.target.closest('.btn-delete');
         if (deleteBtn) {
           const row = deleteBtn.closest('tr');
@@ -485,6 +609,21 @@
           applyFilters();
         }
       });
+    }
+
+    if (saleViewModal) {
+      saleViewModal.addEventListener('click', (event) => {
+        if (event.target === saleViewModal) {
+          closeSaleViewModal();
+        }
+      });
+    }
+
+    if (saleViewCloseBtn) {
+      saleViewCloseBtn.addEventListener('click', closeSaleViewModal);
+    }
+    if (saleViewCloseBtnSecondary) {
+      saleViewCloseBtnSecondary.addEventListener('click', closeSaleViewModal);
     }
 
     // Init

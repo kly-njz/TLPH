@@ -35,7 +35,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-y-auto">
   
   <div
     class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]"
@@ -47,10 +47,10 @@
     {% include 'municipal/header.html' %}
   </div>
 
-  <div class="flex flex-1 overflow-hidden">
+  <div class="flex flex-1">
     {% include 'municipal/sidenav.html' %}
 
-    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden">
+    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-y-auto custom-scrollbar">
 
         <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900 mb-2">
           <div class="flex items-center gap-3">
@@ -280,6 +280,57 @@
     </div>
   </div>
 
+  <!-- Purchase Details Modal -->
+  <div id="purchaseViewModal" class="fixed inset-0 z-40 bg-slate-900/50 flex items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-lg border border-slate-300">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-800 text-white">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px]">receipt_long</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black uppercase tracking-tight m-0">Purchase Details</h2>
+            <p class="text-[9px] font-bold uppercase tracking-widest m-0 text-slate-200">Read-only view of selected record</p>
+          </div>
+        </div>
+        <button id="purchaseViewCloseBtn" type="button" class="btn-action bg-slate-700 border-slate-600 text-slate-100" title="Close">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <div class="px-4 py-3 bg-slate-50 space-y-2">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Official Supplier</div>
+            <div id="viewSupplier" class="mt-1 text-[10px] font-black text-slate-900 uppercase"></div>
+          </div>
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Municipality</div>
+            <div id="viewMunicipality" class="mt-1 text-[10px] font-black text-slate-900 uppercase"></div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+          <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Product / Item Description</div>
+          <div id="viewProduct" class="mt-1 text-[10px] font-bold text-slate-800 uppercase"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Procured Quantity</div>
+            <div id="viewQuantity" class="mt-1 text-[10px] font-mono font-black text-blue-800"></div>
+          </div>
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Transaction Date</div>
+            <div id="viewDate" class="mt-1 text-[10px] font-mono text-slate-700"></div>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button id="purchaseViewCloseBtnSecondary" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const defaultMunicipality = "{{ user_municipality or 'Quezon City' }}";
     const searchEl = document.getElementById('searchPurchase');
@@ -316,6 +367,14 @@
     const purchaseCancelBtn = document.getElementById('purchaseCancelBtn');
     const purchaseCloseBtn = document.getElementById('purchaseCloseBtn');
     const purchaseTbody = document.getElementById('tbodyReturns');
+    const purchaseViewModal = document.getElementById('purchaseViewModal');
+    const purchaseViewCloseBtn = document.getElementById('purchaseViewCloseBtn');
+    const purchaseViewCloseBtnSecondary = document.getElementById('purchaseViewCloseBtnSecondary');
+    const viewSupplierEl = document.getElementById('viewSupplier');
+    const viewProductEl = document.getElementById('viewProduct');
+    const viewQuantityEl = document.getElementById('viewQuantity');
+    const viewMunicipalityEl = document.getElementById('viewMunicipality');
+    const viewDateEl = document.getElementById('viewDate');
 
     function openPurchaseModal() {
       if (!purchaseModal || !purchaseForm) return;
@@ -332,6 +391,34 @@
       if (!purchaseModal) return;
       purchaseModal.classList.add('hidden');
       purchaseModal.classList.remove('flex');
+    }
+
+    function openPurchaseViewModal(row) {
+      if (!purchaseViewModal || !row) return;
+
+      const cells = row.querySelectorAll('td');
+      if (cells.length >= 5) {
+        const supplier = cells[0].innerText.trim();
+        const product = cells[1].innerText.trim();
+        const quantity = cells[2].innerText.trim();
+        const municipality = cells[3].innerText.trim();
+        const date = cells[4].innerText.trim();
+
+        if (viewSupplierEl) viewSupplierEl.textContent = supplier;
+        if (viewProductEl) viewProductEl.textContent = product;
+        if (viewQuantityEl) viewQuantityEl.textContent = quantity;
+        if (viewMunicipalityEl) viewMunicipalityEl.textContent = municipality;
+        if (viewDateEl) viewDateEl.textContent = date;
+      }
+
+      purchaseViewModal.classList.remove('hidden');
+      purchaseViewModal.classList.add('flex');
+    }
+
+    function closePurchaseViewModal() {
+      if (!purchaseViewModal) return;
+      purchaseViewModal.classList.add('hidden');
+      purchaseViewModal.classList.remove('flex');
     }
 
     function handlePurchaseSubmit(event) {
@@ -406,6 +493,14 @@
 
     if (purchaseTbody) {
       purchaseTbody.addEventListener('click', (event) => {
+        const viewBtn = event.target.closest('.btn-view');
+        if (viewBtn) {
+          const row = viewBtn.closest('tr');
+          if (!row) return;
+          openPurchaseViewModal(row);
+          return;
+        }
+
         const deleteBtn = event.target.closest('.btn-delete');
         if (deleteBtn) {
           const row = deleteBtn.closest('tr');
@@ -415,6 +510,31 @@
         }
       });
     }
+
+    if (purchaseViewModal) {
+      purchaseViewModal.addEventListener('click', (event) => {
+        if (event.target === purchaseViewModal) {
+          closePurchaseViewModal();
+        }
+      });
+    }
+
+    if (purchaseViewCloseBtn) {
+      purchaseViewCloseBtn.addEventListener('click', closePurchaseViewModal);
+    }
+    if (purchaseViewCloseBtnSecondary) {
+      purchaseViewCloseBtnSecondary.addEventListener('click', closePurchaseViewModal);
+    }
+
+    // Global fallback for delete buttons to ensure they always work
+    document.addEventListener('click', (event) => {
+      const deleteBtn = event.target.closest('.btn-delete');
+      if (!deleteBtn) return;
+      const row = deleteBtn.closest('tr');
+      if (!row || !row.classList.contains('purchase-row')) return;
+      row.remove();
+      applyFilter();
+    });
 
     // Init
     applyFilter();

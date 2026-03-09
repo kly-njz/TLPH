@@ -37,7 +37,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-y-auto">
   
   <div
     class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]"
@@ -49,10 +49,10 @@
     {% include 'municipal/header.html' %}
   </div>
 
-  <div class="flex flex-1 overflow-hidden">
+  <div class="flex flex-1">
     {% include 'municipal/sidenav.html' %}
 
-    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden">
+    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-y-auto custom-scrollbar">
 
       <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-blue-900 mb-2">
         <div class="flex items-center gap-3">
@@ -326,6 +326,58 @@
     </div>
   </div>
 
+  <!-- Quotation Details View Modal -->
+  <div id="quoteViewModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/60">
+    <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
+      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
+        <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
+          <span class="material-icons-round text-[14px]">visibility</span>
+          Quotation Details
+        </h2>
+        <button id="quoteViewCloseIcon" type="button" class="text-slate-300 hover:text-white">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <div class="p-3 space-y-2 text-[10px] text-slate-700">
+        <div>
+          <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Quotation Number</div>
+          <div id="viewQuoteNumber" class="font-black uppercase text-slate-900"></div>
+        </div>
+
+        <div>
+          <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Client / Office</div>
+          <div id="viewQuoteClient" class="font-bold uppercase text-slate-900"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Barangay</div>
+            <div id="viewQuoteBarangay" class="font-bold uppercase text-slate-900"></div>
+          </div>
+          <div>
+            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Filing Date</div>
+            <div id="viewQuoteDate" class="font-mono text-slate-900"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Total Amount (PHP)</div>
+          <div id="viewQuoteAmount" class="font-mono font-black text-blue-800"></div>
+        </div>
+
+        <div>
+          <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Status</div>
+          <span id="viewQuoteStatus" class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-24 text-center border bg-slate-100 text-slate-600 border-slate-200"></span>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 px-3 py-2 border-t border-slate-200 bg-slate-50">
+        <button id="quoteViewCloseBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // --- Chart Implementations ---
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -382,6 +434,17 @@
     const searchInput = document.getElementById('searchQuote');
     const statusFilter = document.getElementById('statusFilter');
     const barangayFilter = document.getElementById('barangayFilter');
+    const quoteTableBody = document.querySelector('#quoteTable tbody');
+
+    const quoteViewModal = document.getElementById('quoteViewModal');
+    const quoteViewCloseIcon = document.getElementById('quoteViewCloseIcon');
+    const quoteViewCloseBtn = document.getElementById('quoteViewCloseBtn');
+    const viewQuoteNumber = document.getElementById('viewQuoteNumber');
+    const viewQuoteClient = document.getElementById('viewQuoteClient');
+    const viewQuoteBarangay = document.getElementById('viewQuoteBarangay');
+    const viewQuoteDate = document.getElementById('viewQuoteDate');
+    const viewQuoteAmount = document.getElementById('viewQuoteAmount');
+    const viewQuoteStatus = document.getElementById('viewQuoteStatus');
 
     function filterTable() {
       const q = (searchInput.value || '').toLowerCase().trim();
@@ -415,6 +478,86 @@
       filterTable();
     }
 
+    function openQuoteViewModal(row) {
+      if (!row || !quoteViewModal) return;
+      const cells = row.querySelectorAll('td');
+      if (!cells.length) return;
+
+      const numberText = cells[0] ? cells[0].innerText.trim() : '';
+      const clientText = cells[1] ? cells[1].innerText.trim() : '';
+      const barangayText = cells[2] ? cells[2].innerText.trim() : '';
+      const amountText = cells[3] ? cells[3].innerText.trim() : '';
+      const dateText = cells[4] ? cells[4].innerText.trim() : '';
+
+      if (viewQuoteNumber) viewQuoteNumber.innerText = numberText;
+      if (viewQuoteClient) viewQuoteClient.innerText = clientText;
+      if (viewQuoteBarangay) viewQuoteBarangay.innerText = barangayText;
+      if (viewQuoteAmount) viewQuoteAmount.innerText = amountText;
+      if (viewQuoteDate) viewQuoteDate.innerText = dateText;
+
+      if (viewQuoteStatus) {
+        const statusCell = cells[5];
+        const badge = statusCell ? statusCell.querySelector('span') : null;
+        const statusText = badge ? badge.innerText.trim() : '';
+        const badgeClass = badge ? badge.className : 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-24 text-center border bg-slate-100 text-slate-600 border-slate-200';
+        viewQuoteStatus.innerText = statusText;
+        viewQuoteStatus.className = badgeClass;
+      }
+
+      quoteViewModal.classList.remove('hidden');
+      quoteViewModal.classList.add('flex');
+    }
+
+    function closeQuoteViewModal() {
+      if (!quoteViewModal) return;
+      quoteViewModal.classList.add('hidden');
+      quoteViewModal.classList.remove('flex');
+    }
+
+    function approveQuotationRow(row) {
+      if (!row) return;
+
+      const currentStat = (row.dataset.stat || '').toUpperCase();
+      if (currentStat === 'APPROVED') {
+        return;
+      }
+
+      const cells = row.querySelectorAll('td');
+      if (!cells.length) return;
+
+      row.dataset.stat = 'APPROVED';
+
+      const statusCell = cells[5];
+      if (!statusCell) return;
+
+      let badge = statusCell.querySelector('span');
+      if (!badge) {
+        badge = document.createElement('span');
+        statusCell.appendChild(badge);
+      }
+
+      badge.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-emerald-50 text-emerald-700 border-emerald-200';
+      badge.textContent = 'Approved';
+
+      // Re-run filters so the row visibility reflects updated status
+      if (typeof filterTable === 'function') {
+        filterTable();
+      }
+    }
+
+    function deleteQuotationRow(row) {
+      if (!row) return;
+      if (!confirm('Delete this quotation record? This cannot be undone on this screen.')) {
+        return;
+      }
+
+      row.remove();
+
+      if (typeof filterTable === 'function') {
+        filterTable();
+      }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         filterTable();
 
@@ -436,6 +579,45 @@
           });
 
           quoteForm.addEventListener('submit', handleQuoteSubmit);
+        }
+
+        if (quoteTableBody) {
+          quoteTableBody.addEventListener('click', (event) => {
+            const viewBtn = event.target.closest('.btn-view');
+            if (viewBtn) {
+              const row = viewBtn.closest('tr');
+              if (!row) return;
+              openQuoteViewModal(row);
+              return;
+            }
+
+            const approveBtn = event.target.closest('.btn-approve');
+            if (approveBtn) {
+              const row = approveBtn.closest('tr');
+              if (!row) return;
+              approveQuotationRow(row);
+              return;
+            }
+
+            const deleteBtn = event.target.closest('.btn-delete');
+            if (deleteBtn) {
+              const row = deleteBtn.closest('tr');
+              if (!row) return;
+              deleteQuotationRow(row);
+              return;
+            }
+          });
+        }
+
+        if (quoteViewModal && quoteViewCloseIcon && quoteViewCloseBtn) {
+          quoteViewCloseIcon.addEventListener('click', closeQuoteViewModal);
+          quoteViewCloseBtn.addEventListener('click', closeQuoteViewModal);
+
+          quoteViewModal.addEventListener('click', (event) => {
+            if (event.target === quoteViewModal) {
+              closeQuoteViewModal();
+            }
+          });
         }
     });
 

@@ -236,6 +236,56 @@
     </main>
   </div>
 
+  <!-- Distribution Details Modal -->
+  <div id="distViewModal" class="fixed inset-0 z-40 bg-slate-900/50 flex items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-lg border border-slate-300">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-800 text-white">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px]">local_shipping</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black uppercase tracking-tight m-0">Distribution Details</h2>
+            <p class="text-[9px] font-bold uppercase tracking-widest m-0 text-slate-200">Read-only view of dispatched record</p>
+          </div>
+        </div>
+        <button id="distViewCloseBtn" type="button" class="btn-action bg-slate-700 border-slate-600 text-slate-100" title="Close">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <div class="px-4 py-3 bg-slate-50 space-y-2">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Asset / Product Name</div>
+            <div id="viewProduct" class="mt-1 text-[10px] font-black text-slate-900 uppercase"></div>
+          </div>
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Official Recipient</div>
+            <div id="viewRecipient" class="mt-1 text-[10px] font-black text-slate-900 uppercase"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Volume / Qty</div>
+            <div id="viewQuantity" class="mt-1 text-[10px] font-mono font-black text-blue-800"></div>
+          </div>
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Municipality</div>
+            <div id="viewMunicipality" class="mt-1 text-[10px] font-black text-slate-900 uppercase"></div>
+          </div>
+          <div class="bg-white border border-slate-300 rounded-[2px] p-2">
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Date Dispatched</div>
+            <div id="viewDate" class="mt-1 text-[10px] font-mono text-slate-700"></div>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button id="distViewCloseBtnSecondary" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Add Distribution Modal -->
   <div id="distModal" class="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4 hidden">
     <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
@@ -325,6 +375,14 @@
     const distCancelBtn = document.getElementById('distCancelBtn');
     const distCloseBtn = document.getElementById('distCloseBtn');
     const distTableBody = document.querySelector('#distTable tbody');
+    const distViewModal = document.getElementById('distViewModal');
+    const distViewCloseBtn = document.getElementById('distViewCloseBtn');
+    const distViewCloseBtnSecondary = document.getElementById('distViewCloseBtnSecondary');
+    const viewProductEl = document.getElementById('viewProduct');
+    const viewRecipientEl = document.getElementById('viewRecipient');
+    const viewQuantityEl = document.getElementById('viewQuantity');
+    const viewMunicipalityEl = document.getElementById('viewMunicipality');
+    const viewDateEl = document.getElementById('viewDate');
 
     function openDistModal() {
       if (!distModal || !distForm) return;
@@ -341,6 +399,34 @@
       if (!distModal) return;
       distModal.classList.add('hidden');
       distModal.classList.remove('flex');
+    }
+
+    function openDistViewModal(row) {
+      if (!distViewModal || !row) return;
+
+      const cells = row.querySelectorAll('td');
+      if (cells.length >= 5) {
+        const product = cells[0].innerText.trim();
+        const recipient = cells[1].innerText.trim();
+        const quantity = cells[2].innerText.trim();
+        const municipality = cells[3].innerText.trim();
+        const date = cells[4].innerText.trim();
+
+        if (viewProductEl) viewProductEl.textContent = product;
+        if (viewRecipientEl) viewRecipientEl.textContent = recipient;
+        if (viewQuantityEl) viewQuantityEl.textContent = quantity;
+        if (viewMunicipalityEl) viewMunicipalityEl.textContent = municipality;
+        if (viewDateEl) viewDateEl.textContent = date;
+      }
+
+      distViewModal.classList.remove('hidden');
+      distViewModal.classList.add('flex');
+    }
+
+    function closeDistViewModal() {
+      if (!distViewModal) return;
+      distViewModal.classList.add('hidden');
+      distViewModal.classList.remove('flex');
     }
 
     function handleDistSubmit(event) {
@@ -415,6 +501,14 @@
 
     if (distTableBody) {
       distTableBody.addEventListener('click', (event) => {
+        const viewBtn = event.target.closest('.btn-view');
+        if (viewBtn) {
+          const row = viewBtn.closest('tr');
+          if (!row) return;
+          openDistViewModal(row);
+          return;
+        }
+
         const deleteBtn = event.target.closest('.btn-delete');
         if (deleteBtn) {
           const row = deleteBtn.closest('tr');
@@ -423,6 +517,21 @@
           applyFilter();
         }
       });
+    }
+
+    if (distViewModal) {
+      distViewModal.addEventListener('click', (event) => {
+        if (event.target === distViewModal) {
+          closeDistViewModal();
+        }
+      });
+    }
+
+    if (distViewCloseBtn) {
+      distViewCloseBtn.addEventListener('click', closeDistViewModal);
+    }
+    if (distViewCloseBtnSecondary) {
+      distViewCloseBtnSecondary.addEventListener('click', closeDistViewModal);
     }
 
     // Init
