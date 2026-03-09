@@ -66,7 +66,7 @@
               </p>
             </div>
           </div>
-          <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
+          <button id="newProjectBtn" type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
             <span class="material-icons-round text-[14px]">add</span> New Project
           </button>
         </header>
@@ -255,11 +255,73 @@
     </div>
   </div>
 
+  <!-- New Project Modal -->
+  <div id="projectModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/60">
+    <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
+      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
+        <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
+          <span class="material-icons-round text-[14px]">playlist_add</span>
+          Register Municipal Project
+        </h2>
+        <button id="projectCloseIcon" type="button" class="text-slate-300 hover:text-white">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <form id="projectForm" class="p-3 space-y-2">
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Project Name *</label>
+          <input id="projectNameInput" type="text" class="gov-input w-full" placeholder="Official project title" required>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Barangay / Area *</label>
+            <select id="projectBarangayInput" class="gov-input w-full cursor-pointer" required>
+              <option value="">Select Barangay</option>
+              <option value="Barangay 1">Barangay 1</option>
+              <option value="Barangay 2">Barangay 2</option>
+              <option value="Barangay 3">Barangay 3</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Start Date *</label>
+            <input id="projectStartDateInput" type="date" class="gov-input w-full" required>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
+            <select id="projectStatusInput" class="gov-input w-full cursor-pointer" required>
+              <option value="Pending">Pending</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Municipality</label>
+            <div class="gov-input w-full bg-slate-50 text-slate-700 font-black">
+              {{ user_municipality or 'Quezon City' }}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 mt-1 border-t border-slate-200">
+          <button id="projectCancelBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+          <button type="submit" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 <script>
   // --- Chart Implementations ---
   Chart.defaults.font.family = "Verdana, Arial, sans-serif";
   Chart.defaults.font.size = 8;
   Chart.defaults.color = "#64748b";
+
+  const defaultMunicipality = "{{ user_municipality or 'Quezon City' }}";
 
   const commonOptions = {
     responsive: true,
@@ -378,7 +440,137 @@
   // Init
   document.addEventListener("DOMContentLoaded", () => {
       filterTable();
+
+      const newProjectBtn = document.getElementById('newProjectBtn');
+      const projectModal = document.getElementById('projectModal');
+      const projectForm = document.getElementById('projectForm');
+      const projectCancelBtn = document.getElementById('projectCancelBtn');
+      const projectCloseIcon = document.getElementById('projectCloseIcon');
+
+      if (newProjectBtn && projectModal && projectForm && projectCancelBtn && projectCloseIcon) {
+        newProjectBtn.addEventListener('click', openProjectModal);
+        projectCancelBtn.addEventListener('click', closeProjectModal);
+        projectCloseIcon.addEventListener('click', closeProjectModal);
+
+        projectModal.addEventListener('click', (event) => {
+          if (event.target === projectModal) {
+            closeProjectModal();
+          }
+        });
+
+        projectForm.addEventListener('submit', handleProjectSubmit);
+      }
   });
+
+  function openProjectModal() {
+    const projectModal = document.getElementById('projectModal');
+    const projectForm = document.getElementById('projectForm');
+    if (!projectModal || !projectForm) return;
+    projectForm.reset();
+    projectModal.classList.remove('hidden');
+    projectModal.classList.add('flex');
+  }
+
+  function closeProjectModal() {
+    const projectModal = document.getElementById('projectModal');
+    const projectForm = document.getElementById('projectForm');
+    if (!projectModal || !projectForm) return;
+    projectForm.reset();
+    projectModal.classList.add('hidden');
+    projectModal.classList.remove('flex');
+  }
+
+  function handleProjectSubmit(event) {
+    event.preventDefault();
+
+    const nameInput = document.getElementById('projectNameInput');
+    const barangayInput = document.getElementById('projectBarangayInput');
+    const startDateInput = document.getElementById('projectStartDateInput');
+    const statusInput = document.getElementById('projectStatusInput');
+
+    if (!nameInput || !barangayInput || !startDateInput || !statusInput) {
+      return;
+    }
+
+    const name = (nameInput.value || '').trim();
+    const barangay = (barangayInput.value || '').trim();
+    const startDate = (startDateInput.value || '').trim();
+    const status = (statusInput.value || '').trim() || 'Pending';
+
+    if (!name || !barangay || !startDate) {
+      return;
+    }
+
+    const tbody = document.querySelector('#projectTable tbody');
+    if (!tbody) {
+      closeProjectModal();
+      return;
+    }
+
+    const row = document.createElement('tr');
+    row.className = 'hover:bg-blue-50 transition proj-row';
+    row.dataset.stat = status.toUpperCase();
+
+    const nameCell = document.createElement('td');
+    nameCell.className = 'px-4 py-3 align-middle font-black text-slate-900 border-r border-slate-100 uppercase';
+    nameCell.textContent = name;
+
+    const barangayCell = document.createElement('td');
+    barangayCell.className = 'px-4 py-3 align-middle font-bold text-blue-800 border-r border-slate-100 uppercase text-center';
+    barangayCell.textContent = barangay;
+
+    const municipalityCell = document.createElement('td');
+    municipalityCell.className = 'px-4 py-3 align-middle font-bold text-slate-700 border-r border-slate-100 uppercase text-center';
+    municipalityCell.textContent = defaultMunicipality || 'Municipality';
+
+    const startDateCell = document.createElement('td');
+    startDateCell.className = 'px-4 py-3 align-middle font-mono text-slate-600 border-r border-slate-100 text-center';
+    startDateCell.textContent = startDate;
+
+    const statusCell = document.createElement('td');
+    statusCell.className = 'px-4 py-3 align-middle text-center border-r border-slate-100';
+
+    const statusSpan = document.createElement('span');
+    statusSpan.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-24 text-center border';
+
+    const upperStatus = status.toUpperCase();
+    if (upperStatus === 'IN PROGRESS') {
+      statusSpan.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+    } else if (upperStatus === 'COMPLETED') {
+      statusSpan.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-200');
+    } else if (upperStatus === 'PENDING') {
+      statusSpan.classList.add('bg-amber-50', 'text-amber-700', 'border-amber-200');
+    } else {
+      statusSpan.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200');
+    }
+
+    statusSpan.textContent = status;
+    statusCell.appendChild(statusSpan);
+
+    const actionsCell = document.createElement('td');
+    actionsCell.className = 'px-4 py-3 align-middle text-center';
+    actionsCell.innerHTML = '<div class="flex justify-center gap-1">\
+        <button class="btn-action btn-view" title="View Details"><span class="material-icons-round text-[14px]">visibility<\/span><\/button>\
+        <button class="btn-action btn-edit" title="Edit"><span class="material-icons-round text-[14px]">edit<\/span><\/button>\
+        <button class="btn-action btn-archive" title="Archive"><span class="material-icons-round text-[14px]">archive<\/span><\/button>\
+      <\/div>';
+
+    row.appendChild(nameCell);
+    row.appendChild(barangayCell);
+    row.appendChild(municipalityCell);
+    row.appendChild(startDateCell);
+    row.appendChild(statusCell);
+    row.appendChild(actionsCell);
+
+    if (tbody.firstChild) {
+      tbody.insertBefore(row, tbody.firstChild);
+    } else {
+      tbody.appendChild(row);
+    }
+
+    closeProjectModal();
+    filterTable();
+  }
 </script>
 </body>
 </html>

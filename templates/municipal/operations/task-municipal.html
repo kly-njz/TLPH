@@ -66,7 +66,7 @@
               </p>
             </div>
           </div>
-          <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
+          <button id="createTaskBtn" type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
             <span class="material-icons-round text-[14px]">add</span> Create Task
           </button>
         </header>
@@ -244,6 +244,64 @@
     </div>
   </div>
 
+  <!-- Create Task Modal -->
+  <div id="taskModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/60">
+    <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
+      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
+        <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
+          <span class="material-icons-round text-[14px]">add_task</span>
+          Create Municipal Task
+        </h2>
+        <button id="taskCloseIcon" type="button" class="text-slate-300 hover:text-white">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <form id="taskForm" class="p-3 space-y-2">
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Task Title / Description *</label>
+          <input id="taskTitleInput" type="text" class="gov-input w-full" placeholder="Brief directive or assignment" required>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Assigned To *</label>
+            <input id="taskAssigneeInput" type="text" class="gov-input w-full" placeholder="Office / Unit" required>
+          </div>
+          <div>
+            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Barangay *</label>
+            <select id="taskBarangayInput" class="gov-input w-full cursor-pointer" required>
+              <option value="">Select Barangay</option>
+              <option value="Barangay 1">Barangay 1</option>
+              <option value="Barangay 2">Barangay 2</option>
+              <option value="Barangay 3">Barangay 3</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
+            <select id="taskStatusInput" class="gov-input w-full cursor-pointer" required>
+              <option value="Pending">Pending</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Due Date *</label>
+            <input id="taskDueDateInput" type="date" class="gov-input w-full" required>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 mt-1 border-t border-slate-200">
+          <button id="taskCancelBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+          <button type="submit" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 <script>
   // --- Chart Implementations ---
   Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -343,7 +401,139 @@
   // Init
   document.addEventListener("DOMContentLoaded", () => {
       filterTable();
+
+      const createTaskBtn = document.getElementById('createTaskBtn');
+      const taskModal = document.getElementById('taskModal');
+      const taskForm = document.getElementById('taskForm');
+      const taskCancelBtn = document.getElementById('taskCancelBtn');
+      const taskCloseIcon = document.getElementById('taskCloseIcon');
+
+      if (createTaskBtn && taskModal && taskForm && taskCancelBtn && taskCloseIcon) {
+        createTaskBtn.addEventListener('click', openTaskModal);
+        taskCancelBtn.addEventListener('click', closeTaskModal);
+        taskCloseIcon.addEventListener('click', closeTaskModal);
+
+        taskModal.addEventListener('click', (event) => {
+          if (event.target === taskModal) {
+            closeTaskModal();
+          }
+        });
+
+        taskForm.addEventListener('submit', handleTaskSubmit);
+      }
   });
+
+  function openTaskModal() {
+    const taskModal = document.getElementById('taskModal');
+    const taskForm = document.getElementById('taskForm');
+    if (!taskModal || !taskForm) return;
+    taskForm.reset();
+    taskModal.classList.remove('hidden');
+    taskModal.classList.add('flex');
+  }
+
+  function closeTaskModal() {
+    const taskModal = document.getElementById('taskModal');
+    const taskForm = document.getElementById('taskForm');
+    if (!taskModal || !taskForm) return;
+    taskForm.reset();
+    taskModal.classList.add('hidden');
+    taskModal.classList.remove('flex');
+  }
+
+  function handleTaskSubmit(event) {
+    event.preventDefault();
+
+    const titleInput = document.getElementById('taskTitleInput');
+    const assigneeInput = document.getElementById('taskAssigneeInput');
+    const barangayInput = document.getElementById('taskBarangayInput');
+    const statusInput = document.getElementById('taskStatusInput');
+    const dueDateInput = document.getElementById('taskDueDateInput');
+
+    if (!titleInput || !assigneeInput || !barangayInput || !statusInput || !dueDateInput) {
+      return;
+    }
+
+    const title = (titleInput.value || '').trim();
+    const assignee = (assigneeInput.value || '').trim();
+    const barangay = (barangayInput.value || '').trim();
+    const status = (statusInput.value || '').trim() || 'Pending';
+    const dueDate = (dueDateInput.value || '').trim();
+
+    if (!title || !assignee || !barangay || !dueDate) {
+      return;
+    }
+
+    const tbody = document.querySelector('#taskTable tbody');
+    if (!tbody) {
+      closeTaskModal();
+      return;
+    }
+
+    const row = document.createElement('tr');
+    row.className = 'hover:bg-blue-50 transition task-row';
+    row.dataset.stat = status.toUpperCase();
+
+    const titleCell = document.createElement('td');
+    titleCell.className = 'px-4 py-3 align-middle font-bold text-slate-900 border-r border-slate-100 uppercase';
+    titleCell.textContent = title;
+
+    const assigneeCell = document.createElement('td');
+    assigneeCell.className = 'px-4 py-3 align-middle font-bold text-blue-800 border-r border-slate-100 uppercase';
+    assigneeCell.textContent = assignee;
+
+    const barangayCell = document.createElement('td');
+    barangayCell.className = 'px-4 py-3 align-middle font-bold text-slate-700 border-r border-slate-100 uppercase';
+    barangayCell.textContent = barangay;
+
+    const statusCell = document.createElement('td');
+    statusCell.className = 'px-4 py-3 align-middle text-center border-r border-slate-100';
+
+    const statusSpan = document.createElement('span');
+    statusSpan.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border';
+
+    const upperStatus = status.toUpperCase();
+    if (upperStatus === 'PENDING') {
+      statusSpan.classList.add('bg-amber-50', 'text-amber-700', 'border-amber-200');
+    } else if (upperStatus === 'IN PROGRESS') {
+      statusSpan.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-200');
+    } else if (upperStatus === 'COMPLETED') {
+      statusSpan.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+    } else {
+      statusSpan.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200');
+    }
+
+    statusSpan.textContent = status;
+    statusCell.appendChild(statusSpan);
+
+    const dueDateCell = document.createElement('td');
+    dueDateCell.className = 'px-4 py-3 align-middle font-mono text-slate-600 border-r border-slate-100 text-center';
+    dueDateCell.textContent = dueDate;
+
+    const actionsCell = document.createElement('td');
+    actionsCell.className = 'px-4 py-3 align-middle text-center';
+    actionsCell.innerHTML = '<div class="flex justify-center gap-1">\
+        <button class="btn-action btn-view" title="View Details"><span class="material-icons-round text-[14px]">visibility<\/span><\/button>\
+        <button class="btn-action btn-approve" title="Mark as Done"><span class="material-icons-round text-[14px]">check<\/span><\/button>\
+        <button class="btn-action btn-delete" title="Revoke/Delete"><span class="material-icons-round text-[14px]">delete<\/span><\/button>\
+      <\/div>';
+
+    row.appendChild(titleCell);
+    row.appendChild(assigneeCell);
+    row.appendChild(barangayCell);
+    row.appendChild(statusCell);
+    row.appendChild(dueDateCell);
+    row.appendChild(actionsCell);
+
+    if (tbody.firstChild) {
+      tbody.insertBefore(row, tbody.firstChild);
+    } else {
+      tbody.appendChild(row);
+    }
+
+    closeTaskModal();
+    filterTable();
+  }
 </script>
 </body>
 </html>
