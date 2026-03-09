@@ -65,7 +65,7 @@
           </div>
         </div>
 
-        <button class="gov-btn bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm flex items-center gap-1.5">
+        <button id="addSaleBtn" type="button" class="gov-btn bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm flex items-center gap-1.5">
           <span class="material-icons-round text-[14px]">add_circle</span> Add Sales Record
         </button>
       </header>
@@ -256,7 +256,77 @@
     </main>
   </div>
 
+  <!-- Add Sale Modal -->
+  <div id="saleModal" class="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px] text-emerald-800">sell</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black text-slate-900 uppercase tracking-tight m-0">Add Sales Record</h2>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Log a new municipal sale</p>
+          </div>
+        </div>
+        <button id="saleCloseBtn" type="button" class="btn-action" title="Close">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <form id="saleForm" class="px-3 py-2 space-y-2">
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Customer / Entity</label>
+          <input id="saleCustomerInput" type="text" class="gov-input w-full" required />
+        </div>
+
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Product Description</label>
+          <input id="saleProductInput" type="text" class="gov-input w-full" required />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Quantity</label>
+            <input id="saleQuantityInput" type="number" min="1" class="gov-input w-full" required />
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Total Amount (₱)</label>
+            <input id="saleTotalInput" type="number" min="0" step="0.01" class="gov-input w-full" required />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Status</label>
+            <select id="saleStatusInput" class="gov-input w-full" required>
+              <option value="">Select status</option>
+              <option>Completed</option>
+              <option>Pending</option>
+              <option>Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Date Logged</label>
+            <input id="saleDateInput" type="date" class="gov-input w-full" required />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Municipality</label>
+          <div class="gov-input w-full bg-slate-50 text-slate-700 font-black uppercase flex items-center">
+            {{ user_municipality or 'Quezon City' }}
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-200 mt-2 mb-2">
+          <button id="saleCancelBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+          <button type="submit" class="gov-btn bg-emerald-700 hover:bg-emerald-800 text-white">Save Sale</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
+    const defaultMunicipality = "{{ user_municipality or 'Quezon City' }}";
     const searchEl = document.getElementById('searchSale');
     const statusFilterEl = document.getElementById('statusFilter');
     const resetBtn = document.getElementById('resetBtn');
@@ -292,6 +362,129 @@
       searchEl.value = '';
       statusFilterEl.value = '';
       applyFilters();
+    }
+
+    const addSaleBtn = document.getElementById('addSaleBtn');
+    const saleModal = document.getElementById('saleModal');
+    const saleForm = document.getElementById('saleForm');
+    const saleCancelBtn = document.getElementById('saleCancelBtn');
+    const saleCloseBtn = document.getElementById('saleCloseBtn');
+    const salesTableBody = document.querySelector('#salesTable tbody');
+
+    function openSaleModal() {
+      if (!saleModal || !saleForm) return;
+      saleForm.reset();
+      const dateInput = document.getElementById('saleDateInput');
+      if (dateInput && !dateInput.value) {
+        dateInput.value = new Date().toISOString().slice(0, 10);
+      }
+      saleModal.classList.remove('hidden');
+      saleModal.classList.add('flex');
+    }
+
+    function closeSaleModal() {
+      if (!saleModal) return;
+      saleModal.classList.add('hidden');
+      saleModal.classList.remove('flex');
+    }
+
+    function handleSaleSubmit(event) {
+      event.preventDefault();
+
+      const customerInput = document.getElementById('saleCustomerInput');
+      const productInput = document.getElementById('saleProductInput');
+      const quantityInput = document.getElementById('saleQuantityInput');
+      const totalInput = document.getElementById('saleTotalInput');
+      const statusInput = document.getElementById('saleStatusInput');
+      const dateInput = document.getElementById('saleDateInput');
+
+      if (!customerInput || !productInput || !quantityInput || !totalInput || !statusInput || !dateInput) return;
+
+      const customer = customerInput.value.trim();
+      const product = productInput.value.trim();
+      const quantityValue = quantityInput.value.trim();
+      const totalValue = totalInput.value.trim();
+      const status = statusInput.value.trim();
+      const date = dateInput.value.trim();
+
+      if (!customer || !product || !quantityValue || !totalValue || !status || !date) {
+        return;
+      }
+
+      const quantity = Number(quantityValue);
+      const total = Number(totalValue);
+      if (Number.isNaN(quantity) || quantity <= 0 || Number.isNaN(total) || total < 0) {
+        return;
+      }
+
+      if (!salesTableBody) return;
+
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-emerald-50 transition sale-row';
+
+      const totalDisplay = total.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      let statusClasses = 'bg-slate-100 text-slate-600 border-slate-200';
+      if (status === 'Completed') {
+        statusClasses = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      } else if (status === 'Pending') {
+        statusClasses = 'bg-amber-50 text-amber-700 border-amber-200';
+      } else if (status === 'Cancelled') {
+        statusClasses = 'bg-rose-50 text-rose-700 border-rose-200';
+      }
+
+      tr.innerHTML = `
+        <td class="px-4 py-3 align-middle border-r border-slate-100 font-black text-slate-900 uppercase">${customer}</td>
+        <td class="px-4 py-3 align-middle border-r border-slate-100 font-bold text-slate-700 uppercase">${product}</td>
+        <td class="px-4 py-3 align-middle border-r border-slate-100 text-right font-mono font-black text-blue-800">${quantity.toLocaleString('en-PH')}</td>
+        <td class="px-4 py-3 align-middle border-r border-slate-100 text-right font-mono font-black text-emerald-700">₱${totalDisplay}</td>
+        <td class="px-4 py-3 align-middle border-r border-slate-100 font-black text-slate-700 uppercase text-center">${defaultMunicipality}</td>
+        <td class="px-4 py-3 align-middle text-center border-r border-slate-100 font-mono text-slate-600">${date}</td>
+        <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
+          <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${statusClasses}">${status}</span>
+        </td>
+        <td class="px-4 py-3 align-middle text-center">
+          <div class="flex justify-center gap-1">
+            <button class="btn-action btn-view" title="View"><span class="material-icons-round text-[14px]">visibility</span></button>
+            <button class="btn-action btn-delete" title="Delete"><span class="material-icons-round text-[14px]">delete</span></button>
+          </div>
+        </td>
+      `;
+
+      if (salesTableBody.firstChild) {
+        salesTableBody.insertBefore(tr, salesTableBody.firstChild);
+      } else {
+        salesTableBody.appendChild(tr);
+      }
+
+      closeSaleModal();
+      applyFilters();
+    }
+
+    if (addSaleBtn && saleModal && saleForm && saleCancelBtn && saleCloseBtn) {
+      addSaleBtn.addEventListener('click', openSaleModal);
+      saleCancelBtn.addEventListener('click', closeSaleModal);
+      saleCloseBtn.addEventListener('click', closeSaleModal);
+
+      saleModal.addEventListener('click', (event) => {
+        if (event.target === saleModal) {
+          closeSaleModal();
+        }
+      });
+
+      saleForm.addEventListener('submit', handleSaleSubmit);
+    }
+
+    if (salesTableBody) {
+      salesTableBody.addEventListener('click', (event) => {
+        const deleteBtn = event.target.closest('.btn-delete');
+        if (deleteBtn) {
+          const row = deleteBtn.closest('tr');
+          if (!row) return;
+          row.remove();
+          applyFilters();
+        }
+      });
     }
 
     // Init
