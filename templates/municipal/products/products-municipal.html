@@ -72,10 +72,10 @@
         </div>
 
         <div class="flex gap-2">
-          <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+          <button id="exportProductsBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">file_download</span> Export
           </button>
-          <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+          <button id="addProductBtn" type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">add</span> Add Product
           </button>
         </div>
@@ -324,7 +324,74 @@
     </main>
   </div>
 
+  <!-- Add Product Modal -->
+  <div id="productModal" class="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px] text-blue-800">add_box</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black text-slate-900 uppercase tracking-tight m-0">Add Product</h2>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Register a new inventory item</p>
+          </div>
+        </div>
+        <button id="productCloseBtn" type="button" class="btn-action" title="Close">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <form id="productForm" class="px-3 py-2 space-y-2">
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Product Name</label>
+          <input id="productNameInput" type="text" class="gov-input w-full" required />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Category</label>
+            <select id="productCategoryInput" class="gov-input w-full" required>
+              <option value="">Select category</option>
+              <option>Reforestation</option>
+              <option>Agroforestry</option>
+              <option>Wildlife</option>
+              <option>Others</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Status</label>
+            <select id="productStatusInput" class="gov-input w-full" required>
+              <option value="">Select status</option>
+              <option>Available</option>
+              <option>Low Stock</option>
+              <option>Out of Stock</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Stock Quantity</label>
+            <input id="productStockInput" type="number" min="0" class="gov-input w-full" required />
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Municipality</label>
+            <div class="gov-input w-full bg-slate-50 text-slate-700 font-black uppercase flex items-center">
+              {{ user_municipality or 'Quezon City' }}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-200 mt-2 mb-2">
+          <button id="productCancelBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+          <button type="submit" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white">Save Product</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
+    const defaultMunicipality = "{{ user_municipality or 'Quezon City' }}";
+    let editingRow = null;
     // --- CHARTS CONFIG ---
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
     Chart.defaults.font.size = 8;
@@ -429,9 +496,247 @@
       filterTable();
     }
 
+    function openProductModal() {
+      const productModal = document.getElementById('productModal');
+      const productForm = document.getElementById('productForm');
+      if (!productModal || !productForm) return;
+      productForm.reset();
+      productModal.classList.remove('hidden');
+      productModal.classList.add('flex');
+    }
+
+    function closeProductModal() {
+      const productModal = document.getElementById('productModal');
+      if (!productModal) return;
+      productModal.classList.add('hidden');
+      productModal.classList.remove('flex');
+      editingRow = null;
+    }
+
+    function handleProductSubmit(event) {
+      event.preventDefault();
+
+      const nameInput = document.getElementById('productNameInput');
+      const categoryInput = document.getElementById('productCategoryInput');
+      const statusInput = document.getElementById('productStatusInput');
+      const stockInput = document.getElementById('productStockInput');
+
+      if (!nameInput || !categoryInput || !statusInput || !stockInput) return;
+
+      const name = nameInput.value.trim();
+      const category = categoryInput.value.trim();
+      const status = statusInput.value.trim();
+      const stockValue = stockInput.value.trim();
+
+      if (!name || !category || !status || stockValue === '') {
+        return;
+      }
+
+      const stock = Number(stockValue);
+      if (Number.isNaN(stock) || stock < 0) {
+        return;
+      }
+
+      let statusClasses = 'bg-slate-100 text-slate-600 border-slate-200';
+      if (status === 'Available') {
+        statusClasses = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      } else if (status === 'Low Stock') {
+        statusClasses = 'bg-amber-50 text-amber-700 border-amber-200';
+      } else if (status === 'Out of Stock') {
+        statusClasses = 'bg-rose-50 text-rose-700 border-rose-200';
+      }
+
+      const stockDisplay = stock.toLocaleString('en-PH');
+      const upperStatus = status.toUpperCase();
+
+      if (editingRow) {
+        // Update existing row
+        editingRow.dataset.cat = category.toUpperCase();
+        editingRow.dataset.stat = upperStatus;
+
+        // Name cell
+        const nameCellDiv = editingRow.cells[0]?.querySelector('div');
+        if (nameCellDiv) {
+          nameCellDiv.textContent = name;
+        } else if (editingRow.cells[0]) {
+          editingRow.cells[0].textContent = name;
+        }
+
+        // Category cell
+        if (editingRow.cells[1]) {
+          editingRow.cells[1].textContent = category;
+        }
+
+        // Municipality cell: keep whatever is already rendered (static or default)
+
+        // Stock cell
+        if (editingRow.cells[3]) {
+          editingRow.cells[3].textContent = stockDisplay;
+        }
+
+        // Status cell (badge)
+        const statusCell = editingRow.cells[4];
+        if (statusCell) {
+          const badge = statusCell.querySelector('span');
+          if (badge) {
+            badge.textContent = status;
+            badge.className = `inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase ${statusClasses} w-20 text-center`;
+          }
+        }
+      } else {
+        // Create new row
+        const tbody = document.getElementById('productTbody');
+        if (!tbody) return;
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-blue-50 transition prod-row';
+        tr.dataset.cat = category.toUpperCase();
+        tr.dataset.stat = upperStatus;
+
+        tr.innerHTML = `
+          <td class="px-4 py-3 align-middle border-r border-slate-100">
+            <div class="text-[10px] font-black text-slate-900 uppercase">${name}</div>
+          </td>
+          <td class="px-4 py-3 align-middle text-center border-r border-slate-100 font-bold text-slate-700 uppercase">${category}</td>
+          <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
+            <div class="text-[9px] font-black text-slate-800 uppercase">${defaultMunicipality}</div>
+          </td>
+          <td class="px-4 py-3 align-middle text-right border-r border-slate-100 font-mono font-black text-slate-900">${stockDisplay}</td>
+          <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
+            <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase ${statusClasses} w-20 text-center">${status}</span>
+          </td>
+          <td class="px-4 py-3 align-middle text-center">
+            <div class="flex justify-center gap-1">
+              <button class="btn-action btn-edit" title="Edit"><span class="material-icons-round text-[14px]">edit</span></button>
+              <button class="btn-action btn-delete" title="Delete"><span class="material-icons-round text-[14px]">delete</span></button>
+            </div>
+          </td>
+        `;
+
+        if (tbody.firstChild) {
+          tbody.insertBefore(tr, tbody.firstChild);
+        } else {
+          tbody.appendChild(tr);
+        }
+      }
+
+      closeProductModal();
+      filterTable();
+    }
+
+    function exportProductsCsv() {
+      const rows = Array.from(document.querySelectorAll('.prod-row'))
+        .filter(row => row.style.display !== 'none');
+
+      const header = ['Product Name', 'Category', 'Municipality', 'Stock Qty', 'Status'];
+      const lines = [];
+
+      lines.push(header.map(value => '"' + value.replace(/"/g, '""') + '"').join(','));
+
+      rows.forEach(row => {
+        const cells = row.cells;
+        if (!cells || cells.length < 5) return;
+
+        const name = (cells[0].innerText || '').trim().replace(/\s+/g, ' ');
+        const category = (cells[1].innerText || '').trim().replace(/\s+/g, ' ');
+        const municipality = (cells[2].innerText || '').trim().replace(/\s+/g, ' ');
+        const stock = (cells[3].innerText || '').trim().replace(/\s+/g, ' ');
+        const status = (cells[4].innerText || '').trim().replace(/\s+/g, ' ');
+
+        const values = [name, category, municipality, stock, status].map(v => {
+          const safe = v.replace(/"/g, '""');
+          return '"' + safe + '"';
+        });
+
+        lines.push(values.join(','));
+      });
+
+      const csvContent = lines.join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `municipal_products_${dateStr}.csv`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
     // Init
     document.addEventListener("DOMContentLoaded", () => {
-        filterTable();
+      filterTable();
+
+      const addProductBtn = document.getElementById('addProductBtn');
+      const exportProductsBtn = document.getElementById('exportProductsBtn');
+      const productModal = document.getElementById('productModal');
+      const productForm = document.getElementById('productForm');
+      const productCancelBtn = document.getElementById('productCancelBtn');
+      const productCloseBtn = document.getElementById('productCloseBtn');
+      const productTbody = document.getElementById('productTbody');
+
+      if (addProductBtn && productModal && productForm && productCancelBtn && productCloseBtn) {
+        addProductBtn.addEventListener('click', openProductModal);
+        productCancelBtn.addEventListener('click', closeProductModal);
+        productCloseBtn.addEventListener('click', closeProductModal);
+
+        productModal.addEventListener('click', (event) => {
+          if (event.target === productModal) {
+            closeProductModal();
+          }
+        });
+
+        productForm.addEventListener('submit', handleProductSubmit);
+      }
+
+      if (exportProductsBtn) {
+        exportProductsBtn.addEventListener('click', exportProductsCsv);
+      }
+
+      if (productTbody) {
+        productTbody.addEventListener('click', (event) => {
+          const editBtn = event.target.closest('.btn-edit');
+          const deleteBtn = event.target.closest('.btn-delete');
+
+          if (editBtn) {
+            const row = editBtn.closest('tr');
+            if (!row) return;
+
+            const nameDiv = row.cells[0]?.querySelector('div');
+            const name = nameDiv ? nameDiv.textContent.trim() : (row.cells[0]?.textContent || '').trim();
+            const category = (row.cells[1]?.textContent || '').trim();
+            const stockText = (row.cells[3]?.textContent || '').trim().replace(/,/g, '');
+            const statusSpan = row.cells[4]?.querySelector('span');
+            const status = statusSpan ? statusSpan.textContent.trim() : (row.cells[4]?.textContent || '').trim();
+
+            const nameInput = document.getElementById('productNameInput');
+            const categoryInput = document.getElementById('productCategoryInput');
+            const statusInput = document.getElementById('productStatusInput');
+            const stockInput = document.getElementById('productStockInput');
+
+            if (!nameInput || !categoryInput || !statusInput || !stockInput) return;
+
+            openProductModal();
+
+            nameInput.value = name;
+            categoryInput.value = category;
+            statusInput.value = status;
+            stockInput.value = stockText;
+
+            editingRow = row;
+          }
+
+          if (deleteBtn) {
+            const row = deleteBtn.closest('tr');
+            if (!row) return;
+            row.remove();
+            filterTable();
+          }
+        });
+      }
     });
   </script>
 </body>
