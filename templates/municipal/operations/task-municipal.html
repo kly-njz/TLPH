@@ -302,6 +302,54 @@
     </div>
   </div>
 
+  <!-- Task Details View Modal -->
+  <div id="taskViewModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/60">
+    <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
+      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
+        <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
+          <span class="material-icons-round text-[14px]">visibility</span>
+          Task Details
+        </h2>
+        <button id="taskViewCloseIcon" type="button" class="text-slate-300 hover:text-white">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <div class="p-3 space-y-2 text-[10px] text-slate-700">
+        <div>
+          <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Task Title / Description</div>
+          <div id="viewTaskTitle" class="font-black uppercase text-slate-900"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Assigned To</div>
+            <div id="viewTaskAssignee" class="font-bold uppercase text-slate-900"></div>
+          </div>
+          <div>
+            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Barangay</div>
+            <div id="viewTaskBarangay" class="font-bold uppercase text-slate-900"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Status</div>
+            <span id="viewTaskStatus" class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-slate-100 text-slate-600 border-slate-200"></span>
+          </div>
+          <div>
+            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Due Date</div>
+            <div id="viewTaskDueDate" class="font-mono text-slate-900"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 px-3 py-2 border-t border-slate-200 bg-slate-50">
+        <button id="taskViewCloseBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Close</button>
+      </div>
+    </div>
+  </div>
+
 <script>
   // --- Chart Implementations ---
   Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -320,6 +368,16 @@
   const pendingVal  = Number("{{ pending_tasks|default(15) }}");
   const progVal     = Number("{{ in_progress_tasks|default(18) }}");
   const doneVal     = Number("{{ completed_tasks|default(9) }}");
+
+  const taskTableBody = document.querySelector('#taskTable tbody');
+  const taskViewModal = document.getElementById('taskViewModal');
+  const taskViewCloseIcon = document.getElementById('taskViewCloseIcon');
+  const taskViewCloseBtn = document.getElementById('taskViewCloseBtn');
+  const viewTaskTitle = document.getElementById('viewTaskTitle');
+  const viewTaskAssignee = document.getElementById('viewTaskAssignee');
+  const viewTaskBarangay = document.getElementById('viewTaskBarangay');
+  const viewTaskStatus = document.getElementById('viewTaskStatus');
+  const viewTaskDueDate = document.getElementById('viewTaskDueDate');
 
   // Status Doughnut
   new Chart(document.getElementById('taskStatusChart'), {
@@ -398,6 +456,44 @@
     filterTable();
   }
 
+  function openTaskViewModal(row) {
+    if (!row || !taskViewModal) return;
+    const cells = row.querySelectorAll('td');
+    if (!cells.length) return;
+
+    const titleText = cells[0] ? cells[0].innerText.trim() : '';
+    const assigneeText = cells[1] ? cells[1].innerText.trim() : '';
+    const barangayText = cells[2] ? cells[2].innerText.trim() : '';
+    const statusCell = cells[3];
+    const statusBadge = statusCell ? statusCell.querySelector('span') : null;
+    const statusText = statusBadge ? statusBadge.innerText.trim() : '';
+    const dueDateText = cells[4] ? cells[4].innerText.trim() : '';
+
+    if (viewTaskTitle) viewTaskTitle.innerText = titleText;
+    if (viewTaskAssignee) viewTaskAssignee.innerText = assigneeText;
+    if (viewTaskBarangay) viewTaskBarangay.innerText = barangayText;
+    if (viewTaskDueDate) viewTaskDueDate.innerText = dueDateText;
+
+    if (viewTaskStatus) {
+      if (statusBadge) {
+        viewTaskStatus.innerText = statusText;
+        viewTaskStatus.className = statusBadge.className;
+      } else {
+        viewTaskStatus.innerText = statusText;
+        viewTaskStatus.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-slate-100 text-slate-600 border-slate-200';
+      }
+    }
+
+    taskViewModal.classList.remove('hidden');
+    taskViewModal.classList.add('flex');
+  }
+
+  function closeTaskViewModal() {
+    if (!taskViewModal) return;
+    taskViewModal.classList.add('hidden');
+    taskViewModal.classList.remove('flex');
+  }
+
   // Init
   document.addEventListener("DOMContentLoaded", () => {
       filterTable();
@@ -420,6 +516,28 @@
         });
 
         taskForm.addEventListener('submit', handleTaskSubmit);
+      }
+
+      if (taskTableBody) {
+        taskTableBody.addEventListener('click', (event) => {
+          const viewBtn = event.target.closest('.btn-view');
+          if (viewBtn) {
+            const row = viewBtn.closest('tr');
+            if (!row) return;
+            openTaskViewModal(row);
+          }
+        });
+      }
+
+      if (taskViewModal && taskViewCloseIcon && taskViewCloseBtn) {
+        taskViewCloseIcon.addEventListener('click', closeTaskViewModal);
+        taskViewCloseBtn.addEventListener('click', closeTaskViewModal);
+
+        taskViewModal.addEventListener('click', (event) => {
+          if (event.target === taskViewModal) {
+            closeTaskViewModal();
+          }
+        });
       }
   });
 
