@@ -226,7 +226,7 @@
           <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">
             Showing <span id="visibleCount" class="text-slate-900 font-black">0</span> of <span id="totalCount" class="text-slate-900 font-black">0</span> records • System Verified
           </span>
-          <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
+          <button id="exportDistCsvBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[12px]">file_download</span> Export CSV
           </button>
         </div>
@@ -377,11 +377,54 @@
     const distViewModal = document.getElementById('distViewModal');
     const distViewCloseBtn = document.getElementById('distViewCloseBtn');
     const distViewCloseBtnSecondary = document.getElementById('distViewCloseBtnSecondary');
+    const exportDistCsvBtn = document.getElementById('exportDistCsvBtn');
     const viewProductEl = document.getElementById('viewProduct');
     const viewRecipientEl = document.getElementById('viewRecipient');
     const viewQuantityEl = document.getElementById('viewQuantity');
     const viewMunicipalityEl = document.getElementById('viewMunicipality');
     const viewDateEl = document.getElementById('viewDate');
+
+    function csvEscape(value) {
+      const text = String(value ?? '').replace(/\r?\n|\r/g, ' ').trim();
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+
+    function exportDistributionCsv() {
+      const rows = Array.from(document.querySelectorAll('#distTable tbody tr.dist-row'));
+      const visibleRows = rows.filter((row) => row.style.display !== 'none');
+      const sourceRows = visibleRows.length ? visibleRows : rows;
+
+      const headers = ['Product Name', 'Recipient', 'Quantity', 'Municipality', 'Date Dispatched'];
+      const csvLines = [headers.map(csvEscape).join(',')];
+
+      sourceRows.forEach((row) => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 5) return;
+        const record = [
+          cells[0].innerText,
+          cells[1].innerText,
+          cells[2].innerText,
+          cells[3].innerText,
+          cells[4].innerText
+        ];
+        csvLines.push(record.map(csvEscape).join(','));
+      });
+
+      if (csvLines.length <= 1) return;
+
+      const csvContent = `\uFEFF${csvLines.join('\n')}`;
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const dateSuffix = new Date().toISOString().slice(0, 10);
+
+      anchor.href = url;
+      anchor.download = `distributed-products-${dateSuffix}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    }
 
     function openDistModal() {
       if (!distModal || !distForm) return;
@@ -531,6 +574,10 @@
     }
     if (distViewCloseBtnSecondary) {
       distViewCloseBtnSecondary.addEventListener('click', closeDistViewModal);
+    }
+
+    if (exportDistCsvBtn) {
+      exportDistCsvBtn.addEventListener('click', exportDistributionCsv);
     }
 
     // Init
