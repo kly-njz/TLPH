@@ -7,6 +7,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <style>
     /* Government Standard Typography & Layout */
@@ -288,7 +289,7 @@
           <span class="material-icons-round text-[16px]">receipt_long</span>
           <div class="leading-tight">
             <h2 class="text-[11px] font-black uppercase tracking-tight m-0">Purchase Details</h2>
-            <p class="text-[9px] font-bold uppercase tracking-widest m-0 text-slate-200">Read-only view of selected record</p>
+            <p class="text-[9px] font-bold uppercase tracking-widest m-0 text-slate-200">Purchase record details</p>
           </div>
         </div>
         <button id="purchaseViewCloseBtn" type="button" class="btn-action bg-slate-700 border-slate-600 text-slate-100" title="Close">
@@ -324,7 +325,15 @@
           </div>
         </div>
 
-        <div class="flex justify-end pt-2">
+        <div class="flex justify-between items-center pt-2 border-t border-slate-200 mt-1">
+          <div class="flex gap-1.5">
+            <button id="printPurchaseBtn" type="button" class="gov-btn bg-slate-700 hover:bg-slate-900 text-white flex items-center gap-1">
+              <span class="material-icons-round text-[13px]">print</span> Print
+            </button>
+            <button id="downloadPurchaseBtn" type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white flex items-center gap-1">
+              <span class="material-icons-round text-[13px]">download</span> Download
+            </button>
+          </div>
           <button id="purchaseViewCloseBtnSecondary" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Close</button>
         </div>
       </div>
@@ -524,6 +533,542 @@
     }
     if (purchaseViewCloseBtnSecondary) {
       purchaseViewCloseBtnSecondary.addEventListener('click', closePurchaseViewModal);
+    }
+
+    function getPurchaseDetailsData() {
+      return {
+        supplier: viewSupplierEl ? viewSupplierEl.textContent.trim() : '',
+        product: viewProductEl ? viewProductEl.textContent.trim() : '',
+        quantity: viewQuantityEl ? viewQuantityEl.textContent.trim() : '',
+        municipality: viewMunicipalityEl ? viewMunicipalityEl.textContent.trim() : '',
+        date: viewDateEl ? viewDateEl.textContent.trim() : ''
+      };
+    }
+
+    const printPurchaseBtn = document.getElementById('printPurchaseBtn');
+    if (printPurchaseBtn) {
+      printPurchaseBtn.addEventListener('click', function () {
+        const d = getPurchaseDetailsData();
+        const now = new Date();
+        const issuedOn = now.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+        const refNo = 'REF-' + now.getFullYear()
+          + String(now.getMonth()+1).padStart(2,'0')
+          + String(now.getDate()).padStart(2,'0')
+          + '-' + String(now.getHours()).padStart(2,'0')
+          + String(now.getMinutes()).padStart(2,'0');
+        const win = window.open('', '_blank', 'width=820,height=1100');
+        win.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DENR Purchase Record — ${d.supplier}</title>
+  <style>
+    @page { size: A4 portrait; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Arial', sans-serif;
+      font-size: 10px;
+      color: #1e293b;
+      background: #fff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* ── Accent bars ── */
+    .bar-blue  { background: #1e3a8a; height: 7px; width: 100%; }
+    .bar-green { background: #16a34a; height: 2.5px; width: 100%; }
+
+    /* ── Letterhead ── */
+    .letterhead {
+      padding: 18px 30px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      border-bottom: none;
+    }
+    .letterhead img {
+      width: 64px;
+      height: 64px;
+      object-fit: contain;
+      margin-bottom: 7px;
+    }
+    .lh-republic {
+      font-size: 9px;
+      color: #64748b;
+      text-align: center;
+      letter-spacing: 0.04em;
+    }
+    .lh-dept {
+      font-size: 13px;
+      font-weight: 900;
+      color: #1e3a8a;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 3px;
+    }
+    .lh-address {
+      font-size: 8px;
+      color: #64748b;
+      text-align: center;
+      margin-top: 3px;
+    }
+    .lh-office {
+      font-size: 8.5px;
+      font-weight: 700;
+      color: #475569;
+      text-align: center;
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Double-rule divider ── */
+    .divider {
+      margin: 0 30px;
+      border-top: 2px solid #1e3a8a;
+      border-bottom: 1px solid #16a34a;
+      padding-bottom: 2px;
+    }
+
+    /* ── Document title banner ── */
+    .doc-title {
+      margin: 14px 30px 0;
+      background: #1e3a8a;
+      color: white;
+      text-align: center;
+      padding: 9px 0;
+      border-radius: 3px;
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Meta row ── */
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 30px 0;
+      font-size: 8px;
+      color: #64748b;
+    }
+
+    /* ── Section label ── */
+    .section-label {
+      margin: 12px 30px 8px;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 2px;
+      padding: 5px 10px;
+      font-size: 8px;
+      font-weight: 900;
+      color: #1e3a8a;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+
+    /* ── Fields ── */
+    .fields { padding: 0 30px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .field-full { margin-bottom: 8px; }
+    .field {
+      border: 1px solid #cbd5e1;
+      border-radius: 2px;
+      background: #f8fafc;
+      padding: 7px 10px 8px;
+    }
+    .field-label {
+      font-size: 7px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+    .field-value {
+      font-size: 11.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #0f172a;
+    }
+
+    /* ── Certification box ── */
+    .cert-box {
+      margin: 12px 30px;
+      background: #eff6ff;
+      border: 1px solid #93c5fd;
+      border-radius: 3px;
+      padding: 10px 14px;
+    }
+    .cert-title {
+      font-size: 8px;
+      font-weight: 900;
+      color: #1e3a8a;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 5px;
+    }
+    .cert-text {
+      font-size: 8.5px;
+      color: #334155;
+      line-height: 1.6;
+    }
+
+    /* ── Signature block ── */
+    .sig-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 14px 30px 0;
+    }
+    .sig-block { }
+    .sig-role {
+      font-size: 8px;
+      font-weight: 900;
+      color: #334155;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+    .sig-line {
+      border-top: 1px solid #94a3b8;
+      margin-bottom: 4px;
+    }
+    .sig-name {
+      font-size: 8px;
+      font-weight: 700;
+      color: #0f172a;
+      text-align: center;
+    }
+    .sig-title {
+      font-size: 7.5px;
+      color: #64748b;
+      text-align: center;
+    }
+
+    /* ── Footer bar ── */
+    .page-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+    }
+    .footer-content {
+      background: #1e3a8a;
+      color: white;
+      text-align: center;
+      font-size: 7px;
+      padding: 4px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bar-blue"></div>
+  <div class="bar-green"></div>
+
+  <!-- Letterhead -->
+  <div class="letterhead">
+    <img src="/static/images/denr-logo.png" alt="DENR Logo" onerror="this.style.display='none'">
+    <div class="lh-republic">Republic of the Philippines</div>
+    <div class="lh-dept">Department of Environment and Natural Resources</div>
+    <div class="lh-address">Visayas Avenue, Diliman, Quezon City 1100</div>
+    <div class="lh-office">Municipal Office &mdash; ${d.municipality}</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Document title -->
+  <div class="doc-title">Purchase Transaction Record</div>
+
+  <!-- Meta -->
+  <div class="meta-row">
+    <span>Document Reference No.: <strong>${refNo}</strong></span>
+    <span>Date Issued: <strong>${issuedOn}</strong></span>
+  </div>
+
+  <!-- Section label -->
+  <div class="section-label">I. &nbsp; Procurement Details</div>
+
+  <!-- Fields -->
+  <div class="fields">
+    <div class="grid2">
+      <div class="field">
+        <div class="field-label">Official Supplier / Vendor</div>
+        <div class="field-value">${d.supplier}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Municipality / Locality</div>
+        <div class="field-value">${d.municipality}</div>
+      </div>
+    </div>
+    <div class="field-full">
+      <div class="field">
+        <div class="field-label">Product / Item Description</div>
+        <div class="field-value">${d.product}</div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <div class="field-label">Procured Quantity</div>
+        <div class="field-value">${d.quantity}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Transaction Date</div>
+        <div class="field-value">${d.date}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Certification -->
+  <div class="cert-box">
+    <div class="cert-title">Certification</div>
+    <div class="cert-text">
+      This document certifies that the purchase transaction described herein was duly recorded in the Municipal
+      Purchase Ledger in accordance with applicable DENR procurement regulations and guidelines. The information
+      contained herein is true and correct to the best knowledge of the issuing office.
+    </div>
+  </div>
+
+  <!-- Signatures -->
+  <div class="sig-row">
+    <div class="sig-block">
+      <div class="sig-role">Prepared by:</div>
+      <div class="sig-line"></div>
+      <div class="sig-name">Municipal Agriculture Officer</div>
+      <div class="sig-title">DENR &mdash; ${d.municipality}</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-role">Noted by:</div>
+      <div class="sig-line"></div>
+      <div class="sig-name">Municipal Environment and Natural</div>
+      <div class="sig-title">Resources Officer (MENRO)</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="page-footer">
+    <div class="bar-green"></div>
+    <div class="footer-content">
+      Department of Environment and Natural Resources &nbsp;&bull;&nbsp; Municipal Purchase Ledger System &nbsp;&bull;&nbsp; ${issuedOn}
+    </div>
+  </div>
+
+</body>
+</html>`);
+        win.document.close();
+        win.focus();
+        setTimeout(() => { win.print(); }, 600);
+      });
+    }
+
+    const downloadPurchaseBtn = document.getElementById('downloadPurchaseBtn');
+    if (downloadPurchaseBtn) {
+      downloadPurchaseBtn.addEventListener('click', async function () {
+        const d = getPurchaseDetailsData();
+        const { jsPDF } = window.jspdf;
+
+        // Load logo as base64
+        let logoBase64 = null;
+        try {
+          const resp = await fetch('/static/images/denr-logo.png');
+          const blob = await resp.blob();
+          logoBase64 = await new Promise((res) => {
+            const reader = new FileReader();
+            reader.onloadend = () => res(reader.result);
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) { logoBase64 = null; }
+
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pageW = doc.internal.pageSize.getWidth();
+        const pageH = doc.internal.pageSize.getHeight();
+        const margin = 20;
+        const contentW = pageW - margin * 2;
+
+        // ── Top accent bar ───────────────────────────────────────
+        doc.setFillColor(30, 58, 138);
+        doc.rect(0, 0, pageW, 6, 'F');
+        doc.setFillColor(22, 163, 74); // green accent strip
+        doc.rect(0, 6, pageW, 2, 'F');
+
+        // ── Government Logo ──────────────────────────────────────
+        const logoSize = 22;
+        const logoX = (pageW - logoSize) / 2;
+        let headerTopY = 14;
+        if (logoBase64) {
+          doc.addImage(logoBase64, 'PNG', logoX, headerTopY, logoSize, logoSize);
+        }
+        const textStartY = headerTopY + (logoBase64 ? logoSize + 3 : 0);
+
+        // ── Republic Header ──────────────────────────────────────
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(80, 80, 80);
+        doc.text('Republic of the Philippines', pageW / 2, textStartY, { align: 'center' });
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(30, 58, 138);
+        doc.text('DEPARTMENT OF ENVIRONMENT AND NATURAL RESOURCES', pageW / 2, textStartY + 5.5, { align: 'center' });
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(80, 80, 80);
+        doc.text('Visayas Avenue, Diliman, Quezon City 1100', pageW / 2, textStartY + 10, { align: 'center' });
+        doc.text('Municipal Office — ' + d.municipality.toUpperCase(), pageW / 2, textStartY + 14.5, { align: 'center' });
+
+        // ── Horizontal divider ───────────────────────────────────
+        let y = textStartY + 19;
+        doc.setDrawColor(30, 58, 138);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageW - margin, y);
+        doc.setLineWidth(0.25);
+        doc.setDrawColor(22, 163, 74);
+        doc.line(margin, y + 1.2, pageW - margin, y + 1.2);
+        doc.setLineWidth(0.2);
+
+        // ── Document Title ───────────────────────────────────────
+        y += 9;
+        doc.setFillColor(30, 58, 138);
+        doc.roundedRect(margin, y, contentW, 11, 1.5, 1.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(255, 255, 255);
+        doc.text('PURCHASE TRANSACTION RECORD', pageW / 2, y + 7.5, { align: 'center' });
+
+        // ── Document Metadata ────────────────────────────────────
+        y += 16;
+        const now = new Date();
+        const refNo = 'REF-' + now.getFullYear()
+          + String(now.getMonth()+1).padStart(2,'0')
+          + String(now.getDate()).padStart(2,'0')
+          + '-' + String(now.getHours()).padStart(2,'0')
+          + String(now.getMinutes()).padStart(2,'0');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(100, 116, 139);
+        doc.text('Document Reference No.: ' + refNo, margin, y);
+
+        const issuedOn = now.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+        doc.text('Date Issued: ' + issuedOn, pageW - margin, y, { align: 'right' });
+
+        // ── Section Label ────────────────────────────────────────
+        y += 8;
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.roundedRect(margin, y, contentW, 6, 1, 1, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(30, 58, 138);
+        doc.text('I.  PROCUREMENT DETAILS', margin + 3, y + 4);
+
+        // ── Field helper ─────────────────────────────────────────
+        y += 11;
+        const fieldH = 14;
+        const labelCol = [100, 116, 139];
+        const valueCol = [15, 23, 42];
+        const bgField  = [248, 250, 252];
+        const bdField  = [203, 213, 225];
+
+        function drawField(label, value, x, w, fy) {
+          doc.setFillColor(...bgField);
+          doc.setDrawColor(...bdField);
+          doc.roundedRect(x, fy, w, fieldH, 1, 1, 'FD');
+          // label
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(6);
+          doc.setTextColor(...labelCol);
+          doc.text(label.toUpperCase(), x + 3, fy + 4.5);
+          // value
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.setTextColor(...valueCol);
+          const truncated = doc.splitTextToSize(value || '—', w - 6)[0] || '—';
+          doc.text(truncated, x + 3, fy + 10.5);
+        }
+
+        const half = (contentW - 5) / 2;
+
+        // Row 1: Supplier | Municipality
+        drawField('Official Supplier / Vendor', d.supplier, margin, half, y);
+        drawField('Municipality / Locality', d.municipality, margin + half + 5, half, y);
+        y += fieldH + 4;
+
+        // Row 2: Product full-width
+        drawField('Product / Item Description', d.product, margin, contentW, y);
+        y += fieldH + 4;
+
+        // Row 3: Quantity | Date
+        drawField('Procured Quantity', d.quantity, margin, half, y);
+        drawField('Transaction Date', d.date, margin + half + 5, half, y);
+        y += fieldH + 10;
+
+        // ── Certification block ──────────────────────────────────
+        doc.setFillColor(239, 246, 255);
+        doc.setDrawColor(147, 197, 253);
+        doc.roundedRect(margin, y, contentW, 22, 1.5, 1.5, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(30, 58, 138);
+        doc.text('CERTIFICATION', margin + 3, y + 5.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(51, 65, 85);
+        const certText = 'This document certifies that the purchase transaction described herein was duly recorded in the Municipal Purchase Ledger in accordance with applicable DENR procurement regulations and guidelines.';
+        const certLines = doc.splitTextToSize(certText, contentW - 6);
+        doc.text(certLines, margin + 3, y + 10.5);
+        y += 30;
+
+        // ── Signature block ──────────────────────────────────────
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(100, 116, 139);
+
+        const sigW = (contentW - 10) / 2;
+        // Left sig
+        doc.setDrawColor(148, 163, 184);
+        doc.line(margin, y + 14, margin + sigW, y + 14);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(15, 23, 42);
+        doc.text('Prepared by:', margin, y + 4);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(100, 116, 139);
+        doc.text('Municipal Agriculture Officer', margin, y + 18);
+        doc.text('DENR — ' + d.municipality, margin, y + 22);
+
+        // Right sig
+        const sigRX = margin + sigW + 10;
+        doc.line(sigRX, y + 14, sigRX + sigW, y + 14);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(15, 23, 42);
+        doc.text('Noted by:', sigRX, y + 4);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(100, 116, 139);
+        doc.text('Municipal Environment and Natural', sigRX, y + 18);
+        doc.text('Resources Officer (MENRO)', sigRX, y + 22);
+
+        // ── Bottom accent & footer bar ───────────────────────────
+        doc.setFillColor(22, 163, 74);
+        doc.rect(0, pageH - 8, pageW, 2, 'F');
+        doc.setFillColor(30, 58, 138);
+        doc.rect(0, pageH - 6, pageW, 6, 'F');
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text('Department of Environment and Natural Resources  •  Municipal Purchase Ledger System  •  ' + issuedOn, pageW / 2, pageH - 2.5, { align: 'center' });
+
+        // ── Save ─────────────────────────────────────────────────
+        const safeName = d.supplier.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'purchase';
+        doc.save('DENR_Purchase_' + safeName + '_' + d.date + '.pdf');
+      });
     }
 
     // Global fallback for delete buttons to ensure they always work
