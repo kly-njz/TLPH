@@ -380,7 +380,45 @@
     }
 
     function resetAll(){ clearFilters(); }
-    function exportLogs(){ alert('Exporting scoped (region + municipalities) system log to CSV...'); }
+
+    function exportLogs(){
+      const rows = Array.from(document.querySelectorAll('#systemBody tr'));
+      const visible = rows.filter(tr => tr.style.display !== 'none');
+
+      if(!visible.length){ alert('No visible log entries to export.'); return; }
+
+      const headers = ['Timestamp','User','Region','Scope','Municipality','Action','Details','IP'];
+      const csvRows = [headers.join(',')];
+
+      visible.forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        const esc = s => '"' + (s || '').replace(/"/g, '""') + '"';
+
+        const timestamp  = (tds[0]?.innerText || '').trim();
+        const user       = tr.getAttribute('data-user') || '';
+        const region     = tr.getAttribute('data-region') || '';
+        const scope      = tr.getAttribute('data-scope') || '';
+        const muni       = tr.getAttribute('data-municipality') || '';
+        const action     = tr.getAttribute('data-action') || '';
+        const details    = (tds[4]?.innerText || '').trim();
+        const ip         = (tds[5]?.innerText || '').trim();
+
+        csvRows.push([esc(timestamp), esc(user), esc(region), esc(scope), esc(muni), esc(action), esc(details), esc(ip)].join(','));
+      });
+
+      const csv  = '\uFEFF' + csvRows.join('\r\n'); // BOM for Excel UTF-8
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      const now  = new Date().toISOString().slice(0,19).replace(/[T:]/g, '-');
+      a.href     = url;
+      a.download = 'system-logs-' + (USER_REGION || 'regional') + '-' + now + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
     function prevPage(){ alert('Previous page'); }
     function nextPage(){ alert('Next page'); }
 
