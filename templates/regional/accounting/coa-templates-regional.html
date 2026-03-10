@@ -253,7 +253,7 @@
                       </span>
                     </td>
                     <td class="text-center">
-                      <button type="button" class="text-slate-400 hover:text-blue-700 transition">
+                      <button type="button" @click="openEditAccountModal(a)" class="text-slate-400 hover:text-blue-700 transition">
                         <span class="material-icons-round text-[16px]">edit</span>
                       </button>
                     </td>
@@ -325,7 +325,7 @@
   <div x-show="accountModalOpen" x-cloak class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-[2px] shadow-xl w-full max-w-md border border-slate-300 overflow-hidden">
       <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
-        <h3 class="text-xs font-black uppercase text-slate-700">Add Account</h3>
+        <h3 class="text-xs font-black uppercase text-slate-700" x-text="isEditing ? 'Edit Account' : 'Add Account'">Add Account</h3>
         <button type="button" @click="accountModalOpen = false" class="text-slate-400 hover:text-rose-600">
           <span class="material-icons-round text-sm">close</span>
         </button>
@@ -334,19 +334,19 @@
         <div class="grid grid-cols-3 gap-3">
           <div class="col-span-1">
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Code</label>
-            <input type="text" class="gov-input w-full" placeholder="1001">
+            <input type="text" x-model="editingAccount.code" class="gov-input w-full" placeholder="1001">
           </div>
           <div class="col-span-2">
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Type</label>
-            <select class="gov-input w-full bg-white" title="Account Type">
-              <option>Asset</option><option>Liability</option><option>Equity</option><option>Income</option><option>Expense</option>
+            <select x-model="editingAccount.account_type" class="gov-input w-full bg-white" title="Account Type">
+              <option value="asset">Asset</option><option value="liability">Liability</option><option value="equity">Equity</option><option value="income">Income</option><option value="expense">Expense</option>
             </select>
           </div>
         </div>
 
         <div>
           <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Account Name</label>
-          <input type="text" class="gov-input w-full" placeholder="Cash on Hand">
+          <input type="text" x-model="editingAccount.name" class="gov-input w-full" placeholder="Cash on Hand">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -356,7 +356,7 @@
           </div>
           <div>
             <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Municipality (Optional)</label>
-            <select class="gov-input w-full bg-white" title="Municipality">
+            <select x-model="editingAccount.municipality" class="gov-input w-full bg-white" title="Municipality">
               <option value="">All Municipalities</option>
               {% for m in municipalities %}
                 <option value="{{ m }}">{{ m }}</option>
@@ -366,14 +366,15 @@
         </div>
 
         <div class="flex items-center gap-2 pt-1">
-          <input type="checkbox" id="lockCheck" class="rounded border-slate-300">
+          <input type="checkbox" id="lockCheck" x-model="editingAccount.locked" class="rounded border-slate-300">
           <label for="lockCheck" class="text-[10px] font-bold text-slate-600">Lock Account (Prevent Modification)</label>
         </div>
 
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" @click="accountModalOpen = false"
             class="gov-btn border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button type="button" class="gov-btn bg-blue-800 text-white hover:bg-blue-900">Save</button>
+          <button type="button" @click="saveAccount()"
+            class="gov-btn bg-blue-800 text-white hover:bg-blue-900" x-text="isEditing ? 'Update' : 'Save'">Save</button>
         </div>
       </div>
     </div>
@@ -398,6 +399,8 @@
         selectedTemplateId: null,
         templateModalOpen: false,
         accountModalOpen: false,
+        isEditing: false,
+        editingAccount: { code: '', name: '', account_type: 'asset', municipality: '', locked: false },
 
         get filteredTemplates() {
           let filtered = this.templates;
@@ -487,7 +490,34 @@
         },
 
         openAccountModal() {
+          this.isEditing = false;
+          this.editingAccount = { code: '', name: '', account_type: 'asset', municipality: '', locked: false };
           this.accountModalOpen = true;
+        },
+
+        openEditAccountModal(account) {
+          this.isEditing = true;
+          this.editingAccount = { ...account };
+          this.accountModalOpen = true;
+        },
+
+        async saveAccount() {
+          if (!this.editingAccount.code || !this.editingAccount.name) {
+            alert('Code and Account Name are required.');
+            return;
+          }
+          if (this.isEditing) {
+            // Update existing account in local list
+            const idx = this.accounts.findIndex(a => a.id === this.editingAccount.id);
+            if (idx !== -1) {
+              this.accounts.splice(idx, 1, { ...this.editingAccount });
+            }
+          } else {
+            // Add new account locally
+            const newAcc = { ...this.editingAccount, id: Date.now(), template_id: this.selectedTemplateId };
+            this.accounts.push(newAcc);
+          }
+          this.accountModalOpen = false;
         },
 
         exportTemplate() {
