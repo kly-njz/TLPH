@@ -271,6 +271,7 @@
               <option value="ALL" selected>All Types</option>
               <option value="License/Permit Request">License/Permit Request</option>
               <option value="Service Request">Service Request</option>
+              <option value="Application">Application</option>
             </select>
           </div>
 
@@ -458,7 +459,38 @@
         }
       }
 
-      allTransactions = [...paymentTransactions, ...serviceTransactions];
+      // Load applications from 'applications' collection
+      let applicationTransactions = [];
+      if (userId) {
+        try {
+          const appQ = query(
+            collection(db, 'applications'),
+            where('userId', '==', userId)
+          );
+          const appSnapshot = await getDocs(appQ);
+          appSnapshot.forEach((doc) => {
+            const app = doc.data();
+            const effectiveStatus = getEffectiveAppStatus(app);
+            const createdAt = app.submittedAt?.toDate?.()?.toISOString?.() || app.createdAt || new Date().toISOString();
+            applicationTransactions.push({
+              reference_num: app.externalId || doc.id,
+              name_of_application: app.productName || 'Application',
+              type_of_application: 'Application',
+              payment_status: app.paymentStatus === 'completed' ? 'Paid' : (app.paymentStatus === 'free' ? 'N/A' : 'Paid'),
+              status: mapApplicationStatus(normalizeStatus(effectiveStatus)),
+              amount: app.investmentQty || 0,
+              created_at: createdAt,
+              invoice_id: app.invoiceId || 'N/A',
+              description: app.category || '',
+              source: 'application'
+            });
+          });
+        } catch (err) {
+          console.error('Error fetching applications:', err);
+        }
+      }
+
+      allTransactions = [...paymentTransactions, ...serviceTransactions, ...applicationTransactions];
       allTransactions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       
       computeCards();
@@ -668,12 +700,13 @@
   function computeCards() {
     const licenseReq = allTransactions.filter(r => r.type_of_application === "License/Permit Request").length;
     const serviceReq = allTransactions.filter(r => r.type_of_application === "Service Request").length;
+    const appReq = allTransactions.filter(r => r.type_of_application === "Application").length;
 
     const successTxn = allTransactions.filter(r => normalize(r.status) === "approved" && (normalize(r.payment_status) === "paid" || normalize(r.payment_status) === "n/a")).length;
 
     document.getElementById("cardNumProducts").textContent = inventoryStats.count.toLocaleString();
     document.getElementById("cardTotalQty").textContent = inventoryStats.totalQty.toLocaleString();
-    document.getElementById("cardAppReq").textContent = licenseReq + serviceReq; // Total applications
+    document.getElementById("cardAppReq").textContent = licenseReq + serviceReq + appReq; // Total applications
     document.getElementById("cardServiceReq").textContent = serviceReq;
     document.getElementById("cardLicenseReq").textContent = licenseReq;
     document.getElementById("cardSuccessTxn").textContent = successTxn;
@@ -712,7 +745,7 @@
           backgroundColor: ['#10b981', '#3b82f6']
         }] 
       },
-      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }, plugins: { legend: { display: false } } }
+      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { ticks: { maxRotation: 0, minRotation: 0, font: { size: 10 }, callback: function(val) { const label = this.getLabelForValue(val); const map = { 'License/Permit Request': 'License/Permit', 'Service Request': 'Service Req', 'Application': 'Application' }; return map[label] || label; } } } }, plugins: { legend: { display: false } } }
     });
 
     const statusCounts = countBy(allTransactions, x => x.status);
