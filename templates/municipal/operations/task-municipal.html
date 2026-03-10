@@ -233,7 +233,7 @@
             <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">
               Showing <span id="visibleCount" class="text-slate-900 font-black">0</span> records • Municipal FY 2026
             </span>
-            <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
+            <button id="exportCsvBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
               <span class="material-icons-round text-[12px]">file_download</span> Export CSV
             </button>
           </div>
@@ -560,6 +560,11 @@
           }
         });
       }
+
+      const exportCsvBtn = document.getElementById('exportCsvBtn');
+      if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', exportTaskTableToCSV);
+      }
   });
 
   function openTaskModal() {
@@ -690,6 +695,57 @@
 
     closeTaskModal();
     filterTable();
+  }
+
+  function exportTaskTableToCSV() {
+    const table = document.getElementById('taskTable');
+    if (!table) return;
+
+    const escapeCsvCell = (value) => {
+      const safeValue = String(value ?? '').replace(/"/g, '""');
+      return `"${safeValue}"`;
+    };
+
+    const csvRows = [];
+    const headerCells = table.querySelectorAll('thead th');
+    if (headerCells.length) {
+      const headerValues = Array.from(headerCells)
+        .slice(0, 5)
+        .map(cell => escapeCsvCell(cell.innerText.trim()));
+      csvRows.push(headerValues.join(','));
+    }
+
+    const dataRows = table.querySelectorAll('tbody tr.task-row');
+    dataRows.forEach((row) => {
+      if (row.style.display === 'none') return;
+
+      const cells = row.querySelectorAll('td');
+      if (!cells.length) return;
+
+      const values = [
+        cells[0]?.innerText.trim() || '',
+        cells[1]?.innerText.trim() || '',
+        cells[2]?.innerText.trim() || '',
+        cells[3]?.innerText.trim() || '',
+        cells[4]?.innerText.trim() || ''
+      ].map(escapeCsvCell);
+
+      csvRows.push(values.join(','));
+    });
+
+    if (csvRows.length <= 1) return;
+
+    const blob = new Blob([`\uFEFF${csvRows.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const datePart = new Date().toISOString().slice(0, 10);
+
+    link.href = downloadUrl;
+    link.download = `municipal-tasks-${datePart}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
   }
 </script>
 </body>
