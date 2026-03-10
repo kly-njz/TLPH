@@ -35,7 +35,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-hidden">
+<body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-y-auto">
   
   <div
     class="pointer-events-none fixed inset-0 -z-10 bg-no-repeat opacity-[0.035]"
@@ -47,10 +47,10 @@
     {% include 'municipal/header.html' %}
   </div>
 
-  <div class="flex flex-1 overflow-hidden">
+  <div class="flex flex-1">
     {% include 'municipal/sidenav.html' %}
 
-    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-hidden">
+    <main class="flex-1 flex flex-col px-4 py-3 min-w-0 overflow-y-auto custom-scrollbar">
 
         <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-rose-700 mb-2">
           <div class="flex items-center gap-3">
@@ -66,7 +66,7 @@
           </div>
 
           <div class="flex gap-2">
-            <button class="gov-btn bg-rose-700 hover:bg-rose-800 text-white shadow-sm flex items-center gap-1.5">
+            <button id="addDamageReportBtn" type="button" class="gov-btn bg-rose-700 hover:bg-rose-800 text-white shadow-sm flex items-center gap-1.5">
               <span class="material-icons-round text-[14px]">add</span> Add Report
             </button>
           </div>
@@ -240,6 +240,115 @@
     </div>
   </div>
 
+  <!-- Add Damage Report Modal -->
+  <div id="damageModal" class="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px] text-rose-800">report_problem</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black text-slate-900 uppercase tracking-tight m-0">Add Damage Report</h2>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Log a new damaged asset / incident</p>
+          </div>
+        </div>
+        <button id="damageCloseBtn" type="button" class="btn-action" title="Close">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <form id="damageForm" class="px-3 py-2 space-y-2">
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Asset / Product Name</label>
+          <input id="damageProductInput" type="text" class="gov-input w-full" required />
+        </div>
+
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Recorded Incident</label>
+          <select id="damageIncidentInput" class="gov-input w-full" required>
+            <option value="">Select incident type...</option>
+            <option value="Flood">Flood</option>
+            <option value="Pest">Pest</option>
+            <option value="Fire">Fire</option>
+            <option value="Transport Damage">Transport Damage</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Volume / Qty</label>
+            <input id="damageQuantityInput" type="number" min="1" class="gov-input w-full" required />
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Date Logged</label>
+            <input id="damageDateInput" type="date" class="gov-input w-full" required />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Municipality</label>
+          <div class="gov-input w-full bg-slate-50 text-slate-700 font-black uppercase flex items-center">
+            {{ user_municipality or 'Quezon City' }}
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-200 mt-2 mb-2">
+          <button id="damageCancelBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+          <button type="submit" class="gov-btn bg-rose-700 hover:bg-rose-800 text-white">Save Report</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Damage Details View Modal -->
+  <div id="damageViewModal" class="fixed inset-0 z-50 bg-slate-900/50 items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
+      <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px] text-rose-800">visibility</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black text-slate-900 uppercase tracking-tight m-0">Damage Report Details</h2>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Review logged damaged asset / incident</p>
+          </div>
+        </div>
+        <button id="damageViewCloseBtn" type="button" class="btn-action" title="Close">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <div class="px-3 py-2 space-y-2 text-[10px] text-slate-700">
+        <div>
+          <div class="text-[9px] font-black uppercase text-slate-500 mb-0.5">Asset / Product Name</div>
+          <div id="viewDamageProduct" class="font-black uppercase text-slate-900"></div>
+        </div>
+
+        <div>
+          <div class="text-[9px] font-black uppercase text-slate-500 mb-0.5">Recorded Incident</div>
+          <div id="viewDamageIncident" class="font-black uppercase text-slate-900"></div>
+        </div>
+
+        <div>
+          <div class="text-[9px] font-black uppercase text-slate-500 mb-0.5">Volume / Qty</div>
+          <div id="viewDamageQuantity" class="font-mono font-black text-slate-900"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <div class="text-[9px] font-black uppercase text-slate-500 mb-0.5">Municipality</div>
+            <div id="viewDamageMunicipality" class="font-black uppercase text-slate-900"></div>
+          </div>
+          <div>
+            <div class="text-[9px] font-black uppercase text-slate-500 mb-0.5">Date Logged</div>
+            <div id="viewDamageDate" class="font-mono text-slate-900"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 px-3 py-2 border-t border-slate-200 bg-slate-50">
+        <button id="damageViewCloseBtnSecondary" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const searchDist = document.getElementById('searchDamage');
     const incidentFilter = document.getElementById('incidentFilter');
@@ -275,6 +384,170 @@
       searchDist.value = '';
       incidentFilter.value = '';
       applyFilter();
+    }
+
+    const defaultMunicipality = "{{ user_municipality or 'Quezon City' }}";
+    const addDamageReportBtn = document.getElementById('addDamageReportBtn');
+    const damageModal = document.getElementById('damageModal');
+    const damageForm = document.getElementById('damageForm');
+    const damageCancelBtn = document.getElementById('damageCancelBtn');
+    const damageCloseBtn = document.getElementById('damageCloseBtn');
+    const damageTableBody = document.querySelector('#damageTable tbody');
+
+    const damageViewModal = document.getElementById('damageViewModal');
+    const damageViewCloseBtn = document.getElementById('damageViewCloseBtn');
+    const damageViewCloseBtnSecondary = document.getElementById('damageViewCloseBtnSecondary');
+    const viewDamageProduct = document.getElementById('viewDamageProduct');
+    const viewDamageIncident = document.getElementById('viewDamageIncident');
+    const viewDamageQuantity = document.getElementById('viewDamageQuantity');
+    const viewDamageMunicipality = document.getElementById('viewDamageMunicipality');
+    const viewDamageDate = document.getElementById('viewDamageDate');
+
+    function openDamageModal() {
+      if (!damageModal || !damageForm) return;
+      damageForm.reset();
+      const dateInput = document.getElementById('damageDateInput');
+      if (dateInput && !dateInput.value) {
+        dateInput.value = new Date().toISOString().slice(0, 10);
+      }
+      damageModal.classList.remove('hidden');
+      damageModal.classList.add('flex');
+    }
+
+    function closeDamageModal() {
+      if (!damageModal) return;
+      damageModal.classList.add('hidden');
+      damageModal.classList.remove('flex');
+    }
+
+    function openDamageViewModal(row) {
+      if (!row || !damageViewModal) return;
+      const cells = row.querySelectorAll('td');
+      if (!cells.length) return;
+
+      const productText = cells[0] ? cells[0].innerText.trim() : '';
+      const incidentText = cells[1] ? cells[1].innerText.trim() : '';
+      const quantityText = cells[2] ? cells[2].innerText.trim() : '';
+      const municipalityText = cells[3] ? cells[3].innerText.trim() : '';
+      const dateText = cells[4] ? cells[4].innerText.trim() : '';
+
+      if (viewDamageProduct) viewDamageProduct.innerText = productText;
+      if (viewDamageIncident) viewDamageIncident.innerText = incidentText;
+      if (viewDamageQuantity) viewDamageQuantity.innerText = quantityText;
+      if (viewDamageMunicipality) viewDamageMunicipality.innerText = municipalityText;
+      if (viewDamageDate) viewDamageDate.innerText = dateText;
+
+      damageViewModal.classList.remove('hidden');
+      damageViewModal.classList.add('flex');
+    }
+
+    function closeDamageViewModal() {
+      if (!damageViewModal) return;
+      damageViewModal.classList.add('hidden');
+      damageViewModal.classList.remove('flex');
+    }
+
+    function handleDamageSubmit(event) {
+      event.preventDefault();
+
+      const productInput = document.getElementById('damageProductInput');
+      const incidentInput = document.getElementById('damageIncidentInput');
+      const quantityInput = document.getElementById('damageQuantityInput');
+      const dateInput = document.getElementById('damageDateInput');
+
+      if (!productInput || !incidentInput || !quantityInput || !dateInput) return;
+
+      const product = productInput.value.trim();
+      const incident = incidentInput.value.trim();
+      const quantityValue = quantityInput.value.trim();
+      const date = dateInput.value.trim();
+
+      if (!product || !incident || !quantityValue || !date) {
+        return;
+      }
+
+      const quantity = Number(quantityValue);
+      if (Number.isNaN(quantity) || quantity <= 0) {
+        return;
+      }
+
+      if (!damageTableBody) return;
+
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-rose-50 transition damage-row';
+
+      const qtyDisplay = quantity.toLocaleString('en-PH');
+      const qtyClass = quantity > 100 ? 'text-rose-700' : 'text-blue-700';
+
+      tr.innerHTML = `
+        <td class="px-4 py-3 align-middle border-r border-slate-100 font-bold text-slate-900 uppercase">${product}</td>
+        <td class="px-4 py-3 align-middle text-center border-r border-slate-100 font-bold text-slate-700 uppercase">${incident}</td>
+        <td class="px-4 py-3 align-middle text-right border-r border-slate-100 font-mono font-black ${qtyClass}">${qtyDisplay}</td>
+        <td class="px-4 py-3 align-middle text-center border-r border-slate-100 font-bold text-slate-700 uppercase">
+          ${defaultMunicipality}
+        </td>
+        <td class="px-4 py-3 align-middle text-center border-r border-slate-100 font-mono text-slate-600">${date}</td>
+        <td class="px-4 py-3 align-middle text-center">
+          <div class="flex justify-center gap-1">
+            <button class="btn-action btn-view" title="View"><span class="material-icons-round text-[14px]">visibility</span></button>
+            <button class="btn-action btn-delete" title="Delete"><span class="material-icons-round text-[14px]">delete</span></button>
+          </div>
+        </td>
+      `;
+
+      if (damageTableBody.firstChild) {
+        damageTableBody.insertBefore(tr, damageTableBody.firstChild);
+      } else {
+        damageTableBody.appendChild(tr);
+      }
+
+      closeDamageModal();
+      applyFilter();
+    }
+
+    if (addDamageReportBtn && damageModal && damageForm && damageCancelBtn && damageCloseBtn) {
+      addDamageReportBtn.addEventListener('click', openDamageModal);
+      damageCancelBtn.addEventListener('click', closeDamageModal);
+      damageCloseBtn.addEventListener('click', closeDamageModal);
+
+      damageModal.addEventListener('click', (event) => {
+        if (event.target === damageModal) {
+          closeDamageModal();
+        }
+      });
+
+      damageForm.addEventListener('submit', handleDamageSubmit);
+    }
+
+    if (damageTableBody) {
+      damageTableBody.addEventListener('click', (event) => {
+        const viewBtn = event.target.closest('.btn-view');
+        if (viewBtn) {
+          const row = viewBtn.closest('tr');
+          if (!row) return;
+          openDamageViewModal(row);
+          return;
+        }
+
+        const deleteBtn = event.target.closest('.btn-delete');
+        if (deleteBtn) {
+          const row = deleteBtn.closest('tr');
+          if (!row) return;
+          row.remove();
+          applyFilter();
+        }
+      });
+    }
+
+    if (damageViewModal && damageViewCloseBtn && damageViewCloseBtnSecondary) {
+      damageViewCloseBtn.addEventListener('click', closeDamageViewModal);
+      damageViewCloseBtnSecondary.addEventListener('click', closeDamageViewModal);
+
+      damageViewModal.addEventListener('click', (event) => {
+        if (event.target === damageViewModal) {
+          closeDamageViewModal();
+        }
+      });
     }
 
     // Init

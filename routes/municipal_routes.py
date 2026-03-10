@@ -1,6 +1,9 @@
 from flask import Blueprint, render_template, request, jsonify, session
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
+from .municipal_api_logs import _resolve_municipality_from_user_context
+import json
+from datetime import datetime
 
 bp = Blueprint('municipal', __name__, url_prefix='/municipal')
 
@@ -86,14 +89,38 @@ def hrm_company():
     companies = []
 
     try:
-        for doc in db.collection('companies').stream():
-            item = doc.to_dict() or {}
-            item['id'] = doc.id
-            companies.append(item)
+        # Get the logged-in user's municipality
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        if user_municipality:
+            # Fetch only the company for the user's municipality
+            query = db.collection('companies').where('municipality', '==', user_municipality).limit(1)
+            for doc in query.stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                companies.append(item)
+            
+            if not companies:
+                print(f"[WARN] No company found for municipality: {user_municipality}")
+        else:
+            print(f"[WARN] Could not resolve user municipality")
     except Exception as e:
         print(f"Error fetching companies: {e}")
+        import traceback
+        traceback.print_exc()
 
-    return render_template('municipal/hrm/company-municipal.html', companies_data=companies)
+    # Convert all datetime objects to ISO format strings and serialize with proper JSON encoder
+    def json_serializer(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
+    
+    # Convert companies to JSON string, then back to dict for Jinja2
+    companies_json = json.dumps(companies, default=json_serializer, separators=(',', ':'))
+    print(f"[DEBUG] Serialized JSON length: {len(companies_json)}")
+    print(f"[DEBUG] First 200 chars: {companies_json[:200]}")
+    
+    return render_template('municipal/hrm/company-municipal.html', companies_json=companies_json)
 
 @bp.route('/department')
 @role_required('municipal','municipal_admin')
@@ -166,7 +193,40 @@ def hrm_designation():
 @bp.route('/office-shift')
 @role_required('municipal','municipal_admin')
 def hrm_office_shift():
-    return render_template('municipal/hrm/office-shift-municipal.html')
+    db = get_firestore_db()
+    shifts = []
+
+    try:
+        # Get the logged-in user's municipality
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        if user_municipality:
+            # Fetch shifts for the user's municipality
+            query = db.collection('office_shifts').where('municipality', '==', user_municipality).limit(10)
+            for doc in query.stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                shifts.append(item)
+            
+            if not shifts:
+                print(f"[WARN] No shifts found for municipality: {user_municipality}")
+        else:
+            print(f"[WARN] Could not resolve user municipality")
+    except Exception as e:
+        print(f"Error fetching shifts: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # Convert all datetime objects to ISO format strings
+    def json_serializer(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
+    
+    shifts_json = json.dumps(shifts, default=json_serializer, separators=(',', ':'))
+    print(f"[DEBUG] Shifts JSON length: {len(shifts_json)}")
+    
+    return render_template('municipal/hrm/office-shift-municipal.html', shifts_json=shifts_json)
 
 @bp.route('/employees')
 @role_required('municipal','municipal_admin')
@@ -177,10 +237,25 @@ def hrm_employees():
     designations = []
 
     try:
-        for doc in db.collection('employees').stream():
-            item = doc.to_dict() or {}
-            item['id'] = doc.id
-            employees.append(item)
+        # Get the logged-in user's municipality
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        if user_municipality:
+            # Fetch employees for the user's municipality
+            query = db.collection('employees').where('municipality', '==', user_municipality)
+            for doc in query.stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                employees.append(item)
+            
+            if not employees:
+                print(f"[WARN] No employees found for municipality: {user_municipality}")
+        else:
+            # Fallback: fetch all employees if municipality can't be resolved
+            for doc in db.collection('employees').stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                employees.append(item)
     except Exception as e:
         print(f"Error fetching employees: {e}")
 
@@ -212,10 +287,22 @@ def hrm_attendance():
     employees = []
 
     try:
-        for doc in db.collection('employees').stream():
-            item = doc.to_dict() or {}
-            item['id'] = doc.id
-            employees.append(item)
+        # Get the logged-in user's municipality
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        if user_municipality:
+            # Fetch employees for the user's municipality
+            query = db.collection('employees').where('municipality', '==', user_municipality)
+            for doc in query.stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                employees.append(item)
+        else:
+            # Fallback: fetch all
+            for doc in db.collection('employees').stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                employees.append(item)
     except Exception:
         pass
 
@@ -309,7 +396,40 @@ def update_holiday_office_status():
 @bp.route('/leave-request')
 @role_required('municipal','municipal_admin')
 def hrm_leave():
-    return render_template('municipal/hrm/leave-municipal.html')
+    db = get_firestore_db()
+    leave_records = []
+
+    try:
+        # Get the logged-in user's municipality
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        if user_municipality:
+            # Fetch leave requests for the user's municipality
+            query = db.collection('leave_requests').where('municipality', '==', user_municipality).limit(100)
+            for doc in query.stream():
+                item = doc.to_dict() or {}
+                item['id'] = doc.id
+                leave_records.append(item)
+            
+            if not leave_records:
+                print(f"[WARN] No leave requests found for municipality: {user_municipality}")
+        else:
+            print(f"[WARN] Could not resolve user municipality")
+    except Exception as e:
+        print(f"Error fetching leave requests: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # Convert all datetime objects to ISO format strings
+    def json_serializer(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
+    
+    leave_json = json.dumps(leave_records, default=json_serializer, separators=(',', ':'))
+    print(f"[DEBUG] Leave records JSON length: {len(leave_json)}")
+    
+    return render_template('municipal/hrm/leave-municipal.html', leave_json=leave_json)
 
 @bp.route('/payroll')
 @role_required('municipal','municipal_admin')

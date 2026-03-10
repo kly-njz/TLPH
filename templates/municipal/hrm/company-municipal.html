@@ -271,121 +271,67 @@
   </div>
 
   <!-- Server-side data injection via data attribute -->
-  <div id="server-data" data-companies="{{ companies_data|default([], true)|tojson|safe }}" style="display: none;"></div>
+  <div id="server-data" data-companies='{{ companies_json|safe }}' style="display: none;"></div>
 
-  <script type="module">
-    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getFirestore, collection, query, orderBy, getDocs, updateDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-
-    // Parse server data from data attribute
+  <script>
+    console.log('🔵 SCRIPT STARTING - parsing data...');
+    
     const serverDataEl = document.getElementById('server-data');
-    const serverCompanies = serverDataEl ? JSON.parse(serverDataEl.getAttribute('data-companies') || '[]') : [];
-
-    // Firebase config from /static/js/firebase-config.js
-    const firebaseConfig = {
-      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
-      authDomain: "tlph-denr-system.firebaseapp.com",
-      projectId: "tlph-denr-system",
-      storageBucket: "tlph-denr-system.appspot.com",
-      messagingSenderId: "999028568640",
-      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
-      measurementId: "G-TXKQ1Z0J1X"
-    };
-
-    // Check if any Firebase app already exists
-    let db;
+    const dataJson = serverDataEl?.getAttribute('data-companies') || '[]';
+    console.log('📊 Raw data length:', dataJson.length);
+    
+    let serverCompanies = [];
     try {
-      const existingApps = getApps();
-      if (existingApps.length > 0) {
-        db = window.db || getFirestore(existingApps[0]);
-      } else {
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-      }
-      window.db = db;
-    } catch (error) {
-      console.error('Firebase initialization error:', error);
-      db = window.db;
+      serverCompanies = JSON.parse(dataJson);
+      console.log('✅ JSON parsed:', serverCompanies.length, 'records');
+    } catch (err) {
+      console.error('❌ JSON parse failed:', err.message);
+      serverCompanies = [];
     }
 
-    // Notification component for header
+    // Define window functions
     window.notificationData = function() {
       return {
         count: 0,
-        
-        async loadNotifications() {
-          try {
-            this.count = 0; // Default to 0 for now
-          } catch (error) {
-            console.error('Error loading notifications:', error);
-            this.count = 0;
-          }
-        }
-      }
-    }
+        async loadNotifications() { this.count = 0; }
+      };
+    };
 
     window.companyPage = function() {
       return {
         company: {
-          id: null,
-          office_name: '',
-          municipality: '',
-          province: '',
-          region: '',
-          lgu_class: '',
-          physical_address: '',
-          email: '',
-          contact_number: '',
-          office_hours: '',
-          verification_status: 'Authenticated',
-          linked_users: 0,
-          pending_requests: 0,
-          active_programs: 0,
-          status: 'Active'
+          id: null, office_name: '', municipality: '', province: '', region: '',
+          lgu_class: '', physical_address: '', email: '', contact_number: '',
+          office_hours: '', verification_status: 'Authenticated', linked_users: 0,
+          pending_requests: 0, active_programs: 0, status: 'Active'
         },
-        editCompany: {},
-        administrators: [],
-        showEditModal: false,
-        loading: false,
+        editCompany: {}, administrators: [], showEditModal: false, loading: false,
 
         async loadCompanies() {
           try {
             this.loading = true;
-            
-            // Always use server data (even if empty) - prevents Firestore permission errors
-            if (serverCompanies.length > 0) {
-              this.company = serverCompanies[0];
+            if (serverCompanies?.length > 0) {
+              this.company = { ...serverCompanies[0] };
               this.editCompany = { ...this.company };
+              console.log('✅ Company loaded:', this.company.municipality);
             } else {
-              // Server returned no data - use empty defaults instead of calling Firestore
               this.company = {
-                id: null,
-                office_name: 'No Data',
-                municipality: '',
-                province: '',
-                region: '',
-                lgu_class: '',
-                physical_address: '',
-                email: '',
-                contact_number: '',
-                office_hours: '',
-                verification_status: 'Pending',
-                linked_users: 0,
-                pending_requests: 0,
-                active_programs: 0,
-                status: 'Inactive'
+                id: null, office_name: 'Municipality Office', municipality: 'Not Found',
+                province: '', region: '', lgu_class: '', 
+                physical_address: 'No office information available', email: 'N/A',
+                contact_number: 'N/A', office_hours: '', verification_status: 'Pending',
+                linked_users: 0, pending_requests: 0, active_programs: 0, status: 'Inactive'
               };
               this.editCompany = { ...this.company };
             }
             
-            // Load sample administrators (placeholder until admin collection is created)
             this.administrators = [
               { id: 1, name: 'Maria Clara de los Santos', position: 'Environment & Natural Resources Officer', access_level: 'Master Level', status: 'Authorized' },
               { id: 2, name: 'Crisostomo Ibarra Jr.', position: 'Land Monitoring Specialist', access_level: 'Restricted Level', status: 'Authorized' },
               { id: 3, name: 'Elias Malabanan', position: 'Field Inspector - Coastal Unit', access_level: 'Restricted Level', status: 'Off-duty' }
             ];
           } catch (error) {
-            console.error('Error loading companies:', error);
+            console.error('Error in loadCompanies:', error);
           } finally {
             this.loading = false;
           }
@@ -407,23 +353,56 @@
               alert('Error: Company not loaded');
               return;
             }
-
+            const db = window.db;
+            if (!db) {
+              alert('Database connection not ready');
+              return;
+            }
+            const { updateDoc, doc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
             const companyRef = doc(db, 'companies', this.company.id);
-            await updateDoc(companyRef, {
-              ...this.editCompany,
-              updated_at: new Date()
-            });
-
-            // Update view
+            await updateDoc(companyRef, { ...this.editCompany, updated_at: new Date() });
             this.company = { ...this.editCompany };
             this.closeEditModal();
             alert('Office information updated successfully');
           } catch (error) {
             console.error('Error updating company:', error);
-            alert('Error updating company: ' + error.message);
+            alert('Error: ' + error.message);
           }
         }
+      };
+    };
+
+    console.log('✅ FUNCTIONS DEFINED - Ready for Alpine!');
+  </script>
+
+  <!-- Firebase initialization -->
+  <script type="module">
+    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+      authDomain: "tlph-denr-system.firebaseapp.com",
+      projectId: "tlph-denr-system",
+      storageBucket: "tlph-denr-system.appspot.com",
+      messagingSenderId: "999028568640",
+      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
+      measurementId: "G-TXKQ1Z0J1X"
+    };
+
+    try {
+      const existingApps = getApps();
+      let db;
+      if (existingApps.length > 0) {
+        db = getFirestore(existingApps[0]);
+      } else {
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
       }
+      window.db = db;
+      console.log('✓ Firebase initialized');
+    } catch (error) {
+      console.error('Firebase initialization error:', error);
     }
   </script>
 

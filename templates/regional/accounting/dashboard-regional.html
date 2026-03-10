@@ -275,8 +275,7 @@
                                   <tr>
                                     <td class="py-1 pr-2 text-slate-700 font-medium">{{ muni }}</td>
                                     <td class="py-1 text-right">
-                                      <input type="number" min="0" step="any" name="amount_{{ muni }}_{{ province }}" placeholder="0.00" class="border border-slate-300 rounded px-2 py-1 text-xs w-24 text-right focus:border-blue-500" />
-                                      <input type="hidden" name="province_{{ muni }}_{{ province }}" value="{{ province }}" />
+                                      <input type="number" min="0" step="any" name="amount__{{ muni }}__{{ province }}" placeholder="0.00" class="border border-slate-300 rounded px-2 py-1 text-xs w-24 text-right focus:border-blue-500" />
                                     </td>
                                   </tr>
                                   {% endfor %}
@@ -320,22 +319,26 @@
             const form = document.getElementById('distributeForm');
             const data = new FormData(form);
             const payload = [];
+            
             // Loop through all form elements to build payload
             for (let [key, value] of data.entries()) {
-              if (key.startsWith('amount_')) {
+              if (key.startsWith('amount__')) {
                 const amount = parseFloat(value);
                 if (!isNaN(amount) && amount > 0) {
                   // Extract municipality and province from the input name
-                  // Format: amount_MUNICIPALITY_PROVINCE
-                  const parts = key.replace('amount_', '').split('_');
-                  // Province may have underscores, so join all after the first as province
-                  const muni = parts[0].replace(/_/g, ' ');
-                  const province = parts.slice(1).join('_').replace(/_/g, ' ');
+                  // Format: amount__MUNICIPALITY__PROVINCE
+                  const parts = key.replace('amount__', '').split('__');
+                  if (parts.length !== 2) {
+                    console.error('Invalid field name format:', key);
+                    continue;
+                  }
+                  const muni = parts[0];
+                  const province = parts[1];
                   payload.push({
                     region: "{{ user_region }}",
                     amount: amount,
                     fund_type: 'national',
-                    transfer_id: 'NAT-TRF-' + Date.now() + '-' + muni + '-' + province,
+                    transfer_id: 'NAT-TRF-' + Date.now() + '-' + muni.replace(/\s+/g, '_'),
                     municipality: muni,
                     province: province
                   });
@@ -343,21 +346,34 @@
               }
             }
             if (payload.length === 0) {
-              alert('Enter at least one amount.');
+              alert('Please enter at least one amount greater than 0.');
               return;
             }
+            
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Distributing...';
+            
             Promise.all(payload.map(item =>
               fetch('/regional/accounting/distribute-fund', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(item)
+              }).then(res => res.json()).then(resp => {
+                if (!resp.success) throw new Error(resp.error || 'Unknown error');
+                return resp;
               })
-            )).then(() => {
-              alert('Fund distribution complete!');
+            )).then(results => {
+              alert(`Successfully distributed ₱${payload.reduce((sum, p) => sum + p.amount, 0).toFixed(2)} to ${payload.length} municipality(ies).`);
               closeDistributeModal();
-              location.reload();
-            }).catch(() => {
-              alert('Distribution failed.');
+              form.reset();
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Distribute';
+              setTimeout(() => location.reload(), 500);
+            }).catch(err => {
+              alert('Distribution failed: ' + (err.message || 'Unknown error occurred'));
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Distribute';
             });
           }
           </script>
@@ -381,8 +397,20 @@
                   <td class="px-3 py-2 font-bold">{{ fund.municipality if fund.municipality else 'N/A' }}</td>
                   <td class="px-3 py-2 text-slate-600">{{ fund.fund_type if fund.fund_type else 'N/A' }}</td>
                   <td class="px-3 py-2 font-mono text-slate-500">{{ fund.transfer_id if fund.transfer_id else 'N/A' }}</td>
-                  <td class="px-3 py-2 text-right font-bold text-slate-900">₱ {{ fund.amount if fund.amount else 'N/A' }}</td>
-                  <td class="px-3 py-2 text-slate-500">{{ fund.timestamp.strftime('%Y-%m-%d %H:%M:%S') if fund.timestamp and fund.timestamp.strftime else (fund.timestamp if fund.timestamp else 'N/A') }}</td>
+                  <td class="px-3 py-2 text-right font-bold text-slate-900">₱ {{ "%.2f"|format(fund.amount) if fund.amount else 'N/A' }}</td>
+                  <td class="px-3 py-2 text-slate-500">
+                    {% if fund.timestamp %}
+                      {% if fund.timestamp.strftime %}
+                        {{ fund.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+                      {% elif fund.timestamp.__class__.__name__ == 'Timestamp' %}
+                        {{ fund.timestamp.isoformat()[:19] }}
+                      {% else %}
+                        {{ fund.timestamp }}
+                      {% endif %}
+                    {% else %}
+                      N/A
+                    {% endif %}
+                  </td>
                   <td class="px-3 py-2">
                     <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-sm font-black uppercase text-[8px]">{{ fund.status if fund.status else 'N/A' }}</span>
                   </td>

@@ -44,7 +44,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="leavePage()" @load="loadData()" x-cloak>
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="leavePage()" x-init="loadData()" x-cloak>
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -180,38 +180,34 @@
     </main>
   </div>
 
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+  <!-- Server-side data injection -->
+  <div id="server-data" data-leave='{{ leave_json|safe }}' style="display: none;"></div>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
-      authDomain: "tlph-denr-system.firebaseapp.com",
-      projectId: "tlph-denr-system",
-      storageBucket: "tlph-denr-system.appspot.com",
-      messagingSenderId: "999028568640",
-      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
-      measurementId: "G-TXKQ1Z0J1X"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+  <script>
+    console.log('🔵 LEAVE SCRIPT STARTING - parsing data...');
+    
+    const serverDataEl = document.getElementById('server-data');
+    const dataJson = serverDataEl?.getAttribute('data-leave') || '[]';
+    console.log('📊 Raw leave data length:', dataJson.length);
+    
+    let serverLeaveRecords = [];
+    try {
+      serverLeaveRecords = JSON.parse(dataJson);
+      console.log('✅ Leave records JSON parsed:', serverLeaveRecords.length, 'records');
+    } catch (err) {
+      console.error('❌ JSON parse failed:', err.message);
+      serverLeaveRecords = [];
+    }
 
     // Notification component for header
     window.notificationData = function() {
       return {
         count: 0,
-        
         async loadNotifications() {
-          try {
-            this.count = 0; // Default to 0 for now
-          } catch (error) {
-            console.error('Error loading notifications:', error);
-            this.count = 0;
-          }
+          this.count = 0;
         }
-      }
-    }
+      };
+    };
 
     window.leavePage = function() {
       return {
@@ -234,35 +230,63 @@
 
         async loadData() {
           try {
-            const employeesRef = collection(db, 'employees');
-            const q = query(employeesRef, orderBy('first_name'));
-            const snapshot = await getDocs(q);
+            // Use server-side leave records data
+            this.leaveRecords = serverLeaveRecords && serverLeaveRecords.length > 0 ? serverLeaveRecords : [];
             
-            this.employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            if (this.leaveRecords.length > 0) {
+              console.log('✅ Loaded', this.leaveRecords.length, 'leave records');
+            } else {
+              console.warn('⚠ No leave records available from server');
+            }
             
-            // Sample leave data
-            const leaveTypes = ['Sick Leave', 'Vacation Leave', 'Privilege Leave'];
-            const statuses = ['Pending', 'Approved', 'Denied'];
-            
-            this.leaveRecords = this.employees.map((emp, idx) => ({
-              id: emp.id,
-              employee_id: emp.employee_id,
-              employee_name: emp.first_name + ' ' + emp.last_name,
-              leave_type: leaveTypes[idx % leaveTypes.length],
-              from_date: '2026-03-05',
-              to_date: '2026-03-07',
-              days: 3,
-              status: statuses[idx % statuses.length]
-            }));
-            
+            // Calculate statistics
             this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
             this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
+            
+            console.log('📊 Statistics:', { pending: this.pendingCount, active: this.activeCount, total: this.leaveRecords.length });
           } catch (error) {
-            console.error('Error loading leave data:', error);
+            console.error('❌ Error loading leave data:', error);
           }
         }
+      };
+    };
+
+    console.log('✅ LEAVE FUNCTIONS DEFINED - Ready for Alpine!');
+  </script>
+
+  <script type="module">
+    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+      authDomain: "tlph-denr-system.firebaseapp.com",
+      projectId: "tlph-denr-system",
+      storageBucket: "tlph-denr-system.appspot.com",
+      messagingSenderId: "999028568640",
+      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
+      measurementId: "G-TXKQ1Z0J1X"
+    };
+
+    // Check if any Firebase app already exists
+    let db;
+    try {
+      const existingApps = getApps();
+      if (existingApps.length > 0) {
+        db = window.db || getFirestore(existingApps[0]);
+      } else {
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
       }
+      window.db = db;
+      console.log('✓ Firebase initialized');
+    } catch (error) {
+      console.error('Firebase initialization error:', error);
+      db = window.db;
     }
   </script>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
 </body>
 </html>

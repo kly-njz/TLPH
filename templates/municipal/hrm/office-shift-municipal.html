@@ -44,7 +44,7 @@
   </style>
 </head>
 
-<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="shiftPage()" @load="loadData()" x-cloak>
+<body class="h-screen w-full bg-gov-bg text-gov-text text-[13px] flex flex-col overflow-hidden" x-data="shiftPage()" x-init="loadData()" x-cloak>
 
   <div class="shrink-0">
     {% include 'municipal/header.html' %}
@@ -61,11 +61,31 @@
           <p class="text-[10px] font-bold text-gov-muted uppercase tracking-widest">Shift Rotation, Working Hours & Duty Cycles</p>
         </div>
         <div class="flex gap-2">
-            <button class="bg-gov-primary text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition-all flex items-center gap-2">
+            <button @click="openEditModal()" class="bg-gov-primary text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition-all flex items-center gap-2">
                 <span class="material-icons-round text-sm">schedule</span> Modify Hours
             </button>
         </div>
       </div>
+
+      <!-- Shift Navigation Section -->
+      <section class="bg-white border border-gov-border rounded-[3px] shadow-sm overflow-hidden">
+        <div class="bg-slate-50 px-3 py-2 border-b border-gov-border">
+          <p class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">📋 Available Shifts for your Municipality</p>
+        </div>
+        <div class="p-3 flex flex-wrap gap-2 overflow-x-auto">
+          <template x-for="shift in shifts" :key="shift.id">
+            <button 
+              @click="currentShift = shift"
+              :class="currentShift?.id === shift.id ? 'bg-indigo-900 text-white border-indigo-900' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-900'"
+              class="px-3 py-2 border rounded-[2px] text-[11px] font-bold uppercase transition-all whitespace-nowrap"
+              x-text="shift.code + ' - ' + shift.name.substring(0, 25)"
+            ></button>
+          </template>
+          <template x-if="shifts.length === 0">
+            <p class="text-[10px] text-slate-500 italic">No shifts available for your municipality</p>
+          </template>
+        </div>
+      </section>
 
       <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         
@@ -195,9 +215,255 @@
     </main>
   </div>
 
+  <!-- Edit Shift Hours Modal -->
+  <template x-if="showEditModal">
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="closeEditModal()">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" @click.stop>
+        <div class="bg-indigo-950 text-white px-5 py-3 flex items-center justify-between sticky top-0">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-round">edit_note</span>
+            <h2 class="font-bold text-sm">Edit Shift Hours - <span x-text="editShiftData?.code || 'N/A'"></span></h2>
+          </div>
+          <button @click="closeEditModal()" class="text-white hover:bg-indigo-900 p-1 rounded">
+            <span class="material-icons-round">close</span>
+          </button>
+        </div>
+
+        <div class="p-5 space-y-5">
+          <!-- Shift Name -->
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-1">Shift Name</label>
+            <input x-model="editShiftData.name" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-[2px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+
+          <!-- Duty Type -->
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-1">Duty Type</label>
+            <select x-model="editShiftData.duty_type" class="w-full px-3 py-2 border border-slate-300 rounded-[2px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="Fixed Office Hours">Fixed Office Hours</option>
+              <option value="Flexible Field Hours">Flexible Field Hours</option>
+              <option value="Rotating/On-Call">Rotating/On-Call</option>
+              <option value="Evening Shift">Evening Shift</option>
+            </select>
+          </div>
+
+          <!-- Time Inputs Grid -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-1">Start Time</label>
+              <input x-model="editShiftData.start_time" type="text" placeholder="08:00 AM" class="w-full px-3 py-2 border border-slate-300 rounded-[2px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-1">End Time</label>
+              <input x-model="editShiftData.end_time" type="text" placeholder="05:00 PM" class="w-full px-3 py-2 border border-slate-300 rounded-[2px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+          </div>
+
+          <!-- Break Times Grid -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-1">Lunch Break Start</label>
+              <input x-model="editShiftData.lunch_break_start" type="text" placeholder="12:00 PM" class="w-full px-3 py-2 border border-slate-300 rounded-[2px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-1">Lunch Break End</label>
+              <input x-model="editShiftData.lunch_break_end" type="text" placeholder="01:00 PM" class="w-full px-3 py-2 border border-slate-300 rounded-[2px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+          </div>
+
+          <!-- Grace Period -->
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-1">Grace Period (Minutes)</label>
+            <input x-model.number="editShiftData.grace_period" type="number" min="0" max="60" class="w-full px-3 py-2 border border-slate-300 rounded-[2px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+
+          <!-- Description -->
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-1">Description</label>
+            <textarea x-model="editShiftData.description" rows="3" class="w-full px-3 py-2 border border-slate-300 rounded-[2px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+          </div>
+
+          <!-- Status -->
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-1">Status</label>
+            <select x-model="editShiftData.status" class="w-full px-3 py-2 border border-slate-300 rounded-[2px] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Archived">Archived</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="bg-slate-50 px-5 py-3 flex justify-end gap-2 sticky bottom-0 border-t border-slate-200">
+          <button @click="closeEditModal()" class="px-4 py-2 text-slate-700 border border-slate-300 rounded-[2px] text-sm font-bold uppercase hover:bg-slate-100 transition-all">
+            Cancel
+          </button>
+          <button @click="saveShiftChanges()" class="px-4 py-2 bg-indigo-900 text-white rounded-[2px] text-sm font-bold uppercase hover:bg-indigo-800 transition-all flex items-center gap-2">
+            <span class="material-icons-round text-base">check</span> Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Server-side data injection -->
+  <div id="server-data" data-shifts='{{ shifts_json|safe }}' style="display: none;"></div>
+
+  <script>
+    console.log('🔵 SHIFT SCRIPT STARTING - parsing data...');
+    
+    const serverDataEl = document.getElementById('server-data');
+    const dataJson = serverDataEl?.getAttribute('data-shifts') || '[]';
+    console.log('📊 Raw shifts data length:', dataJson.length);
+    
+    let serverShifts = [];
+    try {
+      serverShifts = JSON.parse(dataJson);
+      console.log('✅ Shifts JSON parsed:', serverShifts.length, 'shifts');
+    } catch (err) {
+      console.error('❌ JSON parse failed:', err.message);
+      serverShifts = [];
+    }
+
+    // Notification component for header
+    window.notificationData = function() {
+      return {
+        count: 0,
+        async loadNotifications() {
+          this.count = 0;
+        }
+      };
+    };
+
+    window.shiftPage = function() {
+      return {
+        shifts: [],
+        employees: [],
+        shiftEmployees: [],
+        currentShift: null,
+        showEditModal: false,
+        editShiftData: {},
+
+        async loadData() {
+          try {
+            // Use server-side shifts data
+            this.shifts = serverShifts && serverShifts.length > 0 ? serverShifts : [];
+            
+            if (this.shifts.length > 0) {
+              this.currentShift = this.shifts[0];
+              console.log('✅ Loaded shift:', this.currentShift.name);
+            } else {
+              // Fallback if no data
+              this.currentShift = {
+                id: '1',
+                code: 'SHFT-REG-01',
+                name: 'REGULAR DAY SHIFT (ADMINISTRATIVE STAFF)',
+                duty_type: 'Fixed Office Hours',
+                start_time: '08:00 AM',
+                end_time: '05:00 PM',
+                grace_period: 15,
+                municipality: 'Not Found'
+              };
+            }
+            
+            // Mock employees for shift assignment (you can replace with real API call)
+            this.employees = [
+              { id: 1, first_name: 'Maria', last_name: 'Santos', designation: 'Environment Officer', department_name: 'Administration' },
+              { id: 2, first_name: 'Juan', last_name: 'Dela Cruz', designation: 'Land Monitor', department_name: 'Field Operations' },
+              { id: 3, first_name: 'Rosa', last_name: 'Garcia', designation: 'Inspector', department_name: 'Field Operations' },
+              { id: 4, first_name: 'Pedro', last_name: 'Reyes', designation: 'Coordinator', department_name: 'Administration' },
+              { id: 5, first_name: 'Ana', last_name: 'Lopez', designation: 'Specialist', department_name: 'Administration' }
+            ];
+            
+            // Populate shift employees
+            this.shiftEmployees = this.employees.map((emp, idx) => ({
+              id: emp.id,
+              name: emp.first_name + ' ' + emp.last_name,
+              designation: emp.designation || 'Staff',
+              department: emp.department_name || 'Administration',
+              avg_in_time: ['08:15 AM', '08:00 AM', '08:20 AM', '08:10 AM', '08:05 AM'][idx % 5],
+              status: 'active'
+            }));
+          } catch (error) {
+            console.error('❌ Error in loadData:', error);
+          }
+        },
+
+        openEditModal() {
+          if (!this.currentShift) {
+            alert('Please select a shift first');
+            return;
+          }
+          this.editShiftData = { ...this.currentShift };
+          this.showEditModal = true;
+          console.log('📝 Edit modal opened for:', this.editShiftData.name);
+        },
+
+        closeEditModal() {
+          this.showEditModal = false;
+          this.editShiftData = {};
+        },
+
+        async saveShiftChanges() {
+          try {
+            if (!this.editShiftData.id) {
+              alert('Error: Shift ID not found');
+              return;
+            }
+
+            const db = window.db;
+            if (!db) {
+              alert('Database connection not ready');
+              return;
+            }
+
+            // Validate time format
+            const timeRegex = /^\d{1,2}:\d{2}\s(AM|PM)$/i;
+            if (!timeRegex.test(this.editShiftData.start_time) || !timeRegex.test(this.editShiftData.end_time)) {
+              alert('Invalid time format. Use format: HH:MM AM/PM');
+              return;
+            }
+
+            const { updateDoc, doc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+            const shiftRef = doc(db, 'office_shifts', this.editShiftData.id);
+            
+            await updateDoc(shiftRef, {
+              name: this.editShiftData.name,
+              duty_type: this.editShiftData.duty_type,
+              start_time: this.editShiftData.start_time,
+              end_time: this.editShiftData.end_time,
+              lunch_break_start: this.editShiftData.lunch_break_start,
+              lunch_break_end: this.editShiftData.lunch_break_end,
+              grace_period: this.editShiftData.grace_period,
+              description: this.editShiftData.description,
+              status: this.editShiftData.status,
+              updated_at: new Date()
+            });
+
+            // Update local state
+            const shiftIndex = this.shifts.findIndex(s => s.id === this.editShiftData.id);
+            if (shiftIndex >= 0) {
+              this.shifts[shiftIndex] = { ...this.editShiftData };
+              this.currentShift = { ...this.editShiftData };
+            }
+
+            this.closeEditModal();
+            alert('✅ Shift hours updated successfully!');
+            console.log('✅ Shift updated:', this.editShiftData.code);
+          } catch (error) {
+            console.error('❌ Error saving shift:', error);
+            alert('Error: ' + error.message);
+          }
+        }
+      };
+    };
+
+    console.log('✅ SHIFT FUNCTIONS DEFINED - Ready for Alpine!');
+  </script>
+
   <script type="module">
     import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
@@ -209,7 +475,6 @@
       measurementId: "G-TXKQ1Z0J1X"
     };
 
-    // Check if any Firebase app already exists
     let db;
     try {
       const existingApps = getApps();
@@ -220,76 +485,11 @@
         db = getFirestore(app);
       }
       window.db = db;
+      console.log('✓ Firebase initialized');
     } catch (error) {
       console.error('Firebase initialization error:', error);
       db = window.db;
     }
-    // Notification component for header
-    window.notificationData = function() {
-      return {
-        count: 0,
-        
-        async loadNotifications() {
-          try {
-            this.count = 0; // Default to 0 for now
-          } catch (error) {
-            console.error('Error loading notifications:', error);
-            this.count = 0;
-          }
-        }
-      }
-    }
-    window.shiftPage = function() {
-      return {
-        shifts: [],
-        employees: [],
-        shiftEmployees: [],
-        currentShift: null,
-
-        async loadData() {
-          try {
-            // Load shifts
-            const shiftsRef = collection(db, 'shifts');
-            const shiftQ = query(shiftsRef);
-            const shiftSnapshot = await getDocs(shiftQ);
-            this.shifts = shiftSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            if (this.shifts.length === 0) {
-              this.currentShift = {
-                id: '1',
-                code: 'SHFT-REG-01',
-                name: 'REGULAR DAY SHIFT (ADMIN)',
-                duty_type: 'Fixed Office Hours',
-                start_time: '08:00 AM',
-                end_time: '05:00 PM',
-                grace_period: 15
-              };
-            } else {
-              this.currentShift = this.shifts[0];
-            }
-            
-            // Load employees
-            const employeesRef = collection(db, 'employees');
-            const empQ = query(employeesRef, orderBy('first_name'));
-            const empSnapshot = await getDocs(empQ);
-            this.employees = empSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // Populate shift employees
-            this.shiftEmployees = this.employees.slice(0, 5).map((emp, idx) => ({
-              id: emp.id,
-              name: emp.first_name + ' ' + emp.last_name,
-              designation: emp.designation || 'Staff',
-              department: emp.department_name || 'Administration',
-              avg_in_time: ['08:15 AM', '08:00 AM', '08:20 AM', '08:10 AM', '08:05 AM'][idx],
-              status: 'active'
-            }));
-          } catch (error) {
-            console.error('Error loading shift data:', error);
-          }
-        }
-      }
-    }
   </script>
 
-</body>
-</html>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
