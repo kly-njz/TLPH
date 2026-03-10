@@ -398,6 +398,7 @@ def update_holiday_office_status():
 def hrm_leave():
     db = get_firestore_db()
     leave_records = []
+    employees = []
 
     try:
         # Get the logged-in user's municipality
@@ -413,10 +414,17 @@ def hrm_leave():
             
             if not leave_records:
                 print(f"[WARN] No leave requests found for municipality: {user_municipality}")
+
+            # Fetch employees for the user's municipality
+            emp_query = db.collection('employees').where('municipality', '==', user_municipality)
+            for doc in emp_query.stream():
+                emp = doc.to_dict() or {}
+                emp['id'] = doc.id
+                employees.append({'id': doc.id, 'name': emp.get('full_name', emp.get('name', '')), 'employee_id': emp.get('employee_id', doc.id)})
         else:
             print(f"[WARN] Could not resolve user municipality")
     except Exception as e:
-        print(f"Error fetching leave requests: {e}")
+        print(f"Error fetching leave data: {e}")
         import traceback
         traceback.print_exc()
 
@@ -427,9 +435,49 @@ def hrm_leave():
         raise TypeError(f"Type {type(obj)} not serializable")
     
     leave_json = json.dumps(leave_records, default=json_serializer, separators=(',', ':'))
+    employees_json = json.dumps(employees, default=json_serializer, separators=(',', ':'))
     print(f"[DEBUG] Leave records JSON length: {len(leave_json)}")
     
-    return render_template('municipal/hrm/leave-municipal.html', leave_json=leave_json)
+    return render_template('municipal/hrm/leave-municipal.html', leave_json=leave_json, employees_json=employees_json)
+
+
+@bp.route('/leave-request/create', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def hrm_leave_create():
+    db = get_firestore_db()
+    try:
+        data = request.get_json(force=True) or {}
+        user_municipality = _resolve_municipality_from_user_context()
+
+        if not user_municipality:
+            return jsonify({'success': False, 'error': 'Could not resolve municipality'}), 400
+
+        required = ['employee_name', 'employee_id', 'leave_type', 'from_date', 'to_date', 'days']
+        for field in required:
+            if not data.get(field):
+                return jsonify({'success': False, 'error': f'Missing field: {field}'}), 400
+
+        record = {
+            'employee_name': data['employee_name'],
+            'employee_id': data['employee_id'],
+            'leave_type': data['leave_type'],
+            'from_date': data['from_date'],
+            'to_date': data['to_date'],
+            'days': float(data['days']),
+            'reason': data.get('reason', ''),
+            'status': 'Pending',
+            'municipality': user_municipality,
+            'created_at': datetime.utcnow().isoformat(),
+        }
+
+        doc_ref = db.collection('leave_requests').add(record)
+        record['id'] = doc_ref[1].id
+        return jsonify({'success': True, 'record': record})
+    except Exception as e:
+        print(f"Error creating leave request: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @bp.route('/payroll')
 @role_required('municipal','municipal_admin')

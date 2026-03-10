@@ -64,7 +64,7 @@
             <button @click="showLedger = true" class="bg-white border border-gov-border text-gov-primary px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-50 transition-all flex items-center gap-2">
                 <span class="material-icons-round text-sm">assignment</span> Leave Ledger
             </button>
-            <button class="bg-gov-primary text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition-all flex items-center gap-2">
+            <button @click="showCreateModal = true" class="bg-gov-primary text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition-all flex items-center gap-2">
                 <span class="material-icons-round text-sm">post_add</span> Create Request
             </button>
         </div>
@@ -257,8 +257,97 @@
     </div>
   </div>
 
+  <!-- Create Leave Request Modal -->
+  <div x-show="showCreateModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @keydown.escape.window="showCreateModal = false; resetCreateForm()">
+    <div class="bg-white w-full max-w-lg rounded-[3px] shadow-2xl flex flex-col" @click.stop>
+      <div class="bg-gov-primary text-white px-4 py-3 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-sm">post_add</span>
+          <span class="font-bold uppercase text-[11px] tracking-widest">New Leave Request</span>
+        </div>
+        <button @click="showCreateModal = false; resetCreateForm()" class="text-white/70 hover:text-white transition">
+          <span class="material-icons-round text-base">close</span>
+        </button>
+      </div>
+
+      <div class="p-4 flex flex-col gap-3 overflow-y-auto custom-scroll">
+        <!-- Error -->
+        <div x-show="createError" class="bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold px-3 py-2 rounded-[2px]" x-text="createError"></div>
+
+        <!-- Employee -->
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Employee <span class="text-rose-500">*</span></label>
+          <template x-if="employees.length > 0">
+            <select x-model="createForm.employee_id" @change="onEmployeeSelect()" class="w-full text-[11px] border border-gov-border rounded-[2px] px-2 py-1.5 outline-none focus:border-amber-600 bg-white">
+              <option value="">— Select Employee —</option>
+              <template x-for="emp in employees" :key="emp.id">
+                <option :value="emp.id" x-text="emp.name + (emp.employee_id ? ' (' + emp.employee_id + ')' : '')"></option>
+              </template>
+            </select>
+          </template>
+          <template x-if="employees.length === 0">
+            <input x-model="createForm.employee_name" type="text" placeholder="Full Name" class="w-full text-[11px] border border-gov-border rounded-[2px] px-2 py-1.5 outline-none focus:border-amber-600">
+          </template>
+        </div>
+
+        <template x-if="employees.length === 0">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Employee ID <span class="text-rose-500">*</span></label>
+            <input x-model="createForm.employee_id" type="text" placeholder="e.g. EMP-001" class="w-full text-[11px] border border-gov-border rounded-[2px] px-2 py-1.5 outline-none focus:border-amber-600">
+          </div>
+        </template>
+
+        <!-- Leave Type -->
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Leave Type <span class="text-rose-500">*</span></label>
+          <select x-model="createForm.leave_type" class="w-full text-[11px] font-bold border border-gov-border rounded-[2px] px-2 py-1.5 outline-none focus:border-amber-600 bg-white">
+            <option value="Sick Leave">Sick Leave</option>
+            <option value="Vacation Leave">Vacation Leave</option>
+            <option value="Privilege Leave">Privilege Leave</option>
+            <option value="Maternity Leave">Maternity Leave</option>
+            <option value="Paternity Leave">Paternity Leave</option>
+            <option value="Solo Parent Leave">Solo Parent Leave</option>
+            <option value="Emergency Leave">Emergency Leave</option>
+          </select>
+        </div>
+
+        <!-- Dates -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">From Date <span class="text-rose-500">*</span></label>
+            <input x-model="createForm.from_date" @change="calcDays()" type="date" class="w-full text-[11px] border border-gov-border rounded-[2px] px-2 py-1.5 outline-none focus:border-amber-600">
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">To Date <span class="text-rose-500">*</span></label>
+            <input x-model="createForm.to_date" @change="calcDays()" type="date" class="w-full text-[11px] border border-gov-border rounded-[2px] px-2 py-1.5 outline-none focus:border-amber-600">
+          </div>
+        </div>
+
+        <!-- Days -->
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Number of Days <span class="text-rose-500">*</span></label>
+          <input x-model="createForm.days" type="number" min="0.5" step="0.5" placeholder="Auto-calculated (excl. weekends)" class="w-full text-[11px] border border-gov-border rounded-[2px] px-2 py-1.5 outline-none focus:border-amber-600">
+        </div>
+
+        <!-- Reason -->
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Reason / Remarks</label>
+          <textarea x-model="createForm.reason" rows="3" placeholder="Optional details..." class="w-full text-[11px] border border-gov-border rounded-[2px] px-2 py-1.5 outline-none focus:border-amber-600 resize-none"></textarea>
+        </div>
+      </div>
+
+      <div class="shrink-0 px-4 py-3 border-t border-gov-border bg-slate-50 flex justify-end gap-2">
+        <button @click="showCreateModal = false; resetCreateForm()" class="border border-gov-border text-gov-primary px-4 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-100 transition">Cancel</button>
+        <button @click="submitLeave()" :disabled="createSaving" class="bg-gov-primary text-white px-4 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition flex items-center gap-2 disabled:opacity-60">
+          <span x-show="createSaving" class="material-icons-round text-sm animate-spin">refresh</span>
+          <span x-text="createSaving ? 'Saving...' : 'Submit Request'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Server-side data injection -->
-  <div id="server-data" data-leave='{{ leave_json|safe }}' style="display: none;"></div>
+  <div id="server-data" data-leave='{{ leave_json|safe }}' data-employees='{{ employees_json|safe }}' style="display: none;"></div>
 
   <script>
     console.log('🔵 LEAVE SCRIPT STARTING - parsing data...');
@@ -274,6 +363,13 @@
     } catch (err) {
       console.error('❌ JSON parse failed:', err.message);
       serverLeaveRecords = [];
+    }
+
+    let serverEmployees = [];
+    try {
+      serverEmployees = JSON.parse(serverDataEl?.getAttribute('data-employees') || '[]');
+    } catch (err) {
+      serverEmployees = [];
     }
 
     // Notification component for header
@@ -297,6 +393,18 @@
         showLedger: false,
         ledgerSearch: '',
         ledgerTypeFilter: '',
+        showCreateModal: false,
+        createSaving: false,
+        createError: '',
+        createForm: {
+          employee_name: '',
+          employee_id: '',
+          leave_type: 'Sick Leave',
+          from_date: '',
+          to_date: '',
+          days: '',
+          reason: ''
+        },
 
         get ledgerData() {
           const map = {};
@@ -331,8 +439,8 @@
 
         async loadData() {
           try {
-            // Use server-side leave records data
             this.leaveRecords = serverLeaveRecords && serverLeaveRecords.length > 0 ? serverLeaveRecords : [];
+            this.employees = serverEmployees || [];
             
             if (this.leaveRecords.length > 0) {
               console.log('✅ Loaded', this.leaveRecords.length, 'leave records');
@@ -340,7 +448,6 @@
               console.warn('⚠ No leave records available from server');
             }
             
-            // Calculate statistics
             this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
             this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
             
@@ -348,6 +455,66 @@
           } catch (error) {
             console.error('❌ Error loading leave data:', error);
           }
+        },
+
+        onEmployeeSelect() {
+          const emp = this.employees.find(e => e.id === this.createForm.employee_id);
+          if (emp) {
+            this.createForm.employee_name = emp.name;
+          }
+        },
+
+        calcDays() {
+          if (this.createForm.from_date && this.createForm.to_date) {
+            const from = new Date(this.createForm.from_date);
+            const to = new Date(this.createForm.to_date);
+            if (to >= from) {
+              let count = 0;
+              const cur = new Date(from);
+              while (cur <= to) {
+                const day = cur.getDay();
+                if (day !== 0 && day !== 6) count++;
+                cur.setDate(cur.getDate() + 1);
+              }
+              this.createForm.days = count;
+            } else {
+              this.createForm.days = '';
+            }
+          }
+        },
+
+        resetCreateForm() {
+          this.createForm = { employee_name: '', employee_id: '', leave_type: 'Sick Leave', from_date: '', to_date: '', days: '', reason: '' };
+          this.createError = '';
+          this.createSaving = false;
+        },
+
+        async submitLeave() {
+          this.createError = '';
+          if (!this.createForm.employee_name || !this.createForm.leave_type || !this.createForm.from_date || !this.createForm.to_date || !this.createForm.days) {
+            this.createError = 'Please fill in all required fields.';
+            return;
+          }
+          this.createSaving = true;
+          try {
+            const res = await fetch('/municipal/leave-request/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.createForm)
+            });
+            const result = await res.json();
+            if (result.success) {
+              this.leaveRecords.unshift(result.record);
+              this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
+              this.showCreateModal = false;
+              this.resetCreateForm();
+            } else {
+              this.createError = result.error || 'Failed to save. Please try again.';
+            }
+          } catch (e) {
+            this.createError = 'Network error. Please try again.';
+          }
+          this.createSaving = false;
         }
       };
     };
