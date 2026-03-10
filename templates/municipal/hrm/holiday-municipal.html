@@ -594,6 +594,220 @@
       document.getElementById('timeFields').style.display = (status === 'open') ? '' : 'none';
     }
   </script>
+
+  <!-- Import Holidays Modal -->
+  <div id="importHolidaysModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="w-full max-w-sm rounded border border-slate-400 bg-white shadow-2xl overflow-hidden">
+      <div class="bg-orange-700 px-4 py-2 flex justify-between items-center text-white">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-1">
+          <span class="material-icons-round text-[14px]">cloud_download</span> Import Philippine Holidays
+        </h3>
+        <button onclick="closeImportModal()" class="text-white/70 hover:text-white"><span class="material-icons-round text-[18px]">close</span></button>
+      </div>
+      <div class="p-4 bg-slate-50 space-y-3">
+        <p class="text-[11px] text-slate-600">This will import official Philippine public holidays and special non-working days for the selected fiscal year. Existing records will not be duplicated.</p>
+        <div id="importYearInfo" class="bg-orange-50 border border-orange-200 rounded p-2 text-[11px] font-bold text-orange-800"></div>
+        <div id="importProgress" class="hidden space-y-1">
+          <div class="flex items-center gap-2 text-[11px] text-slate-600">
+            <span class="material-icons-round text-sm text-orange-600" style="animation: spin 1s linear infinite">sync</span>
+            <span id="importProgressText">Importing...</span>
+          </div>
+          <div class="w-full bg-slate-200 rounded-full h-1.5">
+            <div id="importProgressBar" class="bg-orange-600 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+        <div id="importResult" class="hidden text-[11px] font-bold p-2 rounded bg-white border border-slate-200"></div>
+        <div class="flex justify-end gap-2 pt-1" id="importActions">
+          <button type="button" onclick="closeImportModal()" class="bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-[10px] font-bold uppercase">Cancel</button>
+          <button type="button" onclick="confirmImportHolidays()" id="importConfirmBtn" class="bg-orange-600 text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase hover:bg-orange-700 flex items-center gap-1">
+            <span class="material-icons-round text-sm">cloud_download</span> Import
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
+
+  <script>
+    function importCalendarificHolidays() {
+      const bodyEl = document.querySelector('body[x-data]');
+      let selectedYear = '2026';
+      try {
+        if (window.Alpine && bodyEl) {
+          const data = window.Alpine.$data(bodyEl);
+          selectedYear = data.selectedYear || '2026';
+        }
+      } catch(e) {}
+
+      const modal = document.getElementById('importHolidaysModal');
+      const progress = document.getElementById('importProgress');
+      const result = document.getElementById('importResult');
+      const actions = document.getElementById('importActions');
+      const confirmBtn = document.getElementById('importConfirmBtn');
+      const yearInfo = document.getElementById('importYearInfo');
+
+      // Reset state
+      progress.classList.add('hidden');
+      result.classList.add('hidden');
+      actions.innerHTML = '<button type="button" onclick="closeImportModal()" class="bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-[10px] font-bold uppercase">Cancel</button><button type="button" onclick="confirmImportHolidays()" id="importConfirmBtn" class="bg-orange-600 text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase hover:bg-orange-700 flex items-center gap-1"><span class="material-icons-round text-sm">cloud_download</span> Import</button>';
+      actions.classList.remove('hidden');
+
+      modal.dataset.year = selectedYear;
+      const counts = { '2025': 20, '2026': 20 };
+      yearInfo.textContent = 'FY ' + selectedYear + ': ' + (counts[selectedYear] || 20) + ' official Philippine public holidays ready to import.';
+      modal.classList.remove('hidden');
+    }
+
+    function closeImportModal() {
+      document.getElementById('importHolidaysModal').classList.add('hidden');
+    }
+
+    async function confirmImportHolidays() {
+      const modal = document.getElementById('importHolidaysModal');
+      const selectedYear = modal.dataset.year || '2026';
+      const actions = document.getElementById('importActions');
+      const progress = document.getElementById('importProgress');
+      const result = document.getElementById('importResult');
+      const progressText = document.getElementById('importProgressText');
+      const progressBar = document.getElementById('importProgressBar');
+
+      const phHolidays = {
+        '2025': [
+          { date: '2025-01-01', name: "New Year's Day", type: 'National Holiday', description: 'National Holiday', office_status: 'closed' },
+          { date: '2025-01-29', name: 'Chinese New Year', type: 'Special Non-Working Day', description: 'Lunar New Year', office_status: 'closed' },
+          { date: '2025-02-25', name: 'EDSA People Power Revolution Anniversary', type: 'Special Non-Working Day', description: 'EDSA Revolution Anniversary', office_status: 'closed' },
+          { date: '2025-04-09', name: 'Araw ng Kagitingan (Day of Valor)', type: 'National Holiday', description: 'Fall of Bataan', office_status: 'closed' },
+          { date: '2025-04-17', name: 'Maundy Thursday', type: 'National Holiday', description: 'Holy Week', office_status: 'closed' },
+          { date: '2025-04-18', name: 'Good Friday', type: 'National Holiday', description: 'Holy Week', office_status: 'closed' },
+          { date: '2025-04-19', name: 'Black Saturday', type: 'Special Non-Working Day', description: 'Holy Week', office_status: 'closed' },
+          { date: '2025-05-01', name: 'Labor Day', type: 'National Holiday', description: 'International Labour Day', office_status: 'closed' },
+          { date: '2025-06-12', name: 'Independence Day', type: 'National Holiday', description: 'Philippine Independence Day', office_status: 'closed' },
+          { date: '2025-07-04', name: 'Fil-American Friendship Day', type: 'Special Non-Working Day', description: '', office_status: 'closed' },
+          { date: '2025-08-21', name: 'Ninoy Aquino Day', type: 'National Holiday', description: '', office_status: 'closed' },
+          { date: '2025-08-25', name: 'National Heroes Day', type: 'National Holiday', description: 'Last Monday of August', office_status: 'closed' },
+          { date: '2025-11-01', name: "All Saints' Day", type: 'National Holiday', description: '', office_status: 'closed' },
+          { date: '2025-11-02', name: "All Souls' Day", type: 'Special Non-Working Day', description: '', office_status: 'closed' },
+          { date: '2025-11-30', name: 'Bonifacio Day', type: 'National Holiday', description: 'Andres Bonifacio Day', office_status: 'closed' },
+          { date: '2025-12-08', name: 'Feast of the Immaculate Conception', type: 'Special Non-Working Day', description: '', office_status: 'closed' },
+          { date: '2025-12-24', name: 'Christmas Eve', type: 'Special Non-Working Day', description: '', office_status: 'closed' },
+          { date: '2025-12-25', name: 'Christmas Day', type: 'National Holiday', description: '', office_status: 'closed' },
+          { date: '2025-12-30', name: 'Rizal Day', type: 'National Holiday', description: 'Jose Rizal Day', office_status: 'closed' },
+          { date: '2025-12-31', name: "New Year's Eve", type: 'Special Non-Working Day', description: '', office_status: 'closed' }
+        ],
+        '2026': [
+          { date: '2026-01-01', name: "New Year's Day", type: 'National Holiday', description: 'National Holiday', office_status: 'closed' },
+          { date: '2026-02-17', name: 'Chinese New Year', type: 'Special Non-Working Day', description: 'Year of the Horse', office_status: 'closed' },
+          { date: '2026-02-25', name: 'EDSA People Power Revolution Anniversary', type: 'Special Non-Working Day', description: 'EDSA Revolution Anniversary', office_status: 'closed' },
+          { date: '2026-04-02', name: 'Maundy Thursday', type: 'National Holiday', description: 'Holy Week', office_status: 'closed' },
+          { date: '2026-04-03', name: 'Good Friday', type: 'National Holiday', description: 'Holy Week', office_status: 'closed' },
+          { date: '2026-04-04', name: 'Black Saturday', type: 'Special Non-Working Day', description: 'Holy Week', office_status: 'closed' },
+          { date: '2026-04-09', name: 'Araw ng Kagitingan (Day of Valor)', type: 'National Holiday', description: 'Fall of Bataan', office_status: 'closed' },
+          { date: '2026-05-01', name: 'Labor Day', type: 'National Holiday', description: 'International Labour Day', office_status: 'closed' },
+          { date: '2026-06-12', name: 'Independence Day', type: 'National Holiday', description: 'Philippine Independence Day', office_status: 'closed' },
+          { date: '2026-07-04', name: 'Fil-American Friendship Day', type: 'Special Non-Working Day', description: '', office_status: 'closed' },
+          { date: '2026-08-21', name: 'Ninoy Aquino Day', type: 'National Holiday', description: '', office_status: 'closed' },
+          { date: '2026-08-31', name: 'National Heroes Day', type: 'National Holiday', description: 'Last Monday of August', office_status: 'closed' },
+          { date: '2026-11-01', name: "All Saints' Day", type: 'National Holiday', description: '', office_status: 'closed' },
+          { date: '2026-11-02', name: "All Souls' Day", type: 'Special Non-Working Day', description: '', office_status: 'closed' },
+          { date: '2026-11-30', name: 'Bonifacio Day', type: 'National Holiday', description: 'Andres Bonifacio Day', office_status: 'closed' },
+          { date: '2026-12-08', name: 'Feast of the Immaculate Conception', type: 'Special Non-Working Day', description: '', office_status: 'closed' },
+          { date: '2026-12-24', name: 'Christmas Eve', type: 'Special Non-Working Day', description: '', office_status: 'closed' },
+          { date: '2026-12-25', name: 'Christmas Day', type: 'National Holiday', description: '', office_status: 'closed' },
+          { date: '2026-12-30', name: 'Rizal Day', type: 'National Holiday', description: 'Jose Rizal Day', office_status: 'closed' },
+          { date: '2026-12-31', name: "New Year's Eve", type: 'Special Non-Working Day', description: '', office_status: 'closed' }
+        ]
+      };
+
+      const toImport = phHolidays[selectedYear];
+      if (!toImport) {
+        result.innerHTML = '<span class="text-red-600">No holiday data available for FY ' + selectedYear + '.</span>';
+        result.classList.remove('hidden');
+        return;
+      }
+
+      actions.classList.add('hidden');
+      progress.classList.remove('hidden');
+      result.classList.add('hidden');
+      progressText.textContent = 'Connecting to database...';
+      progressBar.style.width = '10%';
+
+      try {
+        const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js');
+        const { getFirestore, collection, addDoc, getDocs } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+          authDomain: "tlph-denr-system.firebaseapp.com",
+          projectId: "tlph-denr-system",
+          storageBucket: "tlph-denr-system.appspot.com",
+          messagingSenderId: "999028568640",
+          appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb"
+        };
+
+        let db = window.db;
+        if (!db) {
+          const existingApps = getApps();
+          const app = existingApps.length > 0 ? existingApps[0] : initializeApp(firebaseConfig);
+          db = getFirestore(app);
+        }
+
+        progressText.textContent = 'Checking existing records...';
+        progressBar.style.width = '25%';
+
+        const snapshot = await getDocs(collection(db, 'holidays'));
+        const existingDates = new Set(snapshot.docs.map(d => (d.data().date || '').split('T')[0]));
+
+        const newHolidays = toImport.filter(h => !existingDates.has(h.date));
+        const skipped = toImport.length - newHolidays.length;
+
+        if (newHolidays.length === 0) {
+          progress.classList.add('hidden');
+          result.innerHTML = '<span class="text-amber-700">All ' + toImport.length + ' FY ' + selectedYear + ' holidays already exist. Nothing new to import.</span>';
+          result.classList.remove('hidden');
+          actions.innerHTML = '<button type="button" onclick="closeImportModal()" class="bg-slate-800 text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase">Close</button>';
+          actions.classList.remove('hidden');
+          return;
+        }
+
+        let added = 0;
+        for (const holiday of newHolidays) {
+          await addDoc(collection(db, 'holidays'), holiday);
+          added++;
+          const pct = 25 + Math.round((added / newHolidays.length) * 70);
+          progressBar.style.width = pct + '%';
+          progressText.textContent = 'Saving ' + added + ' of ' + newHolidays.length + '...';
+
+          // Live-update the Alpine list
+          try {
+            const bodyEl = document.querySelector('body[x-data]');
+            if (window.Alpine && bodyEl) {
+              const data = window.Alpine.$data(bodyEl);
+              if (data && Array.isArray(data.holidays)) {
+                data.holidays = [...data.holidays, { id: 'imp-' + Date.now() + added, ...holiday }]
+                  .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+              }
+            }
+          } catch(e) {}
+        }
+
+        progressBar.style.width = '100%';
+        progress.classList.add('hidden');
+        result.innerHTML = '<span class="text-emerald-700">&#10003; Successfully imported ' + added + ' holiday(s) for FY ' + selectedYear + '.' + (skipped > 0 ? ' (' + skipped + ' already existed.)' : '') + '</span>';
+        result.classList.remove('hidden');
+        actions.innerHTML = '<button type="button" onclick="closeImportModal()" class="bg-slate-800 text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase">Close</button>';
+        actions.classList.remove('hidden');
+
+      } catch(err) {
+        console.error('Holiday import error:', err);
+        progress.classList.add('hidden');
+        result.innerHTML = '<span class="text-red-600">Import failed: ' + (err.message || 'Unknown error') + '</span>';
+        result.classList.remove('hidden');
+        actions.innerHTML = '<button type="button" onclick="closeImportModal()" class="bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-[10px] font-bold uppercase">Cancel</button><button type="button" onclick="confirmImportHolidays()" class="bg-orange-600 text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase">Retry</button>';
+        actions.classList.remove('hidden');
+      }
+    }
+  </script>
+
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </body>
 </html>
