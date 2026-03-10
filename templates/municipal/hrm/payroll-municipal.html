@@ -63,7 +63,7 @@
           <p class="text-[10px] font-bold text-gov-muted uppercase tracking-widest">General Payroll Registry • Disbursement Period: Feb 01 - Feb 15, 2026</p>
         </div>
         <div class="flex gap-2">
-            <button class="bg-white border border-gov-border text-gov-primary px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-50 transition-all flex items-center gap-2">
+            <button @click="openAllPayslipsModal()" class="bg-white border border-gov-border text-gov-primary px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-50 transition-all flex items-center gap-2">
                 <span class="material-icons-round text-sm">payments</span> View Pay Slips
             </button>
             <button @click="openDisbursementModal()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-emerald-900 transition-all flex items-center gap-2 shadow-sm">
@@ -217,6 +217,77 @@
         <div class="mt-6 flex justify-between items-end">
           <div class="text-[10px] text-slate-400 italic">This is a system-generated official document. <br>For verification, contact HR or Accounting.</div>
           <div class="text-[10px] text-slate-700 font-bold uppercase">Authorized by: <span class="text-emerald-900">DENR HRM</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- All Pay Slips Modal -->
+  <div id="all-payslips-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 hidden">
+    <div class="bg-white rounded shadow-lg w-full max-w-3xl border-2 border-emerald-900 relative flex flex-col" style="max-height:90vh">
+      <div class="flex justify-between items-center border-b border-emerald-900 px-6 py-3 bg-emerald-900 shrink-0">
+        <div class="flex items-center gap-2">
+          <img src="/static/images/denr.jpg" alt="DENR Logo" class="h-8 w-8 rounded-full border border-emerald-700 bg-white">
+          <div>
+            <div class="text-[10px] text-emerald-200 font-bold uppercase tracking-widest">DENR — Official Payroll Registry</div>
+            <div class="text-sm text-white font-black leading-tight">All Employee Pay Slips</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button @click="printAllPayslips()" class="bg-white text-emerald-900 px-3 py-1 rounded text-[10px] font-bold uppercase hover:bg-emerald-100 flex items-center gap-1">
+            <span class="material-icons-round text-sm">print</span> Print All
+          </button>
+          <button @click="closeAllPayslipsModal()" class="text-white text-2xl font-bold ml-2">&times;</button>
+        </div>
+      </div>
+      <div class="overflow-y-auto custom-scroll flex-1 px-6 py-4">
+        <template x-if="payrollRecords.length === 0">
+          <div class="text-center py-10 text-slate-400">
+            <span class="material-icons-round text-4xl">inbox</span>
+            <p class="mt-2 text-sm">No payroll records available.</p>
+          </div>
+        </template>
+        <template x-for="record in payrollRecords" :key="record.id">
+          <div class="border border-slate-200 rounded mb-4 overflow-hidden">
+            <div class="bg-slate-100 px-4 py-2 flex items-center justify-between border-b border-slate-200">
+              <div>
+                <span class="font-black text-[12px] text-gov-primary" x-text="record.employee_name"></span>
+                <span class="ml-2 text-[10px] text-slate-500 font-bold" x-text="'(' + (record.position || 'Staff') + ')'"></span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[9px] font-bold uppercase px-2 py-0.5 rounded" :class="{'bg-blue-100 text-blue-700': record.method === 'Bank', 'bg-gray-100 text-gray-700': record.method !== 'Bank'}" x-text="record.method || 'Cash'"></span>
+                <button @click="viewPayslip(record); closeAllPayslipsModal()" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded text-[9px] font-bold uppercase flex items-center gap-1">
+                  <span class="material-icons-round text-xs">open_in_new</span> View
+                </button>
+              </div>
+            </div>
+            <div class="grid grid-cols-4 divide-x divide-slate-100 text-[11px]">
+              <div class="px-4 py-2">
+                <p class="text-[9px] text-slate-400 uppercase font-bold">Basic Pay</p>
+                <p class="font-black text-slate-800 font-mono-num" x-text="formatCurrency(record.basic_pay)"></p>
+              </div>
+              <div class="px-4 py-2">
+                <p class="text-[9px] text-slate-400 uppercase font-bold">Allowances</p>
+                <p class="font-black text-slate-800 font-mono-num" x-text="formatCurrency(record.allowances)"></p>
+              </div>
+              <div class="px-4 py-2">
+                <p class="text-[9px] text-slate-400 uppercase font-bold">Deductions</p>
+                <p class="font-black text-rose-600 font-mono-num" x-text="formatCurrency(record.deductions)"></p>
+              </div>
+              <div class="px-4 py-2 bg-emerald-50">
+                <p class="text-[9px] text-slate-400 uppercase font-bold">Net Pay</p>
+                <p class="font-black text-emerald-800 font-mono-num" x-text="formatCurrency(record.net_pay)"></p>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div class="shrink-0 border-t border-slate-200 px-6 py-3 bg-slate-50 flex justify-between items-center">
+        <span class="text-[10px] text-slate-500 font-bold" x-text="'Total Employees: ' + payrollRecords.length"></span>
+        <div class="flex gap-6 text-[11px] font-bold">
+          <span>Gross: <span class="font-mono-num text-slate-900" x-text="formatCurrency(totalGross)"></span></span>
+          <span class="text-rose-600">Deductions: <span class="font-mono-num" x-text="formatCurrency(totalDeductions)"></span></span>
+          <span class="text-emerald-800">Net: <span class="font-mono-num" x-text="formatCurrency(totalNet)"></span></span>
         </div>
       </div>
     </div>
@@ -406,6 +477,18 @@
         closePayslip() {
           this.selectedPayslip = null;
           document.getElementById('payslip-modal').classList.add('hidden');
+        },
+
+        openAllPayslipsModal() {
+          document.getElementById('all-payslips-modal').classList.remove('hidden');
+        },
+
+        closeAllPayslipsModal() {
+          document.getElementById('all-payslips-modal').classList.add('hidden');
+        },
+
+        printAllPayslips() {
+          window.print();
         },
 
         openDisbursementModal() {
