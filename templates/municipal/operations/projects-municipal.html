@@ -244,7 +244,7 @@
             <span class="text-[9px] text-slate-500 italic uppercase font-bold tracking-wider">
               Showing <span id="visibleCount" class="text-slate-900 font-black">0</span> records • Municipal FY 2026
             </span>
-            <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
+            <button id="exportCsvBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
               <span class="material-icons-round text-[12px]">file_download</span> Export CSV
             </button>
           </div>
@@ -458,6 +458,7 @@
   const projectViewModal = document.getElementById('projectViewModal');
   const projectViewCloseIcon = document.getElementById('projectViewCloseIcon');
   const projectViewCloseBtn = document.getElementById('projectViewCloseBtn');
+  const exportCsvBtn = document.getElementById('exportCsvBtn');
   const viewProjectName = document.getElementById('viewProjectName');
   const viewProjectBarangay = document.getElementById('viewProjectBarangay');
   const viewProjectMunicipality = document.getElementById('viewProjectMunicipality');
@@ -574,6 +575,59 @@
     return statusText;
   }
 
+  function toCsvCell(value) {
+    const normalized = String(value ?? '').replace(/\r?\n|\r/g, ' ').trim();
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
+  }
+
+  function exportProjectsCsv() {
+    const rows = Array.from(document.querySelectorAll('#projectTable tbody tr.proj-row'));
+    const visibleRows = rows.filter((row) => row.style.display !== 'none');
+    const rowsToExport = visibleRows.length ? visibleRows : rows;
+
+    if (!rowsToExport.length) {
+      window.alert('No project records available to export.');
+      return;
+    }
+
+    const headers = ['Project Name', 'Barangay / Area', 'Municipality', 'Start Date', 'Status'];
+    const csvLines = [headers.map(toCsvCell).join(',')];
+
+    rowsToExport.forEach((row) => {
+      const cells = row.querySelectorAll('td');
+      if (!cells.length) return;
+
+      const statusBadge = cells[4] ? cells[4].querySelector('span') : null;
+      const statusText = statusBadge ? statusBadge.textContent.trim() : '';
+
+      const values = [
+        cells[0] ? cells[0].textContent.trim() : '',
+        cells[1] ? cells[1].textContent.trim() : '',
+        cells[2] ? cells[2].textContent.trim() : '',
+        cells[3] ? cells[3].textContent.trim() : '',
+        statusText
+      ];
+
+      csvLines.push(values.map(toCsvCell).join(','));
+    });
+
+    const csvContent = csvLines.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const filename = `municipal-projects-${dateStamp}.csv`;
+
+    const downloadLink = document.createElement('a');
+    downloadLink.href = url;
+    downloadLink.download = filename;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(url);
+  }
+
   // Init
   document.addEventListener("DOMContentLoaded", () => {
       filterTable();
@@ -642,6 +696,10 @@
             closeProjectViewModal();
           }
         });
+      }
+
+      if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', exportProjectsCsv);
       }
   });
 
