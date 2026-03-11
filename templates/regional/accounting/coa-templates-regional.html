@@ -521,7 +521,46 @@
         },
 
         exportTemplate() {
-          alert('Export (demo)');
+          let rows, filename;
+          if (this.selectedTemplateId) {
+            const tpl = this.templates.find(t => t.id === this.selectedTemplateId);
+            const safeName = tpl ? tpl.name.replace(/[^a-z0-9]/gi, '_') : 'template';
+            filename = `coa_${safeName}.csv`;
+            rows = [['Code', 'Account Name', 'Type', 'Municipality', 'Locked']];
+            this.selectedTemplateAccounts.forEach(a => {
+              rows.push([
+                a.code || '',
+                a.name || '',
+                a.account_type || '',
+                a.municipality || '',
+                a.locked ? 'Yes' : 'No'
+              ]);
+            });
+          } else {
+            filename = 'coa_templates_all.csv';
+            rows = [['Template', 'Code', 'Account Name', 'Type', 'Municipality', 'Locked']];
+            this.accounts.forEach(a => {
+              const tpl = this.templates.find(t => t.id === a.template_id);
+              rows.push([
+                tpl ? tpl.name : '',
+                a.code || '',
+                a.name || '',
+                a.account_type || '',
+                a.municipality || '',
+                a.locked ? 'Yes' : 'No'
+              ]);
+            });
+          }
+          const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
         }
       };
     }
