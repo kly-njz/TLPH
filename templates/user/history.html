@@ -584,6 +584,20 @@
     </div>
   </div>
 
+  <!-- License Detail Modal -->
+  <div id="licenseDetailModal" style="display:none;" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="p-4 sm:p-5 flex items-center justify-between" style="background: #f0fdf4; border-bottom: 2px solid #bbf7d0;">
+        <h2 class="text-base font-black uppercase text-green-800"><span class="material-icons-round" style="font-size:16px;vertical-align:middle;margin-right:6px;">assignment</span> License Application Details</h2>
+        <button onclick="closeLicenseDetail()" class="text-gray-400 hover:text-gray-700 text-xl font-bold leading-none">&times;</button>
+      </div>
+      <div id="ldmBody" class="p-4 sm:p-5"></div>
+      <div class="border-t border-gray-200 p-4">
+        <button onclick="closeLicenseDetail()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg text-xs transition-all">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Receipt Modal -->
   <div class="receipt-modal fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="receiptModal">
     <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -904,7 +918,7 @@
           <td data-label="Date">${license.date}</td>
           <td data-label="ID"><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${license.id.substring(0, 8)}</code></td>
           <td data-label="Action" style="text-align: center;">
-            <button class="action-btn" onclick="alert('License Details ID: ${license.id}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</button>
+            <button class="action-btn" onclick="openLicenseDetail('${license.id}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</button>
           </td>
         </tr>
       `).join('');
@@ -1412,6 +1426,140 @@
     window.closeServiceDetail = function() {
       document.getElementById('serviceDetailModal').style.display = 'none';
     };
+
+    window.openLicenseDetail = async function(licenseId) {
+      const modal = document.getElementById('licenseDetailModal');
+      modal.style.display = 'flex';
+      document.getElementById('ldmBody').innerHTML = '<div class="text-center py-8"><span class="material-icons-round text-green-700" style="font-size:36px;display:block;margin-bottom:8px;">hourglass_empty</span><p class="text-xs text-gray-400 font-bold uppercase">Loading details...</p></div>';
+      try {
+        const snap = await getDoc(doc(db, 'license_applications', licenseId));
+        if (!snap.exists()) {
+          document.getElementById('ldmBody').innerHTML = '<p class="text-xs text-red-500 font-bold">Record not found.</p>';
+          return;
+        }
+        const d = snap.data();
+        const status = (d.status || 'pending').toLowerCase();
+        const isRejected = status === 'rejected';
+        const isApproved = status === 'approved';
+
+        const fmtDate = (ts) => {
+          if (!ts) return 'N/A';
+          const dt = ts.toDate ? ts.toDate() : new Date(ts);
+          return dt.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+        };
+
+        const fmtKey = (key) => key
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/[_-]/g, ' ')
+          .replace(/\b\w/g, l => l.toUpperCase())
+          .trim();
+
+        let html = '';
+
+        // Rejection block
+        if (isRejected) {
+          const rejLevel = d.rejectedByLevel || 'DENR';
+          const rejNote = d.rejectionNote || '';
+          const rejEmail = d.rejectedByEmail || '';
+          html += `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+              <p class="text-[10px] font-black uppercase text-red-700 mb-1">&#x2717; Rejected by ${rejLevel}</p>
+              ${rejEmail ? `<p class="text-[10px] text-red-500 font-semibold mb-2">By: ${rejEmail}</p>` : ''}
+              <div class="border-t border-red-100 pt-2 mt-1">
+                <p class="text-[10px] font-bold uppercase text-red-600 mb-0.5">Reason</p>
+                <p class="text-xs text-red-800 font-semibold">${rejNote || 'No reason provided.'}</p>
+              </div>
+            </div>
+          `;
+        }
+
+        // Core info
+        const applicationType = (d.applicationType || 'License/Permit').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const statusColor = isRejected ? 'text-red-600' : isApproved ? 'text-green-700' : 'text-amber-600';
+        const statusBg = isRejected ? 'bg-red-50 border-red-200' : isApproved ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200';
+
+        html += `
+          <div class="mb-4 p-3 rounded-lg border ${statusBg}">
+            <p class="text-[10px] font-black uppercase text-gray-500 mb-1">Application Type</p>
+            <p class="font-black text-green-800 text-sm mb-2">${applicationType}</p>
+            <div class="flex items-center gap-2">
+              <span class="inline-block px-3 py-1 rounded text-[10px] font-black uppercase border ${statusBg} ${statusColor}">${(d.status || 'PENDING').toUpperCase()}</span>
+              <span class="text-[10px] text-gray-400 font-semibold">${fmtDate(d.createdAt)}</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 text-xs mb-3">
+            ${d.amount ? `<div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Application Fee</p><p class="font-black text-green-700">&#8369; ${Number(d.amount).toLocaleString('en-PH', {minimumFractionDigits: 2})}</p></div>` : ''}
+            ${d.paymentStatus ? `<div><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Payment Status</p><p class="font-bold ${d.paymentStatus === 'paid' ? 'text-green-700' : 'text-amber-600'}">${(d.paymentStatus).toUpperCase()}</p></div>` : ''}
+            ${d.userEmail ? `<div class="col-span-2"><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Email</p><p class="font-semibold text-gray-700 break-all">${d.userEmail}</p></div>` : ''}
+            <div class="col-span-2"><p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">Reference ID</p><p class="font-mono text-[10px] text-gray-500 break-all">${d.externalId || snap.id}</p></div>
+          </div>
+        `;
+
+        // Form fields (the actual data they entered in the application)
+        const formFields = (d.formData && d.formData.formFields) ? d.formData.formFields : {};
+        const skipKeys = new Set(['xendit_raw_amount', '']);
+        const fieldEntries = Object.entries(formFields).filter(([k, v]) => v && String(v).trim() && !skipKeys.has(k));
+
+        if (fieldEntries.length > 0) {
+          html += `
+            <div class="mt-3 pt-3 border-t border-green-100 bg-green-50 rounded-lg p-3">
+              <p class="text-green-800 font-black uppercase tracking-widest text-[10px] mb-2"><i class="fa-solid fa-file-lines mr-1"></i> Application Form Details</p>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+          `;
+          fieldEntries.forEach(([key, value]) => {
+            html += `<div><p class="text-gray-400 font-bold uppercase tracking-widest text-[10px] mb-0.5">${fmtKey(key)}</p><p class="font-semibold text-gray-800 break-words">${String(value)}</p></div>`;
+          });
+          html += `</div></div>`;
+        }
+
+        // Uploaded files
+        const uploadedFiles = d.uploadedFiles || {};
+        const fileEntries = Object.entries(uploadedFiles).filter(([k, v]) => v);
+
+        if (fileEntries.length > 0) {
+          html += `
+            <div class="mt-3 pt-3 border-t border-blue-100 bg-blue-50 rounded-lg p-3">
+              <p class="text-blue-800 font-black uppercase tracking-widest text-[10px] mb-2"><i class="fa-solid fa-paperclip mr-1"></i> Uploaded Documents</p>
+              <div class="space-y-2">
+          `;
+          fileEntries.forEach(([key, val]) => {
+            const files = Array.isArray(val) ? val : [val];
+            files.forEach(f => {
+              if (f && f.name) {
+                html += `
+                  <div class="flex items-center justify-between bg-white border border-blue-100 rounded-lg p-2 gap-2">
+                    <div class="min-w-0">
+                      <p class="text-[9px] font-black uppercase text-gray-400 mb-0.5">${fmtKey(key)}</p>
+                      <p class="font-semibold text-gray-800 text-xs truncate">${f.name}</p>
+                      ${f.size ? `<p class="text-[9px] text-gray-400">${(f.size/1024).toFixed(1)} KB</p>` : ''}
+                    </div>
+                    ${f.downloadUrl ? `<a href="${f.downloadUrl}" target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center gap-1 text-blue-600 hover:text-blue-800 font-black text-[10px] uppercase bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded transition-all"><i class="fa-solid fa-eye"></i> View</a>` : '<span class="text-[9px] text-gray-400 italic shrink-0">No URL</span>'}
+                  </div>
+                `;
+              }
+            });
+          });
+          html += `</div></div>`;
+        }
+
+        if (!fieldEntries.length && !fileEntries.length) {
+          html += `<p class="text-xs text-gray-400 italic text-center py-4">No additional details available for this application.</p>`;
+        }
+
+        document.getElementById('ldmBody').innerHTML = html;
+      } catch (err) {
+        console.error('Error loading license detail:', err);
+        document.getElementById('ldmBody').innerHTML = '<p class="text-xs text-red-500 font-bold">Error loading details. Please try again.</p>';
+      }
+    };
+
+    window.closeLicenseDetail = function() {
+      document.getElementById('licenseDetailModal').style.display = 'none';
+    };
+
+    document.getElementById('licenseDetailModal').addEventListener('click', function(e) {
+      if (e.target === this) closeLicenseDetail();
+    });
 
     // Initialize on auth state change
     let appStatusUnsubscribe = null;
