@@ -253,7 +253,7 @@
                   <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">
                       Showing <span id="visibleCount" class="text-slate-900 font-black">0</span> records • Municipal FY 2026
                   </span>
-                  <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
+                  <button id="exportCsvBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
                     <span class="material-icons-round text-[12px]">file_download</span> Export CSV
                   </button>
               </div>
@@ -558,6 +558,57 @@
       }
     }
 
+    function csvEscape(value) {
+      const text = String(value ?? '')
+        .replace(/\r?\n|\r/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return '"' + text.replace(/"/g, '""') + '"';
+    }
+
+    function exportVisibleQuotationsToCsv() {
+      const rows = Array.from(document.querySelectorAll('#quoteTable tbody tr.quote-row'));
+      const visibleRows = rows.filter(row => row.style.display !== 'none');
+
+      if (!visibleRows.length) {
+        alert('No visible records to export.');
+        return;
+      }
+
+      const headers = ['Quotation Number', 'Client / Office', 'Barangay', 'Total Amount', 'Filing Date', 'Status'];
+      const csvLines = [headers.map(csvEscape).join(',')];
+
+      visibleRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const values = [
+          cells[0] ? cells[0].innerText : '',
+          cells[1] ? cells[1].innerText : '',
+          cells[2] ? cells[2].innerText : '',
+          cells[3] ? cells[3].innerText : '',
+          cells[4] ? cells[4].innerText : '',
+          cells[5] ? cells[5].innerText : ''
+        ];
+        csvLines.push(values.map(csvEscape).join(','));
+      });
+
+      const csvContent = '\uFEFF' + csvLines.join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      link.href = url;
+      link.download = `quotations-${y}-${m}-${d}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(url);
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         filterTable();
 
@@ -566,6 +617,11 @@
         const quoteForm = document.getElementById('quoteForm');
         const quoteCancelBtn = document.getElementById('quoteCancelBtn');
         const quoteCloseIcon = document.getElementById('quoteCloseIcon');
+        const exportCsvBtn = document.getElementById('exportCsvBtn');
+
+        if (exportCsvBtn) {
+          exportCsvBtn.addEventListener('click', exportVisibleQuotationsToCsv);
+        }
 
         if (createQuoteBtn && quoteModal && quoteForm && quoteCancelBtn && quoteCloseIcon) {
           createQuoteBtn.addEventListener('click', openQuoteModal);
