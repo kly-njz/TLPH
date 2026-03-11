@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="/static/css/dashboard-municipal-custom.css" />
+  <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
 </head>
 
 <body class="h-screen w-full bg-govbg font-gov text-govtext flex flex-col overflow-hidden">
@@ -352,8 +353,170 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script>
-    function exportDashboard(){ alert('Export dashboard (demo)'); }
+    function exportDashboard() {
+      const exportBtn = document.querySelector('button[onclick="exportDashboard()"]');
+      if (exportBtn) { exportBtn.disabled = true; }
+
+      const mainEl = document.querySelector('main');
+
+      // ── 1. Deep-clone into a hidden but LAY-OUT-ACTIVE position
+      //        (position:absolute so flex/grid children compute correctly)
+      const clone = mainEl.cloneNode(true);
+      clone.style.cssText =
+        'position:absolute;top:0;left:-29999px;' +
+        'width:' + mainEl.scrollWidth + 'px;' +
+        'overflow:visible;height:auto;max-height:none;' +
+        'flex:none;z-index:-999;background:#f8fafc;pointer-events:none;';
+      document.body.appendChild(clone);
+
+      // ── 2. Copy live canvas pixels into clone (cloneNode gives blank canvases)
+      const origCanvases  = mainEl.querySelectorAll('canvas');
+      const cloneCanvases = clone.querySelectorAll('canvas');
+      origCanvases.forEach((orig, i) => {
+        const dest = cloneCanvases[i];
+        if (!dest) return;
+        dest.width  = orig.width;
+        dest.height = orig.height;
+        dest.getContext('2d').drawImage(orig, 0, 0);
+      });
+
+      // ── 3. Expand ALL collapsed flex/overflow constraints using class names
+      //        (do NOT rely on getComputedStyle — unreliable off-viewport)
+      clone.querySelectorAll('*').forEach(el => {
+        const cls = (el.getAttribute('class') || '');
+        if (/overflow-hidden|overflow-auto|overflow-scroll|overflow-y-auto/.test(cls)) {
+          el.style.overflow  = 'visible';
+          el.style.height    = 'auto';
+          el.style.maxHeight = 'none';
+        }
+        if (/\bflex-1\b/.test(cls)) {
+          el.style.flex   = 'none';
+          el.style.height = 'auto';
+        }
+        if (/\bmin-h-0\b/.test(cls)) {
+          el.style.minHeight = 'auto';
+          el.style.height    = 'auto';
+        }
+        if (/\bh-screen\b|\bh-full\b/.test(cls)) {
+          el.style.height = 'auto';
+        }
+      });
+
+      // ── 4. Hide UI controls from the captured output (selects, export btn, badge)
+      const cloneHeader = clone.querySelector('header');
+      if (cloneHeader) {
+        cloneHeader.querySelectorAll('select, button').forEach(el => el.style.display = 'none');
+        cloneHeader.querySelectorAll('[class*="bg-blue-50"]').forEach(el => el.style.display = 'none');
+      }
+
+      // ── 5. Wait for reflow, then capture
+      setTimeout(() => {
+        const captureW = clone.scrollWidth;
+        const captureH = clone.scrollHeight;
+
+        html2canvas(clone, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          scrollX: 0,
+          scrollY: 0,
+          x: 0,
+          y: 0,
+          width:        captureW,
+          height:       captureH,
+          windowWidth:  captureW,
+          windowHeight: captureH,
+          logging: false,
+          backgroundColor: '#f8fafc'
+        }).then(canvas => {
+          document.body.removeChild(clone);
+
+          const { jsPDF } = window.jspdf;
+          const pageW    = 297;  // A4 landscape (mm)
+          const pageH    = 210;
+          const margin   = 8;
+          const headerH  = 10;
+          const footerH  = 6;
+          const contentY = headerH + 2;
+          // ── 0.5 mm safety margin so floating-point never clips the last pixel
+          const contentH = pageH - contentY - footerH - 0.5;
+          const usableW  = pageW - margin * 2;
+
+          const imgW     = canvas.width;
+          const imgH     = canvas.height;
+          const ratio    = usableW / imgW;          // mm per canvas-px
+          const pagePxH  = Math.floor(contentH / ratio); // px per page (floor = safe)
+          const pagesNeeded = Math.ceil(imgH / pagePxH);
+
+          const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+          const today   = new Date();
+          const dateStr = today.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+          const fileName = 'accounting-dashboard-' + today.toISOString().slice(0, 10) + '.pdf';
+
+          function drawHeader(page) {
+            pdf.setFillColor(30, 58, 138);
+            pdf.rect(0, 0, pageW, headerH, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(8);
+            pdf.text('ACCOUNTING DASHBOARD — MUNICIPALITY', margin, 6.5);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(7);
+            pdf.text('Exported: ' + dateStr + '   |   Page ' + page + ' of ' + pagesNeeded,
+                     pageW - margin, 6.5, { align: 'right' });
+          }
+
+          function drawFooter() {
+            pdf.setDrawColor(203, 213, 225);
+            pdf.line(margin, pageH - footerH, pageW - margin, pageH - footerH);
+            pdf.setTextColor(148, 163, 184);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(6.5);
+            pdf.text('TLPH Municipal Accounting System  •  Confidential', margin, pageH - 2.5);
+            pdf.text('www.tlph.gov.ph', pageW - margin, pageH - 2.5, { align: 'right' });
+          }
+
+          for (let i = 0; i < pagesNeeded; i++) {
+            const srcY = i * pagePxH;
+            const srcH = Math.min(pagePxH, imgH - srcY);
+            if (srcH <= 0) break;
+
+            if (i > 0) pdf.addPage();
+            drawHeader(i + 1);
+
+            const slice = document.createElement('canvas');
+            slice.width  = imgW;
+            slice.height = srcH;
+            const ctx = slice.getContext('2d');
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, imgW, srcH);
+            ctx.drawImage(canvas, 0, srcY, imgW, srcH, 0, 0, imgW, srcH);
+
+            // Scale to fit — renderH is always ≤ contentH thanks to floor + 0.5 mm margin
+            const renderH = srcH * ratio;
+            pdf.addImage(slice.toDataURL('image/jpeg', 0.95), 'JPEG',
+                         margin, contentY, usableW, renderH);
+            drawFooter();
+          }
+
+          pdf.save(fileName);
+
+        }).catch(err => {
+          if (document.body.contains(clone)) document.body.removeChild(clone);
+          console.error('PDF export failed:', err);
+          alert('Export failed. Please try again.');
+        }).finally(() => {
+          if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = '<span class="material-icons-round text-[14px]">download</span> Export';
+          }
+        });
+      }, 250);
+    }
     function viewAllAlerts(){ alert('Open municipal alerts page (demo)'); }
     function viewAllActivity(){ alert('Open municipal activity page (demo)'); }
 
