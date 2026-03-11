@@ -65,7 +65,7 @@
         </div>
 
         <div class="flex gap-1.5 no-print">
-          <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+          <button @click="exportCSV()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">file_download</span> Export
           </button>
           <button @click="openAddModal()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
@@ -466,6 +466,36 @@
             status: 'Active',
             municipality: ''
           };
+        },
+
+        exportCSV() {
+          const rows = this.filteredEmployees;
+          if (!rows.length) { alert('No records to export.'); return; }
+          const headers = ['Employee ID','Last Name','First Name','Middle Name','Email','Designation','Department','Scope','Municipality','Employment Type','Status'];
+          const escape = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+          const lines = [
+            headers.map(escape).join(','),
+            ...rows.map(e => [
+              e.employee_id,
+              e.last_name,
+              e.first_name,
+              e.middle_name,
+              e.email,
+              e.designation,
+              e.department_name,
+              this.normalizeScope(e.scope),
+              e.municipality,
+              this.normalizeType(e.employment_type),
+              e.status
+            ].map(escape).join(','))
+          ];
+          const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'personnel_registry_{{ region_name | replace(" ", "_") }}_' + new Date().toISOString().slice(0,10) + '.csv';
+          a.click();
+          URL.revokeObjectURL(url);
         },
 
         async addEmployee() {
