@@ -65,7 +65,7 @@
         </div>
 
         <div class="flex gap-1.5 no-print">
-          <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+          <button @click="exportCSV()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">file_download</span> Export
           </button>
           <button @click="deptModalOpen = true" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
@@ -322,6 +322,34 @@
             console.error('[DEPARTMENTS] Save failed:', error);
             alert(error.message || 'Failed to save department');
           }
+        },
+
+        exportCSV() {
+          const rows = this.filteredDepartments;
+          if (!rows.length) { alert('No records to export.'); return; }
+          const headers = ['Office Code', 'Office / Unit Name', 'Scope', 'Reports To', 'Head / OIC', 'Status'];
+          const escape = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+          const csv = [
+            headers.map(escape).join(','),
+            ...rows.map(d => [
+              d.department_code,
+              d.department_name,
+              d.scope,
+              d.parent_code || '',
+              d.head_name,
+              d.status
+            ].map(escape).join(','))
+          ].join('\r\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const scope = this.scopeFilter ? '_' + this.scopeFilter : '';
+          a.href = url;
+          a.download = 'departments' + scope + '_' + new Date().toISOString().slice(0,10) + '.csv';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
         },
 
         resetFilters() {
