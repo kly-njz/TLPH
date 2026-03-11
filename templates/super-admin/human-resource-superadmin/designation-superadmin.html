@@ -157,13 +157,19 @@
             <div class="flex-1 flex flex-col xl:flex-row gap-2 min-h-0">
                 
                 <aside class="w-full xl:w-[260px] flex flex-col gap-2 shrink-0">
-                    <div class="gov-card p-2 flex-1 flex flex-col min-h-[150px] xl:min-h-0">
-                        <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-gov-blue pl-1.5 shrink-0">Designations by Grade</h2>
-                        <div class="chart-safe-zone"><div class="chart-container"><canvas id="chartGrade"></canvas></div></div>
+                    <div class="gov-card p-2 flex-1 flex flex-col min-h-[150px] xl:min-h-0 cursor-pointer hover:border-gov-blue transition-colors group" onclick="openChartModal('grade')">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-gov-blue pl-1.5">Designations by Grade</h2>
+                            <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-blue transition-colors">open_in_full</span>
+                        </div>
+                        <div class="chart-safe-zone pointer-events-none"><div class="chart-container"><canvas id="chartGrade"></canvas></div></div>
                     </div>
-                    <div class="gov-card p-2 flex-1 flex flex-col min-h-[150px] xl:min-h-0">
-                        <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-gov-blue pl-1.5 shrink-0">Operational Status Mix</h2>
-                        <div class="chart-safe-zone"><div class="chart-container"><canvas id="chartStatus"></canvas></div></div>
+                    <div class="gov-card p-2 flex-1 flex flex-col min-h-[150px] xl:min-h-0 cursor-pointer hover:border-gov-blue transition-colors group" onclick="openChartModal('status')">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-1 shrink-0">
+                            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 m-0 border-l-2 border-gov-blue pl-1.5">Operational Status Mix</h2>
+                            <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-blue transition-colors">open_in_full</span>
+                        </div>
+                        <div class="chart-safe-zone pointer-events-none"><div class="chart-container"><canvas id="chartStatus"></canvas></div></div>
                     </div>
                 </aside>
 
@@ -301,6 +307,23 @@
         </div>
     </div>
 
+    <div id="chartModalWrapper" class="gov-modal no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+        <div id="chartModalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 id="modalChartTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-line text-slate-400"></i> Chart Detailed View
+                </h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-6 bg-slate-50 flex-1 h-[50vh] min-h-[350px] relative">
+                <canvas id="modalCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
     <script>
         const regionMap = {
             "All Regions": ["All Municipalities"],
@@ -372,7 +395,7 @@
             $("kpiDepartments").textContent = new Set(filtered.map(x => x.department)).size;
         }
 
-        let chartGrade, chartStatus;
+        let chartGrade, chartStatus, modalChartInstance = null;
         Chart.defaults.font.family = "Verdana, Arial, sans-serif";
         Chart.defaults.font.size = 8;
         Chart.defaults.color = "#64748b";
@@ -429,6 +452,59 @@
                     plugins: { legend: { position: "bottom", labels: { boxWidth: 6, font: { weight: 'bold' } } } } 
                 }
             });
+        }
+
+        // --- MODAL LOGIC ---
+        function openChartModal(type) {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            const modalTitle = document.getElementById('modalChartTitle');
+            
+            modalWrapper.classList.remove('hidden');
+            modalWrapper.classList.add('flex');
+            setTimeout(() => { modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
+            
+            if (modalChartInstance) modalChartInstance.destroy();
+
+            const ctx = document.getElementById('modalCanvas').getContext('2d');
+            const modalFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+
+            if (type === 'grade') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-column text-gov-blue mr-2"></i> Designations by Grade (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: chartGrade.data,
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { grid: {display:false}, ticks: { font: modalFont } }, y: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont, stepSize: 1 } } }
+                    }
+                });
+            } else if (type === 'status') {
+                modalTitle.innerHTML = '<i class="fa-solid fa-chart-pie text-emerald-600 mr-2"></i> Operational Status Mix (Detailed View)';
+                modalChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: chartStatus.data,
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, 
+                        cutout: '60%', 
+                        plugins: { legend: { display:true, position: 'right', labels: {font: modalFont, boxWidth: 12} } } 
+                    }
+                });
+            }
+        }
+
+        function closeChartModal() {
+            const modalWrapper = document.getElementById('chartModalWrapper');
+            const modalBody = document.getElementById('chartModalBody');
+            
+            modalBody.classList.remove('scale-100');
+            modalBody.classList.add('scale-95');
+            setTimeout(() => { 
+                modalWrapper.classList.remove('flex');
+                modalWrapper.classList.add('hidden');
+                if(modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } 
+            }, 300);
         }
 
         function badge(status) {
