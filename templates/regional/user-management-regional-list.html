@@ -171,7 +171,7 @@
 
   <script type="module">
     import { auth, db } from '/static/js/firebase-config.js';
-    import { collection, getDocs, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { collection, getDocs, getDocsFromServer, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
     let allUsers = [];
@@ -298,7 +298,42 @@
       }
     };
 
-    document.getElementById("btnRefresh").onclick = loadRegionalUsers;
+    document.getElementById("btnRefresh").addEventListener('click', async () => {
+      const btn = document.getElementById('btnRefresh');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-icons-round text-[12px] animate-spin">refresh</span> Refreshing...';
+      try {
+        const uSnap = await getDocsFromServer(collection(db, 'users'));
+        allUsers = [];
+        const munSet = new Set();
+        const allowedRoles = ['user', 'municipal_admin', 'regional_admin'];
+        uSnap.forEach(dSnapshot => {
+          const d = dSnapshot.data();
+          const userRole = d.role || 'user';
+          const userProvince = (d.province || '').toUpperCase();
+          if (allowedRoles.includes(userRole) && userProvinces.length > 0 && userProvinces.includes(userProvince)) {
+            allUsers.push({
+              id: dSnapshot.id,
+              name: `${d.firstName || ''} ${d.lastName || ''}`.trim() || d.email || 'Unknown User',
+              email: d.email || 'N/A',
+              municipality: (d.municipality || '').toUpperCase(),
+              province: userProvince,
+              status: d.status || 'Active',
+              role: userRole
+            });
+            if (d.municipality) munSet.add(d.municipality.toUpperCase());
+          }
+        });
+        const munSelect = document.getElementById('municipalitySelect');
+        munSelect.innerHTML = '<option value="all">All Municipalities</option>';
+        Array.from(munSet).sort().forEach(m => { munSelect.innerHTML += `<option value="${m}">${m}</option>`; });
+        render();
+      } catch (e) { console.error('Refresh error:', e); }
+      finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons-round text-[12px]">refresh</span> Refresh Data';
+      }
+    });
     document.getElementById("provinceSelect").onchange = render;
     document.getElementById("municipalitySelect").onchange = render;
     document.getElementById("searchInput").oninput = render;

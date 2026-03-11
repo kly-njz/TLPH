@@ -55,7 +55,7 @@
     {% include 'regional/sidenav.html' %}
   </div>
 
-  <div class="content-area transition-all" x-data="{ dtrModalOpen: false }">
+  <div class="content-area transition-all" x-data="{ dtrModalOpen: false, viewModalOpen: false }" @open-view-modal.window="viewModalOpen = true">
     <main class="flex-1 flex flex-col min-w-0 p-3 gap-2 overflow-y-auto custom-scrollbar">
 
       <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-teal-700 mb-1">
@@ -70,7 +70,7 @@
         </div>
 
         <div class="flex gap-1.5 no-print">
-          <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+          <button onclick="printForm48()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">print</span> Print Form 48
           </button>
           <button @click="dtrModalOpen = true" class="gov-btn bg-teal-700 hover:bg-teal-800 text-white shadow-sm flex items-center gap-1">
@@ -482,6 +482,162 @@
       document.getElementById('statusFilter').value = '';
       document.getElementById('scopeFilter').value = '';
       filterTable();
+    }
+
+    function printForm48() {
+      const q = document.getElementById('searchDtr').value.toLowerCase().trim();
+      const statusF = document.getElementById('statusFilter').value;
+      const scopeF = document.getElementById('scopeFilter').value;
+      const dateF = document.getElementById('dateFilter').value;
+
+      const records = attendanceRecords.filter(rec => {
+        const text = `${rec.full_name || ''} ${rec.employee_id || ''} ${rec.assignment || ''}`.toLowerCase();
+        const matchSearch = !q || text.includes(q);
+        const matchStatus = !statusF || (rec.status || '') === statusF;
+        const matchScope = !scopeF || (rec.scope || '') === scopeF;
+        const matchDate = !dateF || (rec.date || '') === dateF;
+        return matchSearch && matchStatus && matchScope && matchDate;
+      });
+
+      const printDate = dateF
+        ? new Date(dateF + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+      const regionLabel = document.querySelector('h1')?.closest('header')?.querySelector('p')?.textContent?.split('&')[0]?.trim() || '{{ region_name }}';
+
+      const rows = records.map((rec, i) => {
+        function statusBadge(s) {
+          if (s === 'Present') return 'color:#15803d;font-weight:800;';
+          if (s === 'Late') return 'color:#b45309;font-weight:800;';
+          if (s === 'Absent') return 'color:#be123c;font-weight:800;';
+          if (s === 'Undertime') return 'color:#c2410c;font-weight:800;';
+          if (s === 'Leave') return 'color:#0369a1;font-weight:800;';
+          return 'color:#334155;font-weight:800;';
+        }
+        return `
+          <tr style="font-size:9px;border-bottom:1px solid #e2e8f0;">
+            <td style="padding:4px 5px;text-align:center;border-right:1px solid #e2e8f0;">${i + 1}</td>
+            <td style="padding:4px 5px;border-right:1px solid #e2e8f0;font-family:monospace;">${rec.employee_id || 'N/A'}</td>
+            <td style="padding:4px 5px;border-right:1px solid #e2e8f0;text-transform:uppercase;font-weight:700;">${rec.full_name || 'N/A'}</td>
+            <td style="padding:4px 5px;border-right:1px solid #e2e8f0;">${rec.assignment || 'N/A'}</td>
+            <td style="padding:4px 5px;border-right:1px solid #e2e8f0;text-align:center;">${rec.scope || 'REGIONAL'}</td>
+            <td style="padding:4px 5px;border-right:1px solid #e2e8f0;text-align:center;font-family:monospace;">${rec.time_in || '--:--'}</td>
+            <td style="padding:4px 5px;border-right:1px solid #e2e8f0;text-align:center;font-family:monospace;">${rec.time_out || '--:--'}</td>
+            <td style="padding:4px 5px;border-right:1px solid #e2e8f0;text-align:center;font-family:monospace;">${Number(rec.hours || 0).toFixed(2)}</td>
+            <td style="padding:4px 5px;border-right:1px solid #e2e8f0;text-align:center;"><span style="${statusBadge(rec.status)}">${rec.status || 'Present'}</span></td>
+            <td style="padding:4px 5px;font-style:italic;color:#64748b;">${rec.remarks || 'Regular'}</td>
+          </tr>`;
+      }).join('');
+
+      const present = records.filter(r => r.status === 'Present').length;
+      const late = records.filter(r => r.status === 'Late').length;
+      const absent = records.filter(r => r.status === 'Absent').length;
+      const onLeave = records.filter(r => r.status === 'Leave').length;
+      const undertime = records.filter(r => r.status === 'Undertime').length;
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>CSC Form 48 – Daily Time Record Summary</title>
+<style>
+  @media print { @page { size: legal landscape; margin: 12mm 10mm; } }
+  body { font-family: 'Arial', sans-serif; font-size: 9px; color: #1e293b; margin: 0; }
+  .page-wrap { max-width: 1050px; margin: 0 auto; padding: 10px 15px; }
+  .letterhead { text-align: center; border-bottom: 3px solid #0f766e; padding-bottom: 8px; margin-bottom: 8px; }
+  .letterhead .form-no { font-size: 8px; font-weight: 800; color: #0f766e; text-transform: uppercase; letter-spacing: 0.1em; }
+  .letterhead .form-title { font-size: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #0f172a; margin: 2px 0; }
+  .letterhead .form-sub { font-size: 8px; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; }
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; border: 1px solid #cbd5e1; padding: 6px 10px; background: #f8fafc; font-size: 8px; }
+  .meta-item .label { font-weight: 800; text-transform: uppercase; color: #64748b; font-size: 7px; display: block; }
+  .meta-item .value { font-weight: 700; color: #0f172a; font-size: 9px; }
+  table { width: 100%; border-collapse: collapse; border: 1px solid #94a3b8; margin-bottom: 8px; }
+  thead tr { background: #0f766e; color: white; }
+  thead th { padding: 5px 5px; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; border-right: 1px solid rgba(255,255,255,0.2); text-align: center; }
+  tbody tr:nth-child(even) { background: #f8fafc; }
+  .summary-row { background: #f1f5f9 !important; font-weight: 800; border-top: 2px solid #0f766e; }
+  .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
+  .sum-box { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: center; }
+  .sum-box .num { font-size: 16px; font-weight: 900; }
+  .sum-box .lbl { font-size: 7px; font-weight: 800; text-transform: uppercase; color: #64748b; }
+  .cert-section { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 8px; }
+  .cert-block .cert-title { font-weight: 800; text-transform: uppercase; font-size: 7px; color: #64748b; margin-bottom: 8px; }
+  .sig-line { border-top: 1px solid #1e293b; margin-top: 24px; padding-top: 2px; font-size: 8px; font-weight: 800; text-align: center; text-transform: uppercase; }
+  .sig-sub { font-size: 7px; font-weight: 400; color: #64748b; text-align: center; }
+  .footer { text-align: center; font-size: 7px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 4px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <div class="letterhead">
+    <div class="form-no">CSC Form No. 48 &nbsp;|&nbsp; Revised 2018</div>
+    <div class="form-title">Daily Time Record Summary</div>
+    <div class="form-sub">Republic of the Philippines &nbsp;|&nbsp; Department of Environment and Natural Resources &nbsp;|&nbsp; ${regionLabel}</div>
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-item"><span class="label">Reporting Period</span><span class="value">${printDate}</span></div>
+    <div class="meta-item"><span class="label">Office / Scope Filter</span><span class="value">${scopeF || 'All Scopes'}</span></div>
+    <div class="meta-item"><span class="label">Status Filter</span><span class="value">${statusF || 'All Statuses'}</span></div>
+    <div class="meta-item"><span class="label">Total Personnel Listed</span><span class="value">${records.length}</span></div>
+    <div class="meta-item"><span class="label">Date Printed</span><span class="value">${new Date().toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' })}</span></div>
+    <div class="meta-item"><span class="label">System Reference</span><span class="value">DENR–TLPH DTR Management System</span></div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="sum-box"><div class="num" style="color:#15803d;">${present}</div><div class="lbl">Present</div></div>
+    <div class="sum-box"><div class="num" style="color:#b45309;">${late}</div><div class="lbl">Late</div></div>
+    <div class="sum-box"><div class="num" style="color:#c2410c;">${undertime}</div><div class="lbl">Undertime</div></div>
+    <div class="sum-box"><div class="num" style="color:#0369a1;">${onLeave}</div><div class="lbl">On Leave</div></div>
+    <div class="sum-box"><div class="num" style="color:#be123c;">${absent}</div><div class="lbl">Absent</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:28px;">#</th>
+        <th style="width:72px;">ID Number</th>
+        <th>Personnel Name</th>
+        <th>Office / Designation</th>
+        <th style="width:60px;">Scope</th>
+        <th style="width:52px;">Time In</th>
+        <th style="width:52px;">Time Out</th>
+        <th style="width:42px;">Hrs</th>
+        <th style="width:60px;">Status</th>
+        <th>Remarks</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows || '<tr><td colspan="10" style="text-align:center;padding:12px;color:#94a3b8;font-style:italic;">No records for selected filters.</td></tr>'}
+    </tbody>
+  </table>
+
+  <div class="cert-section">
+    <div class="cert-block">
+      <div class="cert-title">Prepared / Certified by:</div>
+      <div class="sig-line">&nbsp;</div>
+      <div class="sig-sub">Human Resource Management Officer</div>
+      <div class="sig-sub">Date: ______________________</div>
+    </div>
+    <div class="cert-block">
+      <div class="cert-title">Verified / Approved by:</div>
+      <div class="sig-line">&nbsp;</div>
+      <div class="sig-sub">Regional Executive Director / Authorized Representative</div>
+      <div class="sig-sub">Date: ______________________</div>
+    </div>
+  </div>
+
+  <div class="footer">This document is system-generated from the DENR TLPH DTR Management System. For official use only. Any alteration without proper authorization is subject to applicable laws and regulations.</div>
+</div>
+<script>window.onload = function(){ window.print(); }<\/script>
+</body>
+</html>`;
+
+      const w = window.open('', '_blank', 'width=1100,height=800');
+      if (!w) { alert('Pop-up blocked. Please allow pop-ups for this site and try again.'); return; }
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
     }
 
     document.addEventListener('DOMContentLoaded', () => {

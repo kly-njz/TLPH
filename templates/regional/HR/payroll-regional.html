@@ -69,7 +69,7 @@
         </div>
 
         <div class="flex gap-1.5 no-print">
-          <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+          <button onclick="printBatchPayslips()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">picture_as_pdf</span> Batch Payslip
           </button>
           <button @click="payrollModalOpen = true" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
@@ -285,6 +285,120 @@
         if (ok) visibleCount++;
       });
       document.getElementById('visibleCount').innerText = visibleCount;
+    }
+
+    function printBatchPayslips() {
+      const rows = Array.from(document.querySelectorAll('.payroll-row')).filter(r => r.style.display !== 'none');
+
+      if (rows.length === 0) {
+        alert('No payroll records are visible to print.');
+        return;
+      }
+
+      const slips = rows.map(row => {
+        const cells = row.querySelectorAll('td');
+        const nameEl = cells[0].querySelector('.font-black');
+        const subEl  = cells[0].querySelector('.text-\\[8px\\]');
+        const name   = nameEl ? nameEl.innerText.trim() : 'N/A';
+        const sub    = subEl  ? subEl.innerText.trim()  : '';
+        const office = cells[1] ? cells[1].innerText.trim() : '';
+        const basic  = cells[2] ? cells[2].innerText.trim() : '0.00';
+        const pera   = cells[3] ? cells[3].innerText.trim() : '0.00';
+        const gross  = cells[4] ? cells[4].innerText.trim() : '0.00';
+        const gsis   = cells[5] ? cells[5].innerText.trim() : '0.00';
+        const loans  = cells[6] ? cells[6].innerText.trim() : '0.00';
+        const net    = cells[7] ? cells[7].innerText.trim() : '0.00';
+        const status = cells[9] ? cells[9].innerText.trim() : '';
+
+        return `
+          <div class="payslip">
+            <div class="payslip-header">
+              <div class="header-logo">
+                <div class="logo-circle">DENR</div>
+              </div>
+              <div class="header-text">
+                <div class="agency">Department of Environment and Natural Resources</div>
+                <div class="sub-agency">Regional Office • Republic of the Philippines</div>
+                <div class="doc-title">OFFICIAL PAYSLIP — February 2026 (1st Quincena)</div>
+              </div>
+            </div>
+            <div class="payslip-body">
+              <div class="employee-block">
+                <div class="emp-name">${name}</div>
+                <div class="emp-detail">${sub}</div>
+                <div class="emp-detail">${office}</div>
+              </div>
+              <table class="slip-table">
+                <thead>
+                  <tr><th colspan="2">EARNINGS</th><th colspan="2">DEDUCTIONS</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Basic Pay</td><td class="amount">₱ ${basic}</td>
+                    <td>GSIS / Tax</td><td class="amount deduct">₱ ${gsis}</td>
+                  </tr>
+                  <tr>
+                    <td>PERA Allowance</td><td class="amount">₱ ${pera}</td>
+                    <td>Loans</td><td class="amount deduct">₱ ${loans}</td>
+                  </tr>
+                  <tr class="total-row">
+                    <td><strong>GROSS PAY</strong></td><td class="amount"><strong>₱ ${gross}</strong></td>
+                    <td><strong>TOTAL DEDUCTIONS</strong></td><td class="amount deduct"><strong>₱ ${(parseFloat((gsis || '0').replace(/,/g,'')) + parseFloat((loans || '0').replace(/,/g,''))).toLocaleString('en-PH', {minimumFractionDigits:2})}</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="net-block">
+                <span class="net-label">NET PAY</span>
+                <span class="net-amount">₱ ${net}</span>
+              </div>
+              <div class="status-block">Status: <strong>${status}</strong></div>
+            </div>
+            <div class="payslip-footer">
+              <div class="sig-line"><div class="sig-blank"></div><div class="sig-text">Employee Signature / Date</div></div>
+              <div class="sig-line"><div class="sig-blank"></div><div class="sig-text">Authorized Officer / Date</div></div>
+            </div>
+          </div>`;
+      }).join('');
+
+      const win = window.open('', '_blank', 'width=900,height=700');
+      win.document.write(`<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>Batch Payslips — Regional Payroll</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Verdana', Arial, sans-serif; font-size: 10px; background: #f0f0f0; }
+  .payslip { width: 180mm; margin: 8mm auto; background: white; border: 1px solid #aaa; padding: 6mm 8mm; page-break-after: always; }
+  .payslip:last-child { page-break-after: auto; }
+  .payslip-header { display: flex; align-items: center; gap: 10px; border-bottom: 3px solid #1e3a8a; padding-bottom: 5px; margin-bottom: 6px; }
+  .logo-circle { width: 36px; height: 36px; border-radius: 50%; background: #1e3a8a; color: white; font-size: 8px; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .agency { font-size: 9px; font-weight: 900; text-transform: uppercase; color: #1e3a8a; }
+  .sub-agency { font-size: 7.5px; color: #555; text-transform: uppercase; font-weight: bold; }
+  .doc-title { font-size: 7.5px; font-weight: 900; text-transform: uppercase; color: #888; margin-top: 2px; }
+  .payslip-body { margin-top: 4px; }
+  .employee-block { background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 6px; margin-bottom: 6px; }
+  .emp-name { font-size: 11px; font-weight: 900; text-transform: uppercase; color: #1e293b; }
+  .emp-detail { font-size: 8px; color: #64748b; font-weight: bold; text-transform: uppercase; }
+  .slip-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+  .slip-table th { background: #1e3a8a; color: white; text-align: center; padding: 3px 5px; font-size: 8px; text-transform: uppercase; font-weight: 900; }
+  .slip-table td { padding: 3px 5px; border-bottom: 1px solid #f1f5f9; }
+  .slip-table .amount { text-align: right; font-family: monospace; font-weight: bold; color: #155e2a; }
+  .slip-table .deduct { color: #991b1b !important; }
+  .total-row td { border-top: 1.5px solid #cbd5e1; background: #f8fafc; }
+  .net-block { margin-top: 6px; display: flex; justify-content: space-between; align-items: center; background: #1e3a8a; color: white; padding: 4px 8px; }
+  .net-label { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; }
+  .net-amount { font-size: 14px; font-weight: 900; font-family: monospace; }
+  .status-block { text-align: right; font-size: 8px; color: #64748b; margin-top: 3px; text-transform: uppercase; }
+  .payslip-footer { display: flex; justify-content: space-between; margin-top: 10mm; gap: 15mm; }
+  .sig-line { flex: 1; text-align: center; }
+  .sig-blank { border-bottom: 1px solid #333; margin-bottom: 2px; height: 12mm; }
+  .sig-text { font-size: 7.5px; text-transform: uppercase; color: #555; font-weight: bold; }
+  @media print {
+    body { background: white; }
+    .payslip { margin: 0 auto; border: 1px solid #aaa; box-shadow: none; }
+  }
+<\/style></head>
+<body>${slips}<script>window.onload=function(){window.print();};<\/script></body></html>`);
+      win.document.close();
     }
 
     function resetFilters() {
