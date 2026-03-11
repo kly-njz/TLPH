@@ -596,7 +596,45 @@
   </div>
 
   <script>
-    function exportDashboard(){ alert('Export dashboard (demo)'); }
+    function exportDashboard() {
+      const headers = ['Municipality', 'Source Fund', 'Transfer ID', 'Amount Released', 'Release Date', 'Status'];
+      const rows = [];
+
+      document.querySelectorAll('#muniFundsTableBody tr').forEach(row => {
+        if (row.style.display === 'none') return; // skip filtered-out rows
+        const cells = row.querySelectorAll('td');
+        if (!cells.length) return; // skip empty-state row if needed
+        const municipality  = cells[0]?.innerText.trim() || 'N/A';
+        const sourceFund    = cells[1]?.innerText.trim() || 'N/A';
+        const transferId    = cells[2]?.innerText.trim() || 'N/A';
+        const amount        = cells[3]?.innerText.trim() || 'N/A';
+        const releaseDate   = cells[4]?.innerText.trim() || 'N/A';
+        const status        = cells[5]?.innerText.trim() || 'N/A';
+        rows.push([municipality, sourceFund, transferId, amount, releaseDate, status]);
+      });
+
+      if (!rows.length) {
+        alert('No data to export with the current filters.');
+        return;
+      }
+
+      const csvContent = [headers, ...rows]
+        .map(r => r.map(v => '"' + v.replace(/"/g, '""') + '"').join(','))
+        .join('\r\n');
+
+      const region = ("{{ user_region|default('REGIONAL') }}").trim().replace(/\s+/g, '_').toUpperCase();
+      const date   = new Date().toISOString().slice(0, 10);
+      const filename = region + '_Accounting_Dashboard_' + date + '.csv';
+
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }
     function viewAllAlerts(){ alert('Open alerts page (demo)'); }
     function viewAllActivity(){ alert('Open activity page (demo)'); }
 
