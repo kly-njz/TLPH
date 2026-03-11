@@ -156,7 +156,7 @@
                       }" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="record.status"></span>
                     </td>
                     <td class="p-2 text-right">
-                      <button class="text-sky-700 hover:text-sky-900 font-black uppercase text-[10px] tracking-tighter">Review</button>
+                      <button @click="openReview(record)" class="text-sky-700 hover:text-sky-900 font-black uppercase text-[10px] tracking-tighter">Review</button>
                     </td>
                   </tr>
                 </template>
@@ -253,6 +253,78 @@
       <div class="shrink-0 px-4 py-2 border-t border-gov-border bg-slate-50 flex justify-between items-center">
         <span class="text-[10px] text-slate-500">Showing <span class="font-bold" x-text="ledgerData.length"></span> entries</span>
         <button @click="showLedger = false" class="bg-gov-primary text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Review Leave Modal -->
+  <div x-show="showReviewModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @keydown.escape.window="showReviewModal = false">
+    <div class="bg-white w-full max-w-md rounded-[3px] shadow-2xl flex flex-col" @click.stop>
+      <div class="bg-gov-primary text-white px-4 py-3 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-sm">rate_review</span>
+          <span class="font-bold uppercase text-[11px] tracking-widest">Review Leave Request</span>
+        </div>
+        <button @click="showReviewModal = false" class="text-white/70 hover:text-white transition">
+          <span class="material-icons-round text-base">close</span>
+        </button>
+      </div>
+
+      <div class="p-4 flex flex-col gap-3">
+        <!-- Info Banner -->
+        <div x-show="reviewError" class="bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold px-3 py-2 rounded-[2px]" x-text="reviewError"></div>
+
+        <div class="bg-slate-50 border border-gov-border rounded-[2px] p-3 grid grid-cols-2 gap-2 text-[11px]">
+          <div>
+            <p class="text-[9px] font-black uppercase text-slate-400">Employee</p>
+            <p class="font-bold text-gov-primary" x-text="selectedRecord?.employee_name"></p>
+            <p class="text-[10px] text-slate-400 font-mono" x-text="selectedRecord?.employee_id"></p>
+          </div>
+          <div>
+            <p class="text-[9px] font-black uppercase text-slate-400">Leave Type</p>
+            <p class="font-bold" x-text="selectedRecord?.leave_type"></p>
+          </div>
+          <div>
+            <p class="text-[9px] font-black uppercase text-slate-400">Inclusive Dates</p>
+            <p class="font-bold" x-text="(selectedRecord?.from_date || '') + ' — ' + (selectedRecord?.to_date || '')"></p>
+          </div>
+          <div>
+            <p class="text-[9px] font-black uppercase text-slate-400">Days</p>
+            <p class="font-bold text-lg" x-text="selectedRecord?.days"></p>
+          </div>
+          <div class="col-span-2" x-show="selectedRecord?.reason">
+            <p class="text-[9px] font-black uppercase text-slate-400">Reason</p>
+            <p class="text-[11px] text-slate-700" x-text="selectedRecord?.reason"></p>
+          </div>
+          <div class="col-span-2">
+            <p class="text-[9px] font-black uppercase text-slate-400">Current Status</p>
+            <span :class="{
+              'bg-amber-100 text-amber-800': selectedRecord?.status === 'Pending',
+              'bg-emerald-100 text-emerald-800': selectedRecord?.status === 'Approved',
+              'bg-rose-100 text-rose-800': selectedRecord?.status === 'Denied'
+            }" class="px-2 py-0.5 rounded-[2px] font-bold text-[9px] uppercase border" x-text="selectedRecord?.status"></span>
+          </div>
+        </div>
+
+        <!-- Remarks -->
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-500 mb-1">Remarks / Notes <span class="text-slate-400 font-normal">(optional)</span></label>
+          <textarea x-model="reviewRemarks" rows="2" placeholder="Enter any remarks..." class="w-full text-[11px] border border-gov-border rounded-[2px] px-2 py-1.5 outline-none focus:border-amber-600 resize-none"></textarea>
+        </div>
+      </div>
+
+      <div class="shrink-0 px-4 py-3 border-t border-gov-border bg-slate-50 flex justify-between items-center gap-2">
+        <button @click="showReviewModal = false" class="border border-gov-border text-gov-primary px-4 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-100 transition">Cancel</button>
+        <div class="flex gap-2">
+          <button @click="submitReview('Denied')" :disabled="reviewSaving" class="bg-rose-600 text-white px-4 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-rose-700 transition flex items-center gap-1 disabled:opacity-60">
+            <span class="material-icons-round text-sm">cancel</span> Deny
+          </button>
+          <button @click="submitReview('Approved')" :disabled="reviewSaving" class="bg-emerald-600 text-white px-4 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-emerald-700 transition flex items-center gap-1 disabled:opacity-60">
+            <span x-show="reviewSaving" class="material-icons-round text-sm animate-spin">refresh</span>
+            <span class="material-icons-round text-sm" x-show="!reviewSaving">check_circle</span>
+            <span x-text="reviewSaving ? 'Saving...' : 'Approve'"></span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -396,6 +468,11 @@
         showCreateModal: false,
         createSaving: false,
         createError: '',
+        showReviewModal: false,
+        selectedRecord: null,
+        reviewRemarks: '',
+        reviewSaving: false,
+        reviewError: '',
         createForm: {
           employee_name: '',
           employee_id: '',
@@ -487,6 +564,47 @@
           this.createForm = { employee_name: '', employee_id: '', leave_type: 'Sick Leave', from_date: '', to_date: '', days: '', reason: '' };
           this.createError = '';
           this.createSaving = false;
+        },
+
+        openReview(record) {
+          this.selectedRecord = record;
+          this.reviewRemarks = '';
+          this.reviewError = '';
+          this.reviewSaving = false;
+          this.showReviewModal = true;
+        },
+
+        async submitReview(decision) {
+          if (!this.selectedRecord) return;
+          this.reviewError = '';
+          this.reviewSaving = true;
+          try {
+            const res = await fetch('/municipal/leave-request/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: this.selectedRecord.id,
+                status: decision,
+                remarks: this.reviewRemarks
+              })
+            });
+            const result = await res.json();
+            if (result.success) {
+              const idx = this.leaveRecords.findIndex(r => r.id === this.selectedRecord.id);
+              if (idx !== -1) {
+                this.leaveRecords[idx].status = decision;
+                if (this.reviewRemarks) this.leaveRecords[idx].remarks = this.reviewRemarks;
+              }
+              this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
+              this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
+              this.showReviewModal = false;
+            } else {
+              this.reviewError = result.error || 'Failed to update. Please try again.';
+            }
+          } catch (e) {
+            this.reviewError = 'Network error. Please try again.';
+          }
+          this.reviewSaving = false;
         },
 
         async submitLeave() {
