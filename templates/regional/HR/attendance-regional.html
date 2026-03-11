@@ -50,7 +50,7 @@
     {% include 'regional/sidenav.html' %}
   </div>
 
-  <div class="content-area transition-all" x-data="{ dtrModalOpen: false }">
+  <div class="content-area transition-all" x-data="{ dtrModalOpen: false, viewModalOpen: false }" @open-view-modal.window="viewModalOpen = true">
     <main class="flex-1 flex flex-col min-w-0 p-3 gap-2 overflow-y-auto custom-scrollbar">
 
       <header class="gov-card p-2 px-3 flex justify-between items-center shrink-0 border-b-4 border-b-teal-700 mb-1">
@@ -229,6 +229,73 @@
           </form>
         </div>
       </div>
+
+      <!-- VIEW RECORD MODAL -->
+      <div x-show="viewModalOpen" style="display:none;" class="fixed inset-0 z-[100] bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div @click.away="viewModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-400">
+          <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white">
+            <h3 class="text-[10px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+              <span class="material-icons-round text-[16px] text-sky-400">badge</span> Attendance Record Details
+            </h3>
+            <button @click="viewModalOpen = false" class="text-slate-400 hover:text-white transition-colors">
+              <span class="material-icons-round text-[16px]">close</span>
+            </button>
+          </div>
+          <div class="p-4 bg-slate-50 space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <p class="gov-label">ID Number</p>
+                <p id="view_employee_id" class="text-[11px] font-black text-blue-900 font-mono uppercase">—</p>
+              </div>
+              <div>
+                <p class="gov-label">Date</p>
+                <p id="view_date" class="text-[11px] font-black text-slate-800">—</p>
+              </div>
+            </div>
+            <div>
+              <p class="gov-label">Full Name</p>
+              <p id="view_full_name" class="text-[11px] font-black text-slate-900 uppercase">—</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <p class="gov-label">Office / Designation</p>
+                <p id="view_assignment" class="text-[11px] font-bold text-slate-700">—</p>
+              </div>
+              <div>
+                <p class="gov-label">Scope</p>
+                <p id="view_scope" class="text-[11px] font-black">—</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3 p-3 bg-white border border-slate-200 rounded-[2px]">
+              <div>
+                <p class="gov-label text-teal-700">Time In</p>
+                <p id="view_time_in" class="text-[13px] font-black text-slate-800 font-mono">—</p>
+              </div>
+              <div>
+                <p class="gov-label text-teal-700">Time Out</p>
+                <p id="view_time_out" class="text-[13px] font-black text-slate-800 font-mono">—</p>
+              </div>
+              <div>
+                <p class="gov-label">Hours</p>
+                <p id="view_hours" class="text-[13px] font-black font-mono">—</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <p class="gov-label">Status</p>
+                <p id="view_status" class="text-[11px] font-black uppercase">—</p>
+              </div>
+              <div>
+                <p class="gov-label">Remarks</p>
+                <p id="view_remarks" class="text-[11px] text-slate-600 italic">—</p>
+              </div>
+            </div>
+            <div class="pt-2 flex justify-end border-t border-slate-200 mt-2">
+              <button type="button" @click="viewModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-100">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -279,7 +346,7 @@
           </td>
           <td class="px-3 py-2 text-slate-500 italic border-r border-slate-100 text-[9px]">${rec.remarks || 'Regular'}</td>
           <td class="px-3 py-2 text-center no-print">
-            <button onclick="prefillAdjustment('${rec.id}','${(rec.date || '').replace(/'/g, "&#39;")}','${(rec.scope || '').replace(/'/g, "&#39;")}','${(rec.time_in || '').replace(/'/g, "&#39;")}','${(rec.time_out || '').replace(/'/g, "&#39;")}','${(rec.remarks || '').replace(/'/g, "&#39;")}')" class="text-blue-900 hover:scale-125 transition-transform"><span class="material-icons-round text-sm">visibility</span></button>
+            <button onclick="openViewModal('${rec.id}')" class="text-sky-700 hover:scale-125 transition-transform" title="View Record"><span class="material-icons-round text-sm">visibility</span></button>
           </td>
         </tr>
       `).join('');
@@ -287,13 +354,23 @@
       document.getElementById('recordCount').textContent = String(records.length);
     }
 
-    function prefillAdjustment(id, date, scope, timeIn, timeOut, notes) {
-      document.getElementById('adjustEmployee').value = id || '';
-      document.getElementById('adjustDate').value = date || new Date().toISOString().slice(0, 10);
-      document.getElementById('adjustScope').value = scope || 'REGIONAL';
-      document.getElementById('adjustTimeIn').value = timeIn || '';
-      document.getElementById('adjustTimeOut').value = timeOut || '';
-      document.getElementById('adjustNotes').value = notes || '';
+    function openViewModal(id) {
+      const rec = attendanceRecords.find(r => r.id === id || String(r.id) === String(id));
+      if (!rec) return;
+      document.getElementById('view_employee_id').textContent = rec.employee_id || 'N/A';
+      document.getElementById('view_date').textContent = rec.date || 'N/A';
+      document.getElementById('view_full_name').textContent = rec.full_name || 'N/A';
+      document.getElementById('view_assignment').textContent = (rec.assignment || 'N/A') + (rec.sub_assignment ? ' — ' + rec.sub_assignment : '');
+      document.getElementById('view_scope').textContent = rec.scope || 'REGIONAL';
+      document.getElementById('view_time_in').textContent = rec.time_in || '--:--';
+      document.getElementById('view_time_out').textContent = rec.time_out || '--:--';
+      const hrs = Number(rec.hours || 0);
+      const hoursEl = document.getElementById('view_hours');
+      hoursEl.textContent = hrs.toFixed(2) + ' hrs';
+      hoursEl.className = 'text-[13px] font-black font-mono ' + (hrs >= 8 ? 'text-emerald-700' : 'text-rose-700');
+      document.getElementById('view_status').textContent = rec.status || 'Present';
+      document.getElementById('view_remarks').textContent = rec.remarks || 'Regular';
+      window.dispatchEvent(new CustomEvent('open-view-modal'));
     }
 
     async function loadAttendance() {
