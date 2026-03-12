@@ -1101,26 +1101,38 @@
     async function loadInventoryData(user) {
       try {
         const inventory = [];
+        const sectorLabels = {
+          'timber': 'Timber / Logs',
+          'ntfp': 'Non-Timber Forest Products',
+          'seedlings': 'Nursery Stocks / Seedlings',
+          'flora': 'Terrestrial Flora (Plants)',
+          'fauna': 'Terrestrial Fauna (Wildlife)',
+          'minerals': 'Metallic/Non-Metallic Minerals',
+          'land': 'Land Resources / Titling'
+        };
 
         const q = query(collection(db, 'inventory_registrations'), where('userId', '==', user.uid));
         const querySnapshot = await getDocs(q);
 
         querySnapshot.forEach((doc) => {
           const item = doc.data();
-          const date = item.submittedAt ? new Date(item.submittedAt.toDate()).toLocaleDateString('en-PH', {
+          // form saves createdAt, fallback to submittedAt
+          const ts = item.createdAt || item.submittedAt;
+          const date = ts ? new Date(ts.toDate()).toLocaleDateString('en-PH', {
             year: 'numeric', month: 'short', day: 'numeric'
           }) : 'N/A';
 
           inventory.push({
             id: doc.id,
             resourceName: item.resourceName || item.resource_name || '—',
-            sector: item.sector || '—',
+            sector: sectorLabels[item.sector] || item.sector || '—',
             status: item.status || 'pending',
-            date: date
+            date: date,
+            _ts: ts ? ts.toDate() : new Date(0)
           });
         });
 
-        inventory.sort((a, b) => new Date(b.date) - new Date(a.date));
+        inventory.sort((a, b) => b._ts - a._ts);
         return inventory;
       } catch (error) {
         console.error('Error loading inventory:', error);
