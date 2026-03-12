@@ -52,10 +52,80 @@
               <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">National Pricing & Billing Registry</p>
             </div>
           </div>
-          <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
+          <button onclick="openCreateModal()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
             <span class="material-icons-round text-[14px]">add</span> Create Quotation
           </button>
         </header>
+
+        <!-- Create Quotation Modal -->
+        <div id="createQuotationModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div class="gov-card w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+            <!-- Modal Header -->
+            <div class="bg-blue-900 text-white px-4 py-3 flex items-center justify-between shrink-0">
+              <div class="flex items-center gap-2">
+                <span class="material-icons-round text-[18px]">attach_money</span>
+                <span class="font-black uppercase text-xs tracking-widest">New Quotation</span>
+              </div>
+              <button onclick="closeCreateModal()" class="text-blue-200 hover:text-white">
+                <span class="material-icons-round text-[20px]">close</span>
+              </button>
+            </div>
+            <!-- Modal Body -->
+            <div class="p-4 overflow-y-auto custom-scrollbar flex-1">
+              <form id="createQuotationForm" onsubmit="submitQuotation(event)" class="flex flex-col gap-3">
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Quotation #</label>
+                    <input type="text" id="qNumber" name="qNumber" placeholder="e.g. Q-2026-049" class="gov-input w-full" required />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Filing Date</label>
+                    <input type="date" id="qDate" name="qDate" class="gov-input w-full" required />
+                  </div>
+                </div>
+
+                <div class="flex flex-col gap-1">
+                  <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Client / Office Entity</label>
+                  <input type="text" id="qClient" name="qClient" placeholder="e.g. DENR NCR - Central Office" class="gov-input w-full" required />
+                </div>
+
+                <div class="flex flex-col gap-1">
+                  <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Description / Particulars</label>
+                  <textarea id="qDescription" name="qDescription" rows="3" placeholder="Brief description of goods or services..." class="gov-input w-full resize-none" required></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Amount (₱)</label>
+                    <input type="number" id="qAmount" name="qAmount" placeholder="0.00" step="0.01" min="0" class="gov-input w-full" required />
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Status</label>
+                    <select id="qStatus" name="qStatus" class="gov-input w-full bg-white cursor-pointer">
+                      <option value="Pending" selected>Pending</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="flex flex-col gap-1">
+                  <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Remarks (Optional)</label>
+                  <input type="text" id="qRemarks" name="qRemarks" placeholder="Additional notes..." class="gov-input w-full" />
+                </div>
+
+              </form>
+            </div>
+            <!-- Modal Footer -->
+            <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+              <button onclick="closeCreateModal()" type="button" class="gov-btn bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300">Cancel</button>
+              <button onclick="submitQuotation(event)" type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white flex items-center gap-1">
+                <span class="material-icons-round text-[12px]">save</span> Save Quotation
+              </button>
+            </div>
+          </div>
+        </div>
 
         <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
           <div class="gov-card p-2 px-3 border-l-4 border-l-slate-600">
@@ -236,6 +306,71 @@
           } 
       }
     });
+
+    // --- Create Quotation Modal ---
+    function openCreateModal() {
+      // Auto-fill today's date
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('qDate').value = today;
+      document.getElementById('createQuotationModal').classList.remove('hidden');
+      document.getElementById('createQuotationModal').classList.add('flex');
+    }
+
+    function closeCreateModal() {
+      document.getElementById('createQuotationModal').classList.add('hidden');
+      document.getElementById('createQuotationModal').classList.remove('flex');
+      document.getElementById('createQuotationForm').reset();
+    }
+
+    // Close modal on backdrop click
+    document.getElementById('createQuotationModal').addEventListener('click', function(e) {
+      if (e.target === this) closeCreateModal();
+    });
+
+    function submitQuotation(e) {
+      e.preventDefault();
+      const number = document.getElementById('qNumber').value.trim();
+      const client = document.getElementById('qClient').value.trim();
+      const amount = parseFloat(document.getElementById('qAmount').value);
+      const date   = document.getElementById('qDate').value;
+      const status = document.getElementById('qStatus').value;
+
+      if (!number || !client || !date || isNaN(amount)) {
+        alert('Please fill in all required fields.');
+        return;
+      }
+
+      // Build status badge classes
+      const statusClasses = {
+        'Approved': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        'Pending':  'bg-amber-50 text-amber-700 border-amber-200',
+        'Rejected': 'bg-rose-50 text-rose-700 border-rose-200'
+      };
+      const badgeClass = statusClasses[status] || 'bg-slate-100 text-slate-600 border-slate-200';
+
+      const formattedAmount = '₱' + amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const row = document.createElement('tr');
+      row.className = 'hover:bg-blue-50 transition quote-row';
+      row.innerHTML = `
+        <td class="font-black text-slate-900 border-r border-slate-100 uppercase">${number}</td>
+        <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">${client}</td>
+        <td class="font-mono font-bold text-blue-800 border-r border-slate-100 uppercase">${formattedAmount}</td>
+        <td class="font-mono text-slate-500 border-r border-slate-100 text-center uppercase">${date}</td>
+        <td class="text-center border-r border-slate-100">
+          <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${badgeClass}">${status}</span>
+        </td>
+        <td class="text-center">
+          <div class="flex justify-center gap-2">
+            <button class="text-blue-700 font-bold uppercase text-[9px]">View</button>
+            <button class="text-emerald-700 font-bold uppercase text-[9px]">Approve</button>
+            <button class="text-rose-700 font-bold uppercase text-[9px]">Delete</button>
+          </div>
+        </td>`;
+
+      document.getElementById('quoteTable').prepend(row);
+      closeCreateModal();
+    }
 
     // --- Search & Filter Logic ---
     function filterTable() {
