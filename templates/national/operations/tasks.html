@@ -159,7 +159,7 @@
                 </div>
                 <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0 text-[9px] text-slate-500">
                     <span class="font-bold uppercase tracking-wider italic">National Management Record • FY 2026</span>
-                    <button class="font-bold uppercase text-blue-700 hover:underline">Export Task List</button>
+                    <button onclick="exportTaskList()" class="font-bold uppercase text-blue-700 hover:underline">Export Task List</button>
                 </div>
             </section>
         </main>
@@ -371,6 +371,39 @@
             if (confirm('Revoke this task? This will remove it from the list.')) {
                 btn.closest('tr').remove();
             }
+        }
+
+        // --- EXPORT TASK LIST ---
+        function exportTaskList() {
+            const rows = document.querySelectorAll('#taskTable tr');
+            const visibleRows = Array.from(rows).filter(r => r.style.display !== 'none');
+            if (!visibleRows.length) { alert('No tasks to export.'); return; }
+
+            const headers = ['Task Title', 'Assigned To', 'Status', 'Due Date'];
+            const csvLines = [headers.join(',')];
+
+            visibleRows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length < 4) return;
+                const rowData = [
+                    '"' + cells[0].textContent.trim().replace(/"/g, '""') + '"',
+                    '"' + cells[1].textContent.trim().replace(/"/g, '""') + '"',
+                    '"' + cells[2].textContent.trim().replace(/"/g, '""') + '"',
+                    '"' + cells[3].textContent.trim().replace(/"/g, '""') + '"'
+                ];
+                csvLines.push(rowData.join(','));
+            });
+
+            const csvContent = csvLines.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'national_task_list_' + new Date().toISOString().slice(0,10) + '.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         function submitCreateTask(e) {
