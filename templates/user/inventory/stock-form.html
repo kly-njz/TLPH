@@ -244,15 +244,22 @@
 
         async function uploadFile(file, path) {
             if (!file) return null;
-            
-            const timestamp = Date.now();
-            const fileName = `${timestamp}_${file.name}`;
-            const storageRef = ref(storage, `${path}/${fileName}`);
-            
-            const snapshot = await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            
-            return downloadURL;
+
+            const doUpload = async () => {
+                const timestamp = Date.now();
+                const fileName = `${timestamp}_${file.name}`;
+                const storageRef = ref(storage, `${path}/${fileName}`);
+                const snapshot = await uploadBytes(storageRef, file);
+                const downloadURL = await getDownloadURL(snapshot.ref);
+                return downloadURL;
+            };
+
+            // Fail fast after 5s so CORS retries don't freeze the button
+            const timeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Upload timed out (CORS/storage not reachable)')), 5000)
+            );
+
+            return Promise.race([doUpload(), timeout]);
         }
 
         document.getElementById('stockForm').addEventListener('submit', async (e) => {
