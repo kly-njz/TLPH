@@ -510,7 +510,7 @@
           onkeyup="filterTable('inventory')"
           style="flex: 1; min-width: 150px;"
         />
-        <select id="inventoryStatusFilter" class="gov-input" onchange="filterTable('inventory')" style="width: 140px;">
+        <select id="inventoryStatusFilter" class="gov-input" onchange="filterTable('inventory')" style="width: 160px;">
           <option value="">Status: ALL</option>
           <option value="active">ACTIVE</option>
           <option value="approved">APPROVED</option>
@@ -518,25 +518,23 @@
           <option value="pending">PENDING</option>
           <option value="rejected">REJECTED</option>
         </select>
-        <select id="inventoryCategoryFilter" class="gov-input" onchange="filterTable('inventory')" style="width: 140px;">
-          <option value="">Category: ALL</option>
-          <option value="crop">CROP & PLANT</option>
-          <option value="fisheries">FISHERIES</option>
-          <option value="agribusiness">AGRIBUSINESS</option>
-          <option value="trade">TRADE</option>
-          <option value="infrastructure">INFRASTRUCTURE</option>
+        <select id="inventorySectorFilter" class="gov-input" onchange="filterTable('inventory')" style="width: 160px;">
+          <option value="">Sector: ALL</option>
+          <option value="forest">Forest</option>
+          <option value="fisheries">Fisheries</option>
+          <option value="livestock">Livestock</option>
+          <option value="wildlife">Wildlife</option>
+          <option value="farm">Farm</option>
         </select>
       </div>
       <div style="overflow-x: auto;">
         <table class="data-table" id="inventoryTable">
           <thead>
             <tr>
-              <th>Category</th>
-              <th>Harvest Qty</th>
-              <th>Investment</th>
-              <th>Unit Price</th>
-              <th>Status</th>
+              <th>Resource Name / Species</th>
+              <th>Sector / Classification</th>
               <th>Date</th>
+              <th>Status</th>
               <th style="text-align: center;">Action</th>
             </tr>
           </thead>
@@ -698,7 +696,9 @@
     window.filterTable = function(tableType) {
       const searchInput = document.getElementById(tableType + 'Search').value.toLowerCase();
       const statusFilter = document.getElementById(tableType + 'StatusFilter')?.value.toLowerCase() || '';
-      const categoryFilter = document.getElementById(tableType + 'CategoryFilter')?.value.toLowerCase() || '';
+      // Inventory uses sectorFilter; all others use categoryFilter
+      const categoryFilterId = tableType === 'inventory' ? tableType + 'SectorFilter' : tableType + 'CategoryFilter';
+      const categoryFilter = document.getElementById(categoryFilterId)?.value.toLowerCase() || '';
       const rows = document.querySelectorAll(`#${tableType}TableBody tr`);
       
       let visibleCount = 0;
@@ -719,7 +719,7 @@
           } else if (tableType === 'services') {
             statusCell = row.cells[2];
           } else if (tableType === 'inventory') {
-            statusCell = row.cells[4];
+            statusCell = row.cells[3];
           } else if (tableType === 'licenses') {
             statusCell = row.cells[1]; // Status is 2nd column in licenses table
           }
@@ -730,12 +730,17 @@
           }
         }
         
-        // Category filtering — services use data-category attribute; other tables use cell text
+        // Category/Sector filtering — services use data-category attribute; inventory uses column 1; others use column 0
         let categoryMatch = true;
         if (categoryFilter) {
           if (tableType === 'services') {
             const rowCat = (row.dataset.category || '').toLowerCase();
             categoryMatch = rowCat === categoryFilter;
+          } else if (tableType === 'inventory') {
+            const sectorCell = row.cells[1]; // Sector is 2nd column
+            if (sectorCell) {
+              categoryMatch = sectorCell.textContent.toLowerCase().includes(categoryFilter);
+            }
           } else {
             const categoryCell = row.cells[0]; // Category/Type is always first column
             if (categoryCell) {
@@ -757,7 +762,7 @@
       // Show no results message if all rows are hidden
       const noResultsRow = Array.from(rows).find(r => r.classList.contains('no-results'));
       let colspanCount = 6;
-      if (tableType === 'inventory') colspanCount = 7;
+      if (tableType === 'inventory') colspanCount = 5;
       else if (tableType === 'licenses') colspanCount = 5;
       
       if (visibleCount === 0 && noResultsRow) {
@@ -919,18 +924,16 @@
       const tbody = document.getElementById('inventoryTableBody');
       
       if (allInventory.length === 0) {
-        tbody.innerHTML = `<tr class="no-results"><td colspan="7" style="text-align: center; padding: 40px 20px; color: #94a3b8;"><span class="material-icons-round" style="font-size: 48px; display: block; margin-bottom: 12px;">inventory_2</span>No inventory found</td></tr>`;
+        tbody.innerHTML = `<tr class="no-results"><td colspan="5" style="text-align: center; padding: 40px 20px; color: #94a3b8;"><span class="material-icons-round" style="font-size: 48px; display: block; margin-bottom: 12px;">inventory_2</span>No inventory registrations found</td></tr>`;
         return;
       }
 
       tbody.innerHTML = allInventory.map((item, idx) => `
         <tr>
-          <td data-label="Category">${item.category}</td>
-          <td data-label="Harvest Qty">${Number(item.harvestQty).toLocaleString()} units</td>
-          <td data-label="Investment">${peso.format(item.investment)}</td>
-          <td data-label="Unit Price">${peso.format(item.unitPrice)}</td>
-          <td data-label="Status"><span class="status-label ${getStatusClass(item.status)}">${getStatusLabel(item.status)}</span></td>
+          <td data-label="Resource Name / Species">${item.resourceName}</td>
+          <td data-label="Sector / Classification">${item.sector}</td>
           <td data-label="Date">${item.date}</td>
+          <td data-label="Status"><span class="status-label ${getStatusClass(item.status)}">${getStatusLabel(item.status)}</span></td>
           <td data-label="Action" style="text-align: center;">
             <a href="/user/inventory/stock-info/${item.id}" class="action-btn"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</a>
           </td>
@@ -1098,31 +1101,20 @@
     async function loadInventoryData(user) {
       try {
         const inventory = [];
-        const categoryLabels = {
-          'farming': 'Crop & Plant',
-          'livestock': 'Fisheries & Agriculture',
-          'agribusiness': 'Agribusiness & Agro-Processing',
-          'trade': 'Agricultural Trade',
-          'infrastructure': 'Infrastructure'
-        };
 
         const q = query(collection(db, 'inventory_registrations'), where('userId', '==', user.uid));
         const querySnapshot = await getDocs(q);
 
         querySnapshot.forEach((doc) => {
           const item = doc.data();
-          const categoryLabel = categoryLabels[item.category] || item.category || 'Product';
           const date = item.submittedAt ? new Date(item.submittedAt.toDate()).toLocaleDateString('en-PH', {
             year: 'numeric', month: 'short', day: 'numeric'
           }) : 'N/A';
-          const unitPrice = item.harvestQty > 0 ? (Number(item.investmentQty || 0) / Number(item.harvestQty)).toFixed(2) : '0.00';
 
           inventory.push({
             id: doc.id,
-            category: categoryLabel,
-            harvestQty: Number(item.harvestQty || 0),
-            investment: Number(item.investmentQty || 0),
-            unitPrice: parseFloat(unitPrice),
+            resourceName: item.resourceName || item.resource_name || '—',
+            sector: item.sector || '—',
             status: item.status || 'pending',
             date: date
           });
