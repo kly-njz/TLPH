@@ -72,46 +72,46 @@
             <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 font-black text-[8px] uppercase rounded-[2px]">System Active</span>
           </div>
           
-          <form class="p-4 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+          <form id="agencyProfileForm" class="p-4 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
             
             <div class="md:col-span-2">
               <label class="gov-label">Official Agency Name</label>
-              <input type="text" class="gov-input w-full uppercase" value="Department of Environment and Natural Resources">
+              <input id="f_agencyName" type="text" class="gov-input w-full uppercase" value="Department of Environment and Natural Resources">
             </div>
             
             <div>
               <label class="gov-label">Agency Acronym</label>
-              <input type="text" class="gov-input w-full uppercase" value="DENR">
+              <input id="f_agencyAcronym" type="text" class="gov-input w-full uppercase" value="DENR">
             </div>
 
             <div>
               <label class="gov-label">Agency / Tax ID Number (TIN)</label>
-              <input type="text" class="gov-input w-full font-mono" value="000-000-000-000">
+              <input id="f_tin" type="text" class="gov-input w-full font-mono" value="000-000-000-000">
             </div>
 
             <div>
               <label class="gov-label">UACS Agency Code</label>
-              <input type="text" class="gov-input w-full font-mono" value="100000000000">
+              <input id="f_uacs" type="text" class="gov-input w-full font-mono" value="100000000000">
             </div>
 
             <div>
               <label class="gov-label">Head of Agency</label>
-              <input type="text" class="gov-input w-full uppercase" value="Secretary Maria Antonia Yulo Loyzaga">
+              <input id="f_headOfAgency" type="text" class="gov-input w-full uppercase" value="Secretary Maria Antonia Yulo Loyzaga">
             </div>
 
             <div class="md:col-span-2">
               <label class="gov-label">Central Office Address</label>
-              <input type="text" class="gov-input w-full uppercase" value="Visayas Avenue, Diliman, Quezon City, 1100">
+              <input id="f_address" type="text" class="gov-input w-full uppercase" value="Visayas Avenue, Diliman, Quezon City, 1100">
             </div>
 
             <div>
               <label class="gov-label">Official Contact Email</label>
-              <input type="email" class="gov-input w-full" value="osec@denr.gov.ph">
+              <input id="f_email" type="email" class="gov-input w-full" value="osec@denr.gov.ph">
             </div>
 
             <div class="md:col-span-3 border-t border-slate-100 pt-3 mt-1 flex justify-end gap-2">
-              <button type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm">Discard Changes</button>
-              <button type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm">Update Agency Profile</button>
+              <button type="button" onclick="discardAgencyChanges()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm">Discard Changes</button>
+              <button type="button" onclick="updateAgencyProfile()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm">Update Agency Profile</button>
             </div>
           </form>
         </section>
@@ -322,8 +322,77 @@
     </main>
   </div>
 
+  <!-- Toast Notification -->
+  <div id="agencyToast" class="fixed bottom-5 right-5 z-[200] hidden">
+    <div id="agencyToastInner" class="flex items-center gap-2 px-4 py-2 rounded-[2px] shadow-lg border text-[10px] font-black uppercase tracking-widest">
+      <span id="agencyToastIcon" class="material-icons-round text-[15px]"></span>
+      <span id="agencyToastMsg"></span>
+    </div>
+  </div>
+
   <script>
-    // Search Filter Logic for Bureaus
+    // ── Agency Profile Form ──────────────────────────────────────────────────
+    const AGENCY_FIELDS = ['f_agencyName','f_agencyAcronym','f_tin','f_uacs','f_headOfAgency','f_address','f_email'];
+    let originalAgencyValues = {};
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Snapshot original values on load
+      AGENCY_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) originalAgencyValues[id] = el.value;
+      });
+    });
+
+    function discardAgencyChanges() {
+      AGENCY_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = originalAgencyValues[id] || '';
+      });
+      showAgencyToast('info', 'Changes discarded.');
+    }
+
+    function updateAgencyProfile() {
+      // Collect current values
+      const payload = {};
+      AGENCY_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) payload[id] = el.value.trim();
+      });
+
+      // Basic validation
+      if (!payload['f_agencyName'] || !payload['f_agencyAcronym']) {
+        showAgencyToast('error', 'Agency name and acronym are required.');
+        return;
+      }
+
+      // Update snapshot so subsequent discards use the new values
+      originalAgencyValues = { ...payload };
+      showAgencyToast('success', 'Agency profile updated successfully.');
+    }
+
+    function showAgencyToast(type, message) {
+      const toast  = document.getElementById('agencyToast');
+      const inner  = document.getElementById('agencyToastInner');
+      const icon   = document.getElementById('agencyToastIcon');
+      const msg    = document.getElementById('agencyToastMsg');
+
+      const styles = {
+        success: { bg: 'bg-emerald-50 border-emerald-300 text-emerald-800', ico: 'check_circle' },
+        error:   { bg: 'bg-rose-50 border-rose-300 text-rose-800',           ico: 'error'        },
+        info:    { bg: 'bg-blue-50 border-blue-300 text-blue-800',            ico: 'info'         },
+      };
+      const s = styles[type] || styles.info;
+
+      inner.className = `flex items-center gap-2 px-4 py-2 rounded-[2px] shadow-lg border text-[10px] font-black uppercase tracking-widest ${s.bg}`;
+      icon.textContent = s.ico;
+      msg.textContent  = message;
+
+      toast.classList.remove('hidden');
+      clearTimeout(toast._hideTimer);
+      toast._hideTimer = setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    // ── Search Filter Logic for Bureaus ──────────────────────────────────────
     function filterBureaus() {
       const query = document.getElementById('bureauSearch').value.toLowerCase().trim();
       const rows = document.querySelectorAll('.bureau-row');
