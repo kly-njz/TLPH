@@ -180,10 +180,11 @@
                 const categoryLabel = categoryLabels[app.category] || app.sector || app.category || 'Product';
                 const imageUrl = app.imageUrl || (app.files?.crop || app.files?.land || app.files?.livestock || app.files?.product) || 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?q=80&w=1000&auto=format&fit=crop';
                 
+                const isInventoryReg = !!app.resourceName;
                 const resourceName = app.resourceName || categoryLabel + ' Product';
                 const investment = app.investmentQty || app.totalValue || 0;
                 const harvest = app.harvestQty || app.stockAvailable || 0;
-                const unitPrice = harvest > 0 ? (investment / harvest).toFixed(2) : '0.00';
+                const unitPrice = harvest > 0 && investment > 0 ? (investment / harvest).toFixed(2) : '0.00';
 
                 document.getElementById('productImage').src = imageUrl;
                 document.getElementById('productImage').onerror = function() {
@@ -193,9 +194,28 @@
                 document.getElementById('categoryBadge').textContent = categoryLabel;
                 document.getElementById('productTitle').textContent = resourceName;
                 document.getElementById('productId').textContent = 'ID: ' + appId.substring(0, 12);
-                document.getElementById('investment').textContent = '₱' + formatNumber(investment);
-                document.getElementById('harvestQty').textContent = formatNumber(harvest);
-                document.getElementById('unitPrice').textContent = '₱' + unitPrice;
+
+                // Inventory registrations show stock info; applications show investment/harvest
+                if (isInventoryReg) {
+                    document.getElementById('investment').textContent = formatNumber(app.stockAvailable || 0) + ' ' + (app.unitOfMeasure || 'pcs');
+                    document.getElementById('harvestQty').textContent = formatNumber(app.stockAvailable || 0);
+                    document.getElementById('unitPrice').textContent = app.sourceLocation || 'N/A';
+                    document.querySelector('[for="investment"], label[for]')?.setAttribute && null;
+                    // Override labels for inventory context
+                    const labels = document.querySelectorAll('label');
+                    labels.forEach(lbl => {
+                        if (lbl.textContent.trim() === 'Investment') lbl.textContent = 'Stock Available';
+                        if (lbl.textContent.trim() === 'Harvest Quantity') lbl.textContent = 'Unit of Measure';
+                        if (lbl.textContent.trim() === 'Unit Price') lbl.textContent = 'Source Location';
+                        if (lbl.textContent.trim() === 'UNITS') lbl.textContent = '';
+                    });
+                    document.querySelector('#harvestQty + span')?.remove();
+                } else {
+                    document.getElementById('investment').textContent = '₱' + formatNumber(investment);
+                    document.getElementById('harvestQty').textContent = formatNumber(harvest);
+                    document.getElementById('unitPrice').textContent = '₱' + unitPrice;
+                }
+                
                 document.getElementById('submittedDate').textContent = formatDate(app.submittedAt || app.createdAt);
 
                 const statusBadge = document.getElementById('statusBadge');
