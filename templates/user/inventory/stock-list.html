@@ -75,6 +75,15 @@
         </div>
     </header>
 
+    <!-- Toast Notification -->
+    <div id="toastNotification" class="hidden fixed top-4 right-4 z-[9999] bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-bounce-once max-w-sm">
+        <i class="fa-solid fa-check-circle text-xl"></i>
+        <span id="toastMessage" class="text-sm font-semibold"></span>
+        <button onclick="document.getElementById('toastNotification').classList.add('hidden')" class="ml-2 text-white/80 hover:text-white">
+            <i class="fa-solid fa-times text-xs"></i>
+        </button>
+    </div>
+
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20">
         <div id="loadingState" class="text-center py-12">
             <div class="inline-flex items-center justify-center w-12 h-12 bg-emerald-50 rounded-full mb-3">
@@ -87,8 +96,8 @@
             <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-50 rounded-full mb-3">
                 <i class="fa-solid fa-box-open text-3xl text-gray-300"></i>
             </div>
-            <p class="text-gray-700 font-semibold text-sm mb-1">No approved items yet</p>
-            <p class="text-gray-500 text-xs">Only approved inventory and applications are displayed here</p>
+            <p class="text-gray-700 font-semibold text-sm mb-1">No inventory items yet</p>
+            <p class="text-gray-500 text-xs">Your registered stock and approved applications will appear here</p>
         </div>
 
         <div id="combinedGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 hidden"></div>
@@ -174,6 +183,11 @@
                              class="w-full h-full object-cover"
                              onerror="this.src='https://images.unsplash.com/photo-1574943320219-553eb213f72d?q=80&w=1000&auto=format&fit=crop'">
                         
+                        <!-- Status & Protected Badges -->
+                        <div class="absolute top-1.5 right-1.5 flex flex-col gap-1">
+                            ${item.status === 'pending_payment' ? '<div class="bg-orange-500/95 backdrop-blur-sm text-white px-1.5 py-0.5 rounded text-[8px] font-semibold shadow-sm flex items-center gap-0.5"><i class=\'fa-solid fa-clock text-[7px]\'></i>Pending Payment</div>' : ''}
+                            ${item.status === 'approved' || item.status === 'active' ? '<div class="bg-emerald-600/95 backdrop-blur-sm text-white px-1.5 py-0.5 rounded text-[8px] font-semibold shadow-sm flex items-center gap-0.5"><i class=\'fa-solid fa-check text-[7px]\'></i>Active</div>' : ''}
+                        </div>
                         <!-- Protected Badge if applicable -->
                         ${item.isProtected ? '<div class="absolute top-1.5 left-1.5"><div class="bg-purple-600/95 backdrop-blur-sm text-white px-1.5 py-0.5 rounded text-[8px] font-semibold shadow-sm"><i class="fa-solid fa-shield mr-0.5 text-[7px]"></i>Protected</div></div>' : ''}
                     </div>
@@ -387,7 +401,9 @@
 
                 loadingState.classList.add('hidden');
 
-                const approvedInventory = inventoryItems.filter(item => item.status === 'approved');
+                const approvedInventory = inventoryItems.filter(item => 
+                    item.status === 'approved' || item.status === 'pending_payment' || item.status === 'active'
+                );
                 const approvedApplications = applications.filter(app => {
                     const status = (app.status || '').toLowerCase();
                     return status === 'approved' || status === 'pending_payment' || status === 'paid';
@@ -472,7 +488,10 @@
             const paymentSuccess = urlParams.get('payment_success');
             
             if (paymentSuccess === 'true') {
-                alert('Payment successful! Your inventory registration has been submitted.');
+                const toast = document.getElementById('toastNotification');
+                document.getElementById('toastMessage').textContent = 'Payment successful! Your stock entry has been registered.';
+                toast.classList.remove('hidden');
+                setTimeout(() => toast.classList.add('hidden'), 5000);
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
         });
