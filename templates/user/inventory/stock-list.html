@@ -85,6 +85,19 @@
     </div>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20">
+
+        <!-- Pending submissions notice (shown dynamically) -->
+        <div id="pendingNotice" class="hidden mb-4 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-clock text-orange-500 text-sm"></i>
+                <p class="text-[11px] font-black text-orange-700 uppercase m-0">
+                    You have <span id="pendingCount" class="text-orange-900">0</span> pending submission(s) awaiting approval
+                </p>
+            </div>
+            <a href="/user/inventory/history" class="text-[9px] font-black text-orange-700 uppercase border border-orange-300 px-3 py-1 rounded-lg hover:bg-orange-100 no-underline transition-all flex-shrink-0">
+                View History
+            </a>
+        </div>
         <div id="loadingState" class="text-center py-12">
             <div class="inline-flex items-center justify-center w-12 h-12 bg-emerald-50 rounded-full mb-3">
                 <i class="fa-solid fa-spinner fa-spin text-xl text-emerald-600"></i>
@@ -96,17 +109,18 @@
             <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-50 rounded-full mb-3">
                 <i class="fa-solid fa-box-open text-3xl text-gray-300"></i>
             </div>
-            <p class="text-gray-700 font-semibold text-sm mb-1">No inventory items yet</p>
-            <p class="text-gray-500 text-xs">Your registered stock and approved applications will appear here</p>
+            <p class="text-gray-700 font-semibold text-sm mb-1">No approved inventory yet</p>
+            <p class="text-gray-500 text-xs">Items will appear here once your registration is approved</p>
         </div>
 
         <div id="combinedGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 hidden"></div>
     </main>
 
     <nav class="fixed bottom-4 right-4 z-50">
-        <a href="/user/inventory/stock-history" class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white text-gray-700 shadow-lg hover:shadow-xl transition-all no-underline border border-gray-200 hover:border-emerald-600 group">
+        <a href="/user/inventory/history" class="relative flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white text-gray-700 shadow-lg hover:shadow-xl transition-all no-underline border border-gray-200 hover:border-emerald-600 group">
             <i class="fa-solid fa-clock-rotate-left text-emerald-600 text-base"></i>
             <span class="font-semibold text-xs group-hover:text-emerald-600">History</span>
+            <span id="historyNavBadge" class="hidden absolute -top-1.5 -right-1.5 bg-orange-500 text-white text-[8px] font-black rounded-full w-4 h-4 flex items-center justify-center"></span>
         </a>
     </nav>
 
@@ -183,11 +197,6 @@
                              class="w-full h-full object-cover"
                              onerror="this.src='https://images.unsplash.com/photo-1574943320219-553eb213f72d?q=80&w=1000&auto=format&fit=crop'">
                         
-                        <!-- Status & Protected Badges -->
-                        <div class="absolute top-1.5 right-1.5 flex flex-col gap-1">
-                            ${item.status === 'pending_payment' ? '<div class="bg-orange-500/95 backdrop-blur-sm text-white px-1.5 py-0.5 rounded text-[8px] font-semibold shadow-sm flex items-center gap-0.5"><i class=\'fa-solid fa-clock text-[7px]\'></i>Pending Payment</div>' : ''}
-                            ${item.status === 'approved' || item.status === 'active' ? '<div class="bg-emerald-600/95 backdrop-blur-sm text-white px-1.5 py-0.5 rounded text-[8px] font-semibold shadow-sm flex items-center gap-0.5"><i class=\'fa-solid fa-check text-[7px]\'></i>Active</div>' : ''}
-                        </div>
                         <!-- Protected Badge if applicable -->
                         ${item.isProtected ? '<div class="absolute top-1.5 left-1.5"><div class="bg-purple-600/95 backdrop-blur-sm text-white px-1.5 py-0.5 rounded text-[8px] font-semibold shadow-sm"><i class="fa-solid fa-shield mr-0.5 text-[7px]"></i>Protected</div></div>' : ''}
                     </div>
@@ -401,12 +410,25 @@
 
                 loadingState.classList.add('hidden');
 
-                const approvedInventory = inventoryItems.filter(item => 
-                    item.status === 'approved' || item.status === 'pending_payment' || item.status === 'active'
+                const approvedInventory = inventoryItems.filter(item =>
+                    item.status === 'approved' || item.status === 'active'
                 );
+
+                // Show pending notice if user has pending_payment items
+                const pendingItems = inventoryItems.filter(item =>
+                    item.status === 'pending_payment' || item.status === 'pending'
+                );
+                if (pendingItems.length > 0) {
+                    document.getElementById('pendingCount').textContent = pendingItems.length;
+                    document.getElementById('pendingNotice').classList.remove('hidden');
+                    // Show orange badge on the History nav button
+                    const badge = document.getElementById('historyNavBadge');
+                    badge.textContent = pendingItems.length;
+                    badge.classList.remove('hidden');
+                }
                 const approvedApplications = applications.filter(app => {
                     const status = (app.status || '').toLowerCase();
-                    return status === 'approved' || status === 'pending_payment' || status === 'paid';
+                    return status === 'approved' || status === 'paid' || status === 'active';
                 });
 
                 const allItems = [];
