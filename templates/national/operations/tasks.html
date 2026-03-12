@@ -46,7 +46,7 @@
                         <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Task Assignment & Monitoring</p>
                     </div>
                 </div>
-                <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
+                <button id="createTaskBtn" type="button" onclick="openCreateTaskModal()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1.5">
                     <span class="material-icons-round text-[14px]">add</span> Create Task
                 </button>
             </header>
@@ -165,6 +165,63 @@
         </main>
     </div>
 
+    <!-- Create Task Modal -->
+    <div id="taskModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/60">
+        <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
+            <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
+                <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
+                    <span class="material-icons-round text-[14px]">add_task</span>
+                    Create National Task
+                </h2>
+                <button id="taskCloseIcon" type="button" onclick="closeCreateTaskModal()" class="text-slate-300 hover:text-white">
+                    <span class="material-icons-round text-[16px]">close</span>
+                </button>
+            </div>
+
+            <form id="taskForm" class="p-3 space-y-2" onsubmit="submitCreateTask(event)">
+                <div>
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Task Title / Description *</label>
+                    <input id="taskTitleInput" type="text" class="gov-input w-full" placeholder="Brief directive or assignment" required>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Assigned To *</label>
+                        <input id="taskAssigneeInput" type="text" class="gov-input w-full" placeholder="Office / Division" required>
+                    </div>
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Priority</label>
+                        <select id="taskPriorityInput" class="gov-input w-full cursor-pointer">
+                            <option value="Normal">Normal</option>
+                            <option value="High">High</option>
+                            <option value="Urgent">Urgent</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
+                        <select id="taskStatusInput" class="gov-input w-full cursor-pointer" required>
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Due Date *</label>
+                        <input id="taskDueDateInput" type="date" class="gov-input w-full" required>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2 mt-1 border-t border-slate-200">
+                    <button id="taskCancelBtn" type="button" onclick="closeCreateTaskModal()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+                    <button type="submit" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white">Save Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // --- CHARTS CONFIG ---
         Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -218,6 +275,64 @@
             document.getElementById('searchTask').value = '';
             document.getElementById('statusFilter').value = '';
             filterTable();
+        }
+
+        // --- CREATE TASK MODAL ---
+        const taskModal = document.getElementById('taskModal');
+
+        function openCreateTaskModal() {
+            document.getElementById('taskForm').reset();
+            taskModal.classList.remove('hidden');
+            taskModal.classList.add('flex');
+        }
+
+        function closeCreateTaskModal() {
+            taskModal.classList.add('hidden');
+            taskModal.classList.remove('flex');
+        }
+
+        // Close on backdrop click
+        taskModal.addEventListener('click', function(e) {
+            if (e.target === taskModal) closeCreateTaskModal();
+        });
+
+        function submitCreateTask(e) {
+            e.preventDefault();
+            const title    = document.getElementById('taskTitleInput').value.trim();
+            const assignee = document.getElementById('taskAssigneeInput').value.trim();
+            const status   = document.getElementById('taskStatusInput').value;
+            const dueDate  = document.getElementById('taskDueDateInput').value;
+
+            const statusColors = {
+                'Pending':     'bg-amber-50 text-amber-700 border-amber-200',
+                'In Progress': 'bg-blue-50 text-blue-700 border-blue-200',
+                'Completed':   'bg-emerald-50 text-emerald-700 border-emerald-200'
+            };
+            const colorClass = statusColors[status] || 'bg-slate-100 text-slate-600 border-slate-200';
+
+            const formattedDate = dueDate
+                ? new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+                : '';
+
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-blue-50 transition';
+            row.innerHTML = `
+                <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">${title}</td>
+                <td class="font-bold text-blue-800 border-r border-slate-100 uppercase">${assignee}</td>
+                <td class="text-center border-r border-slate-100">
+                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${colorClass}">${status}</span>
+                </td>
+                <td class="font-mono text-slate-500 border-r border-slate-100 text-center">${formattedDate}</td>
+                <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                        <button class="text-blue-700 font-bold hover:underline uppercase">View</button>
+                        <button class="text-green-700 font-bold hover:underline uppercase">Done</button>
+                        <button class="text-rose-700 font-bold hover:underline uppercase" onclick="this.closest('tr').remove()">Revoke</button>
+                    </div>
+                </td>
+            `;
+            document.getElementById('taskTable').prepend(row);
+            closeCreateTaskModal();
         }
     </script>
 </body>
