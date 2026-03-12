@@ -479,6 +479,35 @@ def hrm_leave_create():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@bp.route('/leave-request/update', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def hrm_leave_update():
+    db = get_firestore_db()
+    try:
+        data = request.get_json(force=True) or {}
+        record_id = data.get('id')
+        status = data.get('status')
+
+        if not record_id:
+            return jsonify({'success': False, 'error': 'Missing record id'}), 400
+        if status not in ('Approved', 'Denied'):
+            return jsonify({'success': False, 'error': 'Invalid status value'}), 400
+
+        update_data = {
+            'status': status,
+            'reviewed_at': datetime.utcnow().isoformat(),
+        }
+        if data.get('remarks'):
+            update_data['remarks'] = data['remarks']
+
+        db.collection('leave_requests').document(record_id).update(update_data)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error updating leave request: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @bp.route('/payroll')
 @role_required('municipal','municipal_admin')
 def hrm_payroll():

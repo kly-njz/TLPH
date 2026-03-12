@@ -41,6 +41,9 @@
         loadingEmployees: false,
         filterDepartment: '',
         filterStatus: '',
+        showRightsModal: false,
+        savingRights: false,
+        rightsForm: { authority_level: '', signing_rights: '', duty_type: '', overtime_status: '', field_service: '', work_arrangement: '' },
 
         async loadData() {
           // Load Firebase if not already loaded
@@ -160,6 +163,59 @@
         getFullName(employee) {
           const parts = [employee.first_name, employee.middle_name, employee.last_name].filter(Boolean);
           return parts.join(' ') || 'N/A';
+        },
+
+        openRightsModal() {
+          if (!this.selectedDesignation || !this.selectedDesignation.id) {
+            alert('Please select a designation first before defining rights.');
+            return;
+          }
+          this.rightsForm = {
+            authority_level: this.selectedDesignation.authority_level || '',
+            signing_rights: this.selectedDesignation.signing_rights || '',
+            duty_type: this.selectedDesignation.duty_type || '',
+            overtime_status: this.selectedDesignation.overtime_status || '',
+            field_service: this.selectedDesignation.field_service || '',
+            work_arrangement: this.selectedDesignation.work_arrangement || ''
+          };
+          this.showRightsModal = true;
+        },
+
+        closeRightsModal() {
+          this.showRightsModal = false;
+          this.savingRights = false;
+        },
+
+        async saveRights() {
+          if (!this.selectedDesignation || !this.selectedDesignation.id) return;
+          try {
+            this.savingRights = true;
+            if (!firebaseImported) await loadFirebase();
+
+            const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+            const ref = doc(db, 'designations', this.selectedDesignation.id);
+            await updateDoc(ref, {
+              authority_level: this.rightsForm.authority_level,
+              signing_rights: this.rightsForm.signing_rights,
+              duty_type: this.rightsForm.duty_type,
+              overtime_status: this.rightsForm.overtime_status,
+              field_service: this.rightsForm.field_service,
+              work_arrangement: this.rightsForm.work_arrangement
+            });
+
+            // Update local state
+            Object.assign(this.selectedDesignation, this.rightsForm);
+            const idx = this.designations.findIndex(d => d.id === this.selectedDesignation.id);
+            if (idx !== -1) Object.assign(this.designations[idx], this.rightsForm);
+
+            this.closeRightsModal();
+            alert('Rights updated successfully.');
+          } catch (error) {
+            console.error('Error saving rights:', error);
+            alert('Failed to save rights. Please try again.');
+          } finally {
+            this.savingRights = false;
+          }
         }
       }
     }
@@ -234,6 +290,103 @@
   <div class="flex flex-1 overflow-hidden">
     {% include 'municipal/sidenav.html' %}
 
+    <!-- Define Rights Modal -->
+    <div x-show="showRightsModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" @click="closeRightsModal()"></div>
+      <div class="relative bg-white rounded-[3px] shadow-xl w-full max-w-lg mx-4 overflow-hidden">
+        <!-- Modal Header -->
+        <div class="bg-amber-900 px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2 text-white">
+            <span class="material-icons-round text-sm">shield</span>
+            <span class="font-bold uppercase text-[10px] tracking-wider">Define Rights</span>
+            <span class="text-[9px] opacity-70 font-mono" x-text="'— ' + (selectedDesignation.designation || '').toUpperCase()"></span>
+          </div>
+          <button @click="closeRightsModal()" class="text-white hover:text-amber-200">
+            <span class="material-icons-round text-sm">close</span>
+          </button>
+        </div>
+        <!-- Modal Body -->
+        <div class="p-4 grid grid-cols-1 gap-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Authority Level</label>
+              <select x-model="rightsForm.authority_level" class="w-full border border-slate-300 rounded-[2px] px-2 py-1.5 text-[11px] font-bold">
+                <option value="">— Select —</option>
+                <option>Signatory</option>
+                <option>Co-Signatory</option>
+                <option>Approver</option>
+                <option>Recommending Approval</option>
+                <option>Noted By</option>
+                <option>None</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Signing Rights</label>
+              <select x-model="rightsForm.signing_rights" class="w-full border border-slate-300 rounded-[2px] px-2 py-1.5 text-[11px] font-bold">
+                <option value="">— Select —</option>
+                <option>Full Signing Authority</option>
+                <option>Limited Signing Authority</option>
+                <option>Documents Only</option>
+                <option>Financial Documents</option>
+                <option>No Signing Rights</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Duty Type</label>
+              <select x-model="rightsForm.duty_type" class="w-full border border-slate-300 rounded-[2px] px-2 py-1.5 text-[11px] font-bold">
+                <option value="">— Select —</option>
+                <option>Regular</option>
+                <option>Shift</option>
+                <option>Compressed Work Week</option>
+                <option>Flexible</option>
+                <option>Field</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Overtime Status</label>
+              <select x-model="rightsForm.overtime_status" class="w-full border border-slate-300 rounded-[2px] px-2 py-1.5 text-[11px] font-bold">
+                <option value="">— Select —</option>
+                <option>Eligible</option>
+                <option>Not Eligible</option>
+                <option>Exempt</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Field Service</label>
+              <select x-model="rightsForm.field_service" class="w-full border border-slate-300 rounded-[2px] px-2 py-1.5 text-[11px] font-bold">
+                <option value="">— Select —</option>
+                <option>Required</option>
+                <option>Optional</option>
+                <option>Not Required</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Work Arrangement</label>
+              <select x-model="rightsForm.work_arrangement" class="w-full border border-slate-300 rounded-[2px] px-2 py-1.5 text-[11px] font-bold">
+                <option value="">— Select —</option>
+                <option>On-Site</option>
+                <option>Hybrid</option>
+                <option>Remote</option>
+                <option>Field-Based</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <!-- Modal Footer -->
+        <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+          <button @click="closeRightsModal()" class="px-3 py-1.5 text-[10px] font-bold uppercase border border-slate-300 rounded-[2px] hover:bg-slate-100 transition-all">Cancel</button>
+          <button @click="saveRights()" :disabled="savingRights" class="bg-amber-900 text-white px-4 py-1.5 text-[10px] font-bold uppercase rounded-[2px] hover:bg-amber-800 transition-all flex items-center gap-2 disabled:opacity-60">
+            <span class="material-icons-round text-sm" x-text="savingRights ? 'hourglass_top' : 'save'"></span>
+            <span x-text="savingRights ? 'Saving...' : 'Save Rights'"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <main class="flex-1 flex flex-col p-4 gap-4 overflow-y-auto custom-scroll">
       
       <div class="shrink-0 flex items-center justify-between border-b-2 border-amber-800 pb-2">
@@ -242,7 +395,7 @@
           <p class="text-[10px] font-bold text-gov-muted uppercase tracking-widest">Authority Level, Signing Rights & Duty Classification</p>
         </div>
         <div class="flex gap-2">
-            <button class="bg-gov-primary text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition-all flex items-center gap-2">
+            <button @click="openRightsModal()" class="bg-gov-primary text-white px-3 py-1.5 rounded-[2px] text-[10px] font-bold uppercase hover:bg-slate-800 transition-all flex items-center gap-2">
                 <span class="material-icons-round text-sm">shield</span> Define Rights
             </button>
         </div>

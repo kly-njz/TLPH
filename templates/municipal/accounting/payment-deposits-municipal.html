@@ -30,6 +30,7 @@
     .badge { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; padding: 2px 6px; border-radius: 2px; border: 1px solid; }
     .btn-action { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; cursor: pointer; }
     .btn-view:hover { color: white; background: #0f766e; border-color: #0f766e; }
+    [x-cloak] { display: none !important; }
   </style>
 </head>
 
@@ -167,7 +168,7 @@
                     <td class="text-[9px]" x-text="deposit.payment_method">-</td>
                     <td class="text-[9px]" x-text="deposit.payer_email">-</td>
                     <td>
-                      <button class="btn-action btn-view" title="View Details">
+                      <button class="btn-action btn-view" title="View Details" @click="viewDeposit(deposit)">
                         <span class="material-icons-round text-[14px]">open_in_new</span>
                       </button>
                     </td>
@@ -191,7 +192,90 @@
     </div>
   </div>
 
+  <!-- Deposit Detail Modal -->
+  <div x-data x-show="$store.depositModal.open" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background:rgba(0,0,0,.45);">
+    <div class="bg-white rounded-[3px] shadow-xl w-full max-w-lg border border-slate-200"
+         @click.outside="$store.depositModal.close()">
+
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-emerald-700 text-[18px]">receipt_long</span>
+          <h3 class="text-xs font-black uppercase tracking-widest text-slate-800">Deposit Details</h3>
+        </div>
+        <button @click="$store.depositModal.close()" class="btn-action hover:bg-red-50 hover:border-red-300 hover:text-red-600">
+          <span class="material-icons-round text-[14px]">close</span>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-4 grid grid-cols-2 gap-3 text-[11px]" x-data="{ get d() { return $store.depositModal.deposit || {} } }">
+        <div class="col-span-2">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Invoice / External ID</p>
+          <code class="text-blue-600 font-bold text-xs" x-text="d.invoice_id || d.external_id || '—'"></code>
+        </div>
+        <div>
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Amount</p>
+          <p class="font-black text-emerald-700 text-sm">₱ <span x-text="d.amount ? Number(d.amount).toLocaleString('en-PH',{maximumFractionDigits:2}) : '0'"></span></p>
+        </div>
+        <div>
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Status</p>
+          <span class="badge" :class="$store.depositModal.statusClass" x-text="d.status || '—'"></span>
+        </div>
+        <div>
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Payment Method</p>
+          <p class="font-bold text-slate-700" x-text="d.payment_method || '—'"></p>
+        </div>
+        <div>
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Source</p>
+          <p class="font-bold text-slate-700" x-text="String(d.source || 'transactions').replace('_',' ')"></p>
+        </div>
+        <div class="col-span-2">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Description</p>
+          <p class="font-bold text-slate-700" x-text="d.description || '—'"></p>
+        </div>
+        <div>
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Payer Email</p>
+          <p class="font-bold text-slate-700" x-text="d.payer_email || '—'"></p>
+        </div>
+        <div>
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Payer Name</p>
+          <p class="font-bold text-slate-700" x-text="d.payer_name || d.customer_name || '—'"></p>
+        </div>
+        <div class="col-span-2">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Date</p>
+          <p class="font-bold text-slate-700" x-text="d.created_at ? new Date(d.created_at).toLocaleString('en-PH') : '—'"></p>
+        </div>
+        <template x-if="d.xendit_id || d.reference_id">
+          <div class="col-span-2">
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Reference ID</p>
+            <code class="text-slate-600 font-bold text-[10px]" x-text="d.xendit_id || d.reference_id"></code>
+          </div>
+        </template>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-4 py-2.5 border-t border-slate-100 flex justify-end">
+        <button @click="$store.depositModal.close()"
+                class="gov-btn bg-slate-800 text-white hover:bg-slate-700">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    document.addEventListener('alpine:init', () => {
+      Alpine.store('depositModal', {
+        open: false,
+        deposit: null,
+        statusClass: '',
+        close() { this.open = false; this.deposit = null; }
+      });
+    });
+
     function paymentDeposits() {
       return {
         deposits: [],
@@ -260,6 +344,22 @@
           this.searchTerm = '';
           this.statusFilter = '';
           this.updateCharts();
+        },
+
+        viewDeposit(deposit) {
+          const statuses = {
+            'COMPLETED': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+            'PAID': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+            'SETTLED': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+            'PENDING': 'bg-amber-50 text-amber-800 border-amber-200',
+            'FAILED': 'bg-red-50 text-red-800 border-red-200',
+            'EXPIRED': 'bg-red-50 text-red-800 border-red-200',
+            'CANCELLED': 'bg-slate-100 text-slate-700 border-slate-300'
+          };
+          const key = String(deposit.status || '').toUpperCase();
+          Alpine.store('depositModal').statusClass = statuses[key] || statuses['PENDING'];
+          Alpine.store('depositModal').deposit = deposit;
+          Alpine.store('depositModal').open = true;
         },
 
         async loadDeposits() {
