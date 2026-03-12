@@ -51,7 +51,7 @@
               <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">National Monitoring Dashboard</p>
             </div>
           </div>
-          <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+          <button onclick="openNewProjectModal()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">add</span> New Project
           </button>
         </header>
@@ -179,6 +179,70 @@
     </main>
   </div>
 
+  <!-- New Project Modal -->
+  <div id="newProjectModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/40">
+    <div class="bg-white border border-slate-300 rounded-[2px] shadow-xl w-full max-w-md mx-4">
+
+      <div class="bg-blue-900 text-white px-4 py-2.5 flex items-center justify-between rounded-t-[2px]">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px]">add_circle_outline</span>
+          <span class="text-xs font-black uppercase tracking-widest">New Project</span>
+        </div>
+        <button onclick="closeNewProjectModal()" class="hover:text-slate-300 transition">
+          <span class="material-icons-round text-[18px]">close</span>
+        </button>
+      </div>
+
+      <form id="newProjectForm" onsubmit="submitNewProject(event)" class="p-4 flex flex-col gap-3">
+
+        <div class="flex flex-col gap-1">
+          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Project Name <span class="text-rose-600">*</span></label>
+          <input id="npName" type="text" required placeholder="e.g. Manila Bay Rehab Phase V"
+            class="gov-input w-full" />
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Region / Entity <span class="text-rose-600">*</span></label>
+          <input id="npRegion" type="text" required placeholder="e.g. NCR Central"
+            class="gov-input w-full" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Status <span class="text-rose-600">*</span></label>
+            <select id="npStatus" class="gov-input cursor-pointer w-full">
+              <option value="Pending">Pending</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Start Date <span class="text-rose-600">*</span></label>
+            <input id="npStartDate" type="date" required class="gov-input w-full" />
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Description</label>
+          <textarea id="npDescription" rows="2" placeholder="Optional project description..."
+            class="gov-input w-full resize-none"></textarea>
+        </div>
+
+        <div id="npError" class="hidden text-[9px] font-bold text-rose-600 uppercase"></div>
+
+        <div class="flex justify-end gap-2 pt-1 border-t border-slate-100">
+          <button type="button" onclick="closeNewProjectModal()"
+            class="gov-btn bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200">Cancel</button>
+          <button type="submit"
+            class="gov-btn bg-blue-800 hover:bg-blue-900 text-white flex items-center gap-1">
+            <span class="material-icons-round text-[12px]">save</span> Save Project
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
   <script>
     // --- Chart Implementations ---
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -245,6 +309,69 @@
     }
 
     document.getElementById('searchProject').addEventListener('input', filterTable);
+
+    // --- New Project Modal ---
+    function openNewProjectModal() {
+      document.getElementById('newProjectModal').classList.remove('hidden');
+      document.getElementById('newProjectForm').reset();
+      document.getElementById('npError').classList.add('hidden');
+    }
+
+    function closeNewProjectModal() {
+      document.getElementById('newProjectModal').classList.add('hidden');
+    }
+
+    // Close on backdrop click
+    document.getElementById('newProjectModal').addEventListener('click', function(e) {
+      if (e.target === this) closeNewProjectModal();
+    });
+
+    function statusBadgeClass(status) {
+      if (status === 'In Progress') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+      if (status === 'Completed')   return 'bg-blue-50 text-blue-700 border border-blue-200';
+      return 'bg-slate-100 text-slate-600 border border-slate-200';
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr + 'T00:00:00');
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function submitNewProject(e) {
+      e.preventDefault();
+      const name      = document.getElementById('npName').value.trim();
+      const region    = document.getElementById('npRegion').value.trim();
+      const status    = document.getElementById('npStatus').value;
+      const startDate = document.getElementById('npStartDate').value;
+
+      if (!name || !region || !startDate) {
+        const err = document.getElementById('npError');
+        err.textContent = 'Please fill in all required fields.';
+        err.classList.remove('hidden');
+        return;
+      }
+
+      const tbody = document.getElementById('projectTable');
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-blue-50 transition';
+      tr.innerHTML = `
+        <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">${name}</td>
+        <td class="font-bold text-blue-800 border-r border-slate-100 uppercase">${region}</td>
+        <td class="text-center border-r border-slate-100">
+          <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center ${statusBadgeClass(status)}">${status}</span>
+        </td>
+        <td class="font-mono text-slate-500 border-r border-slate-100 text-center">${formatDate(startDate)}</td>
+        <td class="text-center">
+          <div class="flex justify-center gap-2">
+            <button class="text-blue-700 font-bold uppercase hover:underline">View</button>
+            <button class="text-blue-700 font-bold uppercase hover:underline">Edit</button>
+            <button onclick="this.closest('tr').remove()" class="text-rose-700 font-bold uppercase hover:underline">Delete</button>
+          </div>
+        </td>`;
+      tbody.prepend(tr);
+      closeNewProjectModal();
+    }
 
     function resetFilters() {
       document.getElementById('searchProject').value = '';
