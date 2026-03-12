@@ -192,17 +192,26 @@
         <div class="flex-1 flex flex-col xl:flex-row gap-2 min-h-0">
             
             <aside class="w-full xl:w-[260px] flex flex-col gap-2 shrink-0 overflow-y-auto custom-scrollbar no-print">
-                <div class="gov-card p-2 flex flex-col shrink-0 h-[180px]">
-                    <h2 class="text-[9px] font-black uppercase text-slate-700 border-l-2 border-gov-blue pl-1.5 mb-1 shrink-0">Holidays by Type</h2>
-                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="chType"></canvas></div></div>
+                <div class="gov-card p-2 flex flex-col shrink-0 h-[180px] cursor-pointer hover:border-gov-blue transition-colors group" onclick="openChartModal('type')">
+                    <div class="flex justify-between items-center mb-1 shrink-0 border-b border-slate-100 pb-1">
+                        <h2 class="text-[9px] font-black uppercase text-slate-700 border-l-2 border-gov-blue pl-1.5 m-0">Holidays by Type</h2>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-blue transition-colors">open_in_full</span>
+                    </div>
+                    <div class="chart-safe-zone pointer-events-none"><div class="chart-container"><canvas id="chType"></canvas></div></div>
                 </div>
-                <div class="gov-card p-2 flex flex-col shrink-0 h-[180px]">
-                    <h2 class="text-[9px] font-black uppercase text-slate-700 border-l-2 border-gov-blue pl-1.5 mb-1 shrink-0">Distribution by Scope</h2>
-                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="chScope"></canvas></div></div>
+                <div class="gov-card p-2 flex flex-col shrink-0 h-[180px] cursor-pointer hover:border-emerald-600 transition-colors group" onclick="openChartModal('scope')">
+                    <div class="flex justify-between items-center mb-1 shrink-0 border-b border-slate-100 pb-1">
+                        <h2 class="text-[9px] font-black uppercase text-slate-700 border-l-2 border-emerald-600 pl-1.5 m-0">Distribution by Scope</h2>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-emerald-600 transition-colors">open_in_full</span>
+                    </div>
+                    <div class="chart-safe-zone pointer-events-none"><div class="chart-container"><canvas id="chScope"></canvas></div></div>
                 </div>
-                <div class="gov-card p-2 flex flex-col shrink-0 h-[180px]">
-                    <h2 class="text-[9px] font-black uppercase text-slate-700 border-l-2 border-gov-blue pl-1.5 mb-1 shrink-0">Top Regions</h2>
-                    <div class="chart-safe-zone"><div class="chart-container"><canvas id="chRegion"></canvas></div></div>
+                <div class="gov-card p-2 flex flex-col shrink-0 h-[180px] cursor-pointer hover:border-gov-red transition-colors group" onclick="openChartModal('region')">
+                    <div class="flex justify-between items-center mb-1 shrink-0 border-b border-slate-100 pb-1">
+                        <h2 class="text-[9px] font-black uppercase text-slate-700 border-l-2 border-gov-red pl-1.5 m-0">Top Regions</h2>
+                        <span class="material-icons-round text-[12px] text-slate-300 group-hover:text-gov-red transition-colors">open_in_full</span>
+                    </div>
+                    <div class="chart-safe-zone pointer-events-none"><div class="chart-container"><canvas id="chRegion"></canvas></div></div>
                 </div>
             </aside>
 
@@ -412,6 +421,23 @@
     </div>
   </div>
 
+  <div id="chartModalWrapper" class="gov-modal no-print">
+      <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
+      <div id="chartModalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+          <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+              <h3 id="modalChartTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                  <i class="fa-solid fa-chart-line text-slate-400"></i> Chart Detailed View
+              </h3>
+              <button onclick="closeChartModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                  <span class="material-icons-round text-sm">close</span>
+              </button>
+          </div>
+          <div class="p-6 bg-slate-50 flex-1 h-[50vh] min-h-[350px] relative">
+              <canvas id="modalCanvas"></canvas>
+          </div>
+      </div>
+  </div>
+
   <div id="toast" class="fixed bottom-4 right-4 z-[4000] hidden">
     <div class="rounded-[2px] border border-emerald-300 bg-emerald-50 shadow-lg px-4 py-3 flex items-center gap-3">
         <span class="material-icons-round text-emerald-700 text-[18px]">check_circle</span>
@@ -520,6 +546,7 @@
     $("wdRegion").addEventListener("change", function() { loadMunicipalities(this.options[this.selectedIndex].dataset.code, 'wdMuni', '(All Municipalities)', true); });
 
     const nowY = new Date().getFullYear();
+    $("fy").appendChild(Object.assign(document.createElement("option"), {value:"ALL", textContent:"All Years"}));
     for(let y = nowY - 2; y <= nowY + 10; y++){
       const opt = document.createElement("option"); opt.value = String(y); opt.textContent = String(y);
       if(y === 2026) opt.selected = true; $("fy").appendChild(opt);
@@ -637,7 +664,7 @@
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
     Chart.defaults.font.size = 8;
     Chart.defaults.color = "#64748b";
-    let chType, chScope, chRegion;
+    let chType, chScope, chRegion, modalChartInstance = null;
 
     const renderCharts = () => {
       const rows = filt(holidays);
@@ -656,6 +683,72 @@
       chScope = new Chart($("chScope"), { type: "doughnut", data: { labels: byScope.map(x=>x[0]), datasets: [{ data: byScope.map(x=>x[1]), backgroundColor:['#64748b','#15803d','#f59e0b'], borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, cutout:'65%', layout:{padding:{bottom:10}}, plugins:{ legend:{ position:"bottom", labels:{boxWidth:6, font:chartFont} } } } });
       chRegion = new Chart($("chRegion"), { type: "bar", data: { labels: byRegion.map(x=>x[0].substring(0,8)), datasets: [{ data: byRegion.map(x=>x[1]), backgroundColor: barColors, borderRadius:2, borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{ grid:{display:false}, ticks:{font:chartFont} } } } });
     };
+
+    // --- MODAL CHART LOGIC ---
+    function openChartModal(type) {
+        const modalWrapper = document.getElementById('chartModalWrapper');
+        const modalBody = document.getElementById('chartModalBody');
+        const modalTitle = document.getElementById('modalChartTitle');
+        
+        modalWrapper.classList.remove('hidden');
+        modalWrapper.classList.add('flex');
+        setTimeout(() => { modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
+        
+        if (modalChartInstance) modalChartInstance.destroy();
+
+        const ctx = document.getElementById('modalCanvas').getContext('2d');
+        const modalFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
+
+        if (type === 'type') {
+            modalTitle.innerHTML = '<i class="fa-solid fa-chart-column text-gov-blue mr-2"></i> Holidays by Type (Detailed View)';
+            modalChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: chType.data,
+                options: { 
+                    responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { grid: {display:false}, ticks: { font: modalFont } }, y: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont, stepSize: 1 }, beginAtZero: true } }
+                }
+            });
+        } else if (type === 'scope') {
+            modalTitle.innerHTML = '<i class="fa-solid fa-chart-pie text-emerald-600 mr-2"></i> Distribution by Scope (Detailed View)';
+            modalChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: chScope.data,
+                options: { 
+                    responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2, 
+                    cutout: '60%', 
+                    plugins: { legend: { display:true, position: 'right', labels: {font: modalFont, boxWidth: 12} } } 
+                }
+            });
+        } else if (type === 'region') {
+            modalTitle.innerHTML = '<i class="fa-solid fa-chart-bar text-gov-red mr-2"></i> Top Regions (Detailed View)';
+            modalChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: chRegion.data,
+                options: { 
+                    indexAxis: 'y',
+                    responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { grid: {color: '#e2e8f0'}, ticks: { font: modalFont, stepSize: 1 }, beginAtZero: true }, y: { grid: {display:false}, ticks: { font: modalFont } } }
+                }
+            });
+        }
+    }
+
+    function closeChartModal() {
+        const modalWrapper = document.getElementById('chartModalWrapper');
+        const modalBody = document.getElementById('chartModalBody');
+        
+        modalBody.classList.remove('scale-100');
+        modalBody.classList.add('scale-95');
+        setTimeout(() => { 
+            modalWrapper.classList.remove('flex');
+            modalWrapper.classList.add('hidden');
+            if(modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } 
+        }, 300);
+    }
+
 
     const calcWorkingDays = ({year, month, region, muni}) => {
       const daysInMonth = new Date(year, month + 1, 0).getDate();

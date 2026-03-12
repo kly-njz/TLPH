@@ -98,8 +98,8 @@
                             </div>
 
                             <div class="col-span-1">
-                                <label class="label-style">Sector / Classification</label>
-                                <select id="sector" name="sector" class="input-style appearance-none bg-white cursor-pointer">
+                                <label class="label-style">Sector / Classification <span class="text-red-500">*</span></label>
+                                <select id="sector" name="sector" required class="input-style appearance-none bg-white cursor-pointer">
                                     <option value="" disabled selected>Select Sector</option>
                                     <optgroup label="Forestry">
                                         <option value="timber">Timber / Logs</option>
@@ -203,9 +203,8 @@
     </main>
 
     <script type="module">
-        import { auth, db, storage, onAuthStateChanged } from "{{ url_for('static', filename='js/firebase-config.js') }}";
+        import { auth, db, onAuthStateChanged } from "{{ url_for('static', filename='js/firebase-config.js') }}";
         import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
         const REGISTRATION_FEE = 150.00;
         let currentUser = null;
@@ -242,17 +241,23 @@
             }, 10);
         };
 
-        async function uploadFile(file, path) {
+        // Upload via Flask server (same pattern as profile photo & application uploads — no CORS issues)
+        async function uploadFile(file, fileType, userId) {
             if (!file) return null;
-            
-            const timestamp = Date.now();
-            const fileName = `${timestamp}_${file.name}`;
-            const storageRef = ref(storage, `${path}/${fileName}`);
-            
-            const snapshot = await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            
-            return downloadURL;
+
+            const formData = new FormData();
+            formData.append(fileType, file);
+            formData.append('userId', userId);
+            formData.append('fileType', fileType);
+
+            const response = await fetch('/api/upload-inventory-image', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'Upload failed');
+            return result.url;
         }
 
         document.getElementById('stockForm').addEventListener('submit', async (e) => {
@@ -291,15 +296,25 @@
 
                 const imageFile = document.getElementById('file_image').files[0];
                 if (imageFile) {
-                    console.log('Uploading image...');
-                    formData.imageUrl = await uploadFile(imageFile, `inventory/images/${currentUser.uid}`);
+                    try {
+                        console.log('Uploading image...');
+                        formData.imageUrl = await uploadFile(imageFile, 'image', currentUser.uid);
+                        console.log('Image uploaded:', formData.imageUrl);
+                    } catch (uploadErr) {
+                        console.warn('Image upload skipped:', uploadErr.message);
+                    }
                 }
 
                 if (formData.isProtected) {
                     const permitFile = document.getElementById('file_permit').files[0];
                     if (permitFile) {
-                        console.log('Uploading permit...');
-                        formData.permitUrl = await uploadFile(permitFile, `inventory/permits/${currentUser.uid}`);
+                        try {
+                            console.log('Uploading permit...');
+                            formData.permitUrl = await uploadFile(permitFile, 'permit', currentUser.uid);
+                            console.log('Permit uploaded:', formData.permitUrl);
+                        } catch (uploadErr) {
+                            console.warn('Permit upload skipped:', uploadErr.message);
+                        }
                     }
                 }
 
@@ -311,7 +326,7 @@
                 const paymentData = {
                     amount: REGISTRATION_FEE,
                     description: `Inventory Registration - ${formData.resourceName}`,
-                    userEmail: currentUser.email,
+                    email: currentUser.email,
                     userId: currentUser.uid,
                     inventoryId: docRef.id,
                     transactionType: 'inventory-registration',

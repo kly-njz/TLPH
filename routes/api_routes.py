@@ -592,6 +592,46 @@ def upload_profile_photo():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/upload-inventory-image', methods=['POST'])
+def upload_inventory_image():
+    """Upload inventory image/permit to server filesystem (no Firebase Storage CORS issues)"""
+    try:
+        import os
+        from werkzeug.utils import secure_filename
+
+        user_id = request.form.get('userId', 'unknown')
+        file_type = request.form.get('fileType', 'image')  # 'image' or 'permit'
+
+        file_key = 'image' if file_type == 'image' else 'permit'
+        if file_key not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+        file = request.files[file_key]
+        if not file or file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+        allowed = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'}
+        ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+        if ext not in allowed:
+            return jsonify({'success': False, 'error': f'Invalid file type: {ext}'}), 400
+
+        upload_dir = os.path.join('static', 'uploads', 'inventory', user_id)
+        os.makedirs(upload_dir, exist_ok=True)
+
+        import time
+        filename = f"{file_type}_{int(time.time())}_{secure_filename(file.filename)}"
+        file_path = os.path.join(upload_dir, filename)
+        file.save(file_path)
+
+        url = f"/static/uploads/inventory/{user_id}/{filename}"
+        return jsonify({'success': True, 'url': url})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/submit-application', methods=['POST'])
 @firebase_auth_required
 def submit_application():
