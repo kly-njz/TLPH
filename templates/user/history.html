@@ -370,6 +370,13 @@
 <body style="background: #e2e8f0; margin: 0; padding: 0;">
   {% include 'user/header.html' %}
 
+  <!-- Payment Success Toast -->
+  <div id="paymentSuccessToast" class="hidden fixed top-4 right-4 z-50 bg-green-600 text-white px-5 py-3 rounded-lg shadow-xl flex items-center gap-3 text-sm font-semibold">
+    <span class="material-icons-round" style="font-size:20px;">check_circle</span>
+    Payment successful! Your inventory registration is now under review.
+    <button onclick="document.getElementById('paymentSuccessToast').classList.add('hidden')" class="ml-2 text-white/80 hover:text-white font-bold">&times;</button>
+  </div>
+
   <div style="margin: 0 auto; padding: 20px; max-width: 1200px;">
     <!-- Header -->
     <div style="margin-bottom: 20px; border-bottom: 2px solid #cbd5e1; padding-bottom: 12px;">
@@ -503,6 +510,14 @@
           onkeyup="filterTable('inventory')"
           style="flex: 1; min-width: 150px;"
         />
+        <select id="inventoryStatusFilter" class="gov-input" onchange="filterTable('inventory')" style="width: 140px;">
+          <option value="">Status: ALL</option>
+          <option value="active">ACTIVE</option>
+          <option value="approved">APPROVED</option>
+          <option value="awaiting payment">AWAITING PAYMENT</option>
+          <option value="pending">PENDING</option>
+          <option value="rejected">REJECTED</option>
+        </select>
         <select id="inventoryCategoryFilter" class="gov-input" onchange="filterTable('inventory')" style="width: 140px;">
           <option value="">Category: ALL</option>
           <option value="crop">CROP & PLANT</option>
@@ -755,7 +770,8 @@
 
     function getStatusClass(status) {
       const normalized = (status || '').toLowerCase();
-      if (normalized === 'approved') return 'status-approved';
+      if (normalized === 'approved' || normalized === 'active') return 'status-approved';
+      if (normalized === 'pending_payment') return 'status-submitted';
       if (normalized === 'pending' || normalized === 'submitted') return 'status-pending';
       if (normalized === 'rejected') return 'status-rejected';
       if (normalized.includes('review')) return 'status-under-review';
@@ -767,6 +783,8 @@
     function getStatusLabel(status) {
       const normalized = (status || '').toLowerCase();
       if (normalized === 'approved') return 'APPROVED';
+      if (normalized === 'active') return 'ACTIVE';
+      if (normalized === 'pending_payment') return 'AWAITING PAYMENT';
       if (normalized === 'pending') return 'PENDING';
       if (normalized === 'submitted') return 'SUBMITTED';
       if (normalized === 'rejected') return 'REJECTED';
@@ -820,6 +838,23 @@
         populateLicensesTable();
         
         console.log('Tables populated');
+
+        // Handle URL hash to switch to the correct tab
+        const hash = window.location.hash.replace('#', '');
+        if (hash && ['applications', 'services', 'inventory', 'licenses'].includes(hash)) {
+          showTable(hash);
+        }
+
+        // Show payment success toast if redirected after payment
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('payment_success') === 'true') {
+          const toast = document.getElementById('paymentSuccessToast');
+          if (toast) {
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 5000);
+          }
+          history.replaceState(null, '', window.location.pathname + window.location.hash);
+        }
       } catch (error) {
         console.error('Error loading history:', error);
       }
@@ -894,7 +929,7 @@
           <td data-label="Harvest Qty">${Number(item.harvestQty).toLocaleString()} units</td>
           <td data-label="Investment">${peso.format(item.investment)}</td>
           <td data-label="Unit Price">${peso.format(item.unitPrice)}</td>
-          <td data-label="Status"><span class="status-label status-approved">ACTIVE</span></td>
+          <td data-label="Status"><span class="status-label ${getStatusClass(item.status)}">${getStatusLabel(item.status)}</span></td>
           <td data-label="Date">${item.date}</td>
           <td data-label="Action" style="text-align: center;">
             <a href="/user/inventory/stock-info/${item.id}" class="action-btn"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</a>
@@ -1071,7 +1106,7 @@
           'infrastructure': 'Infrastructure'
         };
 
-        const q = query(collection(db, 'inventory_registrations'), where('userId', '==', user.uid), where('status', '==', 'approved'));
+        const q = query(collection(db, 'inventory_registrations'), where('userId', '==', user.uid));
         const querySnapshot = await getDocs(q);
 
         querySnapshot.forEach((doc) => {
@@ -1088,6 +1123,7 @@
             harvestQty: Number(item.harvestQty || 0),
             investment: Number(item.investmentQty || 0),
             unitPrice: parseFloat(unitPrice),
+            status: item.status || 'pending',
             date: date
           });
         });
