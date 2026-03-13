@@ -348,6 +348,8 @@
           investment: "0.00",
           harvest: ""
         },
+        currentCollection: 'applications',
+        currentRecordType: 'application',
 
         async init() {
           try {
@@ -377,11 +379,21 @@
               return;
             }
 
-            // Fetch application data
-            const appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId));
-            
+            // Fetch request data (applications first, then inventory registrations)
+            let appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId));
+            if (appDoc.exists()) {
+              this.currentCollection = 'applications';
+              this.currentRecordType = 'application';
+            } else {
+              appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'inventory_registrations', applicationId));
+              if (appDoc.exists()) {
+                this.currentCollection = 'inventory_registrations';
+                this.currentRecordType = 'inventory';
+              }
+            }
+
             if (!appDoc.exists()) {
-              alert('Application not found');
+              alert('Record not found');
               window.history.back();
               return;
             }
@@ -451,7 +463,9 @@
               phone: userData.phone || userData.contactNumber || 'N/A',
               address: `${appData.municipality || ''}, ${appData.province || ''}`.replace(/^,\s*/, '') || 'N/A',
               region: provinceToRegion[appData.province] || (appData.province ? 'Province: ' + appData.province : 'N/A'),
-              categoryLabel: categoryLabels[appData.category] || appData.category || 'N/A'
+              categoryLabel: this.currentRecordType === 'inventory'
+                ? (appData.sector || appData.category || 'Inventory').toString().replace(/_/g, ' ').toUpperCase()
+                : (categoryLabels[appData.category] || appData.category || 'N/A')
             };
 
             // Populate timeline
@@ -481,12 +495,20 @@
 
             // Populate form data
             this.formData = {
-              productName: appData.productName || appData.cropName || appData.product || 'N/A',
-              category: categoryLabels[appData.category] || appData.category || 'N/A',
+              productName: this.currentRecordType === 'inventory'
+                ? (appData.resourceName || appData.productName || appData.product || 'N/A')
+                : (appData.productName || appData.cropName || appData.product || 'N/A'),
+              category: this.currentRecordType === 'inventory'
+                ? (appData.sector || appData.category || 'Inventory').toString().replace(/_/g, ' ').toUpperCase()
+                : (categoryLabels[appData.category] || appData.category || 'N/A'),
               province: appData.province || 'N/A',
               municipality: appData.municipality || appData.city || 'N/A',
-              investment: appData.investmentQty ? Number(appData.investmentQty).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00',
-              harvest: appData.harvestQty || 'N/A'
+              investment: this.currentRecordType === 'inventory'
+                ? Number(appData.registrationFee || 0).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                : (appData.investmentQty ? Number(appData.investmentQty).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'),
+              harvest: this.currentRecordType === 'inventory'
+                ? `${Number(appData.stockAvailable || 0).toLocaleString()} ${appData.unitOfMeasure || 'pcs'}`
+                : (appData.harvestQty || 'N/A')
             };
 
             this.loading = false;
@@ -501,7 +523,8 @@
 
         async updateNationalStatus(newStatus) {
           const action = newStatus === 'approved' ? 'approve' : 'reject';
-          if (!confirm(`Are you sure you want to ${action} this application at the National level?`)) {
+          const targetLabel = this.currentRecordType === 'inventory' ? 'inventory request' : 'application';
+          if (!confirm(`Are you sure you want to ${action} this ${targetLabel} at the National level?`)) {
             return;
           }
 
@@ -516,9 +539,9 @@
               [`national${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}edBy`]: window.firebaseAuth.currentUser?.email || 'national-admin'
             };
 
-            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId), updateData);
+            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, this.currentCollection, applicationId), updateData);
 
-            alert(`Application ${newStatus} successfully!`);
+            alert(`${this.currentRecordType === 'inventory' ? 'Inventory request' : 'Application'} ${newStatus} successfully!`);
             window.location.reload();
           } catch (error) {
             console.error('Error updating status:', error);
