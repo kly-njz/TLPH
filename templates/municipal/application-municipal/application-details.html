@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Application Details | DENR Admin</title>
+    <title>Request Details | DENR Admin</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -89,19 +89,19 @@
             <div class="mb-4">
                 <button onclick="window.history.back()" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 text-white text-xs font-bold uppercase tracking-wider hover:bg-slate-700 transition-all">
                     <span class="material-icons-round text-sm">arrow_back</span>
-                    Back to Applications
+                    Back to Registry
                 </button>
             </div>
             
             <div id="loadingContainer" class="text-center py-20">
                 <div class="loading-spinner"></div>
-                <p class="text-slate-600 mt-4 font-bold uppercase text-sm">Loading application details...</p>
+                <p class="text-slate-600 mt-4 font-bold uppercase text-sm">Loading request details...</p>
             </div>
             
             <div id="contentContainer" style="display: none;">
                 <div class="mb-6 flex justify-between items-end border-b-2 border-slate-300 pb-4">
                     <div>
-                        <h1 class="text-3xl font-black uppercase tracking-tighter text-slate-900 m-0">Application Review</h1>
+                        <h1 id="pageTitle" class="text-3xl font-black uppercase tracking-tighter text-slate-900 m-0">Request Review</h1>
                         <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-1">Ref No: <span class="text-blue-800" id="refNumber">—</span></p>
                     </div>
                     <div id="statusBadge" class="bg-amber-100 text-amber-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-amber-200">
@@ -112,24 +112,24 @@
                 <div class="row g-4">
                     <div class="col-lg-8">
                         <div class="gov-card p-6 shadow-sm mb-4">
-                            <h3 class="text-xs font-black uppercase border-b pb-2 mb-4 text-blue-900"><i class="fa-solid fa-folder-open me-2"></i> Application Details</h3>
+                            <h3 id="detailsHeading" class="text-xs font-black uppercase border-b pb-2 mb-4 text-blue-900"><i class="fa-solid fa-folder-open me-2"></i> Request Details</h3>
                             
                             <div class="row">
                                 <div class="col-md-6">
-                                    <p class="info-label">Product/Project Name</p>
+                                    <p id="nameLabel" class="info-label">Product/Project Name</p>
                                     <p class="info-value" id="productName">—</p>
 
-                                    <p class="info-label">Select Category</p>
+                                    <p id="categoryLabelTitle" class="info-label">Category</p>
                                     <p class="info-value" id="category">—</p>
                                     
                                     <p class="info-label">Municipality</p>
                                     <p class="info-value" id="municipality">—</p>
                                 </div>
                                 <div class="col-md-6">
-                                    <p class="info-label">Initial Investment</p>
+                                    <p id="amountLabel" class="info-label">Initial Investment</p>
                                     <p class="info-value text-green-700" id="investment">—</p>
 
-                                    <p class="info-label">Max Harvest Qty</p>
+                                    <p id="quantityLabel" class="info-label">Max Harvest Qty</p>
                                     <p class="info-value" id="harvestQty">—</p>
                                     
                                     <p class="info-label">Date Filed</p>
@@ -139,7 +139,7 @@
 
                             <hr class="my-4 opacity-10">
 
-                            <h3 class="text-xs font-black uppercase border-b pb-2 mb-4 text-emerald-800"><i class="fa-solid fa-file-shield me-2"></i> Technical & Standard Documents</h3>
+                            <h3 id="docsHeading" class="text-xs font-black uppercase border-b pb-2 mb-4 text-emerald-800"><i class="fa-solid fa-file-shield me-2"></i> Technical Documents</h3>
                             
                             <div id="documentsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <p class="text-slate-600 text-sm">No documents uploaded.</p>
@@ -165,15 +165,15 @@
                             
                             <div class="d-grid gap-2">
                                 <button onclick="updateApplicationStatus('approved')" class="btn btn-success bg-green-700 border-0 btn-action shadow-sm">
-                                    <i class="fa-solid fa-circle-check me-2"></i> Approve Application
+                                    <i class="fa-solid fa-circle-check me-2"></i> <span id="approveBtnText">Approve Request</span>
                                 </button>
                                 
                                 <button onclick="updateApplicationStatus('to-review')" class="btn btn-warning bg-blue-600 border-0 btn-action text-white shadow-sm">
-                                    <i class="fa-solid fa-arrow-up-right-from-square me-2"></i> Send To Regional Review
+                                    <i class="fa-solid fa-arrow-up-right-from-square me-2"></i> <span id="forwardBtnText">Send To Regional Review</span>
                                 </button>
                                 
                                 <button onclick="updateApplicationStatus('rejected')" class="btn btn-danger bg-red-600 border-0 btn-action shadow-sm">
-                                    <i class="fa-solid fa-circle-xmark me-2"></i> Reject Application
+                                    <i class="fa-solid fa-circle-xmark me-2"></i> <span id="rejectBtnText">Reject Request</span>
                                 </button>
                             </div>
 
@@ -199,6 +199,8 @@
         let currentApplicationId = null;
         let applicationData = null;
         let userData = null;
+        let currentCollection = 'applications';
+        let currentRecordType = 'application';
 
         const pathParts = window.location.pathname.split('/');
         currentApplicationId = pathParts[pathParts.length - 1];
@@ -217,11 +219,23 @@
                 }
 
                 console.log('Fetching from Firestore: applications/', currentApplicationId);
-                const appDoc = await getDoc(doc(db, 'applications', currentApplicationId));
-                
+                let appDoc = await getDoc(doc(db, 'applications', currentApplicationId));
+
+                if (!appDoc.exists()) {
+                    console.log('Not found in applications, trying inventory_registrations/', currentApplicationId);
+                    appDoc = await getDoc(doc(db, 'inventory_registrations', currentApplicationId));
+                    if (appDoc.exists()) {
+                        currentCollection = 'inventory_registrations';
+                        currentRecordType = 'inventory';
+                    }
+                } else {
+                    currentCollection = 'applications';
+                    currentRecordType = 'application';
+                }
+
                 if (!appDoc.exists()) {
                     console.error('Application not found:', currentApplicationId);
-                    alert('Application not found');
+                    alert('Record not found');
                     window.history.back();
                     return;
                 }
@@ -284,10 +298,19 @@
                     }
                 }
                 
+                const refPrefix = currentRecordType === 'inventory' ? 'INV' : 'APP';
                 const refNumber = date 
-                    ? `APP-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}-${currentApplicationId.substring(0, 6).toUpperCase()}`
-                    : `APP-${new Date().getFullYear()}-${currentApplicationId.substring(0, 6).toUpperCase()}`;
+                    ? `${refPrefix}-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}-${currentApplicationId.substring(0, 6).toUpperCase()}`
+                    : `${refPrefix}-${new Date().getFullYear()}-${currentApplicationId.substring(0, 6).toUpperCase()}`;
                 document.getElementById('refNumber').textContent = refNumber;
+
+                document.getElementById('pageTitle').textContent = currentRecordType === 'inventory' ? 'Inventory Registration Review' : 'Application Review';
+                document.getElementById('detailsHeading').innerHTML = currentRecordType === 'inventory'
+                    ? '<i class="fa-solid fa-boxes-stacked me-2"></i> Inventory Registration Details'
+                    : '<i class="fa-solid fa-folder-open me-2"></i> Application Details';
+                document.getElementById('approveBtnText').textContent = currentRecordType === 'inventory' ? 'Approve Stock Registration' : 'Approve Application';
+                document.getElementById('forwardBtnText').textContent = currentRecordType === 'inventory' ? 'Forward To Regional Review' : 'Send To Regional Review';
+                document.getElementById('rejectBtnText').textContent = currentRecordType === 'inventory' ? 'Reject Stock Registration' : 'Reject Application';
 
                 const statusBadge = document.getElementById('statusBadge');
                 const status = (applicationData.status || 'pending').toLowerCase();
@@ -320,20 +343,53 @@
                     statusBadge.textContent = 'Status: Pending Review';
                 }
 
-                document.getElementById('productName').textContent = applicationData.productName || applicationData.projectName || 'N/A';
-                
-                // Display category label instead of value
-                const categoryValue = applicationData.category || '';
-                const categoryLabel = categoryLabels[categoryValue] || categoryValue || 'N/A';
-                document.getElementById('category').textContent = categoryLabel;
-                
-                document.getElementById('municipality').textContent = applicationData.municipality || 'N/A';
-                
-                const investment = applicationData.investmentQty || applicationData.initialInvestment;
-                document.getElementById('investment').textContent = investment ? `₱ ${Number(investment).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : 'N/A';
-                
-                const harvest = applicationData.harvestQty || applicationData.maxHarvestQty || applicationData.harvestQuantity;
-                document.getElementById('harvestQty').textContent = harvest || 'N/A';
+                if (currentRecordType === 'inventory') {
+                    const sectorLabels = {
+                        'timber': 'Timber / Logs',
+                        'ntfp': 'Non-Timber Forest Products',
+                        'seedlings': 'Nursery Stocks / Seedlings',
+                        'flora': 'Terrestrial Flora (Plants)',
+                        'fauna': 'Terrestrial Fauna (Wildlife)',
+                        'minerals': 'Metallic/Non-Metallic Minerals',
+                        'land': 'Land Resources / Titling'
+                    };
+
+                    document.getElementById('nameLabel').textContent = 'Resource Name';
+                    document.getElementById('categoryLabelTitle').textContent = 'Sector / Classification';
+                    document.getElementById('amountLabel').textContent = 'Registration Fee';
+                    document.getElementById('quantityLabel').textContent = 'Stock Available';
+                    document.getElementById('docsHeading').innerHTML = '<i class="fa-solid fa-file-shield me-2"></i> Inventory Attachments';
+
+                    document.getElementById('productName').textContent = applicationData.resourceName || applicationData.productName || 'N/A';
+                    const invCategory = applicationData.sector || applicationData.category || '';
+                    document.getElementById('category').textContent = sectorLabels[invCategory] || invCategory || 'N/A';
+                    document.getElementById('municipality').textContent = applicationData.municipality || userData?.municipality || 'N/A';
+
+                    const registrationFee = applicationData.registrationFee || 0;
+                    document.getElementById('investment').textContent = `₱ ${Number(registrationFee).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+                    const stock = Number(applicationData.stockAvailable || 0);
+                    const unit = applicationData.unitOfMeasure || 'pcs';
+                    document.getElementById('harvestQty').textContent = `${stock.toLocaleString()} ${unit}`;
+                } else {
+                    document.getElementById('nameLabel').textContent = 'Product/Project Name';
+                    document.getElementById('categoryLabelTitle').textContent = 'Category';
+                    document.getElementById('amountLabel').textContent = 'Initial Investment';
+                    document.getElementById('quantityLabel').textContent = 'Max Harvest Qty';
+                    document.getElementById('docsHeading').innerHTML = '<i class="fa-solid fa-file-shield me-2"></i> Technical & Standard Documents';
+
+                    document.getElementById('productName').textContent = applicationData.productName || applicationData.projectName || 'N/A';
+                    const categoryValue = applicationData.category || '';
+                    const categoryLabel = categoryLabels[categoryValue] || categoryValue || 'N/A';
+                    document.getElementById('category').textContent = categoryLabel;
+                    document.getElementById('municipality').textContent = applicationData.municipality || 'N/A';
+
+                    const investment = applicationData.investmentQty || applicationData.initialInvestment;
+                    document.getElementById('investment').textContent = investment ? `₱ ${Number(investment).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : 'N/A';
+
+                    const harvest = applicationData.harvestQty || applicationData.maxHarvestQty || applicationData.harvestQuantity;
+                    document.getElementById('harvestQty').textContent = harvest || 'N/A';
+                }
                 
                 if (date) {
                     document.getElementById('dateFiled').textContent = date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
@@ -349,7 +405,30 @@
                 }
 
                 const documentsContainer = document.getElementById('documentsContainer');
-                if (applicationData.documents && applicationData.documents.length > 0) {
+                if (currentRecordType === 'inventory') {
+                    const inventoryDocs = [];
+                    if (applicationData.imageUrl) {
+                        inventoryDocs.push({ name: 'Resource Photo', fileName: 'image', url: applicationData.imageUrl });
+                    }
+                    if (applicationData.permitUrl) {
+                        inventoryDocs.push({ name: 'Permit File', fileName: 'permit', url: applicationData.permitUrl });
+                    }
+
+                    if (inventoryDocs.length > 0) {
+                        documentsContainer.innerHTML = inventoryDocs.map(doc => `
+                            <div class="doc-box">
+                                <i class="fa-solid fa-file text-blue-600 text-xl"></i>
+                                <div class="flex-grow">
+                                    <p class="text-[9px] font-black uppercase m-0">${doc.name}</p>
+                                    <p class="text-[10px] font-bold text-slate-700 m-0">${doc.fileName}</p>
+                                </div>
+                                <button onclick="window.open('${doc.url}', '_blank')" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
+                            </div>
+                        `).join('');
+                    } else {
+                        documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No files uploaded.</p>';
+                    }
+                } else if (applicationData.documents && applicationData.documents.length > 0) {
                     documentsContainer.innerHTML = applicationData.documents.map(doc => `
                         <div class="doc-box">
                             <i class="fa-solid fa-file text-blue-600 text-xl"></i>
@@ -383,12 +462,36 @@
             if (!confirmed) return;
 
             try {
-                await updateDoc(doc(db, 'applications', currentApplicationId), {
+                const updateFields = {
                     status: newStatus,
                     updatedAt: serverTimestamp()
-                });
-                
+                };
+
                 if (newStatus === 'approved') {
+                    updateFields.approvedByLevel = 'Municipal';
+                    updateFields.approvedByEmail = auth.currentUser ? auth.currentUser.email : '';
+                    updateFields.rejectedByLevel = '';
+                    updateFields.rejectedByEmail = '';
+                }
+
+                if (newStatus === 'rejected') {
+                    updateFields.rejectedByLevel = 'Municipal';
+                    updateFields.rejectedByEmail = auth.currentUser ? auth.currentUser.email : '';
+                    updateFields.approvedByLevel = '';
+                    updateFields.approvedByEmail = '';
+                }
+
+                if (newStatus === 'to-review') {
+                    updateFields.forwardedAt = serverTimestamp();
+                    updateFields.forwardedBy = auth.currentUser ? auth.currentUser.uid : null;
+                    updateFields.forwardedByEmail = auth.currentUser ? auth.currentUser.email : null;
+                    updateFields.forwardedByLevel = 'Municipal';
+                    updateFields.regionalStatus = 'pending';
+                }
+
+                await updateDoc(doc(db, currentCollection, currentApplicationId), updateFields);
+                
+                if (newStatus === 'approved' && currentRecordType === 'application') {
                     const inventoryData = {
                         userId: applicationData.userId,
                         userEmail: applicationData.userEmail,
@@ -409,7 +512,7 @@
                     await addDoc(collection(db, 'inventory'), inventoryData);
                     alert(`Application approved successfully!\n\nInventory entry created for ${applicationData.productName}.`);
                 } else {
-                    alert(`Application ${statusText} successfully!`);
+                    alert(`${currentRecordType === 'inventory' ? 'Inventory registration' : 'Application'} ${statusText} successfully!`);
                 }
                 
                 await loadApplicationDetails(); 
