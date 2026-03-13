@@ -62,7 +62,13 @@ regions_municipalities = {
         'Adams', 'Bacolod City', 'Barotac Nuevo', 'Barotac Viejo', 'Batad', 'Bingawan', 'Cabatuan', 'Calinog', 'Carles', 'Concepcion', 'Dumangas', 'Duenas', 'Estancia', 'Guimbal', 'Igbaras', 'Iloilo City', 'Janiuay', 'Lambunao', 'Leganes',
           'Lemery', 'Leon', 'Maasin', 'Miagao', 'Mina', 'New Lucena', 'Oton', 'Passi City', 'Pavia', 'Pototan', 'San Dionisio', 'San Enrique', 'San Joaquin', 'San Miguel', 'Santa Barbara', 'Sara', 'Tigbauan', 'Tubungan', 'Zarraga',
         # ...add all municipalities for Eastern Visayas
-    ]
+    ],
+
+    'REGION-IX': [
+        'Bacolod City', 'Bago City', 'Cadiz City', 'Escalante City', 'Himamaylan City', 'Kabankalan City', 'La Carlota City', 'Sagay City', 'San Carlos City', 'Silay City', 'Talisay City', 'Victorias City',
+        # ...add all municipalities for Negros Occidental
+    ],
+
     # ...add all other regions (V, VI, VII, VIII, IX, X, XI, XII, XIII, BARMM, NCR, CAR, CARAGA)
 }
 
