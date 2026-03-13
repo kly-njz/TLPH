@@ -228,6 +228,8 @@
           address: "---",
           area: "0"
         },
+        currentCollection: 'applications',
+        currentRecordType: 'application',
         isFinal: false,
         stats: {
           species: "0",
@@ -254,10 +256,20 @@
                     return;
                 }
 
-                const appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId));
-                
+                let appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId));
+                if (appDoc.exists()) {
+                  this.currentCollection = 'applications';
+                  this.currentRecordType = 'application';
+                } else {
+                  appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'inventory_registrations', applicationId));
+                  if (appDoc.exists()) {
+                    this.currentCollection = 'inventory_registrations';
+                    this.currentRecordType = 'inventory';
+                  }
+                }
+
                 if (!appDoc.exists()) {
-                  alert('Application not found');
+                  alert('Record not found');
                   window.history.back();
                   return;
                 }
@@ -280,22 +292,28 @@
                   'infrastructure': 'Infrastructure'
                 };
 
+                const statusSource = (appData.status || 'pending').toUpperCase().replace('-', ' ');
+
                 this.applicant = {
                   name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || appData.userName || 'N/A',
                   ref: applicationId.substring(0, 12).toUpperCase(),
                   photo: userData.photoURL || userData.photoUrl || userData.profilePhoto || userData.profile_photo || userData.photo || appData.photoURL || '',
-                  status: (appData.status || 'pending').toUpperCase().replace('-', ' '),
-                  productName: appData.productName || 'N/A',
-                  categoryLabel: categoryLabels[appData.category] || appData.category || 'N/A',
+                  status: statusSource,
+                  productName: this.currentRecordType === 'inventory' ? (appData.resourceName || appData.productName || 'N/A') : (appData.productName || 'N/A'),
+                  categoryLabel: this.currentRecordType === 'inventory'
+                    ? (appData.sector || appData.category || 'N/A').toString().replace(/_/g, ' ').toUpperCase()
+                    : (categoryLabels[appData.category] || appData.category || 'N/A'),
                   email: userData.email || appData.userEmail || 'N/A',
                   phone: userData.phone || 'N/A',
                   address: `${appData.municipality || 'N/A'}, ${appData.province || 'Oriental Mindoro'}`,
-                  investment: Number(appData.investmentQty || 0).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                  investment: Number(this.currentRecordType === 'inventory' ? (appData.registrationFee || 0) : (appData.investmentQty || 0)).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})
                 };
 
                 this.stats = {
                   species: "1",
-                  harvest: appData.harvestQty || appData.maxHarvestQty || "0"
+                  harvest: this.currentRecordType === 'inventory'
+                    ? `${Number(appData.stockAvailable || 0).toLocaleString()} ${appData.unitOfMeasure || 'pcs'}`
+                    : (appData.harvestQty || appData.maxHarvestQty || "0")
                 };
 
                 this.documents = [
@@ -333,9 +351,13 @@
             const applicationId = window.location.pathname.split('/').pop();
             const { updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
 
-            await updateDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId), {
+            await updateDoc(window.firebaseDoc(window.firebaseDB, this.currentCollection, applicationId), {
               status: newStatus,
               regionalStatus: newStatus,
+              approvedByLevel: newStatus === 'approved' ? 'Regional' : '',
+              approvedByEmail: newStatus === 'approved' ? (window.firebaseAuth.currentUser?.email || 'regional-admin') : '',
+              rejectedByLevel: newStatus === 'rejected' ? 'Regional' : '',
+              rejectedByEmail: newStatus === 'rejected' ? (window.firebaseAuth.currentUser?.email || 'regional-admin') : '',
               regionalUpdatedAt: new Date().toISOString(),
               regionalUpdatedBy: window.firebaseAuth.currentUser?.email || 'regional-admin'
             });
@@ -357,7 +379,7 @@
             const applicationId = window.location.pathname.split('/').pop();
             const { updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
 
-            await updateDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId), {
+            await updateDoc(window.firebaseDoc(window.firebaseDB, this.currentCollection, applicationId), {
               status: 'forwarded-to-national',
               regionalStatus: 'forwarded',
               nationalStatus: 'pending',
