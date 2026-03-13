@@ -41,12 +41,13 @@ regions_municipalities = {
     ],
 
     'REGION-V': [
-        'Bacon', 'Baras', 'Bato', 'Caramoan', 'Garchitorena', 'Goa', 'Lagonoy', 'Presentacion', 'Sagnay', 'San Fernando', 'San Jose', 'Sipocot',
+        'Bacon', 'Baras', 'Bato', 'Caramoan', 'Garchitorena', 'Goa', 'Lagonoy', 'Presentacion', 'Sagnay', 'San Fernando', 'San Jose', 'Sipocot', 'Siruma', 'Tigaon', 'Tinambac',
         # ...add all municipalities for Albay, Camarines Norte, Camarines Sur, Catanduanes, Masbate, Sorsogon
     ],
 
     'REGION-VI': [
-        'Alimodian', 'Anilao', 'Badiangan', 'Balasan', 'Banate', 'Barotac Nuevo', 'Barotac Viejo', 'Batad', 'Bingawan', 'Cabatuan', 'Calinog', 'Carles', 'Concepcion', 'Dumangas', 'Duenas', 'Estancia', 'Guimbal', 'Igbaras', 'Iloilo City', 'Janiuay', 'Lambunao',
+        'Alimodian', 'Anilao', 'Badiangan', 'Balasan', 'Banate', 'Barotac Nuevo', 'Barotac Viejo', 'Batad', 'Bingawan', 'Cabatuan', 'Calinog', 'Carles', 'Concepcion', 'Dumangas', 'Duenas', 'Estancia', 'Guimbal', 'Igbaras', 'Iloilo City', 'Janiuay', 'Lambunao', 'Leganes',
+          'Lemery', 'Leon', 'Maasin', 'Miagao', 'Mina', 'New Lucena', 'Oton', 'Passi City', 'Pavia', 'Pototan', 'San Dionisio', 'San Enrique', 'San Joaquin', 'San Miguel', 'Santa Barbara', 'Sara', 'Tigbauan', 'Tubungan', 'Zarraga',
         # ...add all municipalities for Aklan, Antique, Capiz, Guimaras, Iloilo
     ],
 
