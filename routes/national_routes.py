@@ -506,8 +506,11 @@ def inventory_national_view():
     try:
         db = get_firestore_db()
 
-        inventory_ref = db.collection('license_applications')
+        inventory_ref = db.collection('inventory_registrations')
         docs = inventory_ref.stream()
+
+        users_ref = db.collection('users')
+        users_map = {u.id: (u.to_dict() or {}) for u in users_ref.stream()}
 
         inventory_records = []
         total_count = 0
@@ -518,22 +521,24 @@ def inventory_national_view():
 
         for doc in docs:
             data = doc.to_dict()
-            form_data = data.get('formData', {}) or {}
+            user_data = users_map.get(data.get('userId', ''), {})
+            full_name = (
+                f"{user_data.get('firstName', '')} {user_data.get('lastName', '')}".strip()
+                or data.get('userEmail', 'N/A')
+            )
+            municipality = data.get('municipality') or user_data.get('municipality', 'N/A')
+            region = data.get('region') or user_data.get('regionName') or user_data.get('region', 'N/A')
 
-            full_name = form_data.get('fullName', 'N/A')
-            municipality = form_data.get('municipality', 'N/A')
-            region = form_data.get('region', 'N/A')
-
-            app_type = data.get('applicationType', 'N/A')
+            sector = str(data.get('sector', '')).lower()
             category_map = {
-                'farm-visit': 'Chemical Inventory',
-                'fishery-permit': 'Natural Resources',
+                'farming': 'Chemical Inventory',
+                'fisheries': 'Natural Resources',
                 'livestock': 'Biodiversity Inventory',
-                'forest': 'Natural Resources',
+                'forestry': 'Natural Resources',
                 'wildlife': 'Protected Area',
                 'environment': 'Natural Resources'
             }
-            category = category_map.get(str(app_type).lower(), 'Chemical Inventory')
+            category = category_map.get(sector, 'Chemical Inventory')
 
             category_count[category] += 1
 
@@ -542,17 +547,8 @@ def inventory_national_view():
 
             total_count += 1
 
-            quantity = data.get('quantity', 1)
-
-            description_map = {
-                'farm-visit': 'Registered Pesticide Stock',
-                'fishery-permit': 'Marine Resources',
-                'livestock': 'Animal Species Count',
-                'forest': 'Forest Resources',
-                'wildlife': 'Wildlife Species',
-                'environment': 'Environmental Data'
-            }
-            description = description_map.get(str(app_type).lower(), 'General Inventory')
+            quantity = data.get('stockAvailable', data.get('quantity', 0))
+            description = data.get('resourceName') or data.get('notes') or 'General Inventory'
 
             inventory_records.append({
                 'id': doc.id,

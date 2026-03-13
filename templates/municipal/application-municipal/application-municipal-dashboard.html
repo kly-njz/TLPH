@@ -399,10 +399,35 @@
               filedDate = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
             }
             
-            const status = data.status || 'pending';
+            const status = (data.status || 'pending').toLowerCase();
+            const natStatus = (data.nationalStatus || '').toLowerCase();
+            const regStatus = (data.regionalStatus || '').toLowerCase();
+
             let statusKey = 'pending';
-            if (status === 'approved') statusKey = 'accepted';
-            else if (status === 'rejected') statusKey = 'rejected';
+            let statusText = 'Pending Review';
+
+            if (natStatus === 'approved') {
+              statusKey = 'approved-national';
+              statusText = 'Approved by National';
+            } else if (natStatus === 'rejected') {
+              statusKey = 'rejected';
+              statusText = 'Rejected by National';
+            } else if (status === 'forwarded-to-national') {
+              statusKey = 'forwarded-national';
+              statusText = 'Forwarded to National';
+            } else if (regStatus === 'approved' || status === 'approved') {
+              statusKey = 'approved-regional';
+              statusText = 'Approved by Regional';
+            } else if (regStatus === 'rejected' || status === 'rejected') {
+              statusKey = 'rejected';
+              statusText = 'Rejected';
+            } else if (status === 'to-review') {
+              statusKey = 'forwarded-regional';
+              statusText = 'Forwarded to Regional';
+            } else if (status === 'under-review') {
+              statusKey = 'pending';
+              statusText = 'Under Review';
+            }
             
             const categoryLabel = categoryLabels[data.category] || data.category || 'Inventory';
             
@@ -413,7 +438,10 @@
               reference: doc.id.substring(0, 12),
               filedDate,
               status: status,
+              nationalStatus: natStatus,
+              regionalStatus: regStatus,
               statusKey,
+              statusText,
               categoryLabel,
               categoryValue: data.category || 'other',
               category: data.category
@@ -550,11 +578,14 @@
           console.warn('2. Do users have municipality field set?');
           console.warn('3. Do the collections have data?');
         }
+
+        applicants = applicants.filter(a => a.type === 'application');
+        console.log('Applications-only rows:', applicants.length);
         
         // Update statistics
-        const acceptedCount = applicants.filter(a => a.statusKey === 'accepted').length;
+        const acceptedCount = applicants.filter(a => ['accepted', 'approved-regional', 'approved-national'].includes(a.statusKey)).length;
         const rejectedCount = applicants.filter(a => a.statusKey === 'rejected').length;
-        const pendingCount = applicants.filter(a => a.statusKey === 'pending').length;
+        const pendingCount = applicants.filter(a => ['pending', 'forwarded-regional', 'forwarded-national'].includes(a.statusKey)).length;
         
         document.getElementById('statAccepted').textContent = acceptedCount;
         document.getElementById('statRejected').textContent = rejectedCount;
