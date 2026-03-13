@@ -18,11 +18,11 @@ regions_municipalities = {
     ],
     'REGION-II': [
         'Abulug', 'Aglipay', 'Alcala', 'Alfonso Castañeda', 'Alicia', 'Allacapan', 'Ambaguio', 'Amulung', 'Angadanan', 'Aparri', 'Aritao', 'Aurora', 'Bagabag', 'Baggao', 'Ballesteros', 'Bambang', 'Basco', 'Bayombong', 'Benito Soliven', 'Buguey', 'Burgos', 'Cabagan', 'Cabarroguis', 'Cabatuan', 'Calayan',
-          'Camalaniugan', 'Claveria', 'Cordon', 'Delfin Albano', 'Diadi', 'Diffun', 'Dinapigue', 'Divilacan', 'Dupax del Norte', 'Dupax del Sur', 'Echague', 'Enrile', 'Gamu', 'Gattaran', 'Gonzaga', 'Iguig', 'Itbayat', 'Ivana', 'Jones', 'Kasibu', 
+          'Camalaniugan', 'Claveria', 'Cordon', 'Delfin Albano', 'Diadi', 'Diffun', 'Dinapigue', 'Divilacan', 'Dupax del Norte', 'Dupax del Sur', 'Echague', 'Enrile', 'Gamu', 'Gattaran', 'Gonzaga', 'Iguig', 'Itbayat', 'Ivana', 'Jones', 'Kasibu'
     ],
     'REGION-III': [
         'Abucay', 'Aliaga', 'Angat', 'Ani-ao', 'Apalit', 'Arayat', 'Bacolor', 'Bagac', 'Balagtas', 'Baliuag', 'Baler', 'Bamban', 'Bangui', 'Barasoain', 'Bocaue', 'Bongabon', 'Bulakan', 'Bustos', 'Cabangan', 'Cabiao', 'Calumpit', 'Camiling', 'Candaba', 'Capas', 'Carranglan', 'Casiguran', 'Castillejos',
-          'Concepcion', 'Cuyapo', 'Dalayap', 'Dilasag', 'Dinalupihan', 'Dingalan', 'Dipaculao', 'Doña Remedios Trinidad', 'Floridablanca', 'Gabaldon', 'General Mamerto Natividad', 'General Tinio', 'Gerona', 'Guagua', 'Guiguinto', 'Guimba', 'Hagonoy', 'Hermosa', 'Iba',('Ivana'), ('Jones'), ('Kasibu'), 
+          'Concepcion', 'Cuyapo', 'Dalayap', 'Dilasag', 'Dinalupihan', 'Dingalan', 'Dipaculao', 'Doña Remedios Trinidad', 'Floridablanca', 'Gabaldon', 'General Mamerto Natividad', 'General Tinio', 'Gerona', 'Guagua', 'Guiguinto', 'Guimba', 'Hagonoy', 'Hermosa', 'Iba','Ivana', 'Jones', 'Kasibu'
 
     ],
     'REGION-IV-A': [
