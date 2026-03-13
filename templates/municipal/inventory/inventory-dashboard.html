@@ -228,7 +228,7 @@
         this.province = String(province || "");
       }
       inScope(municipality) {
-        return this.municipality === municipality;
+        return this.municipality.toLowerCase() === String(municipality || '').toLowerCase();
       }
       matches(q) {
         q = (q || "").toLowerCase().trim();
@@ -239,7 +239,7 @@
     }
 
     class FirebaseInventoryRepository {
-      constructor({ db, collectionName = "inventory" }) {
+      constructor({ db, collectionName = "inventory_registrations" }) {
         this.db = db;
         this.collectionName = collectionName;
       }
@@ -248,20 +248,32 @@
           console.log('Fetching inventory from Firestore...');
           const inventoryRef = collection(this.db, this.collectionName);
           const snapshot = await getDocs(inventoryRef);
+          const usersSnapshot = await getDocs(collection(this.db, 'users'));
+          const usersMap = {};
+
+          usersSnapshot.forEach(userDoc => {
+            const userData = userDoc.data();
+            usersMap[userDoc.id] = {
+              municipality: userData.municipality || '',
+              province: userData.province || '',
+              region: userData.regionName || userData.region || ''
+            };
+          });
           
           console.log('Total inventory items found:', snapshot.size);
           
           const items = [];
           snapshot.forEach(docSnapshot => {
             const data = docSnapshot.data();
+            const userInfo = usersMap[data.userId] || {};
             items.push(new InventoryItem({
               id: docSnapshot.id,
-              category: data.category || 'Uncategorized',
-              description: data.description || 'No description',
-              quantity: data.quantity || 0,
-              region: data.region || '',
-              municipality: data.municipality || '',
-              province: data.province || ''
+              category: data.sector || data.category || 'Uncategorized',
+              description: data.resourceName || data.description || data.notes || 'No description',
+              quantity: data.stockAvailable || data.quantity || 0,
+              region: data.region || userInfo.region || '',
+              municipality: data.municipality || userInfo.municipality || '',
+              province: data.province || userInfo.province || ''
             }));
           });
           

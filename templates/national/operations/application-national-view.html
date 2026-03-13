@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Application Review | National Office</title>
+  <title>Request Review | National Office</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
@@ -78,7 +78,7 @@
     <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between border-b border-gov-border pb-4">
       <div>
         <p class="text-[10px] font-black uppercase tracking-gov3 text-gov-primary">National Office - Final Review</p>
-        <h1 class="text-2xl font-black text-slate-900 uppercase">Application Details</h1>
+        <h1 class="text-2xl font-black text-slate-900 uppercase">Request Details</h1>
       </div>
 
       <button onclick="window.history.back()" class="no-print inline-flex items-center gap-2 border border-gov-border bg-white px-4 py-2 text-[11px] font-black uppercase tracking-gov text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
@@ -89,7 +89,7 @@
     <!-- Loading State -->
     <div x-show="loading" class="text-center py-20">
       <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gov-primary"></div>
-      <p class="mt-4 text-sm font-bold text-slate-600 uppercase">Loading application details...</p>
+      <p class="mt-4 text-sm font-bold text-slate-600 uppercase">Loading request details...</p>
     </div>
 
     <!-- Main Content Wrapper -->
@@ -178,16 +178,16 @@
       </aside>
 
       <section class="lg:col-span-8 space-y-4">
-        <!-- Application Category Card -->
+        <!-- Request Category Card -->
         <div class="border border-gov-border bg-gov-panel p-5 shadow-sm border-l-4 border-l-blue-600">
-          <h3 class="text-[11px] font-black uppercase tracking-gov2 text-gov-primary mb-3">Application Category</h3>
+          <h3 class="text-[11px] font-black uppercase tracking-gov2 text-gov-primary mb-3">Request Category</h3>
           <p class="text-2xl font-black text-blue-700" x-text="applicant.categoryLabel"></p>
         </div>
 
-        <!-- Application Form Data -->
+        <!-- Request Form Data -->
         <section class="border border-gov-border bg-white shadow-sm">
           <div class="bg-slate-50 border-b border-slate-300 px-5 py-3">
-            <h3 class="text-[11px] font-black uppercase tracking-gov2 text-gov-primary">Application Form Details</h3>
+            <h3 class="text-[11px] font-black uppercase tracking-gov2 text-gov-primary">Request Form Details</h3>
             <p class="text-[10px] font-bold text-slate-500 uppercase mt-1">Complete information submitted by the applicant</p>
           </div>
 
@@ -259,10 +259,10 @@
 
           <div class="mt-5 grid gap-2 md:grid-cols-2">
             <button @click="updateNationalStatus('rejected')" class="border-2 border-rose-600 py-3 text-[11px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-600 hover:text-white transition-all">
-              <span class="material-icons-round text-[14px] align-middle">cancel</span> Reject Application
+              <span class="material-icons-round text-[14px] align-middle">cancel</span> Reject Request
             </button>
             <button @click="updateNationalStatus('approved')" class="bg-emerald-700 py-3 text-[11px] font-black uppercase tracking-widest text-white hover:bg-emerald-800 transition-all shadow-md">
-              <span class="material-icons-round text-[14px] align-middle">check_circle</span> Approve Application
+              <span class="material-icons-round text-[14px] align-middle">check_circle</span> Approve Request
             </button>
           </div>
         </section>
@@ -287,10 +287,10 @@
                     'text-emerald-700': applicant.nationalStatus === 'approved',
                     'text-rose-700': applicant.nationalStatus === 'rejected'
                   }">
-                Application <span x-text="applicant.nationalStatus"></span>
+                Request <span x-text="applicant.nationalStatus"></span>
               </h3>
               <p class="text-xs font-bold text-slate-600 mt-1">
-                This application has already been processed by the National Office.
+                This request has already been processed by the National Office.
               </p>
             </div>
           </div>
@@ -348,6 +348,8 @@
           investment: "0.00",
           harvest: ""
         },
+        currentCollection: 'applications',
+        currentRecordType: 'application',
 
         async init() {
           try {
@@ -377,11 +379,21 @@
               return;
             }
 
-            // Fetch application data
-            const appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId));
-            
+            // Fetch request data (applications first, then inventory registrations)
+            let appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId));
+            if (appDoc.exists()) {
+              this.currentCollection = 'applications';
+              this.currentRecordType = 'application';
+            } else {
+              appDoc = await window.firebaseGetDoc(window.firebaseDoc(window.firebaseDB, 'inventory_registrations', applicationId));
+              if (appDoc.exists()) {
+                this.currentCollection = 'inventory_registrations';
+                this.currentRecordType = 'inventory';
+              }
+            }
+
             if (!appDoc.exists()) {
-              alert('Application not found');
+              alert('Record not found');
               window.history.back();
               return;
             }
@@ -451,7 +463,9 @@
               phone: userData.phone || userData.contactNumber || 'N/A',
               address: `${appData.municipality || ''}, ${appData.province || ''}`.replace(/^,\s*/, '') || 'N/A',
               region: provinceToRegion[appData.province] || (appData.province ? 'Province: ' + appData.province : 'N/A'),
-              categoryLabel: categoryLabels[appData.category] || appData.category || 'N/A'
+              categoryLabel: this.currentRecordType === 'inventory'
+                ? (appData.sector || appData.category || 'Inventory').toString().replace(/_/g, ' ').toUpperCase()
+                : (categoryLabels[appData.category] || appData.category || 'N/A')
             };
 
             // Populate timeline
@@ -481,12 +495,20 @@
 
             // Populate form data
             this.formData = {
-              productName: appData.productName || appData.cropName || appData.product || 'N/A',
-              category: categoryLabels[appData.category] || appData.category || 'N/A',
+              productName: this.currentRecordType === 'inventory'
+                ? (appData.resourceName || appData.productName || appData.product || 'N/A')
+                : (appData.productName || appData.cropName || appData.product || 'N/A'),
+              category: this.currentRecordType === 'inventory'
+                ? (appData.sector || appData.category || 'Inventory').toString().replace(/_/g, ' ').toUpperCase()
+                : (categoryLabels[appData.category] || appData.category || 'N/A'),
               province: appData.province || 'N/A',
               municipality: appData.municipality || appData.city || 'N/A',
-              investment: appData.investmentQty ? Number(appData.investmentQty).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00',
-              harvest: appData.harvestQty || 'N/A'
+              investment: this.currentRecordType === 'inventory'
+                ? Number(appData.registrationFee || 0).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                : (appData.investmentQty ? Number(appData.investmentQty).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'),
+              harvest: this.currentRecordType === 'inventory'
+                ? `${Number(appData.stockAvailable || 0).toLocaleString()} ${appData.unitOfMeasure || 'pcs'}`
+                : (appData.harvestQty || 'N/A')
             };
 
             this.loading = false;
@@ -501,7 +523,8 @@
 
         async updateNationalStatus(newStatus) {
           const action = newStatus === 'approved' ? 'approve' : 'reject';
-          if (!confirm(`Are you sure you want to ${action} this application at the National level?`)) {
+          const targetLabel = this.currentRecordType === 'inventory' ? 'inventory request' : 'application';
+          if (!confirm(`Are you sure you want to ${action} this ${targetLabel} at the National level?`)) {
             return;
           }
 
@@ -516,9 +539,9 @@
               [`national${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}edBy`]: window.firebaseAuth.currentUser?.email || 'national-admin'
             };
 
-            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, 'applications', applicationId), updateData);
+            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, this.currentCollection, applicationId), updateData);
 
-            alert(`Application ${newStatus} successfully!`);
+            alert(`${this.currentRecordType === 'inventory' ? 'Inventory request' : 'Application'} ${newStatus} successfully!`);
             window.location.reload();
           } catch (error) {
             console.error('Error updating status:', error);
