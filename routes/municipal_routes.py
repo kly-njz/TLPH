@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, session
+from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
 from .municipal_api_logs import _resolve_municipality_from_user_context
@@ -50,7 +50,7 @@ def inventory():
 @bp.route('/user-inventory')
 @role_required('municipal','municipal_admin')
 def user_inventory():
-    return render_template('municipal/user-inventory-municipal/user-inventory-municipal.html')
+    return redirect(url_for('municipal.inventory'))
 
 @bp.route('/license-permit')
 @role_required('municipal','municipal_admin')

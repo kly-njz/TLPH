@@ -478,59 +478,6 @@
                 });
               });
 
-              const inventoryQuery = window.firebaseQuery(
-                window.firebaseCollection(window.firebaseDB, 'inventory_registrations'),
-                window.firebaseWhere('status', 'in', ['forwarded-to-national', 'approved', 'rejected'])
-              );
-              const inventorySnapshot = await window.firebaseGetDocs(inventoryQuery);
-
-              inventorySnapshot.forEach((invDoc) => {
-                const data = invDoc.data();
-
-                if (!data.forwardedToNationalAt && data.status !== 'forwarded-to-national') {
-                  return;
-                }
-
-                const userInfo = usersMap[data.userId];
-                const nationalStatus = (data.nationalStatus || 'pending').toLowerCase();
-
-                if (nationalStatus === 'approved') approved++;
-                else if (nationalStatus === 'rejected') rejected++;
-                else pending++;
-
-                const location = data.province && data.municipality
-                  ? `${data.municipality}, ${data.province}`
-                  : userInfo?.province && userInfo?.municipality
-                    ? `${userInfo.municipality}, ${userInfo.province}`
-                    : 'Unknown Location';
-
-                const province = (data.province || userInfo?.province || '').toLowerCase();
-                let region = 'N/A';
-                if (['oriental mindoro', 'occidental mindoro', 'marinduque', 'romblon', 'palawan'].includes(province)) {
-                  region = 'MIMAROPA';
-                } else if (['batangas', 'cavite', 'laguna', 'quezon', 'rizal'].includes(province)) {
-                  region = 'REGION IV-A';
-                } else if (['albay', 'camarines norte', 'camarines sur', 'catanduanes', 'masbate', 'sorsogon'].includes(province)) {
-                  region = 'REGION V';
-                }
-
-                const invCategory = (data.sector || data.category || 'INVENTORY').toString().replace(/_/g, ' ').toUpperCase();
-
-                newApps.push({
-                  id: invDoc.id,
-                  dateFiled: data.submittedAt ? new Date(data.submittedAt.toDate()).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A',
-                  submittedAtRaw: data.submittedAt ? data.submittedAt.toDate().getTime() : null,
-                  refId: 'INV-' + invDoc.id.substring(0, 8).toUpperCase(),
-                  applicantName: (userInfo?.name || data.userName || 'Unknown').toUpperCase(),
-                  category: invCategory,
-                  region: region,
-                  location: location,
-                  nationalStatus: nationalStatus,
-                  province: data.province || userInfo?.province || '',
-                  requestType: 'inventory'
-                });
-              });
-
               this.apps = newApps;
               this.totalCount = newApps.length;
               this.approvedCount = approved;
@@ -560,10 +507,7 @@
           if (!confirm('Approve this request at the National level?')) return;
 
           try {
-            const row = this.apps.find(a => a.id === appId);
-            const targetCollection = row?.requestType === 'inventory' ? 'inventory_registrations' : 'applications';
-
-            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, targetCollection, appId), {
+            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, 'applications', appId), {
               status: 'approved',
               nationalStatus: 'approved',
               nationalApprovedAt: new Date().toISOString(),
@@ -581,10 +525,7 @@
           if (!confirm('Reject this request at the National level?')) return;
 
           try {
-            const row = this.apps.find(a => a.id === appId);
-            const targetCollection = row?.requestType === 'inventory' ? 'inventory_registrations' : 'applications';
-
-            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, targetCollection, appId), {
+            await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, 'applications', appId), {
               status: 'rejected',
               nationalStatus: 'rejected',
               nationalRejectedAt: new Date().toISOString(),
