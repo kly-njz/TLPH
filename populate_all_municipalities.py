@@ -17,7 +17,8 @@ regions_municipalities = {
         # ...add all municipalities for Ilocos Norte, Ilocos Sur, La Union, Pangasinan
     ],
     'REGION-II': [
-        # ...add all municipalities for Cagayan Valley
+        'Abulug', 'Aglipay', 'Alcala', 'Alfonso Castañeda', 'Alicia', 'Allacapan', 'Ambaguio', 'Amulung', 'Angadanan', 'Aparri', 'Aritao', 'Aurora', 'Bagabag', 'Baggao', 'Ballesteros', 'Bambang', 'Basco', 'Bayombong', 'Benito Soliven', 'Buguey', 'Burgos', 'Cabagan', 'Cabarroguis', 'Cabatuan', 'Calayan',
+          'Camalaniugan', 'Claveria', 'Cordon', 'Delfin Albano', 'Diadi', 'Diffun', 'Dinapigue', 'Divilacan', 'Dupax del Norte', 'Dupax del Sur', 'Echague', 'Enrile', 'Gamu', 'Gattaran', 'Gonzaga', 'Iguig', 'Itbayat', 'Ivana', 'Jones', 'Kasibu', 
     ],
     'REGION-III': [
         # ...add all municipalities for Central Luzon
