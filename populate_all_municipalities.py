@@ -39,6 +39,18 @@ regions_municipalities = {
         'Alcantara', 'Banton', 'Cajidiocan', 'Calatrava', 'Concepcion', 'Corcuera', 'Ferrol', 'Looc', 'Magdiwang', 'Odiongan', 'Romblon', 'San Agustin', 'San Andres', 'San Fernando', 'San Jose', 'Santa Fe', 'Santa Maria',
         'Aborlan', 'Agutaya', 'Araceli', 'Balabac', 'Bataraza', 'Brooke’s Point', 'Busuanga', 'Cagayancillo', 'Coron', 'Culion', 'Cuyo', 'Dumaran', 'El Nido', 'Kalayaan', 'Linapacan', 'Magsaysay', 'Narra', 'Puerto Princesa City', 'Quezon', 'Rizal', 'Roxas', 'San Vicente', 'Sofronio Española', 'Taytay'
     ],
+
+    'REGION-V': [
+        'Bacon', 'Baras', 'Bato', 'Caramoan', 'Garchitorena', 'Goa', 'Lagonoy', 'Presentacion', 'Sagnay', 'San Fernando', 'San Jose', 'Sipocot',
+        # ...add all municipalities for Albay, Camarines Norte, Camarines Sur, Catanduanes, Masbate, Sorsogon
+    ],
+
+    'REGION-VI': [
+        'Alimodian', 'Anilao', 'Badiangan', 'Balasan', 'Banate', 'Barotac Nuevo', 'Barotac Viejo', 'Batad', 'Bingawan', 'Cabatuan', 'Calinog', 'Carles', 'Concepcion', 'Dumangas', 'Duenas', 'Estancia', 'Guimbal', 'Igbaras', 'Iloilo City', 'Janiuay', 'Lambunao',
+        # ...add all municipalities for Aklan, Antique, Capiz, Guimaras, Iloilo
+    ],
+
+    
     # ...add all other regions (V, VI, VII, VIII, IX, X, XI, XII, XIII, BARMM, NCR, CAR, CARAGA)
 }
 
