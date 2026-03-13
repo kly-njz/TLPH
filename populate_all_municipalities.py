@@ -26,7 +26,11 @@ regions_municipalities = {
 
     ],
     'REGION-IV-A': [
-        # ...add all municipalities for CALABARZON
+        'Agdangan', 'Agoncillo', 'Alabat', 'Alaminos', 'Alfonso', 'Alitagtag', 'Amadeo', 'Angono', 'Atimonan', 'Balayan', 'Balete', 'Baras', 'Bauan', 'Bay', 'Binangonan', 'Buenavista', 'Burdeos', 'Cainta', 'Calatagan', 'Calauag', 'Calauan', 'Candelaria', 'Cardona', 'Catanauan', 'Cavinti', 'Cuenca', 'Dolores',
+          'Famy', 'General Emilio Aguinaldo', 'General Luna', 'General Mariano Alvarez', 'General Nakar', 'Guinayangan', 'Gumaca', 'Ibaan', 'Indang', 'Infanta', 'Jalajala', 'Jomalig', 'Kalayaan', 'Kawit', 'Laurel', 'Lemery', 'Lian', 'Liliw', 'Lobo', 'Lopez', 'Los Baños', 'Lucban', 'Luisiana', 'Lumban', 'Mabini',
+            'Mabitac', 'Macalelon', 'Magallanes', 'Magdalena', 'Majayjay', 'Malvar', 'Maragondon', 'Mataasnakahoy', 'Mauban', 'Mendez', 'Morong', 'Mulanay', 'Nagcarlan', 'Naic', 'Nasugbu', 'Noveleta', 'Padre Burgos', 'Padre Garcia', 'Paete', 'Pagbilao', 'Pagsanjan', 'Pakil', 'Pangil', 'Panukulan', 'Patnanungan',
+              'Perez', 'Pila', 'Pililla', 'Pitogo', 'Plaridel', 'Polillo', 'Quezon', 'Real', 'Rizal', 'Rodriguez', 'Rosario', 'Sampaloc', 'San Andres', 'San Antonio', 'San Francisco', 'San Jose', 'San Juan', 'San Luis', 'San Mateo', 'San Narciso', 'San Nicolas', 'San Pascual', 'Santa Cruz', 'Santa Maria', 'Santa Teresita',
+                'Sariaya', 'Silang', 'Siniloan', 'Taal', 'Tagkawayan', 'Talisay', 'Tanay', 'Tanza', 'Taysan', 'Taytay', 'Teresa', 'Ternate', 'Tiaong', 'Tingloy', 'Tuy', 'Unisan', 'Victoria'
     ],
     'REGION-IV-B': [
         'Abra de Ilog', 'Calintaan', 'Looc', 'Lubang', 'Magsaysay', 'Mamburao', 'Paluan', 'Rizal', 'Sablayan', 'San Jose', 'Santa Cruz',
