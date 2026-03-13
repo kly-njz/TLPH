@@ -57,6 +57,12 @@ regions_municipalities = {
             'San Francisco', 'San Remigio', 'Santa Fe', 'Santander', 'Sibonga', 'Sogod', 'Tabogon', 'Tabuelan', 'Talisay', 'Toledo City', 'Tuburan', 'Tudela',
         # ...add all municipalities for Bohol, Cebu, Negros Oriental, Siquijor
     ],
+
+    'REGION-VIII': [
+        'Adams', 'Bacolod City', 'Barotac Nuevo', 'Barotac Viejo', 'Batad', 'Bingawan', 'Cabatuan', 'Calinog', 'Carles', 'Concepcion', 'Dumangas', 'Duenas', 'Estancia', 'Guimbal', 'Igbaras', 'Iloilo City', 'Janiuay', 'Lambunao', 'Leganes',
+          'Lemery', 'Leon', 'Maasin', 'Miagao', 'Mina', 'New Lucena', 'Oton', 'Passi City', 'Pavia', 'Pototan', 'San Dionisio', 'San Enrique', 'San Joaquin', 'San Miguel', 'Santa Barbara', 'Sara', 'Tigbauan', 'Tubungan', 'Zarraga',
+        # ...add all municipalities for Eastern Visayas
+    ]
     # ...add all other regions (V, VI, VII, VIII, IX, X, XI, XII, XIII, BARMM, NCR, CAR, CARAGA)
 }
 
