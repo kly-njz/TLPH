@@ -801,13 +801,16 @@
     }
     // Resolve inventory status with level context (approved by, rejected by, forwarded to)
     function resolveInventoryStatus(item) {
-      const paymentStatus = (item.paymentStatus || '').toLowerCase();
-      const statusPriority = item.nationalStatus === 'approved' || item.nationalStatus === 'rejected'
+      const paymentStatus = (item.paymentStatus || item.payment_status || item.payment || '').toLowerCase();
+      const rawStatus = item.nationalStatus === 'approved' || item.nationalStatus === 'rejected'
         ? item.nationalStatus
         : item.regionalStatus || item.status || 'pending';
 
-      const normalizedStatus = (statusPriority || '').toLowerCase();
-      if (normalizedStatus === 'pending_payment' && paymentStatus === 'paid') {
+      // Normalize status variants like "pending payment", "payment_pending"
+      const normalizedStatus = (rawStatus || '').toLowerCase().replace(/\s+/g, '_');
+
+      // If payment is confirmed but Firestore status stayed at pending_payment, show under review
+      if ((normalizedStatus === 'pending_payment' || normalizedStatus === 'payment_pending') && paymentStatus === 'paid') {
         return { status: 'pending', label: 'PAID - UNDER REVIEW' };
       }
 
@@ -1159,7 +1162,7 @@
             resourceName: item.resourceName || item.resource_name || '—',
             sector: sectorLabels[item.sector] || item.sector || '—',
             status: item.status || 'pending',
-            paymentStatus: item.paymentStatus || '',
+            paymentStatus: item.paymentStatus || item.payment_status || item.payment || '',
             regionalStatus: item.regionalStatus || '',
             nationalStatus: item.nationalStatus || '',
             approvedByLevel: item.approvedByLevel || '',
