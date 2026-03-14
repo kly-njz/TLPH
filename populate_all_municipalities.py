@@ -69,6 +69,11 @@ regions_municipalities = {
         # ...add all municipalities for Negros Occidental
     ],
 
+    'REGION-X': [
+        'Basilan City', 'Lamitan City', 'Siayan', 'Tambac', 'Tigum', 'Tuburan', 
+        # ...add all municipalities for Zamboanga Peninsula
+    ],
+
     # ...add all other regions (V, VI, VII, VIII, IX, X, XI, XII, XIII, BARMM, NCR, CAR, CARAGA)
 }
 
