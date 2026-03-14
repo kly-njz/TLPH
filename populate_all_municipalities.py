@@ -84,6 +84,11 @@ regions_municipalities = {
         'Banguingui', 'Catarman', 'Guinsiliban', 'Mahinog', 'Mambajao', 'Sagay', 'Teresa', 'Victoria',
         # ...add all municipalities for Southern Mindanao
     ],
+
+    'REGION-XIII': [
+        'Kabankalan City', 'La Carlota City', 'Sagay City', 'San Carlos City', 'Silay City', 'Talisay City', 'Victorias City',
+        # ...add all municipalities for Cordillera Administrative Region
+    ],
     # ...add all other regions (V, VI, VII, VIII, IX, X, XI, XII, XIII, BARMM, NCR, CAR, CARAGA)
 }
 
