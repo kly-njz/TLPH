@@ -74,6 +74,12 @@ regions_municipalities = {
         # ...add all municipalities for Zamboanga Peninsula
     ],
 
+    'REGION-XI': [
+        'Balingasag', 'Balingoan', 'Binuangan', 'Cagayan de Oro City', 'Claveria', 'El Salvador', 'Gingoog City', 'Gitagum', 'Initao', 'Jasaan', 'Kinoguitan', 'Lagonglong', 'Laguindingan', 'Magsaysay', 'Manticao', 'Medina', 'Naawan', 'Opol', 'Salay',
+          'Sugbongcogon', 'Tagoloan', 'Talisayan', 'Villanueva',
+        # ...add all municipalities for Northern Mindanao
+    ],
+    
     # ...add all other regions (V, VI, VII, VIII, IX, X, XI, XII, XIII, BARMM, NCR, CAR, CARAGA)
 }
 
