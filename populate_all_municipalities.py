@@ -79,7 +79,11 @@ regions_municipalities = {
           'Sugbongcogon', 'Tagoloan', 'Talisayan', 'Villanueva',
         # ...add all municipalities for Northern Mindanao
     ],
-    
+
+    'REGION-XII': [
+        'Banguingui', 'Catarman', 'Guinsiliban', 'Mahinog', 'Mambajao', 'Sagay', 'Teresa', 'Victoria',
+        # ...add all municipalities for Southern Mindanao
+    ],
     # ...add all other regions (V, VI, VII, VIII, IX, X, XI, XII, XIII, BARMM, NCR, CAR, CARAGA)
 }
 
