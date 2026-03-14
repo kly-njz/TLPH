@@ -311,7 +311,7 @@
     let activeModalItemId = null;
 
     class InventoryItem {
-      constructor({ id, category, description, quantity, region, municipality, province, owner, status, nationalStatus, regionalStatus, registrationFee, unitOfMeasure, imageUrl, permitUrl, createdAt }) {
+      constructor({ id, category, description, quantity, region, municipality, province, owner, status, nationalStatus, regionalStatus, registrationFee, unitOfMeasure, imageUrl, permitUrl, createdAt, attachments }) {
         this.id = String(id);
         this.category = String(category);
         this.description = String(description);
@@ -328,6 +328,7 @@
         this.imageUrl = String(imageUrl || "");
         this.permitUrl = String(permitUrl || "");
         this.createdAt = createdAt || null;
+        this.attachments = attachments || null;
       }
       inScope(municipality) {
         return this.municipality.toLowerCase() === String(municipality || '').toLowerCase();
@@ -355,7 +356,10 @@
 
           usersSnapshot.forEach(userDoc => {
             const userData = userDoc.data();
+            const fullName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
             usersMap[userDoc.id] = {
+              name: fullName || userData.displayName || userData.userName || userData.email || '',
+              email: userData.email || '',
               municipality: userData.municipality || '',
               province: userData.province || '',
               region: userData.regionName || userData.region || ''
@@ -376,15 +380,16 @@
               region: data.region || userInfo.region || '',
               municipality: data.municipality || userInfo.municipality || '',
               province: data.province || userInfo.province || '',
-              owner: data.userName || 'Unknown User',
+              owner: data.userName || data.ownerName || userInfo.name || data.userEmail || userInfo.email || data.email || 'Unknown User',
               status: data.status || 'pending',
               nationalStatus: data.nationalStatus || '',
               regionalStatus: data.regionalStatus || '',
               registrationFee: data.registrationFee || 0,
               unitOfMeasure: data.unitOfMeasure || 'pcs',
-              imageUrl: data.imageUrl || '',
-              permitUrl: data.permitUrl || '',
-              createdAt: data.createdAt || data.submittedAt || null
+              imageUrl: data.imageUrl || data.image || data.photoUrl || data.photo || '',
+              permitUrl: data.permitUrl || data.permit || data.permitFile || data.permitFileUrl || '',
+              createdAt: data.createdAt || data.submittedAt || null,
+              attachments: data.attachments || data.documents || data.files || data.filePaths || data.uploadedFiles || null
             }));
           });
           
@@ -531,14 +536,51 @@
       return { text: 'Pending Review', className: 'text-amber-700' };
     }
 
-    function renderInventoryDocuments(item) {
+    function extractAttachmentLinks(item) {
       const docs = [];
+      const seen = new Set();
+
+      function pushDoc(label, url) {
+        if (!url || typeof url !== 'string') return;
+        const normalizedUrl = url.trim();
+        if (!normalizedUrl || seen.has(normalizedUrl)) return;
+        if (!(normalizedUrl.startsWith('http') || normalizedUrl.startsWith('/'))) return;
+        seen.add(normalizedUrl);
+        docs.push({ label, url: normalizedUrl });
+      }
+
       if (item.imageUrl) {
-        docs.push({ label: 'Resource Photo', url: item.imageUrl });
+        pushDoc('Resource Photo', item.imageUrl);
       }
       if (item.permitUrl) {
-        docs.push({ label: 'Permit File', url: item.permitUrl });
+        pushDoc('Permit File', item.permitUrl);
       }
+
+      const source = item.attachments;
+      if (Array.isArray(source)) {
+        source.forEach((entry, index) => {
+          if (typeof entry === 'string') {
+            pushDoc(`Attachment ${index + 1}`, entry);
+          } else if (entry && typeof entry === 'object') {
+            pushDoc(entry.name || entry.label || `Attachment ${index + 1}`, entry.url || entry.path || entry.downloadURL || entry.downloadUrl);
+          }
+        });
+      } else if (source && typeof source === 'object') {
+        Object.entries(source).forEach(([key, value]) => {
+          if (typeof value === 'string') {
+            const label = key.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').trim();
+            pushDoc(label ? label.toUpperCase() : 'Attachment', value);
+          } else if (value && typeof value === 'object') {
+            pushDoc(value.name || value.label || key, value.url || value.path || value.downloadURL || value.downloadUrl);
+          }
+        });
+      }
+
+      return docs;
+    }
+
+    function renderInventoryDocuments(item) {
+      const docs = extractAttachmentLinks(item);
 
       if (!docs.length) {
         els.modalDocuments.innerHTML = '<p class="text-[9px] font-bold uppercase tracking-widest text-slate-400 m-0">No attachments uploaded.</p>';
@@ -580,10 +622,12 @@
       els.btnRejectStock.disabled = disableActions;
       els.btnForwardStock.disabled = disableActions;
 
-      const disabledClass = 'opacity-50 cursor-not-allowed';
-      els.btnApproveStock.classList.toggle(disabledClass, disableActions);
-      els.btnRejectStock.classList.toggle(disabledClass, disableActions);
-      els.btnForwardStock.classList.toggle(disabledClass, disableActions);
+      els.btnApproveStock.classList.toggle('opacity-50', disableActions);
+      els.btnApproveStock.classList.toggle('cursor-not-allowed', disableActions);
+      els.btnRejectStock.classList.toggle('opacity-50', disableActions);
+      els.btnRejectStock.classList.toggle('cursor-not-allowed', disableActions);
+      els.btnForwardStock.classList.toggle('opacity-50', disableActions);
+      els.btnForwardStock.classList.toggle('cursor-not-allowed', disableActions);
 
       renderInventoryDocuments(item);
       els.inventoryDetailsModal.classList.remove('hidden');
