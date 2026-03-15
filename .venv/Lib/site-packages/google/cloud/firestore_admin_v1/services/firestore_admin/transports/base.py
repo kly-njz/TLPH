@@ -16,29 +16,29 @@
 import abc
 from typing import Awaitable, Callable, Dict, Optional, Sequence, Union
 
-from google.cloud.firestore_admin_v1 import gapic_version as package_version
-
-import google.auth  # type: ignore
 import google.api_core
-from google.api_core import exceptions as core_exceptions
-from google.api_core import gapic_v1
-from google.api_core import retry as retries
-from google.api_core import operations_v1
-from google.auth import credentials as ga_credentials  # type: ignore
-from google.oauth2 import service_account  # type: ignore
+import google.auth  # type: ignore
 import google.protobuf
-
-from google.cloud.firestore_admin_v1.types import backup
-from google.cloud.firestore_admin_v1.types import database
-from google.cloud.firestore_admin_v1.types import field
-from google.cloud.firestore_admin_v1.types import firestore_admin
-from google.cloud.firestore_admin_v1.types import index
-from google.cloud.firestore_admin_v1.types import schedule
-from google.cloud.firestore_admin_v1.types import user_creds
-from google.cloud.firestore_admin_v1.types import user_creds as gfa_user_creds
+import google.protobuf.empty_pb2 as empty_pb2  # type: ignore
+from google.api_core import exceptions as core_exceptions
+from google.api_core import gapic_v1, operations_v1
+from google.api_core import retry as retries
+from google.auth import credentials as ga_credentials  # type: ignore
 from google.cloud.location import locations_pb2  # type: ignore
 from google.longrunning import operations_pb2  # type: ignore
-from google.protobuf import empty_pb2  # type: ignore
+from google.oauth2 import service_account  # type: ignore
+
+from google.cloud.firestore_admin_v1 import gapic_version as package_version
+from google.cloud.firestore_admin_v1.types import (
+    backup,
+    database,
+    field,
+    firestore_admin,
+    index,
+    schedule,
+    user_creds,
+)
+from google.cloud.firestore_admin_v1.types import user_creds as gfa_user_creds
 
 DEFAULT_CLIENT_INFO = gapic_v1.client_info.ClientInfo(
     gapic_version=package_version.__version__
@@ -97,8 +97,6 @@ class FirestoreAdminTransport(abc.ABC):
                 be used for service account credentials.
         """
 
-        scopes_kwargs = {"scopes": scopes, "default_scopes": self.AUTH_SCOPES}
-
         # Save the scopes.
         self._scopes = scopes
         if not hasattr(self, "_ignore_credentials"):
@@ -113,11 +111,16 @@ class FirestoreAdminTransport(abc.ABC):
 
         if credentials_file is not None:
             credentials, _ = google.auth.load_credentials_from_file(
-                credentials_file, **scopes_kwargs, quota_project_id=quota_project_id
+                credentials_file,
+                scopes=scopes,
+                quota_project_id=quota_project_id,
+                default_scopes=self.AUTH_SCOPES,
             )
         elif credentials is None and not self._ignore_credentials:
             credentials, _ = google.auth.default(
-                **scopes_kwargs, quota_project_id=quota_project_id
+                scopes=scopes,
+                quota_project_id=quota_project_id,
+                default_scopes=self.AUTH_SCOPES,
             )
             # Don't apply audience if the credentials file passed from user.
             if hasattr(credentials, "with_gdch_audience"):
@@ -727,13 +730,19 @@ class FirestoreAdminTransport(abc.ABC):
     @property
     def cancel_operation(
         self,
-    ) -> Callable[[operations_pb2.CancelOperationRequest], None,]:
+    ) -> Callable[
+        [operations_pb2.CancelOperationRequest],
+        None,
+    ]:
         raise NotImplementedError()
 
     @property
     def delete_operation(
         self,
-    ) -> Callable[[operations_pb2.DeleteOperationRequest], None,]:
+    ) -> Callable[
+        [operations_pb2.DeleteOperationRequest],
+        None,
+    ]:
         raise NotImplementedError()
 
     @property

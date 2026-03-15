@@ -13,10 +13,10 @@
 # limitations under the License.
 
 """Classes for representing collections for the Google Cloud Firestore API."""
+
 from __future__ import annotations
 
 import random
-
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -26,10 +26,10 @@ from typing import (
     Generator,
     Generic,
     Iterable,
+    Optional,
     Sequence,
     Tuple,
     Union,
-    Optional,
 )
 
 from google.api_core import retry as retries
@@ -40,13 +40,15 @@ from google.cloud.firestore_v1.base_query import QueryType
 
 if TYPE_CHECKING:  # pragma: NO COVER
     # Types needed only for Type Hints
+    import datetime
+
+    from google.cloud.firestore_v1.async_document import AsyncDocumentReference
     from google.cloud.firestore_v1.base_aggregation import BaseAggregationQuery
     from google.cloud.firestore_v1.base_document import DocumentSnapshot
     from google.cloud.firestore_v1.base_vector_query import (
         BaseVectorQuery,
         DistanceMeasure,
     )
-    from google.cloud.firestore_v1.async_document import AsyncDocumentReference
     from google.cloud.firestore_v1.document import DocumentReference
     from google.cloud.firestore_v1.field_path import FieldPath
     from google.cloud.firestore_v1.pipeline_source import PipelineSource
@@ -57,9 +59,8 @@ if TYPE_CHECKING:  # pragma: NO COVER
     from google.cloud.firestore_v1.vector import Vector
     from google.cloud.firestore_v1.vector_query import VectorQuery
 
-    import datetime
-
 _AUTO_ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+system_random = random.SystemRandom()
 
 
 class BaseCollectionReference(Generic[QueryType]):
@@ -608,12 +609,8 @@ class BaseCollectionReference(Generic[QueryType]):
         """
         Convert this query into a Pipeline
 
-        Queries containing a `cursor` or `limit_to_last` are not currently supported
-
         Args:
             source: the PipelineSource to build the pipeline off o
-        Raises:
-            - NotImplementedError: raised if the query contains a `cursor` or `limit_to_last`
         Returns:
             a Pipeline representing the query
         """
@@ -627,8 +624,11 @@ def _auto_id() -> str:
         str: A 20 character string composed of digits, uppercase and
         lowercase and letters.
     """
-
-    return "".join(random.choice(_AUTO_ID_CHARS) for _ in range(20))
+    try:
+        return "".join(system_random.choice(_AUTO_ID_CHARS) for _ in range(20))
+    # Very old Unix systems don't have os.urandom (/dev/urandom), in which case use random.choice
+    except NotImplementedError:
+        return "".join(random.choice(_AUTO_ID_CHARS) for _ in range(20))
 
 
 def _item_to_document_ref(collection_reference, item):

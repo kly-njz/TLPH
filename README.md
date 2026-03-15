@@ -123,8 +123,11 @@ XENDIT_PUBLIC_KEY=your-xendit-public-key
 
 5. Run the application
 ```bash
-python app.py
+# Use the virtual environment's Python (important: do not use system 'py' or 'python')
+.venv\Scripts\python.exe app.py
 ```
+
+**Note**: Always run the app using `.venv\Scripts\python.exe` to ensure it uses the correct virtual environment with all dependencies installed. Using `py app.py` or `python app.py` may fail with import errors.
 
 6. Access the application
 ```

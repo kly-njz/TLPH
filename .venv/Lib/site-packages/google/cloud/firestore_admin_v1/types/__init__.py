@@ -80,9 +80,12 @@ from .operation import (
     FieldOperationMetadata,
     ImportDocumentsMetadata,
     IndexOperationMetadata,
+    OperationState,
     Progress,
     RestoreDatabaseMetadata,
-    OperationState,
+)
+from .realtime_updates import (
+    RealtimeUpdatesMode,
 )
 from .schedule import (
     BackupSchedule,
@@ -154,6 +157,7 @@ __all__ = (
     "Progress",
     "RestoreDatabaseMetadata",
     "OperationState",
+    "RealtimeUpdatesMode",
     "BackupSchedule",
     "DailyRecurrence",
     "WeeklyRecurrence",

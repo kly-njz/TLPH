@@ -17,11 +17,11 @@ from __future__ import annotations
 
 from typing import MutableMapping, MutableSequence
 
+import google.protobuf.duration_pb2 as duration_pb2  # type: ignore
+import google.protobuf.timestamp_pb2 as timestamp_pb2  # type: ignore
 import proto  # type: ignore
 
-from google.protobuf import duration_pb2  # type: ignore
-from google.protobuf import timestamp_pb2  # type: ignore
-
+from google.cloud.firestore_admin_v1.types import realtime_updates
 
 __protobuf__ = proto.module(
     package="google.firestore.admin.v1",
@@ -68,6 +68,10 @@ class Database(proto.Message):
         concurrency_mode (google.cloud.firestore_admin_v1.types.Database.ConcurrencyMode):
             The concurrency control mode to use for this
             database.
+            If unspecified in a CreateDatabase request, this
+            will default based on the database edition:
+            Optimistic for Enterprise and Pessimistic for
+            all other databases.
         version_retention_period (google.protobuf.duration_pb2.Duration):
             Output only. The period during which past versions of data
             are retained in the database.
@@ -151,6 +155,22 @@ class Database(proto.Message):
             has an up-to-date value before proceeding.
         database_edition (google.cloud.firestore_admin_v1.types.Database.DatabaseEdition):
             Immutable. The edition of the database.
+        realtime_updates_mode (google.cloud.firestore_admin_v1.types.RealtimeUpdatesMode):
+            Immutable. The default Realtime Updates mode
+            to use for this database.
+        firestore_data_access_mode (google.cloud.firestore_admin_v1.types.Database.DataAccessMode):
+            Optional. The Firestore API data access mode to use for this
+            database. If not set on write:
+
+            - the default value is DATA_ACCESS_MODE_DISABLED for
+              Enterprise Edition.
+            - the default value is DATA_ACCESS_MODE_ENABLED for Standard
+              Edition.
+        mongodb_compatible_data_access_mode (google.cloud.firestore_admin_v1.types.Database.DataAccessMode):
+            Optional. The MongoDB compatible API data access mode to use
+            for this database. If not set on write, the default value is
+            DATA_ACCESS_MODE_ENABLED for Enterprise Edition. The value
+            is always DATA_ACCESS_MODE_DISABLED for Standard Edition.
     """
 
     class DatabaseType(proto.Enum):
@@ -169,6 +189,7 @@ class Database(proto.Message):
             DATASTORE_MODE (2):
                 Firestore in Datastore Mode.
         """
+
         DATABASE_TYPE_UNSPECIFIED = 0
         FIRESTORE_NATIVE = 1
         DATASTORE_MODE = 2
@@ -183,21 +204,27 @@ class Database(proto.Message):
                 Use optimistic concurrency control by
                 default. This mode is available for Cloud
                 Firestore databases.
+
+                This is the default setting for Cloud Firestore
+                Enterprise Edition databases.
             PESSIMISTIC (2):
                 Use pessimistic concurrency control by
                 default. This mode is available for Cloud
                 Firestore databases.
 
-                This is the default setting for Cloud Firestore.
+                This is the default setting for Cloud Firestore
+                Standard Edition databases.
             OPTIMISTIC_WITH_ENTITY_GROUPS (3):
                 Use optimistic concurrency control with
                 entity groups by default.
-                This is the only available mode for Cloud
-                Datastore.
+                This mode is enabled for some databases that
+                were automatically upgraded from Cloud Datastore
+                to Cloud Firestore with Datastore Mode.
 
-                This mode is also available for Cloud Firestore
-                with Datastore Mode but is not recommended.
+                It is not recommended for any new databases, and
+                not supported for Firestore Native databases.
         """
+
         CONCURRENCY_MODE_UNSPECIFIED = 0
         OPTIMISTIC = 1
         PESSIMISTIC = 2
@@ -223,6 +250,7 @@ class Database(proto.Message):
                 Reads are supported on any version of the
                 data from within the past 1 hour.
         """
+
         POINT_IN_TIME_RECOVERY_ENABLEMENT_UNSPECIFIED = 0
         POINT_IN_TIME_RECOVERY_ENABLED = 1
         POINT_IN_TIME_RECOVERY_DISABLED = 2
@@ -247,6 +275,7 @@ class Database(proto.Message):
                 This is the default setting for databases
                 created with the Firestore API.
         """
+
         APP_ENGINE_INTEGRATION_MODE_UNSPECIFIED = 0
         ENABLED = 1
         DISABLED = 2
@@ -263,6 +292,7 @@ class Database(proto.Message):
             DELETE_PROTECTION_ENABLED (2):
                 Delete protection is enabled
         """
+
         DELETE_PROTECTION_STATE_UNSPECIFIED = 0
         DELETE_PROTECTION_DISABLED = 1
         DELETE_PROTECTION_ENABLED = 2
@@ -280,9 +310,28 @@ class Database(proto.Message):
             ENTERPRISE (2):
                 Enterprise edition.
         """
+
         DATABASE_EDITION_UNSPECIFIED = 0
         STANDARD = 1
         ENTERPRISE = 2
+
+    class DataAccessMode(proto.Enum):
+        r"""The data access mode.
+
+        Values:
+            DATA_ACCESS_MODE_UNSPECIFIED (0):
+                Not Used.
+            DATA_ACCESS_MODE_ENABLED (1):
+                Accessing the database through the API is
+                allowed.
+            DATA_ACCESS_MODE_DISABLED (2):
+                Accessing the database through the API is
+                disallowed.
+        """
+
+        DATA_ACCESS_MODE_UNSPECIFIED = 0
+        DATA_ACCESS_MODE_ENABLED = 1
+        DATA_ACCESS_MODE_DISABLED = 2
 
     class CmekConfig(proto.Message):
         r"""The CMEK (Customer Managed Encryption Key) configuration for
@@ -369,7 +418,8 @@ class Database(proto.Message):
         r"""Encryption configuration for a new database being created from
         another source.
 
-        The source could be a [Backup][google.firestore.admin.v1.Backup] .
+        The source could be a [Backup][google.firestore.admin.v1.Backup] or
+        a [PitrSnapshot][google.firestore.admin.v1.PitrSnapshot].
 
         This message has `oneof`_ fields (mutually exclusive fields).
         For each oneof, at most one member field can be set at the same time.
@@ -549,6 +599,21 @@ class Database(proto.Message):
         proto.ENUM,
         number=28,
         enum=DatabaseEdition,
+    )
+    realtime_updates_mode: realtime_updates.RealtimeUpdatesMode = proto.Field(
+        proto.ENUM,
+        number=31,
+        enum=realtime_updates.RealtimeUpdatesMode,
+    )
+    firestore_data_access_mode: DataAccessMode = proto.Field(
+        proto.ENUM,
+        number=33,
+        enum=DataAccessMode,
+    )
+    mongodb_compatible_data_access_mode: DataAccessMode = proto.Field(
+        proto.ENUM,
+        number=34,
+        enum=DataAccessMode,
     )
 
 
