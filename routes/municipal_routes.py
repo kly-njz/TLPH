@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
+from config import Config
 from .municipal_api_logs import _resolve_municipality_from_user_context
 import json
 from datetime import datetime
@@ -801,7 +802,8 @@ def logs_audit_logs_municipal():
     return render_template('municipal/logs/audit-logs-municipal.html',
         municipality_name=municipality_name,
         region_name=region_name,
-        province_name=province_name
+        province_name=province_name,
+        firebase_config=Config.FIREBASE_CONFIG
     )
 
 @bp.route('/logs/system-logs-municipal')
