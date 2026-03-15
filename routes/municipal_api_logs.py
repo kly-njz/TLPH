@@ -341,11 +341,24 @@ def api_update_audit_log_status():
                 if not tx_doc.exists:
                     return jsonify({'success': False, 'error': 'Transaction not found'}), 404
 
-                tx_ref.update({
+                update_payload = {
                     'status': new_status,
                     'updated_at': firestore.SERVER_TIMESTAMP,
                     'updated_by': session.get('user_email', 'system')
-                })
+                }
+
+                # If forwarded, include message and forwarding metadata
+                if new_status == 'FORWARDED':
+                    forward_msg = (data.get('forwardMessage') or '').strip()
+                    update_payload.update({
+                        'forwarded_to_region': True,
+                        'forwarded_message': forward_msg,
+                        'forwarded_by': session.get('user_email', 'system'),
+                        'forwarded_at': firestore.SERVER_TIMESTAMP,
+                        'forwarded_region': _resolve_region_from_user_context()
+                    })
+
+                tx_ref.update(update_payload)
             except Exception as e:
                 print(f"[ERROR] Updating transaction status: {e}")
                 return jsonify({'success': False, 'error': 'Failed to update transaction status'}), 500
