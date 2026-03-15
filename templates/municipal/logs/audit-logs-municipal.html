@@ -583,6 +583,11 @@
         detailsOpen: false,
         selected: null,
 
+        // status edit modal
+        statusModalOpen: false,
+        statusSelected: null,
+        newStatus: 'SUCCESS',
+
         // paging
         page: 1,
         pageSize: 12,
@@ -756,6 +761,51 @@
         openDetails(row){
           this.selected = row;
           this.detailsOpen = true;
+        },
+
+        openStatusModal(row){
+          this.statusSelected = row;
+          this.newStatus = row.outcome;
+          this.statusModalOpen = true;
+        },
+
+        async updateStatus(){
+          if(!this.statusSelected) return;
+
+          try {
+            const response = await fetch('/api/municipal/logs/update-status', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                id: this.statusSelected.id,
+                status: this.newStatus,
+                module: this.statusSelected.module
+              })
+            });
+
+            const result = await response.json();
+
+            if(result.success) {
+              // Update the local data
+              this.statusSelected.outcome = this.newStatus;
+              // Update in the logs array
+              const logIndex = this.logs.findIndex(log => log.id === this.statusSelected.id);
+              if(logIndex !== -1) {
+                this.logs[logIndex].outcome = this.newStatus;
+              }
+              // Reapply filters to update the display
+              this.applyFilters();
+              this.statusModalOpen = false;
+              alert('Status updated successfully!');
+            } else {
+              alert('Failed to update status: ' + (result.error || 'Unknown error'));
+            }
+          } catch (error) {
+            console.error('Error updating status:', error);
+            alert('Error updating status. Please try again.');
+          }
         },
 
         openAdvancedModal(){ this.advancedOpen = true; },
