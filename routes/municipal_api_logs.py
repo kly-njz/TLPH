@@ -330,9 +330,6 @@ def api_update_audit_log_status():
         if not log_id or not new_status:
             return jsonify({'success': False, 'error': 'Missing log_id or status'}), 400
 
-        if new_status not in ['SUCCESS', 'WARN', 'FAIL']:
-            return jsonify({'success': False, 'error': 'Invalid status. Must be SUCCESS, WARN, or FAIL'}), 400
-
         db = get_firestore_db()
 
         # Determine which collection to update based on module
