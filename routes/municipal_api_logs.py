@@ -337,10 +337,22 @@ def api_update_audit_log_status():
 
         # Determine which collection to update based on module
         if module == 'PAYMENTS':
-            # For payments, we need to update the transaction status
-            # This is more complex as transactions might be in a different storage
-            # For now, we'll just log this as a status update in a separate collection
-            pass
+            # Update transaction status in Firestore (transactions collection)
+            try:
+                tx_ref = db.collection('transactions').document(log_id)
+                tx_doc = tx_ref.get()
+                if not tx_doc.exists:
+                    return jsonify({'success': False, 'error': 'Transaction not found'}), 404
+
+                tx_ref.update({
+                    'status': new_status,
+                    'updated_at': firestore.SERVER_TIMESTAMP,
+                    'updated_by': session.get('user_email', 'system')
+                })
+            except Exception as e:
+                print(f"[ERROR] Updating transaction status: {e}")
+                return jsonify({'success': False, 'error': 'Failed to update transaction status'}), 500
+
         elif module == 'FUND_TRANSFER':
             # Update fund transfer status
             doc_ref = db.collection('municipal_fund_distribution').document(log_id)
