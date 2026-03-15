@@ -801,7 +801,8 @@ def logs_audit_logs_municipal():
     return render_template('municipal/logs/audit-logs-municipal.html',
         municipality_name=municipality_name,
         region_name=region_name,
-        province_name=province_name
+        province_name=province_name,
+        firebase_config=Config.FIREBASE_CONFIG
     )
 
 @bp.route('/logs/system-logs-municipal')

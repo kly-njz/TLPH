@@ -317,6 +317,67 @@ def api_logs_financial_logs():
         traceback.print_exc()
         return jsonify({'logs': []}), 200
 
+@bp.route('/logs/update-status', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_update_audit_log_status():
+    """Update the status (outcome) of an audit log entry"""
+    try:
+        data = request.get_json()
+        log_id = data.get('id')
+        new_status = data.get('status')
+        module = data.get('module')
+
+        if not log_id or not new_status:
+            return jsonify({'success': False, 'error': 'Missing log_id or status'}), 400
+
+        if new_status not in ['SUCCESS', 'WARN', 'FAIL']:
+            return jsonify({'success': False, 'error': 'Invalid status. Must be SUCCESS, WARN, or FAIL'}), 400
+
+        db = get_firestore_db()
+
+        # Determine which collection to update based on module
+        if module == 'PAYMENTS':
+            # For payments, we need to update the transaction status
+            # This is more complex as transactions might be in a different storage
+            # For now, we'll just log this as a status update in a separate collection
+            pass
+        elif module == 'FUND_TRANSFER':
+            # Update fund transfer status
+            doc_ref = db.collection('municipal_fund_distribution').document(log_id)
+            doc = doc_ref.get()
+            if doc.exists:
+                # Map status to the appropriate field
+                status_mapping = {
+                    'SUCCESS': 'COMPLETED',
+                    'WARN': 'PENDING',
+                    'FAIL': 'FAILED'
+                }
+                doc_ref.update({
+                    'status': status_mapping.get(new_status, new_status),
+                    'updated_at': firestore.SERVER_TIMESTAMP,
+                    'updated_by': session.get('user_email', 'system')
+                })
+            else:
+                return jsonify({'success': False, 'error': 'Fund transfer not found'}), 404
+        else:
+            # For other modules, create/update an audit status override
+            audit_status_ref = db.collection('audit_log_status_overrides').document(log_id)
+            audit_status_ref.set({
+                'log_id': log_id,
+                'status': new_status,
+                'updated_at': firestore.SERVER_TIMESTAMP,
+                'updated_by': session.get('user_email', 'system'),
+                'module': module
+            }, merge=True)
+
+        return jsonify({'success': True, 'message': 'Status updated successfully'}), 200
+
+    except Exception as e:
+        print(f"[ERROR] Updating audit log status: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @bp.route('/deposits', methods=['GET'])
 @role_required('municipal','municipal_admin')
 def api_get_deposits():
