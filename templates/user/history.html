@@ -799,6 +799,41 @@
       if (normalized.includes('forward')) return 'FORWARDED';
       return status.toUpperCase();
     }
+    // Resolve inventory status with level context (approved by, rejected by, forwarded to)
+    function resolveInventoryStatus(item) {
+      const paymentStatus = (item.paymentStatus || item.payment_status || item.payment || '').toLowerCase();
+      const rawStatus = item.nationalStatus === 'approved' || item.nationalStatus === 'rejected'
+        ? item.nationalStatus
+        : item.regionalStatus || item.status || 'pending';
+
+      // Normalize status variants like "pending payment", "payment_pending"
+      const normalizedStatus = (rawStatus || '').toLowerCase().replace(/\s+/g, '_');
+
+      // If payment is confirmed but Firestore status stayed at pending_payment, show under review
+      if ((normalizedStatus === 'pending_payment' || normalizedStatus === 'payment_pending') && paymentStatus === 'paid') {
+        return { status: 'pending', label: 'PAID - UNDER REVIEW' };
+      }
+
+      const status = normalizedStatus;
+      const approvedLevel = item.approvedByLevel || '';
+      const rejectedLevel = item.rejectedByLevel || '';
+      const forwardedLevel = item.forwardedToLevel || item.forwardedByLevel || '';
+
+      if (status === 'approved' && approvedLevel) {
+        return { status, label: `APPROVED BY ${approvedLevel.toUpperCase()}` };
+      }
+      if (status === 'rejected' && rejectedLevel) {
+        return { status, label: `REJECTED BY ${rejectedLevel.toUpperCase()}` };
+      }
+      if (status === 'to-review' || status.includes('forward')) {
+        const level = forwardedLevel.toUpperCase();
+        if (level === 'NATIONAL') return { status, label: 'FWD → NATIONAL' };
+        if (level === 'REGIONAL') return { status, label: 'FWD → REGIONAL' };
+        return { status, label: 'FORWARDED FOR REVIEW' };
+      }
+
+      return { status, label: getStatusLabel(status) };
+    }
 
     function getServiceCategory(serviceType) {
       const t = (serviceType || '').toLowerCase();
@@ -1127,6 +1162,13 @@
             resourceName: item.resourceName || item.resource_name || '—',
             sector: sectorLabels[item.sector] || item.sector || '—',
             status: item.status || 'pending',
+            paymentStatus: item.paymentStatus || item.payment_status || item.payment || '',
+            regionalStatus: item.regionalStatus || '',
+            nationalStatus: item.nationalStatus || '',
+            approvedByLevel: item.approvedByLevel || '',
+            rejectedByLevel: item.rejectedByLevel || '',
+            forwardedByLevel: item.forwardedByLevel || '',
+            forwardedToLevel: item.forwardedToLevel || '',
             date: date,
             _ts: ts ? ts.toDate() : new Date(0)
           });
@@ -1808,7 +1850,10 @@
                   <span style="display: inline-block; padding: 4px 8px; background: #dbeafe; color: #1e40af; border-radius: 4px; font-weight: 700; font-size: 10px; text-transform: uppercase; margin-bottom: 4px;">${app.type}</span>
                   <h3 style="color: #1b330d; font-size: 13px; font-weight: 700; margin: 4px 0 0 0;">${app.description}</h3>
                 </div>
-                <span style="color: #6b7280; font-weight: 600; font-size: 11px;">App #${idx + 1}</span>
+                  ${(() => {
+                    const resolved = resolveInventoryStatus(item);
+                    return `<td data-label="Status"><span class="status-label ${getStatusClass(resolved.status)}">${resolved.label}</span></td>`;
+                  })()}
               </div>
               <div style="background: white; padding: 10px; border-radius: 4px; font-size: 11px;">
                 <p style="color: #6b7280; margin: 0;"><strong>Status:</strong> <span style="color: #059669; font-weight: 700;">${app.status}</span></p>
