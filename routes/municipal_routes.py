@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
+from config import Config
 from .municipal_api_logs import _resolve_municipality_from_user_context
 import json
 from datetime import datetime
