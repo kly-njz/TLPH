@@ -224,6 +224,104 @@ def audit_logs_view():
     return render_template('regional/audit-logs-regional-view.html')
 
 
+@bp.route('/api/audit/financial-logs', methods=['GET'])
+@role_required('regional','regional_admin')
+def api_regional_financial_audit_logs():
+    """Return region-scoped financial audit logs similar to municipal audit payload."""
+    try:
+        db = get_firestore_db()
+        user_region, municipality_set = _resolve_regional_scope(db)
+
+        logs = []
+
+        # Source 1: transactions
+        tx_docs = db.collection('transactions').limit(5000).stream()
+        for tx_doc in tx_docs:
+            tx = tx_doc.to_dict() or {}
+
+            if not _transaction_in_regional_scope(tx, user_region, municipality_set):
+                continue
+
+            status_value = str(tx.get('status') or '').strip().upper() or 'PENDING'
+            ts_value = (
+                tx.get('updated_at')
+                or tx.get('forwarded_at')
+                or tx.get('created_at')
+                or tx.get('createdAt')
+                or tx.get('updatedAt')
+            )
+            outcome_value = 'SUCCESS' if status_value in {'PAID', 'APPROVED', 'COMPLETED'} else ('FAIL' if status_value in {'FAILED', 'REJECTED', 'CANCELLED'} else 'WARN')
+
+            logs.append({
+                'id': tx_doc.id,
+                'ts': _normalize_ts_for_json(ts_value),
+                'user': tx.get('updated_by') or tx.get('forwarded_by') or tx.get('user_email') or 'User',
+                'role': 'Municipal',
+                'module': 'PAYMENTS',
+                'action': status_value,
+                'target': tx.get('transaction_name') or tx.get('description') or 'Payment',
+                'targetId': tx.get('invoice_id') or tx.get('external_id') or tx_doc.id,
+                'device_type': tx.get('device_type') or tx.get('device') or '',
+                'ip': tx.get('ip') or '',
+                'outcome': outcome_value,
+                'message': tx.get('description') or '',
+                'forwarded_message': tx.get('forwarded_message') or tx.get('forwardMessage') or '',
+                'forwarded_by': tx.get('forwarded_by') or '',
+                'municipality': tx.get('municipality') or tx.get('municipality_name') or tx.get('target_municipality') or '',
+                'region': get_firestore_region_name(tx.get('region') or tx.get('region_name') or tx.get('regionName')),
+                'canReview': status_value == 'FORWARDED',
+                'diff': tx,
+            })
+
+        # Source 2: municipal fund distribution
+        fund_docs = db.collection('municipal_fund_distribution').limit(5000).stream()
+        for fund_doc in fund_docs:
+            fund = fund_doc.to_dict() or {}
+
+            fund_muni = str(fund.get('target_municipality') or '').strip().lower()
+            fund_region = get_firestore_region_name(fund.get('region') or fund.get('region_name') or fund.get('regionName'))
+            fund_region_norm = str(fund_region or '').strip().upper()
+            user_region_norm = str(user_region or '').strip().upper()
+
+            in_scope_by_muni = bool(municipality_set and fund_muni and fund_muni in municipality_set)
+            in_scope_by_region = bool(user_region_norm and fund_region_norm and fund_region_norm == user_region_norm)
+            if not (in_scope_by_muni or in_scope_by_region):
+                continue
+
+            status_value = str(fund.get('status') or '').strip().upper() or 'PENDING'
+            ts_value = fund.get('updated_at') or fund.get('created_at')
+            outcome_value = 'SUCCESS' if status_value in {'COMPLETED', 'APPROVED'} else ('FAIL' if status_value in {'FAILED', 'REJECTED', 'CANCELLED'} else 'WARN')
+
+            logs.append({
+                'id': fund_doc.id,
+                'ts': _normalize_ts_for_json(ts_value),
+                'user': fund.get('updated_by') or fund.get('initiated_by') or 'Regional Office',
+                'role': 'Regional',
+                'module': 'FUND_TRANSFER',
+                'action': status_value,
+                'target': fund.get('target_municipality') or 'Municipality',
+                'targetId': fund.get('reference') or fund_doc.id,
+                'device_type': '',
+                'ip': '',
+                'outcome': outcome_value,
+                'message': fund.get('description') or '',
+                'forwarded_message': '',
+                'forwarded_by': '',
+                'municipality': fund.get('target_municipality') or '',
+                'region': fund_region,
+                'canReview': False,
+                'diff': fund,
+            })
+
+        logs = [l for l in logs if l.get('ts')]
+        logs.sort(key=lambda x: x.get('ts') or '', reverse=True)
+
+        return jsonify({'success': True, 'logs': logs, 'region': user_region}), 200
+    except Exception as e:
+        print(f"[ERROR] Regional financial audit logs failed: {e}")
+        return jsonify({'success': False, 'error': str(e), 'logs': []}), 200
+
+
 @bp.route('/api/audit/forwarded-logs', methods=['GET'])
 @role_required('regional','regional_admin')
 def api_regional_forwarded_audit_logs():
