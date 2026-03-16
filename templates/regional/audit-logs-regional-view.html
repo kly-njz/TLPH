@@ -127,7 +127,7 @@
                 <div class="gov-card p-3 border-l-4 border-l-emerald-600 shadow-sm flex flex-col justify-between">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-emerald-800 m-0">Update Actions</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-emerald-800 m-0">Successful Actions</p>
                             <p class="text-2xl font-black text-emerald-700 leading-none mt-1 m-0" id="kpiUpdates">0</p>
                         </div>
                         <span class="material-icons-round text-emerald-200 text-[20px]">edit_note</span>
@@ -137,7 +137,7 @@
                 <div class="gov-card p-3 border-l-4 border-l-rose-600 shadow-sm flex flex-col justify-between">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-rose-800 m-0">Delete Actions</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-rose-800 m-0">Failed or Rejected</p>
                             <p class="text-2xl font-black text-rose-700 leading-none mt-1 m-0" id="kpiDeletes">0</p>
                         </div>
                         <span class="material-icons-round text-rose-200 text-[20px]">delete_sweep</span>
@@ -147,7 +147,7 @@
                 <div class="gov-card p-3 border-l-4 border-l-amber-500 shadow-sm flex flex-col justify-between">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-amber-800 m-0">System Access</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-amber-800 m-0">For Review</p>
                             <p class="text-2xl font-black text-amber-700 leading-none mt-1 m-0" id="kpiLogins">0</p>
                         </div>
                         <span class="material-icons-round text-amber-200 text-[20px]">login</span>
@@ -226,7 +226,7 @@
 
     <script type="module">
         import { auth, db } from '/static/js/firebase-config.js';
-        import { collection, getDocs, doc, getDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
         import { philippineLocations } from '/static/js/ph-locations.js';
 
@@ -235,6 +235,54 @@
         let userRegion = '';
         let userRegionName = '';
         let userProvinces = [];
+
+        function escHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function normalizeActionLabel(action) {
+            const v = String(action || '').trim().toUpperCase();
+            if (!v) return 'N/A';
+            if (v === 'FORWARDED') return 'FORWARDED';
+            if (v === 'APPROVED') return 'APPROVED';
+            if (v === 'REJECTED') return 'REJECTED';
+            return v;
+        }
+
+        async function submitForwardDecision(logId, decision) {
+            if (!logId) return;
+            const upperDecision = String(decision || '').toUpperCase();
+            if (!['APPROVED', 'REJECTED'].includes(upperDecision)) return;
+
+            const notePrompt = upperDecision === 'REJECTED'
+                ? 'Add rejection note (optional):'
+                : 'Add approval note (optional):';
+            const note = window.prompt(notePrompt, '') || '';
+
+            try {
+                const resp = await fetch(`/regional/api/audit/forwarded-logs/${encodeURIComponent(logId)}/decision`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ decision: upperDecision, note })
+                });
+                const payload = await resp.json();
+                if (!resp.ok || !payload.success) {
+                    alert(payload.error || `Failed to ${upperDecision.toLowerCase()} transaction.`);
+                    return;
+                }
+                alert(`Transaction ${upperDecision.toLowerCase()} successfully.`);
+                await loadLogs();
+            } catch (error) {
+                console.error('Decision update failed:', error);
+                alert('Failed to update forwarded status.');
+            }
+        }
 
         function getProperCaseProvinceName(uppercaseProvince) {
             const provinceKeys = Object.keys(philippineLocations);
@@ -261,25 +309,39 @@
 
         async function loadLogs() {
             try {
-                const uSnap = await getDocs(collection(db, 'users'));
-                const provSet = new Set();
-                
-                uSnap.forEach(doc => { 
-                    const userData = doc.data();
-                    const userProvince = (userData.province || '').toUpperCase();
-                    if (userProvinces.length === 0 || userProvinces.includes(userProvince)) {
-                        if (userProvince) provSet.add(userProvince);
-                    }
+                allLogs = [];
+
+                const apiResp = await fetch('/regional/api/audit/financial-logs', {
+                    method: 'GET',
+                    credentials: 'same-origin'
                 });
-                
+                const apiData = await apiResp.json();
+                const rows = Array.isArray(apiData.logs) ? apiData.logs : [];
+
+                rows.forEach(item => {
+                    const ts = item.ts ? new Date(item.ts) : null;
+                    const action = normalizeActionLabel(item.action || 'N/A');
+                    allLogs.push({
+                        id: item.id || '',
+                        timestamp: ts && !Number.isNaN(ts.getTime()) ? ts.toLocaleString() : 'N/A',
+                        actor: item.user || 'Unknown',
+                        mun: String(item.municipality || 'N/A').toUpperCase(),
+                        prov: String(item.region || 'N/A').toUpperCase(),
+                        action,
+                        outcome: String(item.outcome || '').toUpperCase(),
+                        detail: item.message || item.target || 'N/A',
+                        target: item.targetId || item.id || 'N/A',
+                        forwardedMessage: item.forwarded_message || '',
+                        module: item.module || 'N/A',
+                        canReview: Boolean(item.canReview)
+                    });
+                });
+
+                const provSet = new Set(allLogs.map(x => x.prov).filter(Boolean).filter(x => x !== 'N/A'));
                 const pFilter = document.getElementById("provinceFilter");
                 if (pFilter) {
                     pFilter.innerHTML = '<option value="all">All Provinces</option>';
-                    if (userProvinces.length > 0) {
-                        userProvinces.forEach(p => { pFilter.innerHTML += `<option value="${p}">${p}</option>`; });
-                    } else {
-                        Array.from(provSet).sort().forEach(p => { pFilter.innerHTML += `<option value="${p}">${p}</option>`; });
-                    }
+                    Array.from(provSet).sort().forEach(p => { pFilter.innerHTML += `<option value="${p}">${p}</option>`; });
                     pFilter.value = 'all';
                 }
 
@@ -287,27 +349,6 @@
                 document.getElementById("searchInput").value = '';
                 updateMunicipalityFilter('all');
 
-                const snap = await getDocs(query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc')));
-                allLogs = []; 
-                
-                snap.forEach(docSnap => {
-                    const d = docSnap.data();
-                    const logProvince = (d.province || 'N/A').toUpperCase();
-                    
-                    if (['user', 'municipal_admin', 'regional_admin'].includes(d.actorRole)) {
-                        if (userProvinces.length === 0 || userProvinces.includes(logProvince)) {
-                            allLogs.push({
-                                timestamp: d.timestamp ? d.timestamp.toDate().toLocaleString() : 'N/A',
-                                actor: d.actorName || d.actor || 'Unknown',
-                                mun: (d.municipality || 'N/A').toUpperCase(),
-                                prov: logProvince,
-                                action: d.action || 'N/A',
-                                detail: d.detail || d.description || 'N/A',
-                                target: d.targetId || d.target || 'N/A'
-                            });
-                        }
-                    }
-                });
                 render();
             } catch (e) { 
                 console.error('Error loading audit logs:', e); 
@@ -322,25 +363,17 @@
             mFilter.innerHTML = '<option value="all">All Municipalities</option>';
             
             if (selectedProvince === 'all') {
-                const allMunicipalities = new Set();
-                const provincesToShow = userProvinces.length > 0 ? userProvinces : Object.keys(philippineLocations);
-                provincesToShow.forEach(prov => {
-                    const properCaseProv = getProperCaseProvinceName(prov);
-                    const municipalities = philippineLocations[properCaseProv];
-                    if (municipalities) {
-                        municipalities.forEach(mun => allMunicipalities.add(mun.toUpperCase()));
-                    }
-                });
+                const allMunicipalities = new Set(allLogs.map(l => l.mun).filter(Boolean).filter(x => x !== 'N/A'));
                 Array.from(allMunicipalities).sort().forEach(m => { mFilter.innerHTML += `<option value="${m}">${m}</option>`; });
             } else {
-                const properCaseProv = getProperCaseProvinceName(selectedProvince);
-                const municipalities = philippineLocations[properCaseProv];
-                if (municipalities && municipalities.length > 0) {
-                    municipalities.sort().forEach(m => {
-                        const munUpper = m.toUpperCase();
-                        mFilter.innerHTML += `<option value="${munUpper}">${munUpper}</option>`;
-                    });
-                }
+                const byProvince = new Set(
+                    allLogs
+                        .filter(l => l.prov === selectedProvince)
+                        .map(l => l.mun)
+                        .filter(Boolean)
+                        .filter(x => x !== 'N/A')
+                );
+                Array.from(byProvince).sort().forEach(m => { mFilter.innerHTML += `<option value="${m}">${m}</option>`; });
             }
             if (currentSelection !== 'all') {
                 const options = Array.from(mFilter.options).map(opt => opt.value);
@@ -368,30 +401,76 @@
                 tbody.innerHTML = filtered.map(l => {
                     const act = l.action.toUpperCase();
                     const actionClass = act === 'DELETE' ? 'bg-rose-50 text-rose-700 border-rose-200' : 
-                                        act === 'UPDATE' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
+                                        act === 'UPDATE' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                        act === 'FORWARDED' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                        act === 'REJECTED' ? 'bg-rose-50 text-rose-700 border-rose-200' :
                                         'bg-emerald-50 text-emerald-700 border-emerald-200';
+                    const forwardedBlock = l.forwardedMessage
+                        ? `<div class="mt-1 rounded-sm border border-amber-200 bg-amber-50 px-1.5 py-1 text-[9px] text-amber-900"><span class="font-black uppercase tracking-wider text-[8px]">Forwarded Message:</span> ${escHtml(l.forwardedMessage)}</div>`
+                        : '';
+
+                    const decisionButtons = l.canReview
+                        ? `<div class="mt-1 flex gap-1">
+                              <button type="button" class="px-2 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-[8px] font-black uppercase tracking-wider js-forward-decision" data-id="${escHtml(l.id)}" data-decision="APPROVED">Approve</button>
+                              <button type="button" class="px-2 py-0.5 rounded border border-rose-200 bg-rose-50 text-rose-700 text-[8px] font-black uppercase tracking-wider js-forward-decision" data-id="${escHtml(l.id)}" data-decision="REJECTED">Reject</button>
+                           </div>`
+                        : '';
+
                     return `
                         <tr class="hover:bg-blue-50 transition-all">
-                            <td class="px-4 py-2 align-middle font-mono text-slate-500 text-[9px] border-r border-slate-100">${l.timestamp}</td>
-                            <td class="px-4 py-2 align-middle font-black text-blue-900 uppercase border-r border-slate-100">${l.actor}</td>
+                            <td class="px-4 py-2 align-middle font-mono text-slate-500 text-[9px] border-r border-slate-100">${escHtml(l.timestamp)}</td>
+                            <td class="px-4 py-2 align-middle font-black text-blue-900 uppercase border-r border-slate-100">${escHtml(l.actor)}</td>
                             <td class="px-4 py-2 align-middle border-r border-slate-100">
-                                <div class="font-bold text-slate-700 uppercase">${l.mun}</div>
-                                <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">${l.prov}</div>
+                                <div class="font-bold text-slate-700 uppercase">${escHtml(l.mun)}</div>
+                                <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">${escHtml(l.prov)}</div>
                             </td>
                             <td class="px-4 py-2 align-middle border-r border-slate-100">
-                                <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border ${actionClass}">${l.action}</span>
-                                <div class="text-[9px] text-slate-500 font-normal mt-0.5 max-w-[200px] truncate" title="${l.detail}">${l.detail}</div>
+                                <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border ${actionClass}">${escHtml(l.action)}</span>
+                                <div class="text-[9px] text-slate-500 font-normal mt-0.5 max-w-[260px]" title="${escHtml(l.detail)}">${escHtml(l.detail)}</div>
+                                ${forwardedBlock}
+                                ${decisionButtons}
                             </td>
-                            <td class="px-4 py-2 align-middle text-right font-black text-slate-900 font-mono text-[9px]">#${l.target}</td>
+                            <td class="px-4 py-2 align-middle text-right font-black text-slate-900 font-mono text-[9px]">#${escHtml(l.target)}</td>
                         </tr>
                     `;
                 }).join("");
+
+                tbody.querySelectorAll('.js-forward-decision').forEach(btn => {
+                    btn.addEventListener('click', async (event) => {
+                        const target = event.currentTarget;
+                        const logId = target.getAttribute('data-id');
+                        const decision = target.getAttribute('data-decision');
+                        await submitForwardDecision(logId, decision);
+                    });
+                });
             }
 
+            const successActions = new Set(['PAID', 'APPROVED', 'COMPLETED', 'SUCCESS']);
+            const failActions = new Set(['FAILED', 'REJECTED', 'CANCELLED', 'FAIL']);
+            const reviewActions = new Set(['FORWARDED', 'PENDING', 'WARN', 'REFUNDED']);
+
+            const successCount = filtered.filter(x => {
+                const action = String(x.action || '').toUpperCase();
+                const outcome = String(x.outcome || '').toUpperCase();
+                return outcome === 'SUCCESS' || successActions.has(action);
+            }).length;
+
+            const failCount = filtered.filter(x => {
+                const action = String(x.action || '').toUpperCase();
+                const outcome = String(x.outcome || '').toUpperCase();
+                return outcome === 'FAIL' || failActions.has(action);
+            }).length;
+
+            const reviewCount = filtered.filter(x => {
+                const action = String(x.action || '').toUpperCase();
+                const outcome = String(x.outcome || '').toUpperCase();
+                return outcome === 'WARN' || reviewActions.has(action);
+            }).length;
+
             document.getElementById("kpiTotal").textContent = filtered.length;
-            document.getElementById("kpiUpdates").textContent = filtered.filter(x => x.action.toUpperCase() === 'UPDATE').length;
-            document.getElementById("kpiDeletes").textContent = filtered.filter(x => x.action.toUpperCase() === 'DELETE').length;
-            document.getElementById("kpiLogins").textContent = filtered.filter(x => x.action.toUpperCase() === 'LOGIN').length;
+            document.getElementById("kpiUpdates").textContent = successCount;
+            document.getElementById("kpiDeletes").textContent = failCount;
+            document.getElementById("kpiLogins").textContent = reviewCount;
 
             updateCharts(filtered);
         }
