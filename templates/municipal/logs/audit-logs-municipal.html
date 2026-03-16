@@ -599,6 +599,32 @@
   </div>
 
   <script>
+    function showAuditNotification(message, type = 'info') {
+      const stackId = 'auditToastStack';
+      let stack = document.getElementById(stackId);
+      if (!stack) {
+        stack = document.createElement('div');
+        stack.id = stackId;
+        stack.className = 'fixed top-3 right-3 z-[5000] flex flex-col gap-2 pointer-events-none';
+        document.body.appendChild(stack);
+      }
+
+      const tone = type === 'success'
+        ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+        : type === 'error'
+          ? 'border-rose-300 bg-rose-50 text-rose-900'
+          : 'border-blue-300 bg-blue-50 text-blue-900';
+
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto min-w-[220px] max-w-[360px] border ${tone} shadow-sm rounded-[2px] px-3 py-2 text-[10px] font-bold uppercase tracking-wider`;
+      toast.textContent = String(message || 'Notification');
+      stack.appendChild(toast);
+
+      setTimeout(() => {
+        toast.remove();
+      }, 2800);
+    }
+
     function auditLogsPage(){
       return {
         // ui state
@@ -866,13 +892,13 @@
               // Reapply filters to update the display
               this.applyFilters();
               this.statusModalOpen = false;
-              alert('Status updated successfully!');
+              showAuditNotification(`Status updated to ${statusValue}.`, 'success');
             } else {
-              alert('Failed to update status: ' + (result.error || 'Unknown error'));
+              showAuditNotification('Failed to update status: ' + (result.error || 'Unknown error'), 'error');
             }
           } catch (error) {
             console.error('Error updating status:', error);
-            alert('Error updating status. Please try again.');
+            showAuditNotification('Unable to update status right now. Please try again.', 'error');
           }
         },
 
@@ -926,9 +952,9 @@
           };
           try{
             await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-            alert('Copied.');
+            showAuditNotification('Audit event copied to clipboard.', 'success');
           }catch(e){
-            alert('Copy failed in this browser context.');
+            showAuditNotification('Copy failed in this browser context.', 'error');
           }
         },
 
@@ -940,7 +966,7 @@
             this.logs = data.logs || [];
             console.log('[AUDIT LOGS] Loaded logs:', this.logs);
           } catch (e) {
-            alert('Failed to load financial logs.');
+            showAuditNotification('Failed to load financial logs.', 'error');
             this.logs = [];
           }
           this.applyFilters();
@@ -983,13 +1009,13 @@
 
         const val = Number(retentionDaysInput.value);
         if (!Number.isFinite(val) || val < 30) {
-          alert('Retention must be at least 30 days.');
+          showAuditNotification('Retention must be at least 30 days.', 'error');
           return;
         }
 
         retentionDays = Math.round(val);
         retentionDaysLabel.textContent = `${retentionDays} days`;
-        alert('Retention policy updated (UI only).');
+        showAuditNotification(`Retention policy set to ${retentionDays} days (UI only).`, 'success');
         closeRetentionModal();
       }
 
