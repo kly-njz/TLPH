@@ -52,8 +52,13 @@
             {{ user_region|default('Region Assigned') }}
           </span>
 
+          <span id="cleanupStatus" class="hidden sm:inline text-[9px] font-bold uppercase tracking-widest text-slate-500"></span>
+
           <button onclick="resetAll()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1 shadow-sm">
             <span class="material-icons-round text-[14px]">refresh</span> Reset
+          </button>
+          <button id="cleanupBtn" onclick="runCleanup()" class="gov-btn border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 flex items-center gap-1 shadow-sm">
+            <span class="material-icons-round text-[14px]">cleaning_services</span> Cleanup
           </button>
           <button onclick="exportLogs()" class="gov-btn bg-slate-800 hover:bg-slate-900 text-white flex items-center gap-1 shadow-sm">
             <span class="material-icons-round text-[14px]">file_download</span> Export CSV
@@ -410,6 +415,51 @@
     }
 
     function resetAll(){ clearFilters(); }
+
+    async function runCleanup(){
+      const confirmed = window.confirm('Run manual cleanup for expired system logs?');
+      if (!confirmed) return;
+
+      const cleanupBtn = document.getElementById('cleanupBtn');
+      const cleanupStatus = document.getElementById('cleanupStatus');
+      const originalHtml = cleanupBtn ? cleanupBtn.innerHTML : '';
+
+      try {
+        if (cleanupBtn) {
+          cleanupBtn.disabled = true;
+          cleanupBtn.classList.add('opacity-60', 'cursor-not-allowed');
+          cleanupBtn.innerHTML = '<span class="material-icons-round text-[14px]">hourglass_top</span> Cleaning';
+        }
+        if (cleanupStatus) cleanupStatus.textContent = 'Running cleanup...';
+
+        const resp = await fetch('/regional/api/system-logs/cleanup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ batch_size: 200, rounds: 3 })
+        });
+
+        const payload = await resp.json();
+        if (!resp.ok || !payload.success) {
+          throw new Error(payload.error || 'Cleanup request failed');
+        }
+
+        if (cleanupStatus) cleanupStatus.textContent = `Cleanup done: ${payload.deleted || 0} deleted`;
+
+        await loadLiveSystemLogs();
+        applyFilters();
+      } catch (error) {
+        console.error('Manual cleanup failed:', error);
+        if (cleanupStatus) cleanupStatus.textContent = 'Cleanup failed';
+        alert('Cleanup failed: ' + (error?.message || 'Unknown error'));
+      } finally {
+        if (cleanupBtn) {
+          cleanupBtn.disabled = false;
+          cleanupBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+          cleanupBtn.innerHTML = originalHtml;
+        }
+      }
+    }
 
     function exportLogs(){
       const rows = Array.from(document.querySelectorAll('#systemBody tr'));
