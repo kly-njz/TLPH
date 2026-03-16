@@ -54,7 +54,7 @@
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+                    <button id="exportRosterBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
                         <span class="material-icons-round text-[14px]">file_download</span> Export Roster
                     </button>
                     <button id="registerApplicantBtn" type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
@@ -339,6 +339,57 @@
         document.getElementById('liveSearchInput').addEventListener('input', runFilters);
         document.getElementById('regionLiveFilter').addEventListener('change', runFilters);
         document.getElementById('statusLiveFilter').addEventListener('change', runFilters);
+
+        // --- EXPORT ROSTER ---
+        function exportRoster() {
+            const rows = Array.from(document.querySelectorAll('.app-row'))
+                .filter(row => row.style.display !== 'none');
+
+            if (rows.length === 0) {
+                alert('No records to export based on current filters.');
+                return;
+            }
+
+            const headers = [
+                'Applicant Name',
+                'Reference No',
+                'Region',
+                'Status',
+                'Date Logged'
+            ];
+
+            const escapeCsv = (value) => {
+                const safe = `${value ?? ''}`.replace(/"/g, '""');
+                return `"${safe}"`;
+            };
+
+            const lines = [headers.map(escapeCsv).join(',')];
+
+            rows.forEach(row => {
+                const name = row.querySelector('td:nth-child(1) div')?.innerText || '';
+                const ref = row.querySelector('td:nth-child(1) .font-mono')?.innerText.replace('Ref:', '').trim() || '';
+                const region = row.querySelector('td:nth-child(2)')?.innerText || '';
+                const status = row.querySelector('td:nth-child(3) span')?.innerText || '';
+                const dateLogged = row.querySelector('td:nth-child(4)')?.innerText || '';
+                const data = [name, ref, region, status, dateLogged];
+                lines.push(data.map(escapeCsv).join(','));
+            });
+
+            const csvContent = lines.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const dateStamp = new Date().toISOString().slice(0, 10);
+
+            link.href = url;
+            link.download = `applicant-roster-${dateStamp}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('exportRosterBtn').addEventListener('click', exportRoster);
 
         // --- REGISTER APPLICANT MODAL ---
         const registerModal = document.getElementById('registerModal');
