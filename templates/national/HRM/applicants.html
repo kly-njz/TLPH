@@ -274,6 +274,40 @@
         </div>
     </div>
 
+    <div id="profileModal" class="fixed inset-0 z-[125] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-[2px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-400">
+            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Applicant Profile</h3>
+                <button type="button" id="closeProfileBtn" class="text-slate-400 hover:text-white">
+                    <span class="material-icons-round text-[16px]">close</span>
+                </button>
+            </div>
+            <div class="p-4 bg-slate-50 text-[10px]">
+                <div class="border-b border-slate-200 pb-3 mb-3">
+                    <div id="profileName" class="text-[12px] font-black text-slate-900 uppercase leading-tight"></div>
+                    <div id="profileRef" class="text-[9px] text-slate-500 font-mono"></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <div class="gov-label">Region</div>
+                        <div id="profileRegion" class="font-bold text-slate-700"></div>
+                    </div>
+                    <div>
+                        <div class="gov-label">Status</div>
+                        <div id="profileStatus" class="font-bold text-slate-700"></div>
+                    </div>
+                    <div>
+                        <div class="gov-label">Date Logged</div>
+                        <div id="profileDate" class="font-mono font-bold text-slate-700"></div>
+                    </div>
+                </div>
+                <div class="pt-3 border-t border-slate-200 mt-3 flex justify-end gap-2">
+                    <button type="button" id="closeProfileBtnFooter" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 shadow-sm">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // --- CHARTS CONFIG ---
         Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -469,6 +503,67 @@
             registerForm.reset();
             closeRegisterModal();
             runFilters();
+        });
+
+        // --- ROW ACTIONS: PROFILE / CLEAR / DENY ---
+        const profileModal = document.getElementById('profileModal');
+
+        function openProfileModal(data) {
+            document.getElementById('profileName').innerText = data.name || 'N/A';
+            document.getElementById('profileRef').innerText = data.ref ? `Ref: ${data.ref}` : 'Ref: N/A';
+            document.getElementById('profileRegion').innerText = data.region || 'N/A';
+            document.getElementById('profileStatus').innerText = data.status || 'N/A';
+            document.getElementById('profileDate').innerText = data.dateLogged || 'N/A';
+            profileModal.classList.remove('hidden');
+            profileModal.classList.add('flex');
+        }
+
+        function closeProfileModal() {
+            profileModal.classList.add('hidden');
+            profileModal.classList.remove('flex');
+        }
+
+        function getRowData(row) {
+            const name = row.querySelector('td:nth-child(1) div')?.innerText || '';
+            const ref = row.querySelector('td:nth-child(1) .font-mono')?.innerText.replace('Ref:', '').trim() || '';
+            const region = row.querySelector('td:nth-child(2)')?.innerText || '';
+            const status = row.querySelector('td:nth-child(3) span')?.innerText || '';
+            const dateLogged = row.querySelector('td:nth-child(4)')?.innerText || '';
+            return { name, ref, region, status, dateLogged };
+        }
+
+        function setRowStatus(row, status) {
+            const badge = row.querySelector('td:nth-child(3) span');
+            if (!badge) return;
+            badge.innerText = status;
+            badge.className = `inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${statusBadgeClass(status)}`;
+        }
+
+        document.getElementById('closeProfileBtn').addEventListener('click', closeProfileModal);
+        document.getElementById('closeProfileBtnFooter').addEventListener('click', closeProfileModal);
+
+        profileModal.addEventListener('click', (event) => {
+            if (event.target === profileModal) {
+                closeProfileModal();
+            }
+        });
+
+        document.getElementById('tbody').addEventListener('click', (event) => {
+            const button = event.target.closest('button');
+            if (!button) return;
+            const row = button.closest('tr');
+            if (!row) return;
+
+            const action = (button.innerText || '').trim().toLowerCase();
+            if (action === 'profile') {
+                openProfileModal(getRowData(row));
+            } else if (action === 'clear') {
+                setRowStatus(row, 'Approved');
+                runFilters();
+            } else if (action === 'deny') {
+                setRowStatus(row, 'Rejected');
+                runFilters();
+            }
         });
     </script>
 </body>
