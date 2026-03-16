@@ -127,7 +127,7 @@
                 <div class="gov-card p-3 border-l-4 border-l-emerald-600 shadow-sm flex flex-col justify-between">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-emerald-800 m-0">Update Actions</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-emerald-800 m-0">Successful Actions</p>
                             <p class="text-2xl font-black text-emerald-700 leading-none mt-1 m-0" id="kpiUpdates">0</p>
                         </div>
                         <span class="material-icons-round text-emerald-200 text-[20px]">edit_note</span>
@@ -137,7 +137,7 @@
                 <div class="gov-card p-3 border-l-4 border-l-rose-600 shadow-sm flex flex-col justify-between">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-rose-800 m-0">Delete Actions</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-rose-800 m-0">Failed or Rejected</p>
                             <p class="text-2xl font-black text-rose-700 leading-none mt-1 m-0" id="kpiDeletes">0</p>
                         </div>
                         <span class="material-icons-round text-rose-200 text-[20px]">delete_sweep</span>
@@ -147,7 +147,7 @@
                 <div class="gov-card p-3 border-l-4 border-l-amber-500 shadow-sm flex flex-col justify-between">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-amber-800 m-0">System Access</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-amber-800 m-0">For Review</p>
                             <p class="text-2xl font-black text-amber-700 leading-none mt-1 m-0" id="kpiLogins">0</p>
                         </div>
                         <span class="material-icons-round text-amber-200 text-[20px]">login</span>
@@ -328,6 +328,7 @@
                         mun: String(item.municipality || 'N/A').toUpperCase(),
                         prov: String(item.region || 'N/A').toUpperCase(),
                         action,
+                        outcome: String(item.outcome || '').toUpperCase(),
                         detail: item.message || item.target || 'N/A',
                         target: item.targetId || item.id || 'N/A',
                         forwardedMessage: item.forwarded_message || '',
@@ -444,10 +445,32 @@
                 });
             }
 
+            const successActions = new Set(['PAID', 'APPROVED', 'COMPLETED', 'SUCCESS']);
+            const failActions = new Set(['FAILED', 'REJECTED', 'CANCELLED', 'FAIL']);
+            const reviewActions = new Set(['FORWARDED', 'PENDING', 'WARN', 'REFUNDED']);
+
+            const successCount = filtered.filter(x => {
+                const action = String(x.action || '').toUpperCase();
+                const outcome = String(x.outcome || '').toUpperCase();
+                return outcome === 'SUCCESS' || successActions.has(action);
+            }).length;
+
+            const failCount = filtered.filter(x => {
+                const action = String(x.action || '').toUpperCase();
+                const outcome = String(x.outcome || '').toUpperCase();
+                return outcome === 'FAIL' || failActions.has(action);
+            }).length;
+
+            const reviewCount = filtered.filter(x => {
+                const action = String(x.action || '').toUpperCase();
+                const outcome = String(x.outcome || '').toUpperCase();
+                return outcome === 'WARN' || reviewActions.has(action);
+            }).length;
+
             document.getElementById("kpiTotal").textContent = filtered.length;
-            document.getElementById("kpiUpdates").textContent = filtered.filter(x => x.action.toUpperCase() === 'UPDATE').length;
-            document.getElementById("kpiDeletes").textContent = filtered.filter(x => x.action.toUpperCase() === 'DELETE').length;
-            document.getElementById("kpiLogins").textContent = filtered.filter(x => x.action.toUpperCase() === 'LOGIN').length;
+            document.getElementById("kpiUpdates").textContent = successCount;
+            document.getElementById("kpiDeletes").textContent = failCount;
+            document.getElementById("kpiLogins").textContent = reviewCount;
 
             updateCharts(filtered);
         }
