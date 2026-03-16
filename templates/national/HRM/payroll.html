@@ -8,6 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
 
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
   <style>
@@ -53,7 +54,7 @@
             </div>
           </div>
           <div class="flex gap-2">
-            <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+            <button onclick="openBatchPayslips()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
               <span class="material-icons-round text-[14px]">picture_as_pdf</span> Payslip Batch
             </button>
             <button @click="payrollModalOpen = true" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
@@ -85,7 +86,8 @@
           
           <div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-2 shrink-0">
             <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
-                <span class="material-icons-round text-[14px]">receipt_long</span> Compensation Ledger (Feb 01-15)
+                <span class="material-icons-round text-[14px]">receipt_long</span>
+                <span id="payrollPeriodLabel">Compensation Ledger (Feb 01-15)</span>
             </h2>
 
             <div class="flex flex-wrap gap-1.5 items-center">
@@ -272,6 +274,118 @@
         document.getElementById('searchPayroll').value = '';
         document.getElementById('officeFilter').value = '';
         filterTable();
+    }
+
+    function openBatchPayslips() {
+      const rows = Array.from(document.querySelectorAll('.payroll-row'))
+        .filter(row => row.offsetParent !== null);
+
+      if (rows.length === 0) {
+        alert('No visible payroll rows to generate payslips.');
+        return;
+      }
+
+      const records = rows.map(row => {
+        const cells = row.querySelectorAll('td');
+        const name = cells[0]?.querySelector('span')?.innerText?.trim() || 'Unknown Employee';
+        const position = cells[0]?.querySelectorAll('span')[1]?.innerText?.trim() || '';
+        const basic = cells[1]?.innerText?.trim() || '0.00';
+        const pera = cells[2]?.innerText?.trim() || '0.00';
+        const gross = cells[3]?.innerText?.trim() || '0.00';
+        const tax = cells[4]?.innerText?.trim() || '0.00';
+        const loans = cells[5]?.innerText?.trim() || '0.00';
+        const net = cells[6]?.innerText?.trim() || '0.00';
+
+        return { name, position, basic, pera, gross, tax, loans, net };
+      });
+
+      const periodText = document.getElementById('payrollPeriodLabel')?.innerText?.replace('Compensation Ledger', '').trim() || 'Current Period';
+
+      const jspdfLib = window.jspdf;
+      if (!jspdfLib || !jspdfLib.jsPDF) {
+        alert('PDF library failed to load. Please refresh the page and try again.');
+        return;
+      }
+
+      const { jsPDF } = jspdfLib;
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 36;
+      let cursorY = margin;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('Payroll Payslip Batch', margin, cursorY);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(periodText, margin, cursorY + 14);
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth - margin, cursorY + 14, { align: 'right' });
+
+      cursorY += 32;
+      const cardHeight = 110;
+      const cardGap = 12;
+      const cardWidth = (pageWidth - margin * 2 - cardGap) / 2;
+
+      records.forEach((r, idx) => {
+        const col = idx % 2;
+        const row = Math.floor(idx / 2);
+        const x = margin + col * (cardWidth + cardGap);
+        const y = cursorY + row * (cardHeight + cardGap);
+
+        if (y + cardHeight > pageHeight - margin) {
+          doc.addPage();
+          cursorY = margin;
+        }
+
+        const boxY = cursorY + row * (cardHeight + cardGap);
+        doc.setDrawColor(203, 213, 225);
+        doc.setFillColor(248, 250, 252);
+        doc.rect(x, boxY, cardWidth, cardHeight, 'FD');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text(r.name.toUpperCase(), x + 10, boxY + 16, { maxWidth: cardWidth - 20 });
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(r.position.toUpperCase(), x + 10, boxY + 28, { maxWidth: cardWidth - 20 });
+
+        const labelX = x + 10;
+        const valueX = x + cardWidth - 10;
+        let lineY = boxY + 46;
+        const lineGap = 12;
+
+        const line = (label, value) => {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.text(label, labelX, lineY);
+          doc.setFont('helvetica', 'bold');
+          doc.text(value, valueX, lineY, { align: 'right' });
+          lineY += lineGap;
+        };
+
+        line('Basic Pay', r.basic);
+        line('PERA', r.pera);
+        line('Gross Pay', r.gross);
+        line('GSIS/Tax', r.tax);
+        line('Loans', r.loans);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Net Pay', labelX, lineY);
+        doc.text(r.net, valueX, lineY, { align: 'right' });
+      });
+
+      const fileName = `payslip-batch-${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const printWin = window.open(pdfUrl, '_blank');
+      if (printWin) {
+        printWin.addEventListener('load', () => {
+          printWin.focus();
+          printWin.print();
+        });
+      }
     }
   </script>
 </body>
