@@ -109,6 +109,10 @@ def _transaction_in_regional_scope(tx_data, user_region, municipality_set):
     tx_region_norm = str(tx_region or '').strip().upper()
     user_region_norm = str(user_region or '').strip().upper()
 
+    # If regional scope cannot be resolved, avoid hard-failing to empty results.
+    if not user_region_norm and not municipality_set:
+        return True
+
     in_scope_by_municipality = bool(municipality_set and tx_municipality and tx_municipality in municipality_set)
     in_scope_by_region = bool(user_region_norm and tx_region_norm and tx_region_norm == user_region_norm)
 
@@ -234,12 +238,56 @@ def api_regional_financial_audit_logs():
 
         logs = []
 
+        # Build fallback user scope using users in this regional coverage.
+        scoped_emails = set()
+        scoped_user_ids = set()
+        try:
+            users_docs = db.collection('users').limit(5000).stream()
+            user_region_norm = str(user_region or '').strip().upper()
+            for user_doc in users_docs:
+                ud = user_doc.to_dict() or {}
+                u_email = str(ud.get('email') or '').strip().lower()
+                u_muni = str(ud.get('municipality') or ud.get('municipality_name') or '').strip().lower()
+                u_region = get_firestore_region_name(ud.get('region') or ud.get('region_name') or ud.get('regionName'))
+                u_region_norm = str(u_region or '').strip().upper()
+
+                in_scope_by_muni = bool(municipality_set and u_muni and u_muni in municipality_set)
+                in_scope_by_region = bool(user_region_norm and u_region_norm and u_region_norm == user_region_norm)
+                in_scope = in_scope_by_muni or in_scope_by_region or (not user_region_norm and not municipality_set)
+                if not in_scope:
+                    continue
+
+                if u_email:
+                    scoped_emails.add(u_email)
+
+                scoped_user_ids.add(str(user_doc.id).strip())
+                for pid in (ud.get('uid'), ud.get('user_id'), ud.get('userId'), ud.get('id')):
+                    if pid:
+                        scoped_user_ids.add(str(pid).strip())
+        except Exception as e:
+            print(f"[WARN] Failed building fallback regional user scope: {e}")
+
         # Source 1: transactions
         tx_docs = db.collection('transactions').limit(5000).stream()
         for tx_doc in tx_docs:
             tx = tx_doc.to_dict() or {}
 
-            if not _transaction_in_regional_scope(tx, user_region, municipality_set):
+            tx_email = str(
+                tx.get('user_email')
+                or tx.get('userEmail')
+                or tx.get('email')
+                or tx.get('payer_email')
+                or tx.get('payerEmail')
+                or tx.get('customer_email')
+                or tx.get('customerEmail')
+                or ''
+            ).strip().lower()
+            tx_user_id = str(tx.get('userId') or tx.get('user_id') or tx.get('uid') or '').strip()
+
+            in_scope_by_fields = _transaction_in_regional_scope(tx, user_region, municipality_set)
+            in_scope_by_user = bool((tx_email and tx_email in scoped_emails) or (tx_user_id and tx_user_id in scoped_user_ids))
+
+            if not (in_scope_by_fields or in_scope_by_user):
                 continue
 
             status_value = str(tx.get('status') or '').strip().upper() or 'PENDING'
@@ -285,7 +333,7 @@ def api_regional_financial_audit_logs():
 
             in_scope_by_muni = bool(municipality_set and fund_muni and fund_muni in municipality_set)
             in_scope_by_region = bool(user_region_norm and fund_region_norm and fund_region_norm == user_region_norm)
-            if not (in_scope_by_muni or in_scope_by_region):
+            if not (in_scope_by_muni or in_scope_by_region or (not user_region_norm and not municipality_set)):
                 continue
 
             status_value = str(fund.get('status') or '').strip().upper() or 'PENDING'
@@ -313,8 +361,10 @@ def api_regional_financial_audit_logs():
                 'diff': fund,
             })
 
-        logs = [l for l in logs if l.get('ts')]
+        # Keep entries even if timestamp is missing; frontend handles N/A.
         logs.sort(key=lambda x: x.get('ts') or '', reverse=True)
+
+        print(f"[DEBUG] Regional financial audit logs -> region={user_region}, municipalities={len(municipality_set)}, scoped_users={len(scoped_emails)}, returned={len(logs)}")
 
         return jsonify({'success': True, 'logs': logs, 'region': user_region}), 200
     except Exception as e:
