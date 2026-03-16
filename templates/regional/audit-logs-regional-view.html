@@ -226,7 +226,7 @@
 
     <script type="module">
         import { auth, db } from '/static/js/firebase-config.js';
-        import { collection, getDocs, doc, getDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
         import { philippineLocations } from '/static/js/ph-locations.js';
 
@@ -309,82 +309,44 @@
 
         async function loadLogs() {
             try {
-                const uSnap = await getDocs(collection(db, 'users'));
-                const provSet = new Set();
-                
-                uSnap.forEach(doc => { 
-                    const userData = doc.data();
-                    const userProvince = (userData.province || '').toUpperCase();
-                    if (userProvinces.length === 0 || userProvinces.includes(userProvince)) {
-                        if (userProvince) provSet.add(userProvince);
-                    }
+                allLogs = [];
+
+                const apiResp = await fetch('/regional/api/audit/financial-logs', {
+                    method: 'GET',
+                    credentials: 'same-origin'
                 });
-                
+                const apiData = await apiResp.json();
+                const rows = Array.isArray(apiData.logs) ? apiData.logs : [];
+
+                rows.forEach(item => {
+                    const ts = item.ts ? new Date(item.ts) : null;
+                    const action = normalizeActionLabel(item.action || 'N/A');
+                    allLogs.push({
+                        id: item.id || '',
+                        timestamp: ts && !Number.isNaN(ts.getTime()) ? ts.toLocaleString() : 'N/A',
+                        actor: item.user || 'Unknown',
+                        mun: String(item.municipality || 'N/A').toUpperCase(),
+                        prov: String(item.region || 'N/A').toUpperCase(),
+                        action,
+                        detail: item.message || item.target || 'N/A',
+                        target: item.targetId || item.id || 'N/A',
+                        forwardedMessage: item.forwarded_message || '',
+                        module: item.module || 'N/A',
+                        canReview: Boolean(item.canReview)
+                    });
+                });
+
+                const provSet = new Set(allLogs.map(x => x.prov).filter(Boolean).filter(x => x !== 'N/A'));
                 const pFilter = document.getElementById("provinceFilter");
                 if (pFilter) {
                     pFilter.innerHTML = '<option value="all">All Provinces</option>';
-                    if (userProvinces.length > 0) {
-                        userProvinces.forEach(p => { pFilter.innerHTML += `<option value="${p}">${p}</option>`; });
-                    } else {
-                        Array.from(provSet).sort().forEach(p => { pFilter.innerHTML += `<option value="${p}">${p}</option>`; });
-                    }
+                    Array.from(provSet).sort().forEach(p => { pFilter.innerHTML += `<option value="${p}">${p}</option>`; });
                     pFilter.value = 'all';
                 }
 
                 document.getElementById("municipalityFilter").value = 'all';
                 document.getElementById("searchInput").value = '';
                 updateMunicipalityFilter('all');
-
-                const snap = await getDocs(query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc')));
-                allLogs = []; 
-                
-                snap.forEach(docSnap => {
-                    const d = docSnap.data();
-                    const logProvince = (d.province || 'N/A').toUpperCase();
-                    
-                    if (['user', 'municipal_admin', 'regional_admin'].includes(d.actorRole)) {
-                        if (userProvinces.length === 0 || userProvinces.includes(logProvince)) {
-                            allLogs.push({
-                                timestamp: d.timestamp ? d.timestamp.toDate().toLocaleString() : 'N/A',
-                                actor: d.actorName || d.actor || 'Unknown',
-                                mun: (d.municipality || 'N/A').toUpperCase(),
-                                prov: logProvince,
-                                action: d.action || 'N/A',
-                                detail: d.detail || d.description || 'N/A',
-                                target: d.targetId || d.target || 'N/A'
-                            });
-                        }
-                    }
-                });
-
-                try {
-                    const fResp = await fetch('/regional/api/audit/forwarded-logs', {
-                        method: 'GET',
-                        credentials: 'same-origin'
-                    });
-                    const fData = await fResp.json();
-                    const forwarded = Array.isArray(fData.logs) ? fData.logs : [];
-
-                    forwarded.forEach(item => {
-                        const action = normalizeActionLabel(item.action || 'FORWARDED');
-                        const ts = item.ts ? new Date(item.ts) : null;
-                        allLogs.push({
-                            id: item.id || '',
-                            timestamp: ts && !Number.isNaN(ts.getTime()) ? ts.toLocaleString() : 'N/A',
-                            actor: item.forwarded_by || item.user || 'Municipal Admin',
-                            mun: (item.municipality || 'N/A').toUpperCase(),
-                            prov: (item.region || 'N/A').toUpperCase(),
-                            action,
-                            detail: item.message || 'Municipal transaction forwarded for regional review.',
-                            target: item.targetId || item.id || 'N/A',
-                            forwardedMessage: item.forwarded_message || '',
-                            module: item.module || 'PAYMENTS',
-                            canReview: action === 'FORWARDED'
-                        });
-                    });
-                } catch (forwardedError) {
-                    console.error('Error loading forwarded logs:', forwardedError);
-                }
 
                 render();
             } catch (e) { 
@@ -400,25 +362,17 @@
             mFilter.innerHTML = '<option value="all">All Municipalities</option>';
             
             if (selectedProvince === 'all') {
-                const allMunicipalities = new Set();
-                const provincesToShow = userProvinces.length > 0 ? userProvinces : Object.keys(philippineLocations);
-                provincesToShow.forEach(prov => {
-                    const properCaseProv = getProperCaseProvinceName(prov);
-                    const municipalities = philippineLocations[properCaseProv];
-                    if (municipalities) {
-                        municipalities.forEach(mun => allMunicipalities.add(mun.toUpperCase()));
-                    }
-                });
+                const allMunicipalities = new Set(allLogs.map(l => l.mun).filter(Boolean).filter(x => x !== 'N/A'));
                 Array.from(allMunicipalities).sort().forEach(m => { mFilter.innerHTML += `<option value="${m}">${m}</option>`; });
             } else {
-                const properCaseProv = getProperCaseProvinceName(selectedProvince);
-                const municipalities = philippineLocations[properCaseProv];
-                if (municipalities && municipalities.length > 0) {
-                    municipalities.sort().forEach(m => {
-                        const munUpper = m.toUpperCase();
-                        mFilter.innerHTML += `<option value="${munUpper}">${munUpper}</option>`;
-                    });
-                }
+                const byProvince = new Set(
+                    allLogs
+                        .filter(l => l.prov === selectedProvince)
+                        .map(l => l.mun)
+                        .filter(Boolean)
+                        .filter(x => x !== 'N/A')
+                );
+                Array.from(byProvince).sort().forEach(m => { mFilter.innerHTML += `<option value="${m}">${m}</option>`; });
             }
             if (currentSelection !== 'all') {
                 const options = Array.from(mFilter.options).map(opt => opt.value);
