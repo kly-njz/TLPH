@@ -368,11 +368,46 @@ def api_regional_financial_audit_logs():
             for audit_doc in audit_docs:
                 entry = audit_doc.to_dict() or {}
                 actor_role = str(entry.get('actorRole') or '').strip().lower()
-                action_value = str(entry.get('action') or '').strip().upper()
-
-                if actor_role not in {'municipal_admin', 'municipal'}:
+                action_raw = str(entry.get('action') or entry.get('event') or entry.get('type') or '').strip().upper()
+                if not action_raw:
                     continue
+
+                # Normalize variants like USER_LOGIN, SIGNIN, LOG_IN, etc.
+                if 'LOGIN' in action_raw or 'SIGNIN' in action_raw or action_raw in {'LOG_IN'}:
+                    action_value = 'LOGIN'
+                elif 'LOGOUT' in action_raw or 'SIGNOUT' in action_raw or action_raw in {'LOG_OUT'}:
+                    action_value = 'LOGOUT'
+                elif 'APPROV' in action_raw:
+                    action_value = 'APPROVED'
+                elif 'REJECT' in action_raw or 'DENY' in action_raw:
+                    action_value = 'REJECTED'
+                else:
+                    action_value = action_raw
+
                 if action_value not in tracked_actions:
+                    continue
+
+                actor_email = str(
+                    entry.get('actorEmail')
+                    or entry.get('user_email')
+                    or entry.get('email')
+                    or entry.get('user')
+                    or ''
+                ).strip().lower()
+                actor_id = str(
+                    entry.get('actorId')
+                    or entry.get('userId')
+                    or entry.get('uid')
+                    or entry.get('user_id')
+                    or ''
+                ).strip()
+
+                is_municipal_actor = actor_role in {'municipal_admin', 'municipal'}
+                in_scope_by_actor = bool(
+                    (actor_email and actor_email in scoped_emails)
+                    or (actor_id and actor_id in scoped_user_ids)
+                )
+                if not (is_municipal_actor or in_scope_by_actor):
                     continue
 
                 entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip().lower()
@@ -384,7 +419,7 @@ def api_regional_financial_audit_logs():
 
                 in_scope_by_muni = bool(municipality_set and entry_muni and entry_muni in municipality_set)
                 in_scope_by_region = bool(user_region_norm and entry_region_norm and entry_region_norm == user_region_norm)
-                if not (in_scope_by_muni or in_scope_by_region or (not user_region_norm and not municipality_set)):
+                if not (in_scope_by_muni or in_scope_by_region or in_scope_by_actor or (not user_region_norm and not municipality_set)):
                     continue
 
                 ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
