@@ -463,7 +463,65 @@ def api_regional_forwarded_audit_decision(log_id):
             return jsonify({'success': False, 'error': 'Transaction not found'}), 404
 
         tx_data = tx_doc.to_dict() or {}
-        if not _transaction_in_regional_scope(tx_data, user_region, municipality_set):
+
+        # Robust scope validation: do not rely on municipality/region fields alone.
+        in_scope_by_fields = _transaction_in_regional_scope(tx_data, user_region, municipality_set)
+
+        tx_forwarded_region = get_firestore_region_name(
+            tx_data.get('forwarded_region') or tx_data.get('forwardedRegion')
+        )
+        tx_forwarded_region_norm = str(tx_forwarded_region or '').strip().upper()
+        user_region_norm = str(user_region or '').strip().upper()
+        in_scope_by_forwarded_region = bool(user_region_norm and tx_forwarded_region_norm and tx_forwarded_region_norm == user_region_norm)
+
+        tx_email = str(
+            tx_data.get('user_email')
+            or tx_data.get('userEmail')
+            or tx_data.get('email')
+            or tx_data.get('payer_email')
+            or tx_data.get('payerEmail')
+            or tx_data.get('customer_email')
+            or tx_data.get('customerEmail')
+            or ''
+        ).strip().lower()
+        tx_user_id = str(tx_data.get('userId') or tx_data.get('user_id') or tx_data.get('uid') or '').strip()
+
+        scoped_emails = set()
+        scoped_user_ids = set()
+        try:
+            users_docs = db.collection('users').limit(5000).stream()
+            for user_doc in users_docs:
+                ud = user_doc.to_dict() or {}
+                u_email = str(ud.get('email') or '').strip().lower()
+                u_muni = str(ud.get('municipality') or ud.get('municipality_name') or '').strip().lower()
+                u_region = get_firestore_region_name(ud.get('region') or ud.get('region_name') or ud.get('regionName'))
+                u_region_norm = str(u_region or '').strip().upper()
+
+                in_scope_user = bool(
+                    (municipality_set and u_muni and u_muni in municipality_set)
+                    or (user_region_norm and u_region_norm and u_region_norm == user_region_norm)
+                    or (not user_region_norm and not municipality_set)
+                )
+                if not in_scope_user:
+                    continue
+
+                if u_email:
+                    scoped_emails.add(u_email)
+                scoped_user_ids.add(str(user_doc.id).strip())
+                for pid in (ud.get('uid'), ud.get('user_id'), ud.get('userId'), ud.get('id')):
+                    if pid:
+                        scoped_user_ids.add(str(pid).strip())
+        except Exception as e:
+            print(f"[WARN] Failed building decision user scope: {e}")
+
+        in_scope_by_user = bool((tx_email and tx_email in scoped_emails) or (tx_user_id and tx_user_id in scoped_user_ids))
+
+        if not (in_scope_by_fields or in_scope_by_forwarded_region or in_scope_by_user):
+            print(
+                f"[WARN] Regional decision blocked by scope: tx={log_id}, user_region={user_region}, "
+                f"tx_region={tx_data.get('region')}, tx_muni={tx_data.get('municipality')}, "
+                f"forwarded_region={tx_data.get('forwarded_region')}, tx_email={tx_email}, tx_user_id={tx_user_id}"
+            )
             return jsonify({'success': False, 'error': 'Out of regional scope'}), 403
 
         current_status = str(tx_data.get('status') or '').strip().upper()
