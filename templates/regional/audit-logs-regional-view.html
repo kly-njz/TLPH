@@ -236,6 +236,54 @@
         let userRegionName = '';
         let userProvinces = [];
 
+        function escHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function normalizeActionLabel(action) {
+            const v = String(action || '').trim().toUpperCase();
+            if (!v) return 'N/A';
+            if (v === 'FORWARDED') return 'FORWARDED';
+            if (v === 'APPROVED') return 'APPROVED';
+            if (v === 'REJECTED') return 'REJECTED';
+            return v;
+        }
+
+        async function submitForwardDecision(logId, decision) {
+            if (!logId) return;
+            const upperDecision = String(decision || '').toUpperCase();
+            if (!['APPROVED', 'REJECTED'].includes(upperDecision)) return;
+
+            const notePrompt = upperDecision === 'REJECTED'
+                ? 'Add rejection note (optional):'
+                : 'Add approval note (optional):';
+            const note = window.prompt(notePrompt, '') || '';
+
+            try {
+                const resp = await fetch(`/regional/api/audit/forwarded-logs/${encodeURIComponent(logId)}/decision`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ decision: upperDecision, note })
+                });
+                const payload = await resp.json();
+                if (!resp.ok || !payload.success) {
+                    alert(payload.error || `Failed to ${upperDecision.toLowerCase()} transaction.`);
+                    return;
+                }
+                alert(`Transaction ${upperDecision.toLowerCase()} successfully.`);
+                await loadLogs();
+            } catch (error) {
+                console.error('Decision update failed:', error);
+                alert('Failed to update forwarded status.');
+            }
+        }
+
         function getProperCaseProvinceName(uppercaseProvince) {
             const provinceKeys = Object.keys(philippineLocations);
             const matchedKey = provinceKeys.find(key => key.toUpperCase() === uppercaseProvince.toUpperCase());
@@ -308,6 +356,36 @@
                         }
                     }
                 });
+
+                try {
+                    const fResp = await fetch('/regional/api/audit/forwarded-logs', {
+                        method: 'GET',
+                        credentials: 'same-origin'
+                    });
+                    const fData = await fResp.json();
+                    const forwarded = Array.isArray(fData.logs) ? fData.logs : [];
+
+                    forwarded.forEach(item => {
+                        const action = normalizeActionLabel(item.action || 'FORWARDED');
+                        const ts = item.ts ? new Date(item.ts) : null;
+                        allLogs.push({
+                            id: item.id || '',
+                            timestamp: ts && !Number.isNaN(ts.getTime()) ? ts.toLocaleString() : 'N/A',
+                            actor: item.forwarded_by || item.user || 'Municipal Admin',
+                            mun: (item.municipality || 'N/A').toUpperCase(),
+                            prov: (item.region || 'N/A').toUpperCase(),
+                            action,
+                            detail: item.message || 'Municipal transaction forwarded for regional review.',
+                            target: item.targetId || item.id || 'N/A',
+                            forwardedMessage: item.forwarded_message || '',
+                            module: item.module || 'PAYMENTS',
+                            canReview: action === 'FORWARDED'
+                        });
+                    });
+                } catch (forwardedError) {
+                    console.error('Error loading forwarded logs:', forwardedError);
+                }
+
                 render();
             } catch (e) { 
                 console.error('Error loading audit logs:', e); 
@@ -368,24 +446,48 @@
                 tbody.innerHTML = filtered.map(l => {
                     const act = l.action.toUpperCase();
                     const actionClass = act === 'DELETE' ? 'bg-rose-50 text-rose-700 border-rose-200' : 
-                                        act === 'UPDATE' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
+                                        act === 'UPDATE' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                        act === 'FORWARDED' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                        act === 'REJECTED' ? 'bg-rose-50 text-rose-700 border-rose-200' :
                                         'bg-emerald-50 text-emerald-700 border-emerald-200';
+                    const forwardedBlock = l.forwardedMessage
+                        ? `<div class="mt-1 rounded-sm border border-amber-200 bg-amber-50 px-1.5 py-1 text-[9px] text-amber-900"><span class="font-black uppercase tracking-wider text-[8px]">Forwarded Message:</span> ${escHtml(l.forwardedMessage)}</div>`
+                        : '';
+
+                    const decisionButtons = l.canReview
+                        ? `<div class="mt-1 flex gap-1">
+                              <button type="button" class="px-2 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-[8px] font-black uppercase tracking-wider js-forward-decision" data-id="${escHtml(l.id)}" data-decision="APPROVED">Approve</button>
+                              <button type="button" class="px-2 py-0.5 rounded border border-rose-200 bg-rose-50 text-rose-700 text-[8px] font-black uppercase tracking-wider js-forward-decision" data-id="${escHtml(l.id)}" data-decision="REJECTED">Reject</button>
+                           </div>`
+                        : '';
+
                     return `
                         <tr class="hover:bg-blue-50 transition-all">
-                            <td class="px-4 py-2 align-middle font-mono text-slate-500 text-[9px] border-r border-slate-100">${l.timestamp}</td>
-                            <td class="px-4 py-2 align-middle font-black text-blue-900 uppercase border-r border-slate-100">${l.actor}</td>
+                            <td class="px-4 py-2 align-middle font-mono text-slate-500 text-[9px] border-r border-slate-100">${escHtml(l.timestamp)}</td>
+                            <td class="px-4 py-2 align-middle font-black text-blue-900 uppercase border-r border-slate-100">${escHtml(l.actor)}</td>
                             <td class="px-4 py-2 align-middle border-r border-slate-100">
-                                <div class="font-bold text-slate-700 uppercase">${l.mun}</div>
-                                <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">${l.prov}</div>
+                                <div class="font-bold text-slate-700 uppercase">${escHtml(l.mun)}</div>
+                                <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">${escHtml(l.prov)}</div>
                             </td>
                             <td class="px-4 py-2 align-middle border-r border-slate-100">
-                                <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border ${actionClass}">${l.action}</span>
-                                <div class="text-[9px] text-slate-500 font-normal mt-0.5 max-w-[200px] truncate" title="${l.detail}">${l.detail}</div>
+                                <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border ${actionClass}">${escHtml(l.action)}</span>
+                                <div class="text-[9px] text-slate-500 font-normal mt-0.5 max-w-[260px]" title="${escHtml(l.detail)}">${escHtml(l.detail)}</div>
+                                ${forwardedBlock}
+                                ${decisionButtons}
                             </td>
-                            <td class="px-4 py-2 align-middle text-right font-black text-slate-900 font-mono text-[9px]">#${l.target}</td>
+                            <td class="px-4 py-2 align-middle text-right font-black text-slate-900 font-mono text-[9px]">#${escHtml(l.target)}</td>
                         </tr>
                     `;
                 }).join("");
+
+                tbody.querySelectorAll('.js-forward-decision').forEach(btn => {
+                    btn.addEventListener('click', async (event) => {
+                        const target = event.currentTarget;
+                        const logId = target.getAttribute('data-id');
+                        const decision = target.getAttribute('data-decision');
+                        await submitForwardDecision(logId, decision);
+                    });
+                });
             }
 
             document.getElementById("kpiTotal").textContent = filtered.length;
