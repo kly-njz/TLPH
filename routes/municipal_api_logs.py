@@ -260,19 +260,40 @@ def api_logs_financial_logs():
                 # If we have a scope, only include transactions from users in this municipality
                 if municipality_scope and emails_in_scope and t_email not in emails_in_scope:
                     continue
+
+                status_value = (t.get('status') or '—').upper()
+                regional_approved = status_value == 'APPROVED' and (
+                    str(t.get('approvedByLevel') or '').strip().lower() == 'regional'
+                    or bool(t.get('approvedByRegional'))
+                )
+                regional_rejected = status_value == 'REJECTED' and (
+                    str(t.get('rejectedByLevel') or '').strip().lower() == 'regional'
+                    or bool(t.get('rejectedByRegional'))
+                )
+                regional_decision = 'APPROVED' if regional_approved else ('REJECTED' if regional_rejected else '')
+
+                outcome_value = 'SUCCESS' if status_value in {'PAID', 'APPROVED', 'COMPLETED'} else (
+                    'FAIL' if status_value in {'FAILED', 'REJECTED', 'CANCELLED'} else 'WARN'
+                )
+
                 logs.append({
                     'id': t.get('id'),
-                    'ts': t.get('created_at'),
+                    'ts': t.get('updated_at') or t.get('forwarded_at') or t.get('created_at'),
                     'user': t.get('user_email', '—'),
                     'role': 'User',
                     'module': 'PAYMENTS',
-                    'action': t.get('status', '—').upper(),
+                    'action': status_value,
                     'target': t.get('transaction_name', t.get('description', 'Payment')),
                     'targetId': t.get('invoice_id', t.get('external_id', '')),
                     'device_type': t.get('device_type', ''),
                     'ip': t.get('ip', ''),
-                    'outcome': 'SUCCESS' if (t.get('status', '').upper() == 'PAID') else ('FAIL' if t.get('status', '').upper() == 'FAILED' else 'WARN'),
+                    'outcome': outcome_value,
                     'message': t.get('description', ''),
+                    'forwarded_message': t.get('forwarded_message') or t.get('forwardMessage') or '',
+                    'regional_decision': regional_decision,
+                    'regional_decision_by': t.get('regional_reviewed_by') or t.get('approvedByRegional') or t.get('rejectedByRegional') or '',
+                    'regional_decision_at': t.get('regional_reviewed_at') or t.get('approvedAtRegional') or t.get('rejectedAtRegional') or '',
+                    'regional_decision_note': t.get('regional_decision_note') or '',
                     'diff': t
                 })
         except Exception as e:
@@ -326,6 +347,7 @@ def api_update_audit_log_status():
         log_id = data.get('id')
         new_status = data.get('status')
         module = data.get('module')
+        request_ip = system_logs_storage.extract_request_ip(request)
 
         if not log_id or not new_status:
             return jsonify({'success': False, 'error': 'Missing log_id or status'}), 400
@@ -391,6 +413,32 @@ def api_update_audit_log_status():
                 'updated_by': session.get('user_email', 'system'),
                 'module': module
             }, merge=True)
+
+        if str(new_status).strip().upper() == 'APPROVED':
+            actor_email = session.get('user_email', 'system')
+            actor_id = session.get('user_id', '')
+            actor_role = session.get('user_role', 'municipal')
+            municipality_scope = _get_current_municipality_scope() or ''
+            region_scope = _resolve_region_from_user_context() or ''
+            target_label = 'Transaction Approval' if module == 'PAYMENTS' else f'{module or "Audit"} Approval'
+
+            system_logs_storage.add_regional_system_log(
+                region=region_scope,
+                municipality=municipality_scope,
+                user=actor_email,
+                user_id=actor_id,
+                role=actor_role,
+                action='APPROVED',
+                target=target_label,
+                target_id=log_id,
+                module=module or 'AUDIT',
+                outcome='SUCCESS',
+                message=f'Municipal admin {actor_email} approved {module or "audit"} item {log_id}.',
+                ip_address=request_ip,
+                device_type=system_logs_storage.detect_device_type(request.headers.get('User-Agent', '')),
+                user_agent=request.headers.get('User-Agent', ''),
+                metadata={'status': new_status, 'source': 'municipal_api_logs.update-status'}
+            )
 
         return jsonify({'success': True, 'message': 'Status updated successfully'}), 200
 

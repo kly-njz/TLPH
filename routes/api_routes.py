@@ -462,6 +462,7 @@ def set_session():
         # Log successful login with municipality fetched from Firestore users collection
         device_type = detect_device_from_request()
         user_agent = request.headers.get('User-Agent', '')
+        request_ip = system_logs_storage.extract_request_ip(request)
         system_logs_storage.add_system_log(
             municipality=municipality,
             user=user_email,
@@ -473,6 +474,25 @@ def set_session():
             device_type=device_type,
             user_agent=user_agent
         )
+
+        if user_role in {'municipal', 'municipal_admin'}:
+            system_logs_storage.add_regional_system_log(
+                region=region,
+                municipality=municipality,
+                user=user_email,
+                user_id=user_id,
+                role=user_role,
+                action='LOGIN',
+                target='Authentication',
+                target_id=user_id,
+                module='AUTH',
+                outcome='SUCCESS',
+                message=f'Municipal admin {user_email} logged in.',
+                ip_address=request_ip,
+                device_type=device_type,
+                user_agent=user_agent,
+                metadata={'source': 'set-session'}
+            )
 
         return jsonify({'success': True, 'message': 'Session set successfully'})
     
@@ -487,6 +507,8 @@ def logout():
         # Capture user info before clearing session
         user_email = session.get('user_email', 'unknown')
         user_id = session.get('user_id')
+        user_role = session.get('user_role', '')
+        region = session.get('region') or session.get('user_region') or get_user_region(user_id=user_id, user_email=user_email)
         
         # Get fresh municipality from Firestore to ensure consistency
         municipality = get_user_municipality(user_id=user_id, user_email=user_email) if user_email != 'unknown' else 'unknown'
@@ -494,6 +516,7 @@ def logout():
         # Log logout with fresh municipality from Firestore
         device_type = detect_device_from_request()
         user_agent = request.headers.get('User-Agent', '')
+        request_ip = system_logs_storage.extract_request_ip(request)
         system_logs_storage.add_system_log(
             municipality=municipality,
             user=user_email,
@@ -505,6 +528,25 @@ def logout():
             device_type=device_type,
             user_agent=user_agent
         )
+
+        if user_role in {'municipal', 'municipal_admin'}:
+            system_logs_storage.add_regional_system_log(
+                region=region,
+                municipality=municipality,
+                user=user_email,
+                user_id=user_id,
+                role=user_role,
+                action='LOGOUT',
+                target='Authentication',
+                target_id=user_id,
+                module='AUTH',
+                outcome='SUCCESS',
+                message=f'Municipal admin {user_email} logged out.',
+                ip_address=request_ip,
+                device_type=device_type,
+                user_agent=user_agent,
+                metadata={'source': 'logout'}
+            )
         
         session.clear()
         return jsonify({'success': True, 'message': 'Logged out successfully'})

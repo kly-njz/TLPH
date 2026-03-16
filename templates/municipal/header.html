@@ -87,6 +87,62 @@
 </style>
 
 <script>
+    // Fallback Alpine data provider used by notification badge in the header.
+    // Some pages do not define notificationData(), which causes runtime errors.
+    if (typeof window.notificationData !== 'function') {
+        window.notificationData = function() {
+            return {
+                count: 0,
+                async loadNotifications() {
+                    this.count = 0;
+                },
+                init() {
+                    this.loadNotifications();
+                }
+            };
+        };
+    }
+
+    // Shared municipal toast notifier.
+    if (typeof window.municipalNotify !== 'function') {
+        window.municipalNotify = function(message, type) {
+            const tone = (type || 'info').toLowerCase();
+            const stackId = 'municipalToastStack';
+            let stack = document.getElementById(stackId);
+            if (!stack) {
+                stack = document.createElement('div');
+                stack.id = stackId;
+                stack.className = 'fixed top-3 right-3 z-[6000] flex flex-col gap-2 pointer-events-none';
+                document.body.appendChild(stack);
+            }
+
+            const palette = tone === 'success'
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                : tone === 'error'
+                    ? 'border-rose-300 bg-rose-50 text-rose-900'
+                    : tone === 'warn' || tone === 'warning'
+                        ? 'border-amber-300 bg-amber-50 text-amber-900'
+                        : 'border-blue-300 bg-blue-50 text-blue-900';
+
+            const toast = document.createElement('div');
+            toast.className = 'pointer-events-auto min-w-[220px] max-w-[360px] border rounded-[2px] shadow-sm px-3 py-2 text-[10px] font-bold uppercase tracking-wider ' + palette;
+            toast.textContent = String(message || 'Notification');
+            stack.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 2800);
+        };
+    }
+
+    // Route generic alerts to the shared municipal toast UI.
+    if (!window.__municipalAlertPatched) {
+        window.__municipalAlertPatched = true;
+        window.alert = function(message) {
+            window.municipalNotify(message, 'info');
+        };
+    }
+
     // Pure JS toggle function - Mas stable kaysa Alpine kung may script conflicts
     function toggleProfileDropdown(event) {
         event.stopPropagation();

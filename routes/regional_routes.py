@@ -4,6 +4,7 @@ from firebase_auth_middleware import role_required
 from google.cloud.firestore_v1.base_query import FieldFilter
 from datetime import datetime
 from firebase_admin import firestore
+import system_logs_storage
 
 bp = Blueprint('regional', __name__, url_prefix='/regional')
 
@@ -94,6 +95,38 @@ def _normalize_ts_for_json(value):
         return str(value)
     except Exception:
         return str(value)
+
+
+def _extract_ip_value(record):
+    """Best-effort IP extraction across varying field names/formats."""
+    if not isinstance(record, dict):
+        return ''
+
+    candidates = [
+        record.get('ip'),
+        record.get('ip_address'),
+        record.get('ipAddress'),
+        record.get('client_ip'),
+        record.get('clientIp'),
+        record.get('remote_addr'),
+        record.get('remoteAddr'),
+        record.get('x_forwarded_for'),
+        record.get('xForwardedFor'),
+        record.get('request_ip'),
+        record.get('requestIp'),
+        record.get('requester_ip'),
+        record.get('requesterIp'),
+    ]
+
+    for raw in candidates:
+        value = str(raw or '').strip()
+        if not value:
+            continue
+        # If coming from X-Forwarded-For chain, use first IP.
+        if ',' in value:
+            value = value.split(',')[0].strip()
+        return value
+    return ''
 
 
 def _transaction_in_regional_scope(tx_data, user_region, municipality_set):
@@ -310,7 +343,7 @@ def api_regional_financial_audit_logs():
                 'target': tx.get('transaction_name') or tx.get('description') or 'Payment',
                 'targetId': tx.get('invoice_id') or tx.get('external_id') or tx_doc.id,
                 'device_type': tx.get('device_type') or tx.get('device') or '',
-                'ip': tx.get('ip') or '',
+                'ip': _extract_ip_value(tx),
                 'outcome': outcome_value,
                 'message': tx.get('description') or '',
                 'forwarded_message': tx.get('forwarded_message') or tx.get('forwardMessage') or '',
@@ -350,7 +383,7 @@ def api_regional_financial_audit_logs():
                 'target': fund.get('target_municipality') or 'Municipality',
                 'targetId': fund.get('reference') or fund_doc.id,
                 'device_type': '',
-                'ip': '',
+                'ip': _extract_ip_value(fund),
                 'outcome': outcome_value,
                 'message': fund.get('description') or '',
                 'forwarded_message': '',
@@ -361,6 +394,93 @@ def api_regional_financial_audit_logs():
                 'diff': fund,
             })
 
+        # Source 3: auditLogs collection (municipal admin sign-ins and decision actions)
+        try:
+            audit_docs = db.collection('auditLogs').limit(5000).stream()
+            tracked_actions = {'LOGIN', 'LOGOUT', 'APPROVE', 'APPROVED', 'REJECT', 'REJECTED'}
+            for audit_doc in audit_docs:
+                entry = audit_doc.to_dict() or {}
+                actor_role = str(entry.get('actorRole') or '').strip().lower()
+                action_raw = str(entry.get('action') or entry.get('event') or entry.get('type') or '').strip().upper()
+                if not action_raw:
+                    continue
+
+                # Normalize variants like USER_LOGIN, SIGNIN, LOG_IN, etc.
+                if 'LOGIN' in action_raw or 'SIGNIN' in action_raw or action_raw in {'LOG_IN'}:
+                    action_value = 'LOGIN'
+                elif 'LOGOUT' in action_raw or 'SIGNOUT' in action_raw or action_raw in {'LOG_OUT'}:
+                    action_value = 'LOGOUT'
+                elif 'APPROV' in action_raw:
+                    action_value = 'APPROVED'
+                elif 'REJECT' in action_raw or 'DENY' in action_raw:
+                    action_value = 'REJECTED'
+                else:
+                    action_value = action_raw
+
+                if action_value not in tracked_actions:
+                    continue
+
+                actor_email = str(
+                    entry.get('actorEmail')
+                    or entry.get('user_email')
+                    or entry.get('email')
+                    or entry.get('user')
+                    or ''
+                ).strip().lower()
+                actor_id = str(
+                    entry.get('actorId')
+                    or entry.get('userId')
+                    or entry.get('uid')
+                    or entry.get('user_id')
+                    or ''
+                ).strip()
+
+                is_municipal_actor = actor_role in {'municipal_admin', 'municipal'}
+                in_scope_by_actor = bool(
+                    (actor_email and actor_email in scoped_emails)
+                    or (actor_id and actor_id in scoped_user_ids)
+                )
+                if not (is_municipal_actor or in_scope_by_actor):
+                    continue
+
+                entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip().lower()
+                entry_region = get_firestore_region_name(
+                    entry.get('region') or entry.get('region_name') or entry.get('regionName') or entry.get('province')
+                )
+                entry_region_norm = str(entry_region or '').strip().upper()
+                user_region_norm = str(user_region or '').strip().upper()
+
+                in_scope_by_muni = bool(municipality_set and entry_muni and entry_muni in municipality_set)
+                in_scope_by_region = bool(user_region_norm and entry_region_norm and entry_region_norm == user_region_norm)
+                if not (in_scope_by_muni or in_scope_by_region or in_scope_by_actor or (not user_region_norm and not municipality_set)):
+                    continue
+
+                ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
+                outcome_value = 'SUCCESS' if action_value in {'LOGIN', 'APPROVE', 'APPROVED'} else ('FAIL' if action_value in {'REJECT', 'REJECTED'} else 'WARN')
+
+                logs.append({
+                    'id': audit_doc.id,
+                    'ts': _normalize_ts_for_json(ts_value),
+                    'user': entry.get('actorName') or entry.get('actor') or entry.get('user') or 'Municipal Admin',
+                    'role': 'Municipal',
+                    'module': 'AUTH' if action_value in {'LOGIN', 'LOGOUT'} else 'AUDIT',
+                    'action': action_value,
+                    'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                    'targetId': entry.get('targetId') or audit_doc.id,
+                    'device_type': entry.get('device') or entry.get('device_type') or '',
+                    'ip': _extract_ip_value(entry),
+                    'outcome': outcome_value,
+                    'message': entry.get('detail') or entry.get('description') or '',
+                    'forwarded_message': '',
+                    'forwarded_by': '',
+                    'municipality': entry.get('municipality') or entry.get('municipality_name') or '',
+                    'region': entry_region,
+                    'canReview': False,
+                    'diff': entry,
+                })
+        except Exception as e:
+            print(f"[WARN] Failed loading auditLogs source for regional financial logs: {e}")
+
         # Keep entries even if timestamp is missing; frontend handles N/A.
         logs.sort(key=lambda x: x.get('ts') or '', reverse=True)
 
@@ -370,6 +490,141 @@ def api_regional_financial_audit_logs():
     except Exception as e:
         print(f"[ERROR] Regional financial audit logs failed: {e}")
         return jsonify({'success': False, 'error': str(e), 'logs': []}), 200
+
+
+@bp.route('/api/system-logs', methods=['GET'])
+@role_required('regional','regional_admin')
+def api_regional_system_logs():
+    """Return only municipal admin login/logout and approval events for the current region."""
+    try:
+        db = get_firestore_db()
+        user_region, municipality_set = _resolve_regional_scope(db)
+
+        scoped_emails = set()
+        scoped_user_ids = set()
+        try:
+            users_docs = db.collection('users').limit(5000).stream()
+            user_region_norm = str(user_region or '').strip().upper()
+            for user_doc in users_docs:
+                ud = user_doc.to_dict() or {}
+                role_value = str(ud.get('role') or '').strip().lower()
+                if role_value not in {'municipal_admin', 'municipal'}:
+                    continue
+
+                u_email = str(ud.get('email') or '').strip().lower()
+                u_muni = str(ud.get('municipality') or ud.get('municipality_name') or '').strip().lower()
+                u_region = get_firestore_region_name(ud.get('region') or ud.get('region_name') or ud.get('regionName'))
+                u_region_norm = str(u_region or '').strip().upper()
+
+                in_scope = bool(
+                    (municipality_set and u_muni and u_muni in municipality_set)
+                    or (user_region_norm and u_region_norm and u_region_norm == user_region_norm)
+                    or (not user_region_norm and not municipality_set)
+                )
+                if not in_scope:
+                    continue
+
+                if u_email:
+                    scoped_emails.add(u_email)
+                scoped_user_ids.add(str(user_doc.id).strip())
+                for pid in (ud.get('uid'), ud.get('user_id'), ud.get('userId'), ud.get('id')):
+                    if pid:
+                        scoped_user_ids.add(str(pid).strip())
+        except Exception as e:
+            print(f"[WARN] Failed building scoped municipal users for system logs: {e}")
+
+        logs = []
+        regional_log_rows = system_logs_storage.list_regional_system_logs_by_region(user_region, limit=300)
+        user_region_norm = str(user_region or '').strip().upper()
+
+        for entry in regional_log_rows:
+            action_value = str(entry.get('action') or '').strip().upper()
+            if action_value not in {'LOGIN', 'LOGOUT', 'APPROVED'}:
+                continue
+
+            actor_email = str(entry.get('actorEmail') or entry.get('user') or '').strip().lower()
+            actor_id = str(entry.get('actorId') or '').strip()
+            actor_role = str(entry.get('actorRole') or entry.get('role') or '').strip().lower()
+            is_municipal_actor = actor_role in {'municipal_admin', 'municipal'}
+            in_scope_by_actor = bool(
+                (actor_email and actor_email in scoped_emails)
+                or (actor_id and actor_id in scoped_user_ids)
+            )
+
+            entry_region = get_firestore_region_name(
+                entry.get('region') or entry.get('region_name') or entry.get('regionName') or user_region
+            )
+            entry_region_norm = str(entry_region or '').strip().upper()
+            entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip()
+            entry_muni_norm = entry_muni.lower()
+            in_scope_by_location = bool(
+                (municipality_set and entry_muni_norm and entry_muni_norm in municipality_set)
+                or (user_region_norm and entry_region_norm and entry_region_norm == user_region_norm)
+                or (not user_region_norm and not municipality_set)
+            )
+
+            if not is_municipal_actor or not (in_scope_by_actor or in_scope_by_location):
+                continue
+
+            ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
+            details = entry.get('message') or ('Municipal admin signed in.' if action_value == 'LOGIN' else 'Municipal admin signed out.' if action_value == 'LOGOUT' else 'Municipal admin approved an item.')
+
+            logs.append({
+                'id': entry.get('id') or '',
+                'ts': _normalize_ts_for_json(ts_value),
+                'user': entry.get('user') or actor_email or 'Municipal Admin',
+                'role': 'Municipal',
+                'module': entry.get('module') or ('AUTH' if action_value in {'LOGIN', 'LOGOUT'} else 'AUDIT'),
+                'action': action_value,
+                'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
+                'device_type': entry.get('device_type') or '',
+                'ip': _extract_ip_value(entry),
+                'outcome': entry.get('outcome') or 'SUCCESS',
+                'message': details,
+                'municipality': entry_muni,
+                'region': entry_region,
+                'scope': 'MUNICIPAL',
+            })
+
+        logs.sort(key=lambda x: x.get('ts') or '', reverse=True)
+        logs = logs[:40]
+        return jsonify({'success': True, 'logs': logs, 'region': user_region}), 200
+    except Exception as e:
+        print(f"[ERROR] Regional system logs failed: {e}")
+        return jsonify({'success': False, 'error': str(e), 'logs': []}), 200
+
+
+@bp.route('/api/system-logs/cleanup', methods=['POST'])
+@role_required('regional','regional_admin')
+def api_regional_system_logs_cleanup():
+    """Manually run retention cleanup for expired regional system logs."""
+    try:
+        body = request.get_json(silent=True) or {}
+
+        # Safe bounds to prevent expensive accidental runs.
+        requested_batch = int(body.get('batch_size', 200) or 200)
+        requested_rounds = int(body.get('rounds', 1) or 1)
+
+        batch_size = max(1, min(requested_batch, 500))
+        rounds = max(1, min(requested_rounds, 20))
+
+        total_deleted = 0
+        for _ in range(rounds):
+            deleted = system_logs_storage.prune_expired_regional_system_logs(batch_size=batch_size)
+            total_deleted += deleted
+            if deleted < batch_size:
+                break
+
+        return jsonify({
+            'success': True,
+            'deleted': total_deleted,
+            'batch_size': batch_size,
+            'rounds': rounds,
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Regional system logs cleanup failed: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @bp.route('/api/audit/forwarded-logs', methods=['GET'])
@@ -423,7 +678,7 @@ def api_regional_forwarded_audit_logs():
                 'action': status_value,
                 'target': tx.get('transaction_name') or tx.get('description') or 'Payment',
                 'targetId': tx.get('invoice_id') or tx.get('external_id') or tx_doc.id,
-                'ip': tx.get('ip') or '',
+                'ip': _extract_ip_value(tx),
                 'outcome': outcome_value,
                 'message': tx.get('description') or '',
                 'forwarded_message': forwarded_message,
