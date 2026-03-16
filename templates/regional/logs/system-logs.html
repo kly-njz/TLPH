@@ -42,7 +42,7 @@
           <div class="leading-tight">
             <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">System Logs</h1>
             <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">
-              Regional Activity Trail (Region + Municipalities only)
+              Regional Activity Trail (Latest 40 Municipal Entries)
             </p>
           </div>
         </div>
@@ -52,8 +52,13 @@
             {{ user_region|default('Region Assigned') }}
           </span>
 
+          <span id="cleanupStatus" class="hidden sm:inline text-[9px] font-bold uppercase tracking-widest text-slate-500"></span>
+
           <button onclick="resetAll()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1 shadow-sm">
             <span class="material-icons-round text-[14px]">refresh</span> Reset
+          </button>
+          <button id="cleanupBtn" onclick="runCleanup()" class="gov-btn border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 flex items-center gap-1 shadow-sm">
+            <span class="material-icons-round text-[14px]">cleaning_services</span> Cleanup
           </button>
           <button onclick="exportLogs()" class="gov-btn bg-slate-800 hover:bg-slate-900 text-white flex items-center gap-1 shadow-sm">
             <span class="material-icons-round text-[14px]">file_download</span> Export CSV
@@ -141,13 +146,6 @@
                 <option value="LOGIN">Login</option>
                 <option value="LOGOUT">Logout</option>
                 <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-                <option value="FORWARDED">Forwarded</option>
-                <option value="Create">Create</option>
-                <option value="Edit">Edit</option>
-                <option value="Submit">Submit</option>
-                <option value="Approve">Approve</option>
-                <option value="Delete">Delete</option>
               </select>
             </div>
 
@@ -175,7 +173,7 @@
           <div>
             <span class="text-[9px] font-bold uppercase text-slate-500">
               Showing <b class="text-slate-800" id="countShown">0</b>-<b class="text-slate-800" id="countTo">0</b> of
-              <b class="text-slate-800" id="countTotal">0</b> Records (Region Scoped)
+              <b class="text-slate-800" id="countTotal">0</b> Records (Latest 40, Region Scoped)
             </span>
           </div>
         </div>
@@ -249,10 +247,8 @@
 
     function statusBadgeClass(actionRaw){
       const action = String(actionRaw || '').toUpperCase();
-      if (['APPROVE','APPROVED','LOGIN'].includes(action)) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      if (['REJECT','REJECTED','FAILED','DELETE'].includes(action)) return 'bg-rose-50 text-rose-700 border-rose-200';
-      if (['FORWARDED','PENDING','LOGOUT'].includes(action)) return 'bg-amber-50 text-amber-700 border-amber-200';
-      if (['CREATE','EDIT','SUBMIT'].includes(action)) return 'bg-blue-50 text-blue-700 border-blue-200';
+      if (['LOGIN','APPROVED'].includes(action)) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      if (['LOGOUT'].includes(action)) return 'bg-amber-50 text-amber-700 border-amber-200';
       return 'bg-slate-100 text-slate-700 border-slate-300';
     }
 
@@ -264,7 +260,7 @@
 
     async function loadLiveSystemLogs(){
       try {
-        const resp = await fetch('/regional/api/audit/financial-logs', { method: 'GET', credentials: 'same-origin' });
+        const resp = await fetch('/regional/api/system-logs', { method: 'GET', credentials: 'same-origin' });
         const payload = await resp.json();
         const logs = Array.isArray(payload.logs) ? payload.logs : [];
 
@@ -419,7 +415,52 @@
     }
 
     function resetAll(){ clearFilters(); }
-git 
+
+    async function runCleanup(){
+      const confirmed = window.confirm('Run manual cleanup for expired system logs?');
+      if (!confirmed) return;
+
+      const cleanupBtn = document.getElementById('cleanupBtn');
+      const cleanupStatus = document.getElementById('cleanupStatus');
+      const originalHtml = cleanupBtn ? cleanupBtn.innerHTML : '';
+
+      try {
+        if (cleanupBtn) {
+          cleanupBtn.disabled = true;
+          cleanupBtn.classList.add('opacity-60', 'cursor-not-allowed');
+          cleanupBtn.innerHTML = '<span class="material-icons-round text-[14px]">hourglass_top</span> Cleaning';
+        }
+        if (cleanupStatus) cleanupStatus.textContent = 'Running cleanup...';
+
+        const resp = await fetch('/regional/api/system-logs/cleanup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ batch_size: 200, rounds: 3 })
+        });
+
+        const payload = await resp.json();
+        if (!resp.ok || !payload.success) {
+          throw new Error(payload.error || 'Cleanup request failed');
+        }
+
+        if (cleanupStatus) cleanupStatus.textContent = `Cleanup done: ${payload.deleted || 0} deleted`;
+
+        await loadLiveSystemLogs();
+        applyFilters();
+      } catch (error) {
+        console.error('Manual cleanup failed:', error);
+        if (cleanupStatus) cleanupStatus.textContent = 'Cleanup failed';
+        alert('Cleanup failed: ' + (error?.message || 'Unknown error'));
+      } finally {
+        if (cleanupBtn) {
+          cleanupBtn.disabled = false;
+          cleanupBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+          cleanupBtn.innerHTML = originalHtml;
+        }
+      }
+    }
+
     function exportLogs(){
       const rows = Array.from(document.querySelectorAll('#systemBody tr'));
       const visible = rows.filter(tr => tr.style.display !== 'none');
