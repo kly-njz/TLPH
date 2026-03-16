@@ -3,7 +3,8 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
+import random
 from typing import Optional, List, Dict, Any
 
 # Initialize Firebase
@@ -13,6 +14,9 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 REGIONAL_SYSTEM_LOGS_COLLECTION = "regional_system_logs"
+REGIONAL_SYSTEM_LOGS_RETENTION_DAYS = 180
+REGIONAL_SYSTEM_LOGS_CLEANUP_SAMPLE_RATE = 0.02
+REGIONAL_SYSTEM_LOGS_CLEANUP_BATCH = 200
 
 
 def _slugify(value: str) -> str:
@@ -119,6 +123,7 @@ def add_regional_system_log(
 ) -> Dict[str, Any]:
     """Add a region-visible municipal operational log entry to a dedicated collection."""
     doc_ref = db.collection(REGIONAL_SYSTEM_LOGS_COLLECTION).document()
+    expires_at = datetime.utcnow() + timedelta(days=REGIONAL_SYSTEM_LOGS_RETENTION_DAYS)
     log_entry = {
         "id": doc_ref.id,
         "region": str(region or "").strip(),
@@ -141,11 +146,42 @@ def add_regional_system_log(
         "user_agent": user_agent or "",
         "scope": "MUNICIPAL",
         "metadata": metadata or {},
+        # Enables optional Firestore TTL policy and supports fallback app-level cleanup.
+        "expires_at": expires_at,
         "created_at": firestore.SERVER_TIMESTAMP,
         "timestamp": datetime.utcnow().isoformat(),
     }
     doc_ref.set(log_entry)
+
+    # Best-effort retention cleanup: low-frequency and non-blocking for callers.
+    if random.random() < REGIONAL_SYSTEM_LOGS_CLEANUP_SAMPLE_RATE:
+        try:
+            prune_expired_regional_system_logs()
+        except Exception as cleanup_err:
+            print(f"[WARN] Regional system log cleanup skipped: {cleanup_err}")
+
     return {**log_entry, "id": doc_ref.id}
+
+
+def prune_expired_regional_system_logs(batch_size: int = REGIONAL_SYSTEM_LOGS_CLEANUP_BATCH) -> int:
+    """Delete expired docs from dedicated regional system logs collection."""
+    deleted = 0
+    cutoff = datetime.utcnow()
+
+    query = db.collection(REGIONAL_SYSTEM_LOGS_COLLECTION)
+    query = _where(query, "expires_at", "<=", cutoff)
+    query = query.limit(batch_size)
+
+    docs = list(query.stream())
+    if not docs:
+        return 0
+
+    batch = db.batch()
+    for doc in docs:
+        batch.delete(doc.reference)
+        deleted += 1
+    batch.commit()
+    return deleted
 
 
 def list_regional_system_logs(limit: int = 500) -> List[Dict[str, Any]]:
@@ -169,6 +205,41 @@ def list_regional_system_logs(limit: int = 500) -> List[Dict[str, Any]]:
         log_entry = doc.to_dict()
         if log_entry:
             result.append(log_entry)
+
+    result.sort(
+        key=lambda row: _to_sort_key(row.get("created_at") or row.get("timestamp")),
+        reverse=True,
+    )
+    return result[:limit]
+
+
+def list_regional_system_logs_by_region(region: str, limit: int = 200) -> List[Dict[str, Any]]:
+    """List dedicated regional system logs for one region, newest first.
+
+    Uses a region+created_at index when available and falls back to Python-side filtering.
+    """
+    target_region = str(region or "").strip()
+    if not target_region:
+        return list_regional_system_logs(limit=limit)
+
+    result: List[Dict[str, Any]] = []
+
+    try:
+        query = db.collection(REGIONAL_SYSTEM_LOGS_COLLECTION)
+        query = _where(query, "region", "==", target_region)
+        query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
+        query = query.limit(limit)
+        for doc in query.stream():
+            row = doc.to_dict()
+            if row:
+                result.append(row)
+        return result
+    except Exception as e:
+        print(f"[WARN] Indexed regional logs by region query failed, falling back: {e}")
+
+    for row in list_regional_system_logs(limit=1000):
+        if str(row.get("region") or "").strip() == target_region:
+            result.append(row)
 
     result.sort(
         key=lambda row: _to_sort_key(row.get("created_at") or row.get("timestamp")),

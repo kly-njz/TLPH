@@ -534,7 +534,7 @@ def api_regional_system_logs():
             print(f"[WARN] Failed building scoped municipal users for system logs: {e}")
 
         logs = []
-        regional_log_rows = system_logs_storage.list_regional_system_logs(limit=1000)
+        regional_log_rows = system_logs_storage.list_regional_system_logs_by_region(user_region, limit=300)
         user_region_norm = str(user_region or '').strip().upper()
 
         for entry in regional_log_rows:
