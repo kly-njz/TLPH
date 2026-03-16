@@ -491,6 +491,120 @@ def api_regional_financial_audit_logs():
         return jsonify({'success': False, 'error': str(e), 'logs': []}), 200
 
 
+@bp.route('/api/system-logs', methods=['GET'])
+@role_required('regional','regional_admin')
+def api_regional_system_logs():
+    """Return only municipal admin login/logout and approval events for the current region."""
+    try:
+        db = get_firestore_db()
+        user_region, municipality_set = _resolve_regional_scope(db)
+
+        scoped_emails = set()
+        scoped_user_ids = set()
+        try:
+            users_docs = db.collection('users').limit(5000).stream()
+            user_region_norm = str(user_region or '').strip().upper()
+            for user_doc in users_docs:
+                ud = user_doc.to_dict() or {}
+                role_value = str(ud.get('role') or '').strip().lower()
+                if role_value not in {'municipal_admin', 'municipal'}:
+                    continue
+
+                u_email = str(ud.get('email') or '').strip().lower()
+                u_muni = str(ud.get('municipality') or ud.get('municipality_name') or '').strip().lower()
+                u_region = get_firestore_region_name(ud.get('region') or ud.get('region_name') or ud.get('regionName'))
+                u_region_norm = str(u_region or '').strip().upper()
+
+                in_scope = bool(
+                    (municipality_set and u_muni and u_muni in municipality_set)
+                    or (user_region_norm and u_region_norm and u_region_norm == user_region_norm)
+                    or (not user_region_norm and not municipality_set)
+                )
+                if not in_scope:
+                    continue
+
+                if u_email:
+                    scoped_emails.add(u_email)
+                scoped_user_ids.add(str(user_doc.id).strip())
+                for pid in (ud.get('uid'), ud.get('user_id'), ud.get('userId'), ud.get('id')):
+                    if pid:
+                        scoped_user_ids.add(str(pid).strip())
+        except Exception as e:
+            print(f"[WARN] Failed building scoped municipal users for system logs: {e}")
+
+        logs = []
+        audit_docs = db.collection('auditLogs').limit(5000).stream()
+        for audit_doc in audit_docs:
+            entry = audit_doc.to_dict() or {}
+            action_raw = str(entry.get('action') or entry.get('event') or entry.get('type') or '').strip().upper()
+            if not action_raw:
+                continue
+
+            if 'LOGIN' in action_raw or 'SIGNIN' in action_raw or action_raw in {'LOG_IN'}:
+                action_value = 'LOGIN'
+            elif 'LOGOUT' in action_raw or 'SIGNOUT' in action_raw or action_raw in {'LOG_OUT'}:
+                action_value = 'LOGOUT'
+            elif 'APPROV' in action_raw:
+                action_value = 'APPROVED'
+            else:
+                continue
+
+            actor_email = str(
+                entry.get('actorEmail')
+                or entry.get('user_email')
+                or entry.get('email')
+                or entry.get('user')
+                or ''
+            ).strip().lower()
+            actor_id = str(
+                entry.get('actorId')
+                or entry.get('userId')
+                or entry.get('uid')
+                or entry.get('user_id')
+                or ''
+            ).strip()
+
+            actor_role = str(entry.get('actorRole') or '').strip().lower()
+            in_scope_by_actor = bool(
+                (actor_email and actor_email in scoped_emails)
+                or (actor_id and actor_id in scoped_user_ids)
+            )
+            is_municipal_actor = actor_role in {'municipal_admin', 'municipal'}
+            if not (is_municipal_actor and in_scope_by_actor):
+                continue
+
+            entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip()
+            entry_region = get_firestore_region_name(
+                entry.get('region') or entry.get('region_name') or entry.get('regionName') or entry.get('province') or user_region
+            )
+            ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
+            details = entry.get('detail') or entry.get('description') or ('Municipal admin signed in.' if action_value == 'LOGIN' else 'Municipal admin signed out.' if action_value == 'LOGOUT' else 'Municipal admin approved an item.')
+
+            logs.append({
+                'id': audit_doc.id,
+                'ts': _normalize_ts_for_json(ts_value),
+                'user': entry.get('actorName') or entry.get('actor') or actor_email or 'Municipal Admin',
+                'role': 'Municipal',
+                'module': 'AUTH' if action_value in {'LOGIN', 'LOGOUT'} else 'AUDIT',
+                'action': action_value,
+                'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                'targetId': entry.get('targetId') or audit_doc.id,
+                'device_type': entry.get('device') or entry.get('device_type') or '',
+                'ip': _extract_ip_value(entry),
+                'outcome': 'SUCCESS',
+                'message': details,
+                'municipality': entry_muni,
+                'region': entry_region,
+                'scope': 'MUNICIPAL',
+            })
+
+        logs.sort(key=lambda x: x.get('ts') or '', reverse=True)
+        return jsonify({'success': True, 'logs': logs, 'region': user_region}), 200
+    except Exception as e:
+        print(f"[ERROR] Regional system logs failed: {e}")
+        return jsonify({'success': False, 'error': str(e), 'logs': []}), 200
+
+
 @bp.route('/api/audit/forwarded-logs', methods=['GET'])
 @role_required('regional','regional_admin')
 def api_regional_forwarded_audit_logs():
