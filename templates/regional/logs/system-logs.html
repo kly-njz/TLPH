@@ -138,6 +138,11 @@
               <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Action Type</label>
               <select id="action" class="gov-input w-full cursor-pointer">
                 <option value="">All Actions</option>
+                <option value="LOGIN">Login</option>
+                <option value="LOGOUT">Logout</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="FORWARDED">Forwarded</option>
                 <option value="Create">Create</option>
                 <option value="Edit">Edit</option>
                 <option value="Submit">Submit</option>
@@ -292,6 +297,107 @@
     // ✅ Region enforced in UI (must also be enforced in backend queries!)
     const USER_REGION = ("{{ user_region|default('') }}").trim().toUpperCase();
 
+    function normalizeRegion(v){ return String(v || '').trim().toUpperCase().replace(/-/g, ' '); }
+    function escapeHtml(v){
+      return String(v ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function normalizeScope(row){
+      const role = String(row.role || '').toUpperCase();
+      const muni = String(row.municipality || '').trim();
+      if (role === 'REGIONAL') return 'REGION';
+      return muni ? 'MUNICIPAL' : 'REGION';
+    }
+
+    function statusBadgeClass(actionRaw){
+      const action = String(actionRaw || '').toUpperCase();
+      if (['APPROVE','APPROVED','LOGIN'].includes(action)) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      if (['REJECT','REJECTED','FAILED','DELETE'].includes(action)) return 'bg-rose-50 text-rose-700 border-rose-200';
+      if (['FORWARDED','PENDING','LOGOUT'].includes(action)) return 'bg-amber-50 text-amber-700 border-amber-200';
+      if (['CREATE','EDIT','SUBMIT'].includes(action)) return 'bg-blue-50 text-blue-700 border-blue-200';
+      return 'bg-slate-100 text-slate-700 border-slate-300';
+    }
+
+    function toIsoDate(ts){
+      const d = new Date(ts || '');
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toISOString().slice(0,10);
+    }
+
+    async function loadLiveSystemLogs(){
+      try {
+        const resp = await fetch('/regional/api/audit/financial-logs', { method: 'GET', credentials: 'same-origin' });
+        const payload = await resp.json();
+        const logs = Array.isArray(payload.logs) ? payload.logs : [];
+
+        const tbody = document.getElementById('systemBody');
+        if (!tbody) return;
+
+        const userFilter = document.getElementById('user');
+        const municipalityFilter = document.getElementById('municipality');
+        const users = new Set();
+        const municipalities = new Set();
+
+        const rowsHtml = logs.map((row) => {
+          const timestamp = row.ts ? new Date(row.ts) : null;
+          const tsText = timestamp && !Number.isNaN(timestamp.getTime()) ? timestamp.toLocaleString() : 'N/A';
+          const dateIso = timestamp && !Number.isNaN(timestamp.getTime()) ? timestamp.toISOString().slice(0,10) : '';
+          const user = String(row.user || 'Unknown');
+          const region = String(row.region || USER_REGION || 'N/A').toUpperCase();
+          const municipality = String(row.municipality || '').toUpperCase();
+          const scope = normalizeScope(row);
+          const action = String(row.action || 'N/A').toUpperCase();
+          const details = String(row.message || row.target || 'N/A');
+          const ip = String(row.ip || '');
+          const searchBlob = `${tsText} ${user} ${region} ${municipality} ${action} ${details} ${ip}`.toLowerCase();
+
+          if (user) users.add(user);
+          if (municipality) municipalities.add(municipality);
+
+          return `
+            <tr class="hover:bg-slate-50 transition"
+                data-region="${escapeHtml(region)}"
+                data-scope="${escapeHtml(scope)}"
+                data-municipality="${escapeHtml(municipality)}"
+                data-user="${escapeHtml(user)}"
+                data-action="${escapeHtml(action)}"
+                data-date="${escapeHtml(dateIso)}"
+                data-text="${escapeHtml(searchBlob)}">
+              <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100 whitespace-nowrap">${escapeHtml(tsText)}</td>
+              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">${escapeHtml(user)}</td>
+              <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100 font-bold">
+                ${escapeHtml(region)}
+                <span class="font-normal text-slate-400 block text-[8px] uppercase">${municipality ? escapeHtml(municipality + ' (Municipality)') : 'Regional HQ'}</span>
+              </td>
+              <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase border w-16 text-center ${statusBadgeClass(action)}">${escapeHtml(action)}</span>
+              </td>
+              <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${escapeHtml(details)}</td>
+              <td class="px-3 py-1.5 font-mono text-slate-500 text-[9px] whitespace-nowrap">${escapeHtml(ip)}</td>
+            </tr>
+          `;
+        }).join('');
+
+        tbody.innerHTML = rowsHtml || `<tr><td colspan="6" class="py-10 text-center bg-white"><div class="flex flex-col items-center justify-center opacity-40"><span class="material-icons-round text-4xl mb-2 text-slate-300">manage_search</span><p class="font-black uppercase text-[10px] tracking-widest text-slate-500 m-0">No Logs Found</p></div></td></tr>`;
+
+        if (userFilter) {
+          userFilter.innerHTML = '<option value="">All Users</option>';
+          Array.from(users).sort().forEach(u => userFilter.innerHTML += `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`);
+        }
+        if (municipalityFilter) {
+          municipalityFilter.innerHTML = '<option value="">All Municipalities</option>';
+          Array.from(municipalities).sort().forEach(m => municipalityFilter.innerHTML += `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`);
+        }
+      } catch (error) {
+        console.error('Failed loading live system logs:', error);
+      }
+    }
+
     function val(id){ return (document.getElementById(id).value || '').trim(); }
 
     function applyFilters(){
@@ -321,7 +427,7 @@
         const trText = (tr.getAttribute('data-text') || tr.innerText || '').toLowerCase();
 
         // 1) Enforce region scope
-        const okRegion = !USER_REGION || trRegion === USER_REGION;
+        const okRegion = !USER_REGION || normalizeRegion(trRegion) === normalizeRegion(USER_REGION);
 
         // 2) Search/user/action filters
         const okQ = !q || trText.includes(q);
@@ -422,7 +528,10 @@
     function prevPage(){ alert('Previous page'); }
     function nextPage(){ alert('Next page'); }
 
-    document.addEventListener('DOMContentLoaded', () => applyFilters());
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadLiveSystemLogs();
+      applyFilters();
+    });
   </script>
 </body>
 </html>

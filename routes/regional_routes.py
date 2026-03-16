@@ -361,6 +361,58 @@ def api_regional_financial_audit_logs():
                 'diff': fund,
             })
 
+        # Source 3: auditLogs collection (municipal admin sign-ins and decision actions)
+        try:
+            audit_docs = db.collection('auditLogs').limit(5000).stream()
+            tracked_actions = {'LOGIN', 'LOGOUT', 'APPROVE', 'APPROVED', 'REJECT', 'REJECTED'}
+            for audit_doc in audit_docs:
+                entry = audit_doc.to_dict() or {}
+                actor_role = str(entry.get('actorRole') or '').strip().lower()
+                action_value = str(entry.get('action') or '').strip().upper()
+
+                if actor_role not in {'municipal_admin', 'municipal'}:
+                    continue
+                if action_value not in tracked_actions:
+                    continue
+
+                entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip().lower()
+                entry_region = get_firestore_region_name(
+                    entry.get('region') or entry.get('region_name') or entry.get('regionName') or entry.get('province')
+                )
+                entry_region_norm = str(entry_region or '').strip().upper()
+                user_region_norm = str(user_region or '').strip().upper()
+
+                in_scope_by_muni = bool(municipality_set and entry_muni and entry_muni in municipality_set)
+                in_scope_by_region = bool(user_region_norm and entry_region_norm and entry_region_norm == user_region_norm)
+                if not (in_scope_by_muni or in_scope_by_region or (not user_region_norm and not municipality_set)):
+                    continue
+
+                ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
+                outcome_value = 'SUCCESS' if action_value in {'LOGIN', 'APPROVE', 'APPROVED'} else ('FAIL' if action_value in {'REJECT', 'REJECTED'} else 'WARN')
+
+                logs.append({
+                    'id': audit_doc.id,
+                    'ts': _normalize_ts_for_json(ts_value),
+                    'user': entry.get('actorName') or entry.get('actor') or entry.get('user') or 'Municipal Admin',
+                    'role': 'Municipal',
+                    'module': 'AUTH' if action_value in {'LOGIN', 'LOGOUT'} else 'AUDIT',
+                    'action': action_value,
+                    'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                    'targetId': entry.get('targetId') or audit_doc.id,
+                    'device_type': entry.get('device') or entry.get('device_type') or '',
+                    'ip': entry.get('ip') or '',
+                    'outcome': outcome_value,
+                    'message': entry.get('detail') or entry.get('description') or '',
+                    'forwarded_message': '',
+                    'forwarded_by': '',
+                    'municipality': entry.get('municipality') or entry.get('municipality_name') or '',
+                    'region': entry_region,
+                    'canReview': False,
+                    'diff': entry,
+                })
+        except Exception as e:
+            print(f"[WARN] Failed loading auditLogs source for regional financial logs: {e}")
+
         # Keep entries even if timestamp is missing; frontend handles N/A.
         logs.sort(key=lambda x: x.get('ts') or '', reverse=True)
 
