@@ -12,6 +12,7 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
+REGIONAL_SYSTEM_LOGS_COLLECTION = "regional_system_logs"
 
 
 def _slugify(value: str) -> str:
@@ -34,6 +35,30 @@ def _to_sort_key(value: Any) -> datetime:
         except Exception:
             return datetime.min
     return datetime.min
+
+
+def extract_request_ip(req) -> str:
+    """Best-effort client IP extraction from a Flask request."""
+    if req is None:
+        return ""
+
+    candidates = [
+        req.headers.get("X-Forwarded-For", ""),
+        req.headers.get("X-Real-IP", ""),
+        req.headers.get("CF-Connecting-IP", ""),
+        req.headers.get("True-Client-IP", ""),
+        req.headers.get("Fly-Client-IP", ""),
+        getattr(req, "remote_addr", ""),
+    ]
+
+    for raw in candidates:
+        value = str(raw or "").strip()
+        if not value:
+            continue
+        if "," in value:
+            value = value.split(",", 1)[0].strip()
+        return value
+    return ""
 
 
 # ==================== SYSTEM LOGS ====================
@@ -73,6 +98,83 @@ def add_system_log(
     doc_ref.set(log_entry)
     print(f"[DEBUG] Log saved with ID: {doc_ref.id}")
     return {**log_entry, "id": doc_ref.id}
+
+
+def add_regional_system_log(
+    region: str,
+    municipality: str,
+    user: str,
+    action: str,
+    user_id: str = "",
+    role: str = "municipal",
+    target: str = "",
+    target_id: str = "",
+    module: str = "SYSTEM",
+    outcome: str = "SUCCESS",
+    message: str = "",
+    ip_address: str = "",
+    device_type: str = "Unknown",
+    user_agent: str = "",
+    metadata: dict = None,
+) -> Dict[str, Any]:
+    """Add a region-visible municipal operational log entry to a dedicated collection."""
+    doc_ref = db.collection(REGIONAL_SYSTEM_LOGS_COLLECTION).document()
+    log_entry = {
+        "id": doc_ref.id,
+        "region": str(region or "").strip(),
+        "municipality": str(municipality or "").strip(),
+        "user": str(user or "").strip(),
+        "actorEmail": str(user or "").strip(),
+        "actorId": str(user_id or "").strip(),
+        "role": str(role or "municipal").strip(),
+        "actorRole": str(role or "municipal").strip(),
+        "action": str(action or "").strip().upper(),
+        "target": str(target or "").strip(),
+        "target_id": str(target_id or "").strip(),
+        "targetId": str(target_id or "").strip(),
+        "module": module or "SYSTEM",
+        "outcome": outcome or "SUCCESS",
+        "message": message or "",
+        "ip": str(ip_address or "").strip(),
+        "ipAddress": str(ip_address or "").strip(),
+        "device_type": device_type or "Unknown",
+        "user_agent": user_agent or "",
+        "scope": "MUNICIPAL",
+        "metadata": metadata or {},
+        "created_at": firestore.SERVER_TIMESTAMP,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    doc_ref.set(log_entry)
+    return {**log_entry, "id": doc_ref.id}
+
+
+def list_regional_system_logs(limit: int = 500) -> List[Dict[str, Any]]:
+    """List entries from the dedicated regional system logs collection."""
+    result: List[Dict[str, Any]] = []
+
+    try:
+        query = db.collection(REGIONAL_SYSTEM_LOGS_COLLECTION)
+        query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
+        query = query.limit(limit)
+
+        for doc in query.stream():
+            log_entry = doc.to_dict()
+            if log_entry:
+                result.append(log_entry)
+        return result
+    except Exception as e:
+        print(f"[WARN] Indexed regional system logs query failed, falling back: {e}")
+
+    for doc in db.collection(REGIONAL_SYSTEM_LOGS_COLLECTION).stream():
+        log_entry = doc.to_dict()
+        if log_entry:
+            result.append(log_entry)
+
+    result.sort(
+        key=lambda row: _to_sort_key(row.get("created_at") or row.get("timestamp")),
+        reverse=True,
+    )
+    return result[:limit]
 
 
 def get_system_log(log_id: str) -> Optional[Dict[str, Any]]:

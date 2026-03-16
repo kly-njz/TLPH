@@ -4,6 +4,7 @@ from firebase_auth_middleware import role_required
 from google.cloud.firestore_v1.base_query import FieldFilter
 from datetime import datetime
 from firebase_admin import firestore
+import system_logs_storage
 
 bp = Blueprint('regional', __name__, url_prefix='/regional')
 
@@ -533,65 +534,53 @@ def api_regional_system_logs():
             print(f"[WARN] Failed building scoped municipal users for system logs: {e}")
 
         logs = []
-        audit_docs = db.collection('auditLogs').limit(5000).stream()
-        for audit_doc in audit_docs:
-            entry = audit_doc.to_dict() or {}
-            action_raw = str(entry.get('action') or entry.get('event') or entry.get('type') or '').strip().upper()
-            if not action_raw:
+        regional_log_rows = system_logs_storage.list_regional_system_logs(limit=1000)
+        user_region_norm = str(user_region or '').strip().upper()
+
+        for entry in regional_log_rows:
+            action_value = str(entry.get('action') or '').strip().upper()
+            if action_value not in {'LOGIN', 'LOGOUT', 'APPROVED'}:
                 continue
 
-            if 'LOGIN' in action_raw or 'SIGNIN' in action_raw or action_raw in {'LOG_IN'}:
-                action_value = 'LOGIN'
-            elif 'LOGOUT' in action_raw or 'SIGNOUT' in action_raw or action_raw in {'LOG_OUT'}:
-                action_value = 'LOGOUT'
-            elif 'APPROV' in action_raw:
-                action_value = 'APPROVED'
-            else:
-                continue
-
-            actor_email = str(
-                entry.get('actorEmail')
-                or entry.get('user_email')
-                or entry.get('email')
-                or entry.get('user')
-                or ''
-            ).strip().lower()
-            actor_id = str(
-                entry.get('actorId')
-                or entry.get('userId')
-                or entry.get('uid')
-                or entry.get('user_id')
-                or ''
-            ).strip()
-
-            actor_role = str(entry.get('actorRole') or '').strip().lower()
+            actor_email = str(entry.get('actorEmail') or entry.get('user') or '').strip().lower()
+            actor_id = str(entry.get('actorId') or '').strip()
+            actor_role = str(entry.get('actorRole') or entry.get('role') or '').strip().lower()
+            is_municipal_actor = actor_role in {'municipal_admin', 'municipal'}
             in_scope_by_actor = bool(
                 (actor_email and actor_email in scoped_emails)
                 or (actor_id and actor_id in scoped_user_ids)
             )
-            is_municipal_actor = actor_role in {'municipal_admin', 'municipal'}
-            if not (is_municipal_actor and in_scope_by_actor):
+
+            entry_region = get_firestore_region_name(
+                entry.get('region') or entry.get('region_name') or entry.get('regionName') or user_region
+            )
+            entry_region_norm = str(entry_region or '').strip().upper()
+            entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip()
+            entry_muni_norm = entry_muni.lower()
+            in_scope_by_location = bool(
+                (municipality_set and entry_muni_norm and entry_muni_norm in municipality_set)
+                or (user_region_norm and entry_region_norm and entry_region_norm == user_region_norm)
+                or (not user_region_norm and not municipality_set)
+            )
+
+            if not is_municipal_actor or not (in_scope_by_actor or in_scope_by_location):
                 continue
 
-            entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip()
-            entry_region = get_firestore_region_name(
-                entry.get('region') or entry.get('region_name') or entry.get('regionName') or entry.get('province') or user_region
-            )
             ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
-            details = entry.get('detail') or entry.get('description') or ('Municipal admin signed in.' if action_value == 'LOGIN' else 'Municipal admin signed out.' if action_value == 'LOGOUT' else 'Municipal admin approved an item.')
+            details = entry.get('message') or ('Municipal admin signed in.' if action_value == 'LOGIN' else 'Municipal admin signed out.' if action_value == 'LOGOUT' else 'Municipal admin approved an item.')
 
             logs.append({
-                'id': audit_doc.id,
+                'id': entry.get('id') or '',
                 'ts': _normalize_ts_for_json(ts_value),
-                'user': entry.get('actorName') or entry.get('actor') or actor_email or 'Municipal Admin',
+                'user': entry.get('user') or actor_email or 'Municipal Admin',
                 'role': 'Municipal',
-                'module': 'AUTH' if action_value in {'LOGIN', 'LOGOUT'} else 'AUDIT',
+                'module': entry.get('module') or ('AUTH' if action_value in {'LOGIN', 'LOGOUT'} else 'AUDIT'),
                 'action': action_value,
                 'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
-                'targetId': entry.get('targetId') or audit_doc.id,
-                'device_type': entry.get('device') or entry.get('device_type') or '',
+                'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
+                'device_type': entry.get('device_type') or '',
                 'ip': _extract_ip_value(entry),
-                'outcome': 'SUCCESS',
+                'outcome': entry.get('outcome') or 'SUCCESS',
                 'message': details,
                 'municipality': entry_muni,
                 'region': entry_region,
@@ -599,6 +588,7 @@ def api_regional_system_logs():
             })
 
         logs.sort(key=lambda x: x.get('ts') or '', reverse=True)
+        logs = logs[:40]
         return jsonify({'success': True, 'logs': logs, 'region': user_region}), 200
     except Exception as e:
         print(f"[ERROR] Regional system logs failed: {e}")
