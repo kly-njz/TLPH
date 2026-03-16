@@ -3,6 +3,7 @@ from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required
 from google.cloud.firestore_v1.base_query import FieldFilter
 from datetime import datetime
+from firebase_admin import firestore
 
 bp = Blueprint('regional', __name__, url_prefix='/regional')
 
@@ -40,6 +41,78 @@ def get_firestore_region_name(session_region):
         return session_region_upper
     # Return as-is if no mapping found
     return session_region_upper
+
+
+def _resolve_regional_scope(db):
+    """Resolve region + municipality scope for the current regional admin."""
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region)
+
+    if not user_region:
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+        try:
+            if user_id:
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+            if not user_region and user_email:
+                docs = db.collection('users').where(filter=FieldFilter('email', '==', user_email)).limit(1).stream()
+                for doc in docs:
+                    user_data = doc.to_dict() or {}
+                    user_region = get_firestore_region_name(
+                        user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
+                    )
+                    break
+        except Exception as e:
+            print(f"[WARN] Unable to resolve regional scope: {e}")
+
+    municipalities = []
+    try:
+        if user_region:
+            muni_doc = db.collection('municipalities').document(user_region).get()
+            if muni_doc.exists:
+                municipalities = muni_doc.to_dict().get('municipalities', []) or []
+    except Exception as e:
+        print(f"[WARN] Unable to resolve municipalities for region {user_region}: {e}")
+
+    municipality_set = {str(m).strip().lower() for m in municipalities if m}
+    return user_region, municipality_set
+
+
+def _normalize_ts_for_json(value):
+    if not value:
+        return None
+    try:
+        if hasattr(value, 'isoformat'):
+            return value.isoformat()
+        if hasattr(value, 'to_datetime'):
+            return value.to_datetime().isoformat()
+        return str(value)
+    except Exception:
+        return str(value)
+
+
+def _transaction_in_regional_scope(tx_data, user_region, municipality_set):
+    tx_municipality = str(
+        tx_data.get('municipality')
+        or tx_data.get('municipality_name')
+        or tx_data.get('target_municipality')
+        or ''
+    ).strip().lower()
+    tx_region = get_firestore_region_name(
+        tx_data.get('region') or tx_data.get('region_name') or tx_data.get('regionName')
+    )
+    tx_region_norm = str(tx_region or '').strip().upper()
+    user_region_norm = str(user_region or '').strip().upper()
+
+    in_scope_by_municipality = bool(municipality_set and tx_municipality and tx_municipality in municipality_set)
+    in_scope_by_region = bool(user_region_norm and tx_region_norm and tx_region_norm == user_region_norm)
+
+    return in_scope_by_municipality or in_scope_by_region
 
 @bp.route('/profile')
 @role_required('regional','regional_admin')
@@ -149,6 +222,137 @@ def municipal_accounts_create():
 @role_required('regional','regional_admin')
 def audit_logs_view():
     return render_template('regional/audit-logs-regional-view.html')
+
+
+@bp.route('/api/audit/forwarded-logs', methods=['GET'])
+@role_required('regional','regional_admin')
+def api_regional_forwarded_audit_logs():
+    """Return forwarded municipal transaction logs for regional review/audit."""
+    try:
+        db = get_firestore_db()
+        user_region, municipality_set = _resolve_regional_scope(db)
+
+        logs = []
+        tx_docs = db.collection('transactions').limit(5000).stream()
+
+        for tx_doc in tx_docs:
+            tx = tx_doc.to_dict() or {}
+
+            if not _transaction_in_regional_scope(tx, user_region, municipality_set):
+                continue
+
+            status = str(tx.get('status') or '').strip().upper()
+            forwarded_message = str(tx.get('forwarded_message') or tx.get('forwardMessage') or '').strip()
+            forwarded_flag = bool(tx.get('forwarded_to_region')) or status == 'FORWARDED' or bool(forwarded_message)
+            reviewed_flag = (
+                status in {'APPROVED', 'REJECTED'}
+                and (
+                    str(tx.get('approvedByLevel') or '').strip().lower() == 'regional'
+                    or str(tx.get('rejectedByLevel') or '').strip().lower() == 'regional'
+                    or bool(tx.get('reviewed_from_forwarded'))
+                )
+            )
+
+            if not (forwarded_flag or reviewed_flag):
+                continue
+
+            ts_value = (
+                tx.get('forwarded_at')
+                or tx.get('updated_at')
+                or tx.get('created_at')
+                or tx.get('createdAt')
+                or tx.get('updatedAt')
+            )
+            status_value = status or 'FORWARDED'
+            outcome_value = 'SUCCESS' if status_value == 'APPROVED' else ('FAIL' if status_value == 'REJECTED' else 'WARN')
+
+            logs.append({
+                'id': tx_doc.id,
+                'ts': _normalize_ts_for_json(ts_value),
+                'user': tx.get('forwarded_by') or tx.get('updated_by') or tx.get('user_email') or 'Municipal Admin',
+                'role': 'Municipal',
+                'module': 'PAYMENTS',
+                'action': status_value,
+                'target': tx.get('transaction_name') or tx.get('description') or 'Payment',
+                'targetId': tx.get('invoice_id') or tx.get('external_id') or tx_doc.id,
+                'ip': tx.get('ip') or '',
+                'outcome': outcome_value,
+                'message': tx.get('description') or '',
+                'forwarded_message': forwarded_message,
+                'forwarded_by': tx.get('forwarded_by') or tx.get('updated_by') or '',
+                'forwarded_at': _normalize_ts_for_json(tx.get('forwarded_at')),
+                'municipality': tx.get('municipality') or tx.get('municipality_name') or tx.get('target_municipality') or '',
+                'region': get_firestore_region_name(tx.get('region') or tx.get('region_name') or tx.get('regionName')),
+                'diff': tx,
+            })
+
+        logs = [l for l in logs if l.get('ts')]
+        logs.sort(key=lambda x: x.get('ts') or '', reverse=True)
+        return jsonify({'success': True, 'logs': logs, 'region': user_region}), 200
+    except Exception as e:
+        print(f"[ERROR] Regional forwarded audit logs failed: {e}")
+        return jsonify({'success': False, 'error': str(e), 'logs': []}), 200
+
+
+@bp.route('/api/audit/forwarded-logs/<log_id>/decision', methods=['POST'])
+@role_required('regional','regional_admin')
+def api_regional_forwarded_audit_decision(log_id):
+    """Approve or reject a forwarded municipal transaction from regional audit."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        decision = str(payload.get('decision') or '').strip().upper()
+        decision_note = str(payload.get('note') or '').strip()
+
+        if decision not in {'APPROVED', 'REJECTED'}:
+            return jsonify({'success': False, 'error': 'decision must be APPROVED or REJECTED'}), 400
+
+        db = get_firestore_db()
+        user_region, municipality_set = _resolve_regional_scope(db)
+
+        tx_ref = db.collection('transactions').document(log_id)
+        tx_doc = tx_ref.get()
+        if not tx_doc.exists:
+            return jsonify({'success': False, 'error': 'Transaction not found'}), 404
+
+        tx_data = tx_doc.to_dict() or {}
+        if not _transaction_in_regional_scope(tx_data, user_region, municipality_set):
+            return jsonify({'success': False, 'error': 'Out of regional scope'}), 403
+
+        current_status = str(tx_data.get('status') or '').strip().upper()
+        is_forwarded_context = bool(tx_data.get('forwarded_to_region')) or bool(tx_data.get('forwarded_message')) or current_status == 'FORWARDED'
+        if not is_forwarded_context:
+            return jsonify({'success': False, 'error': 'Transaction is not in forwarded-to-region context'}), 400
+
+        update_payload = {
+            'status': decision,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': session.get('user_email', 'system'),
+            'reviewed_from_forwarded': True,
+            'regional_reviewed_at': firestore.SERVER_TIMESTAMP,
+            'regional_reviewed_by': session.get('user_email', 'system'),
+        }
+
+        if decision_note:
+            update_payload['regional_decision_note'] = decision_note
+
+        if decision == 'APPROVED':
+            update_payload.update({
+                'approvedByRegional': session.get('user_email', 'system'),
+                'approvedByLevel': 'Regional',
+                'approvedAtRegional': firestore.SERVER_TIMESTAMP,
+            })
+        else:
+            update_payload.update({
+                'rejectedByRegional': session.get('user_email', 'system'),
+                'rejectedByLevel': 'Regional',
+                'rejectedAtRegional': firestore.SERVER_TIMESTAMP,
+            })
+
+        tx_ref.update(update_payload)
+        return jsonify({'success': True, 'id': log_id, 'status': decision}), 200
+    except Exception as e:
+        print(f"[ERROR] Regional forwarded decision failed: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @bp.route('/system-logs') 
 @role_required('regional','regional_admin')
