@@ -23,6 +23,7 @@
         .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
         .gov-input:focus { border-color: #1e40af; }
         .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+        .gov-label { display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 2px; letter-spacing: 0.025em; }
 
         /* Chart Overlap Fix */
         .chart-safe-zone { position: relative; flex: 1; min-height: 0; width: 100%; }
@@ -56,7 +57,7 @@
                     <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
                         <span class="material-icons-round text-[14px]">file_download</span> Export Roster
                     </button>
-                    <button class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+                    <button id="registerApplicantBtn" type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
                         <span class="material-icons-round text-[14px]">person_add</span> Register Applicant
                     </button>
                 </div>
@@ -226,6 +227,53 @@
         </main>
     </div>
 
+    <div id="registerModal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-[2px] shadow-2xl w-full max-w-xl overflow-hidden border border-slate-400">
+            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Register Applicant</h3>
+                <button type="button" id="closeRegisterBtn" class="text-slate-400 hover:text-white">
+                    <span class="material-icons-round text-[16px]">close</span>
+                </button>
+            </div>
+            <form id="registerForm" class="p-4 bg-slate-50 space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="gov-label">Full Name</label>
+                        <input id="regName" required type="text" class="gov-input w-full uppercase" placeholder="Last, First M.">
+                    </div>
+                    <div>
+                        <label class="gov-label">Reference No.</label>
+                        <input id="regRef" type="text" class="gov-input w-full font-mono uppercase" placeholder="APP-YYYY-XXXX">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label class="gov-label">Region</label>
+                        <select id="regRegion" required class="gov-input w-full cursor-pointer uppercase">
+                            <option value="">Select Region</option>
+                            <option>NCR</option><option>Region I</option><option>Region IV-A</option><option>CAR</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="gov-label">Status</label>
+                        <select id="regStatus" required class="gov-input w-full cursor-pointer uppercase">
+                            <option value="">Select Status</option>
+                            <option>Approved</option><option>Pending</option><option>Rejected</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="gov-label">Date Logged</label>
+                        <input id="regDate" required type="date" class="gov-input w-full cursor-pointer">
+                    </div>
+                </div>
+                <div class="pt-3 border-t border-slate-200 mt-3 flex justify-end gap-2">
+                    <button type="button" id="cancelRegisterBtn" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 shadow-sm">Cancel</button>
+                    <button type="submit" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Save Record</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // --- CHARTS CONFIG ---
         Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -291,6 +339,86 @@
         document.getElementById('liveSearchInput').addEventListener('input', runFilters);
         document.getElementById('regionLiveFilter').addEventListener('change', runFilters);
         document.getElementById('statusLiveFilter').addEventListener('change', runFilters);
+
+        // --- REGISTER APPLICANT MODAL ---
+        const registerModal = document.getElementById('registerModal');
+        const registerForm = document.getElementById('registerForm');
+
+        function openRegisterModal() {
+            registerModal.classList.remove('hidden');
+            registerModal.classList.add('flex');
+        }
+
+        function closeRegisterModal() {
+            registerModal.classList.add('hidden');
+            registerModal.classList.remove('flex');
+        }
+
+        function generateRefNo() {
+            const year = new Date().getFullYear();
+            const serial = Math.floor(1000 + Math.random() * 9000);
+            return `APP-${year}-${serial}`;
+        }
+
+        function statusBadgeClass(status) {
+            if (status === 'Approved') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            if (status === 'Pending') return 'bg-amber-50 text-amber-700 border-amber-200';
+            if (status === 'Rejected') return 'bg-rose-50 text-rose-700 border-rose-200';
+            return 'bg-slate-100 text-slate-700 border-slate-300';
+        }
+
+        document.getElementById('registerApplicantBtn').addEventListener('click', openRegisterModal);
+        document.getElementById('closeRegisterBtn').addEventListener('click', closeRegisterModal);
+        document.getElementById('cancelRegisterBtn').addEventListener('click', closeRegisterModal);
+
+        registerModal.addEventListener('click', (event) => {
+            if (event.target === registerModal) {
+                closeRegisterModal();
+            }
+        });
+
+        registerForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            const name = (document.getElementById('regName').value || '').trim();
+            const ref = (document.getElementById('regRef').value || '').trim() || generateRefNo();
+            const region = (document.getElementById('regRegion').value || '').trim();
+            const status = (document.getElementById('regStatus').value || '').trim();
+            const dateLogged = (document.getElementById('regDate').value || '').trim();
+
+            if (!name || !region || !status || !dateLogged) {
+                return;
+            }
+
+            const tbody = document.getElementById('tbody');
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-blue-50 transition app-row';
+            row.innerHTML = `
+                <td class="border-r border-slate-100">
+                    <div class="font-black text-slate-900 uppercase">${name.toUpperCase()}</div>
+                    <div class="text-[9px] text-slate-500 font-mono">Ref: ${ref.toUpperCase()}</div>
+                </td>
+                <td class="border-r border-slate-100 text-center font-bold text-blue-800 uppercase">${region.toUpperCase()}</td>
+                <td class="text-center border-r border-slate-100">
+                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${statusBadgeClass(status)}">
+                        ${status}
+                    </span>
+                </td>
+                <td class="border-r border-slate-100 text-slate-600 font-mono text-center">${dateLogged}</td>
+                <td class="text-center">
+                    <div class="flex justify-center gap-2">
+                        <button class="text-blue-700 font-bold uppercase hover:underline text-[9px]">Profile</button>
+                        <button class="text-emerald-700 font-bold uppercase hover:underline text-[9px]">Clear</button>
+                        <button class="text-rose-700 font-bold uppercase hover:underline text-[9px]">Deny</button>
+                    </div>
+                </td>
+            `;
+            tbody.prepend(row);
+
+            registerForm.reset();
+            closeRegisterModal();
+            runFilters();
+        });
     </script>
 </body>
 </html>
