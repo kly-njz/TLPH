@@ -595,6 +595,38 @@ def api_regional_system_logs():
         return jsonify({'success': False, 'error': str(e), 'logs': []}), 200
 
 
+@bp.route('/api/system-logs/cleanup', methods=['POST'])
+@role_required('regional','regional_admin')
+def api_regional_system_logs_cleanup():
+    """Manually run retention cleanup for expired regional system logs."""
+    try:
+        body = request.get_json(silent=True) or {}
+
+        # Safe bounds to prevent expensive accidental runs.
+        requested_batch = int(body.get('batch_size', 200) or 200)
+        requested_rounds = int(body.get('rounds', 1) or 1)
+
+        batch_size = max(1, min(requested_batch, 500))
+        rounds = max(1, min(requested_rounds, 20))
+
+        total_deleted = 0
+        for _ in range(rounds):
+            deleted = system_logs_storage.prune_expired_regional_system_logs(batch_size=batch_size)
+            total_deleted += deleted
+            if deleted < batch_size:
+                break
+
+        return jsonify({
+            'success': True,
+            'deleted': total_deleted,
+            'batch_size': batch_size,
+            'rounds': rounds,
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] Regional system logs cleanup failed: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/audit/forwarded-logs', methods=['GET'])
 @role_required('regional','regional_admin')
 def api_regional_forwarded_audit_logs():
