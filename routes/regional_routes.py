@@ -96,6 +96,38 @@ def _normalize_ts_for_json(value):
         return str(value)
 
 
+def _extract_ip_value(record):
+    """Best-effort IP extraction across varying field names/formats."""
+    if not isinstance(record, dict):
+        return ''
+
+    candidates = [
+        record.get('ip'),
+        record.get('ip_address'),
+        record.get('ipAddress'),
+        record.get('client_ip'),
+        record.get('clientIp'),
+        record.get('remote_addr'),
+        record.get('remoteAddr'),
+        record.get('x_forwarded_for'),
+        record.get('xForwardedFor'),
+        record.get('request_ip'),
+        record.get('requestIp'),
+        record.get('requester_ip'),
+        record.get('requesterIp'),
+    ]
+
+    for raw in candidates:
+        value = str(raw or '').strip()
+        if not value:
+            continue
+        # If coming from X-Forwarded-For chain, use first IP.
+        if ',' in value:
+            value = value.split(',')[0].strip()
+        return value
+    return ''
+
+
 def _transaction_in_regional_scope(tx_data, user_region, municipality_set):
     tx_municipality = str(
         tx_data.get('municipality')
@@ -310,7 +342,7 @@ def api_regional_financial_audit_logs():
                 'target': tx.get('transaction_name') or tx.get('description') or 'Payment',
                 'targetId': tx.get('invoice_id') or tx.get('external_id') or tx_doc.id,
                 'device_type': tx.get('device_type') or tx.get('device') or '',
-                'ip': tx.get('ip') or '',
+                'ip': _extract_ip_value(tx),
                 'outcome': outcome_value,
                 'message': tx.get('description') or '',
                 'forwarded_message': tx.get('forwarded_message') or tx.get('forwardMessage') or '',
@@ -350,7 +382,7 @@ def api_regional_financial_audit_logs():
                 'target': fund.get('target_municipality') or 'Municipality',
                 'targetId': fund.get('reference') or fund_doc.id,
                 'device_type': '',
-                'ip': '',
+                'ip': _extract_ip_value(fund),
                 'outcome': outcome_value,
                 'message': fund.get('description') or '',
                 'forwarded_message': '',
@@ -435,7 +467,7 @@ def api_regional_financial_audit_logs():
                     'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
                     'targetId': entry.get('targetId') or audit_doc.id,
                     'device_type': entry.get('device') or entry.get('device_type') or '',
-                    'ip': entry.get('ip') or '',
+                    'ip': _extract_ip_value(entry),
                     'outcome': outcome_value,
                     'message': entry.get('detail') or entry.get('description') or '',
                     'forwarded_message': '',
@@ -510,7 +542,7 @@ def api_regional_forwarded_audit_logs():
                 'action': status_value,
                 'target': tx.get('transaction_name') or tx.get('description') or 'Payment',
                 'targetId': tx.get('invoice_id') or tx.get('external_id') or tx_doc.id,
-                'ip': tx.get('ip') or '',
+                'ip': _extract_ip_value(tx),
                 'outcome': outcome_value,
                 'message': tx.get('description') or '',
                 'forwarded_message': forwarded_message,
