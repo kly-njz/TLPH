@@ -68,7 +68,7 @@
         dateTo: '',
         status: 'All',
         type: 'All',
-        format: 'PDF'
+        format: 'CSV'
       },
       openViewForm(event) {
         const row = event.currentTarget.closest('tr');
@@ -127,9 +127,13 @@
           dateTo: '',
           status: 'All',
           type: 'All',
-          format: 'PDF'
+          format: 'CSV'
         };
         this.reportModalOpen = true;
+      },
+      generateReport() {
+        window.generateLeaveReport(this.reportData);
+        this.reportModalOpen = false;
       }
     }">
 
@@ -572,9 +576,8 @@
                   <div>
                     <label class="gov-label">Format</label>
                     <select class="gov-input w-full" x-model="reportData.format">
-                      <option>PDF</option>
-                      <option>Excel</option>
                       <option>CSV</option>
+                      <option>Excel</option>
                     </select>
                   </div>
                   <div class="flex items-end">
@@ -586,7 +589,7 @@
 
             <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
               <button type="button" @click="reportModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">Cancel</button>
-              <button type="button" @click="reportModalOpen = false" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Generate</button>
+              <button type="button" @click="generateReport()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Generate</button>
             </div>
 
           </div>
@@ -726,6 +729,128 @@
         document.getElementById('typeFilter').value = '';
         document.getElementById('statusFilter').value = '';
         filterTable();
+    }
+
+    function generateLeaveReport(reportData) {
+      const rows = Array.from(document.querySelectorAll('.leave-row'));
+      const selectedStatus = (reportData.status || 'All').toLowerCase();
+      const selectedType = (reportData.type || 'All').toLowerCase();
+      const dateFrom = reportData.dateFrom ? new Date(reportData.dateFrom + 'T00:00:00') : null;
+      const dateTo = reportData.dateTo ? new Date(reportData.dateTo + 'T23:59:59') : null;
+      const format = (reportData.format || 'CSV').toLowerCase();
+
+      const filtered = rows.filter((row) => {
+        const data = row.dataset;
+        const status = (data.status || '').toLowerCase();
+        const type = (data.type || '').toLowerCase();
+
+        const dateFiledCell = row.querySelector('td');
+        const dateFiledText = dateFiledCell ? dateFiledCell.textContent.trim() : '';
+        const dateFiled = dateFiledText ? new Date(dateFiledText + 'T00:00:00') : null;
+
+        const statusOk = selectedStatus === 'all' || status === selectedStatus;
+        const typeOk = selectedType === 'all' || type === selectedType;
+        const fromOk = !dateFrom || (dateFiled && dateFiled >= dateFrom);
+        const toOk = !dateTo || (dateFiled && dateFiled <= dateTo);
+
+        return statusOk && typeOk && fromOk && toOk;
+      });
+
+      const headers = [
+        'Date Filed',
+        'Applicant',
+        'Position',
+        'Office',
+        'Leave Type',
+        'Where Leave Will Be Spent',
+        'Commutation',
+        'Working Days',
+        'Inclusive Dates',
+        'Status',
+        'Application No',
+        'Remarks'
+      ];
+
+      const records = filtered.map((row) => {
+        const data = row.dataset;
+        const dateFiledCell = row.querySelector('td');
+        const dateFiledText = dateFiledCell ? dateFiledCell.textContent.trim() : '';
+        return [
+          dateFiledText,
+          data.applicantName || '',
+          data.position || '',
+          data.office || '',
+          data.leaveType || '',
+          data.leaveWhere || '',
+          data.commutation || '',
+          data.workingDays || '',
+          data.inclusiveDates || '',
+          data.status || '',
+          data.applicationNo || '',
+          data.remarks || ''
+        ];
+      });
+
+      const baseName = 'leave-report-' + new Date().toISOString().slice(0, 10);
+
+      if (format === 'excel') {
+        downloadExcel(headers, records, baseName + '.xls');
+      } else {
+        downloadCsv(headers, records, baseName + '.csv');
+      }
+    }
+
+    function downloadCsv(headers, rows, filename) {
+      const escapeValue = (value) => {
+        const str = String(value ?? '');
+        if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+          return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+      };
+
+      const lines = [headers, ...rows].map((row) => row.map(escapeValue).join(','));
+      const csv = lines.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadExcel(headers, rows, filename) {
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+      const headerRow = '<tr>' + headers.map((h) => '<th>' + escapeHtml(h) + '</th>').join('') + '</tr>';
+      const bodyRows = rows
+        .map((row) => '<tr>' + row.map((cell) => '<td>' + escapeHtml(cell) + '</td>').join('') + '</tr>')
+        .join('');
+
+      const table = '<table>' + headerRow + bodyRows + '</table>';
+      const html = `
+        <html>
+          <head><meta charset="utf-8" /></head>
+          <body>${table}</body>
+        </html>
+      `;
+
+      const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
   </script>
 </body>
