@@ -193,7 +193,7 @@
 
             <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
                 <span id="recordCountDisplay" class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">Showing all records - FY 2026</span>
-                <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
+                <button id="exportPurchasesBtn" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
                     <span class="material-icons-round text-[12px]">file_download</span> Export CSV
                 </button>
             </div>
@@ -355,6 +355,7 @@
 
     function setupPurchaseActions() {
       const addPurchaseBtn = document.getElementById('addPurchaseBtn');
+      const exportPurchasesBtn = document.getElementById('exportPurchasesBtn');
       const purchaseModal = document.getElementById('purchaseModal');
       const purchaseDetailModal = document.getElementById('purchaseDetailModal');
       const purchaseModalClose = document.getElementById('purchaseModalClose');
@@ -365,6 +366,10 @@
 
       if (addPurchaseBtn) {
         addPurchaseBtn.addEventListener('click', openPurchaseModal);
+      }
+
+      if (exportPurchasesBtn) {
+        exportPurchasesBtn.addEventListener('click', exportPurchasesCsv);
       }
 
       if (purchaseModalClose) {
@@ -419,6 +424,46 @@
           }
         });
       }
+    }
+
+    function exportPurchasesCsv() {
+      const rows = Array.from(document.querySelectorAll('#purchaseBody tr.data-row'))
+        .filter(row => row.style.display !== 'none');
+
+      const header = ['Supplier', 'Product / Item', 'Procured Qty', 'Transaction Date'];
+      const lines = [];
+      lines.push(header.map(value => '"' + value.replace(/"/g, '""') + '"').join(','));
+
+      rows.forEach(row => {
+        const cells = row.cells;
+        if (!cells || cells.length < 4) return;
+
+        const supplier = (cells[0].innerText || '').trim().replace(/\s+/g, ' ');
+        const product = (cells[1].innerText || '').trim().replace(/\s+/g, ' ');
+        const quantity = (cells[2].innerText || '').trim().replace(/\s+/g, ' ');
+        const date = (cells[3].innerText || '').trim().replace(/\s+/g, ' ');
+
+        const values = [supplier, product, quantity, date].map(v => {
+          const safe = v.replace(/"/g, '""');
+          return '"' + safe + '"';
+        });
+
+        lines.push(values.join(','));
+      });
+
+      const csvContent = lines.join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `national_purchases_${dateStr}.csv`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
 
     function openPurchaseModal() {
