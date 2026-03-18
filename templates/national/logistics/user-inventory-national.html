@@ -53,7 +53,7 @@
         <button onclick="openModal('add')" class="px-4 py-1.5 bg-slate-900 text-white rounded-[2px] text-[10px] font-black flex items-center gap-1.5 shadow-sm hover:bg-slate-800 transition-all uppercase tracking-wider">
           <span class="material-icons-round text-[14px]">add_box</span> Add Record
         </button>
-        <button class="px-4 py-1.5 border border-slate-300 bg-white text-slate-700 rounded-[2px] text-[10px] font-black flex items-center gap-1.5 hover:bg-slate-50 shadow-sm uppercase tracking-wider">
+        <button onclick="exportCsv()" class="px-4 py-1.5 border border-slate-300 bg-white text-slate-700 rounded-[2px] text-[10px] font-black flex items-center gap-1.5 hover:bg-slate-50 shadow-sm uppercase tracking-wider">
           <span class="material-icons-round text-[14px]">file_download</span> Export CSV
         </button>
       </div>
@@ -469,6 +469,51 @@
     // Sort owners by top stock and render
     const topO = Object.entries(owns).sort((a,b) => b[1] - a[1]).slice(0,5);
     renderChart('chartOwner', 'bar', topO.map(x=>x[0]), topO.map(x=>x[1]), true);
+  }
+
+  function exportCsv() {
+    const table = document.getElementById('mainTable');
+    const headerCells = [...table.querySelectorAll('thead th')];
+    const headers = headerCells.map(th => th.innerText.trim());
+
+    const rows = [...table.querySelectorAll('tbody tr.data-row')].filter(
+      row => row.style.display !== 'none'
+    );
+
+    if (rows.length === 0) {
+      alert('No visible records to export. Adjust filters and try again.');
+      return;
+    }
+
+    const colCount = headers.length;
+    const exportHeaders = headers.slice(0, colCount - 1); // drop Actions
+    const exportRows = rows.map(tr => {
+      const cells = [...tr.cells].map(td => td.innerText.replace(/\s+/g, ' ').trim());
+      return cells.slice(0, colCount - 1);
+    });
+
+    const csvLines = [exportHeaders, ...exportRows].map(row =>
+      row.map(escapeCsvValue).join(',')
+    );
+
+    const csvContent = csvLines.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `user-inventory-${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function escapeCsvValue(value) {
+    const needsQuotes = /[",\n]/.test(value);
+    if (!needsQuotes) return value;
+    return `"${value.replace(/"/g, '""')}"`;
   }
 
   function renderChart(id, type, labels, data, horizontal = false) {
