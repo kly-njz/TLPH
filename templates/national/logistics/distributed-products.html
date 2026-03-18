@@ -208,7 +208,7 @@
 
             <div class="bg-slate-50 border-t border-slate-200 px-3 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 shrink-0">
                 <span id="recordCountDisplay" class="font-bold uppercase tracking-widest text-[9px] italic">Showing <b class="text-slate-700">0</b> records</span>
-                <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1 no-print">
+                <button id="exportDistBtn" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1 no-print">
                     <span class="material-icons-round text-[12px]">file_download</span> Export CSV
                 </button>
             </div>
@@ -401,6 +401,46 @@
         applyFilters();
     }
 
+    function exportDistCsv() {
+        const rows = Array.from(document.querySelectorAll('#distTableBody tr.data-row'))
+            .filter(row => row.style.display !== 'none');
+
+        const header = ['Asset / Product Name', 'Official Recipient', 'Volume / Qty', 'Date Dispatched'];
+        const lines = [];
+        lines.push(header.map(value => '"' + value.replace(/"/g, '""') + '"').join(','));
+
+        rows.forEach(row => {
+            const cells = row.cells;
+            if (!cells || cells.length < 4) return;
+
+            const product = (cells[0].innerText || '').trim().replace(/\s+/g, ' ');
+            const recipient = (cells[1].innerText || '').trim().replace(/\s+/g, ' ');
+            const qty = (cells[2].innerText || '').trim().replace(/\s+/g, ' ');
+            const date = (cells[3].innerText || '').trim().replace(/\s+/g, ' ');
+
+            const values = [product, recipient, qty, date].map(v => {
+                const safe = v.replace(/"/g, '""');
+                return '"' + safe + '"';
+            });
+
+            lines.push(values.join(','));
+        });
+
+        const csvContent = lines.join('\r\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        const dateStr = new Date().toISOString().slice(0, 10);
+        link.href = url;
+        link.download = `distributed_products_${dateStr}.csv`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
     // Live Filter & Dynamic KPI Engine
     function applyFilters() {
         const searchVal = document.getElementById('searchInput').value.toLowerCase();
@@ -497,6 +537,7 @@
         const detailModal = document.getElementById('detailModal');
         const detailCloseBtn = document.getElementById('detailCloseBtn');
         const distTableBody = document.getElementById('distTableBody');
+        const exportDistBtn = document.getElementById('exportDistBtn');
 
         if (addRecordBtn) {
             addRecordBtn.addEventListener('click', openRecordModal);
@@ -520,6 +561,10 @@
 
         if (recordForm) {
             recordForm.addEventListener('submit', handleRecordSubmit);
+        }
+
+        if (exportDistBtn) {
+            exportDistBtn.addEventListener('click', exportDistCsv);
         }
 
         if (detailCloseBtn) {
