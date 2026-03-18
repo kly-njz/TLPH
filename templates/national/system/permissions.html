@@ -50,7 +50,7 @@
             </div>
           </div>
           <div class="flex gap-2">
-            <button class="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
+            <button id="exportMatrixBtn" class="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
               <span class="material-icons-round text-[14px]">file_download</span> Export
             </button>
             <button onclick="openRoleModal()" class="bg-violet-700 hover:bg-violet-800 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
@@ -65,7 +65,7 @@
               <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Roles</span>
               <span class="material-icons-round text-violet-700 text-[14px]">shield</span>
             </div>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">5</div>
+            <div id="activeRolesCount" class="text-lg font-black text-slate-800 mt-0.5 leading-none">5</div>
           </div>
 
           <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-600">
@@ -209,6 +209,53 @@
     </div>
   </div>
 
+  <!-- Create Role Modal -->
+  <div id="roleModal" class="fixed inset-0 z-[110] hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-[2px]">
+    <div class="bg-white w-full max-w-[480px] rounded-[2px] shadow-2xl border border-slate-300 overflow-hidden">
+      <div class="flex items-center justify-between bg-slate-800 text-white px-4 py-2">
+        <div class="text-[11px] font-black uppercase tracking-widest">Create Role</div>
+        <button type="button" onclick="closeRoleModal()" class="text-slate-200 hover:text-white">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+      <form id="createRoleForm" class="p-4 space-y-3 bg-slate-50">
+        <div>
+          <label class="text-[9px] font-black uppercase tracking-widest text-slate-600">Role Name</label>
+          <input id="newRoleName" type="text" class="gov-input w-full mt-1" placeholder="e.g., National Compliance Officer" required>
+        </div>
+        <div>
+          <label class="text-[9px] font-black uppercase tracking-widest text-slate-600">Scope</label>
+          <select id="newRoleScope" class="gov-input w-full mt-1 cursor-pointer">
+            <option value="National">National</option>
+            <option value="All Entities">All Entities</option>
+          </select>
+        </div>
+
+        <div>
+          <div class="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-2">Default Permissions</div>
+          <div class="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-700">
+            <label class="flex items-center gap-2"><input type="checkbox" class="perm-default" value="View" checked> View</label>
+            <label class="flex items-center gap-2"><input type="checkbox" class="perm-default" value="Create"> Create</label>
+            <label class="flex items-center gap-2"><input type="checkbox" class="perm-default" value="Edit"> Edit</label>
+            <label class="flex items-center gap-2"><input type="checkbox" class="perm-default" value="Submit"> Submit</label>
+            <label class="flex items-center gap-2"><input type="checkbox" class="perm-default" value="Approve"> Approve</label>
+            <label class="flex items-center gap-2"><input type="checkbox" class="perm-default" value="Reverse"> Reverse</label>
+            <label class="flex items-center gap-2"><input type="checkbox" class="perm-default" value="Export" checked> Export</label>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-1">
+          <button type="button" onclick="closeRoleModal()" class="px-3 py-1.5 rounded-[2px] border border-slate-300 bg-white text-slate-600 font-black uppercase text-[9px] hover:bg-slate-100 transition">
+            Cancel
+          </button>
+          <button type="submit" class="px-3 py-1.5 rounded-[2px] bg-violet-700 text-white font-black uppercase text-[9px] hover:bg-violet-800 transition shadow-sm">
+            Create Role
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
@@ -237,6 +284,14 @@
         },
         options: { ...chartConfig, cutout: '65%', plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: {size: 8} } } } }
       });
+
+      const exportBtn = document.getElementById('exportMatrixBtn');
+      if (exportBtn) exportBtn.addEventListener('click', exportPermissionMatrix);
+
+      const form = document.getElementById('createRoleForm');
+      if (form) form.addEventListener('submit', handleCreateRole);
+
+      updateRoleCount();
     });
 
     // ===== Matrix Logic =====
@@ -310,7 +365,130 @@
         alert("Permission matrix updated successfully.");
     }
 
-    function openRoleModal() { alert('Open Create Role Modal logic here.'); }
+    function openRoleModal() {
+      const modal = document.getElementById('roleModal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      const input = document.getElementById('newRoleName');
+      if (input) input.focus();
+    }
+
+    function closeRoleModal() {
+      const modal = document.getElementById('roleModal');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      const form = document.getElementById('createRoleForm');
+      if (form) form.reset();
+    }
+
+    function handleCreateRole(event) {
+      event.preventDefault();
+
+      const nameInput = document.getElementById('newRoleName');
+      const scopeSelect = document.getElementById('newRoleScope');
+      const roleName = (nameInput?.value || '').trim();
+      const scope = scopeSelect?.value || 'National';
+
+      if (!roleName) {
+        alert('Please provide a role name.');
+        return;
+      }
+
+      const existing = Array.from(document.querySelectorAll('.role-row'))
+        .some(row => (row.dataset.role || '').toLowerCase() === roleName.toLowerCase());
+      if (existing) {
+        alert('Role name already exists. Please choose a unique name.');
+        return;
+      }
+
+      const defaults = new Set(
+        Array.from(document.querySelectorAll('.perm-default'))
+          .filter(cb => cb.checked)
+          .map(cb => cb.value)
+      );
+
+      const tbody = document.getElementById('matrixBody');
+      if (!tbody) return;
+
+      const row = document.createElement('tr');
+      row.className = 'border-b border-slate-200 hover:bg-slate-50 transition role-row';
+      row.dataset.role = roleName;
+      row.dataset.scope = scope;
+
+      row.innerHTML = `
+        <td class="px-3 py-1.5 font-bold text-slate-900 sticky left-0 bg-white z-10 border-r border-slate-200">${escapeHtml(roleName)}</td>
+        <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" ${defaults.has('View') ? 'checked' : ''}></td>
+        <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" ${defaults.has('Create') ? 'checked' : ''}></td>
+        <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" ${defaults.has('Edit') ? 'checked' : ''}></td>
+        <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" ${defaults.has('Submit') ? 'checked' : ''}></td>
+        <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" ${defaults.has('Approve') ? 'checked' : ''}></td>
+        <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" ${defaults.has('Reverse') ? 'checked' : ''}></td>
+        <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" ${defaults.has('Export') ? 'checked' : ''}></td>
+        <td class="px-3 py-1.5 border-r border-slate-100">
+          <span class="inline-flex px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase ${scope === 'National' ? 'bg-violet-50 text-violet-700 border border-violet-200' : 'bg-slate-100 text-slate-700 border border-slate-300'}">${scope}</span>
+        </td>
+        <td class="px-2 py-1.5 text-center bg-slate-50 border-l border-slate-200">
+          <input type="radio" name="selectedRole" class="w-3 h-3 cursor-pointer role-selector" onclick="handleRoleClick(this)">
+        </td>
+      `;
+
+      tbody.appendChild(row);
+      closeRoleModal();
+      updateRoleCount();
+      filterRoles();
+    }
+
+    function updateRoleCount() {
+      const countEl = document.getElementById('activeRolesCount');
+      if (!countEl) return;
+      const count = document.querySelectorAll('.role-row').length;
+      countEl.textContent = String(count);
+    }
+
+    function exportPermissionMatrix() {
+      const rows = Array.from(document.querySelectorAll('.role-row'))
+        .filter(row => row.style.display !== 'none');
+
+      if (!rows.length) {
+        alert('No visible roles to export.');
+        return;
+      }
+
+      const headers = ['Role','View','Create','Edit','Submit','Approve','Reverse','Export','Scope'];
+      const data = rows.map(row => {
+        const role = row.dataset.role || '';
+        const perms = Array.from(row.querySelectorAll('input.perm[type="checkbox"]'))
+          .map(cb => cb.checked ? 'YES' : 'NO');
+        const scope = row.dataset.scope || '';
+        return [role, ...perms, scope];
+      });
+
+      const csv = [headers, ...data]
+        .map(line => line.map(value => `"${String(value).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `permissions-matrix-${stamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
   </script>
 </body>
 </html>
