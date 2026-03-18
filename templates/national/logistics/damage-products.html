@@ -154,7 +154,7 @@
 
             <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
                 <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">Showing 1 to 10 records • System Verified</span>
-                <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
+                <button id="exportCsvBtn" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1">
                     <span class="material-icons-round text-[12px]">file_download</span> Export CSV
                 </button>
             </div>
@@ -371,6 +371,48 @@
         applyFilters();
     }
 
+    function downloadCsv(filename, content) {
+        const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    function exportDamageCsv() {
+        const table = document.getElementById('damageTable');
+        if (!table) return;
+
+        const rows = Array.from(table.querySelectorAll('tbody tr'));
+        const visibleRows = rows.filter(row => row.style.display !== 'none');
+
+        const headerCells = Array.from(table.querySelectorAll('thead th'));
+        const headers = headerCells
+            .slice(0, 4)
+            .map(cell => `"${cell.innerText.trim().replace(/"/g, '""')}"`);
+
+        const csvLines = [headers.join(',')];
+
+        visibleRows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td')).slice(0, 4);
+            if (cells.length < 4) return;
+            const line = cells.map(cell => {
+                const raw = cell.innerText.trim().replace(/\s+/g, ' ');
+                const escaped = raw.replace(/"/g, '""');
+                return `"${escaped}"`;
+            }).join(',');
+            csvLines.push(line);
+        });
+
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        downloadCsv(`damage-products-${dateStamp}.csv`, csvLines.join('\n'));
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         const addReportBtn = document.getElementById('addReportBtn');
         const reportModal = document.getElementById('reportModal');
@@ -380,6 +422,7 @@
         const detailModal = document.getElementById('detailModal');
         const detailCloseBtn = document.getElementById('detailCloseBtn');
         const damageTableBody = document.getElementById('damageTableBody');
+        const exportCsvBtn = document.getElementById('exportCsvBtn');
 
         if (addReportBtn) {
             addReportBtn.addEventListener('click', openReportModal);
@@ -425,6 +468,10 @@
                 if (!row) return;
                 openDetailModal(row);
             });
+        }
+
+        if (exportCsvBtn) {
+            exportCsvBtn.addEventListener('click', exportDamageCsv);
         }
     });
   </script>
