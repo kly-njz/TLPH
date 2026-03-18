@@ -47,7 +47,7 @@
               <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">National Registry Dashboard</p>
             </div>
           </div>
-          <button class="gov-btn bg-slate-800 hover:bg-slate-900 text-white flex items-center gap-1 shadow-sm">
+          <button onclick="exportUsers()" class="gov-btn bg-slate-800 hover:bg-slate-900 text-white flex items-center gap-1 shadow-sm">
             <span class="material-icons-round text-[14px]">download</span> Export Users
           </button>
         </header>
@@ -234,6 +234,49 @@
 
     function closeModal() { document.getElementById('viewModal').classList.add('hidden'); }
     function removeUser(btn) { if (confirm("Revoke access for this user?")) { btn.closest('tr').remove(); updateAnalytics(); } }
+
+    function exportUsers() {
+      const table = document.querySelector('#usersTbody');
+      if (!table) return;
+
+      const headers = [...document.querySelectorAll('thead th')]
+        .slice(0, 5)
+        .map(th => th.innerText.trim());
+
+      const rows = [...table.querySelectorAll('tr')].map(tr => {
+        const cells = [...tr.querySelectorAll('td')].slice(0, 5);
+        return cells.map(td => td.innerText.replace(/\s+/g, ' ').trim());
+      });
+
+      const escapeCsv = (value) => {
+        const safe = (value ?? '').toString();
+        if (/[",\n]/.test(safe)) {
+          return `"${safe.replace(/"/g, '""')}"`;
+        }
+        return safe;
+      };
+
+      const csv = [headers, ...rows]
+        .map(row => row.map(escapeCsv).join(','))
+        .join('\n');
+
+      const now = new Date();
+      const stamp = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0')
+      ].join('');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `users-export-${stamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
 
     updateAnalytics();
   </script>
