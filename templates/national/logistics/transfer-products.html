@@ -223,7 +223,7 @@
 
             <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0">
                 <span id="recordCountDisplay" class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">Showing <b class="text-slate-700">0</b> records</span>
-                <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1 no-print">
+                <button id="exportTransferBtn" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1 no-print">
                     <span class="material-icons-round text-[12px]">file_download</span> Export CSV
                 </button>
             </div>
@@ -339,6 +339,62 @@
   </div>
 
   <script>
+    function escapeCsvValue(value) {
+        const safe = String(value ?? '').replace(/\s+/g, ' ').trim();
+        if (/[",\n]/.test(safe)) {
+            return `"${safe.replace(/"/g, '""')}"`;
+        }
+        return safe;
+    }
+
+    function exportTransfersCsv() {
+        const rows = Array.from(document.querySelectorAll('tbody tr.data-row'))
+            .filter(row => row.style.display !== 'none');
+
+        if (rows.length === 0) {
+            alert('No visible records to export. Adjust filters and try again.');
+            return;
+        }
+
+        const headers = [
+            'Asset / Product',
+            'Origin (From)',
+            'Destination (To)',
+            'Volume / Qty',
+            'Date Logged',
+            'Status'
+        ];
+
+        const lines = [];
+        lines.push(headers.map(escapeCsvValue).join(','));
+
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 6) return;
+            const values = [
+                cells[0].innerText,
+                cells[1].innerText,
+                cells[2].innerText,
+                cells[3].innerText,
+                cells[4].innerText,
+                cells[5].innerText
+            ].map(escapeCsvValue);
+            lines.push(values.join(','));
+        });
+
+        const csvContent = lines.join('\r\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const dateStr = new Date().toISOString().slice(0, 10);
+        link.href = url;
+        link.download = `transfer-products_${dateStr}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
     // Live Filter & Dynamic KPI Engine
     function applyFilters() {
         const searchVal = document.getElementById('searchTransfer').value.toLowerCase();
@@ -426,6 +482,7 @@
         applyFilters();
 
         const addTransferBtn = document.getElementById('addTransferBtn');
+        const exportTransferBtn = document.getElementById('exportTransferBtn');
         const transferModal = document.getElementById('transferModal');
         const transferForm = document.getElementById('transferForm');
         const transferCancelBtn = document.getElementById('transferCancelBtn');
@@ -572,6 +629,10 @@
 
         if (addTransferBtn) {
             addTransferBtn.addEventListener('click', openTransferModal);
+        }
+
+        if (exportTransferBtn) {
+            exportTransferBtn.addEventListener('click', exportTransfersCsv);
         }
 
         if (transferCancelBtn) {
