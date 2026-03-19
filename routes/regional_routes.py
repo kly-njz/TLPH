@@ -2824,6 +2824,7 @@ def payroll_system_view():
 def accounting_dashboard_view():
     from firebase_admin import firestore
     from flask import session
+    from datetime import datetime, timedelta
     db = firestore.client()
     finance_data = {}
     user_region = (session.get('region') or session.get('user_region') or '').upper().replace('–', '-').replace('—', '-').replace('  ', ' ').replace(' ', '-')
@@ -2900,7 +2901,139 @@ def accounting_dashboard_view():
     except Exception as e:
         print(f"[DEBUG] Error fetching regional fund distributions: {e}")
 
-    return render_template('regional/accounting/dashboard-regional.html', finance=finance_data, municipalities=municipalities, regional_funds=regional_funds, municipal_funds=municipal_funds, user_region=user_region)
+    def _to_float(value):
+        if value is None:
+            return 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            cleaned = str(value).replace('₱', '').replace(',', '').strip()
+            return float(cleaned) if cleaned else 0.0
+        except Exception:
+            return 0.0
+
+    def _format_currency(value):
+        return f"₱ {value:,.2f}"
+
+    def _parse_ts(value):
+        if not value:
+            return None
+        if hasattr(value, 'to_datetime'):
+            try:
+                return value.to_datetime()
+            except Exception:
+                return None
+        if hasattr(value, 'strftime'):
+            return value
+        try:
+            return datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        except Exception:
+            return None
+
+    # Normalize finance documents into known department buckets so template cards
+    # don't show N/A when document IDs/structures vary.
+    department_keys = ['treasury', 'accounting', 'budget', 'engineering']
+    department_finance = {k: {} for k in department_keys}
+
+    for doc_id, payload in finance_data.items():
+        if not isinstance(payload, dict):
+            continue
+
+        lower_id = str(doc_id or '').strip().lower()
+        if lower_id in department_finance:
+            department_finance[lower_id] = payload
+
+        for dept in department_keys:
+            # Pattern 1: document contains nested department key.
+            nested = payload.get(dept)
+            if isinstance(nested, dict) and nested:
+                department_finance[dept] = nested
+
+            # Pattern 2: document has "department" field + values in same object.
+            doc_dept = str(payload.get('department') or payload.get('dept') or '').strip().lower()
+            if doc_dept == dept:
+                department_finance[dept] = payload
+
+    # Build per-department display values.
+    department_cards = {}
+    for dept in department_keys:
+        row = department_finance.get(dept) or {}
+        gf = (
+            row.get('general_fund')
+            if row.get('general_fund') is not None
+            else row.get('generalFund')
+        )
+        gf_value = _to_float(gf)
+        department_cards[dept] = {
+            'general_fund_display': _format_currency(gf_value) if gf_value else 'N/A'
+        }
+
+    # Aggregate real stats for snapshot cards.
+    total_deposits = 0.0
+    total_expenses = 0.0
+
+    for dept in department_keys:
+        row = department_finance.get(dept) or {}
+        total_deposits += _to_float(
+            row.get('total_deposit')
+            if row.get('total_deposit') is not None
+            else row.get('total_deposits')
+            if row.get('total_deposits') is not None
+            else row.get('deposits')
+        )
+        total_expenses += _to_float(
+            row.get('total_expenses')
+            if row.get('total_expenses') is not None
+            else row.get('expenses')
+        )
+
+    # Fallback to transferred fund records when finance totals are not populated.
+    if total_deposits == 0.0:
+        total_deposits = sum(_to_float(f.get('amount')) for f in regional_funds)
+    if total_expenses == 0.0:
+        total_expenses = sum(_to_float(f.get('amount')) for f in municipal_funds)
+
+    net_movement = total_deposits - total_expenses
+
+    # Growth rate: compare recent 30 days vs previous 30 days using fund movement data.
+    now = datetime.utcnow()
+    current_cutoff = now - timedelta(days=30)
+    previous_cutoff = now - timedelta(days=60)
+    current_period_total = 0.0
+    previous_period_total = 0.0
+
+    for row in (regional_funds + municipal_funds):
+        ts = _parse_ts(row.get('timestamp') or row.get('date') or row.get('created_at'))
+        amount = _to_float(row.get('amount'))
+        if not ts:
+            continue
+        if ts >= current_cutoff:
+            current_period_total += amount
+        elif ts >= previous_cutoff:
+            previous_period_total += amount
+
+    if previous_period_total > 0:
+        growth_rate = ((current_period_total - previous_period_total) / previous_period_total) * 100.0
+    else:
+        growth_rate = 0.0
+
+    dashboard_stats = {
+        'total_deposits_display': _format_currency(total_deposits),
+        'total_expenses_display': _format_currency(total_expenses),
+        'net_movement_display': _format_currency(net_movement),
+        'growth_rate_display': f"{growth_rate:+.1f}%",
+    }
+
+    return render_template(
+        'regional/accounting/dashboard-regional.html',
+        finance=finance_data,
+        municipalities=municipalities,
+        regional_funds=regional_funds,
+        municipal_funds=municipal_funds,
+        user_region=user_region,
+        department_cards=department_cards,
+        dashboard_stats=dashboard_stats,
+    )
 
 @bp.route('/accounting/distribute-fund', methods=['POST'])
 @role_required('regional','regional_admin')
