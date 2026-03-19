@@ -219,6 +219,7 @@
         let currentLicenseId = null;
         let licenseData = null;
         let userData = null;
+        let isUpdatingLicenseStatus = false;
 
         // Get license ID from URL
         const pathParts = window.location.pathname.split('/');
@@ -277,6 +278,15 @@
                     </div>
                 `;
             }
+        }
+
+        function setActionButtonsDisabled(disabled) {
+            const actionButtons = document.querySelectorAll('.btn-action');
+            actionButtons.forEach((btn) => {
+                btn.disabled = disabled;
+                btn.style.opacity = disabled ? '0.6' : '1';
+                btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+            });
         }
 
         function displayLicenseDetails() {
@@ -338,6 +348,14 @@
                     statusLabel = 'Pending Review';
                     statusBadge.textContent = `Status: ${statusLabel}`;
                 }
+
+                // Lock action buttons once a decision/forward action exists
+                const isActionLocked = status === 'approved' ||
+                                     status === 'accepted' ||
+                                     status === 'rejected' ||
+                                     status === 'to-review' ||
+                                     status.includes('forward');
+                setActionButtonsDisabled(isActionLocked || isUpdatingLicenseStatus);
 
                 // License details
                 console.log('Setting license details...');
@@ -404,6 +422,8 @@
         }
 
         window.updateLicenseStatus = async function(newStatus) {
+            if (isUpdatingLicenseStatus) return;
+
             const statusText = newStatus === 'approved' ? 'approve' : 
                              newStatus === 'rejected' ? 'reject' : 
                              newStatus === 'to-review' ? 'forward to regional review' :
@@ -413,6 +433,9 @@
             if (!confirmed) return;
 
             try {
+                isUpdatingLicenseStatus = true;
+                setActionButtonsDisabled(true);
+
                 // Update license status
                 const updateFields = {
                     status: newStatus,
@@ -454,9 +477,12 @@
                 
                 alert(`License/Permit ${statusText} successfully!`);
                 await loadLicenseDetails(); // Reload to show updated status
+                isUpdatingLicenseStatus = false;
             } catch (error) {
                 console.error('Error updating status:', error);
                 alert('Failed to update license status: ' + error.message);
+                isUpdatingLicenseStatus = false;
+                setActionButtonsDisabled(false);
             }
         };
 
