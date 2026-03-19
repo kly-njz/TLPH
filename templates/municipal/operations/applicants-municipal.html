@@ -156,14 +156,14 @@
                             <input type="text" id="search" placeholder="Search applicant, ref..." class="gov-input pl-6 w-full" oninput="filterTable()">
                         </div>
 
-                        <select id="barangayFilter" class="gov-input cursor-pointer min-w-[110px]" onchange="filterTable()">
+                        <select id="barangayFilter" title="Filter by barangay" class="gov-input cursor-pointer min-w-[110px]" onchange="filterTable()">
                           <option value="ALL">All Barangays</option>
                           {% for b in barangay_options %}
                           <option value="{{ b|upper }}">{{ b }}</option>
                           {% endfor %}
                         </select>
 
-                        <select id="statusFilter" class="gov-input cursor-pointer min-w-[100px]" onchange="filterTable()">
+                        <select id="statusFilter" title="Filter by status" class="gov-input cursor-pointer min-w-[100px]" onchange="filterTable()">
                           <option value="ALL">All Status</option>
                           <option value="APPROVED">Approved</option>
                           <option value="PENDING">Pending</option>
@@ -241,11 +241,35 @@
   </div>
 </div>
 
+<script id="applicantsChartData" type="application/json">
+{
+  "trendLabels": {{ trend_labels_json|safe }},
+  "trendValues": {{ trend_values_json|safe }},
+  "statusValues": {{ status_values_json|safe }},
+  "barangayLabels": {{ barangay_labels_json|safe }},
+  "barangayValues": {{ barangay_values_json|safe }}
+}
+</script>
+
 <script>
   // --- Chart Implementations ---
   Chart.defaults.font.family = "Verdana, Arial, sans-serif";
   Chart.defaults.font.size = 8;
   Chart.defaults.color = "#64748b";
+
+  let chartData = {
+    trendLabels: ['No Data'],
+    trendValues: [0],
+    statusValues: [0, 0, 0],
+    barangayLabels: ['No Data'],
+    barangayValues: [0]
+  };
+  try {
+    const rawChartData = document.getElementById('applicantsChartData')?.textContent || '{}';
+    chartData = { ...chartData, ...JSON.parse(rawChartData) };
+  } catch (e) {
+    console.warn('Failed to parse applicants chart data:', e);
+  }
 
   const chartOpt = { responsive: true, maintainAspectRatio: false, layout: { padding: 5 } };
 
@@ -253,10 +277,10 @@
   new Chart(document.getElementById('trendChart'), {
       type: 'line',
       data: {
-            labels: {{ trend_labels_json|safe }},
+              labels: chartData.trendLabels,
           datasets: [{
               label: 'Applications',
-              data: {{ trend_values_json|safe }},
+                data: chartData.trendValues,
               borderColor: '#1e3a8a',
               backgroundColor: 'rgba(30,58,138,0.1)',
               fill: true,
@@ -277,7 +301,7 @@
       type: 'doughnut',
       data: {
           labels:['Approved','Pending','Rejected'],
-          datasets:[{ data:{{ status_values_json|safe }}, backgroundColor:['#10b981','#f59e0b','#ef4444'], borderWidth: 0 }]
+          datasets:[{ data: chartData.statusValues, backgroundColor:['#10b981','#f59e0b','#ef4444'], borderWidth: 0 }]
       },
       options: { 
           ...chartOpt, 
@@ -290,8 +314,8 @@
   new Chart(document.getElementById('barangayChart'), {
       type: 'bar',
       data: {
-          labels:{{ barangay_labels_json|safe }},
-          datasets:[{ label: 'Volume', data:{{ barangay_values_json|safe }}, backgroundColor:'#475569', borderRadius: 2, borderWidth: 0 }]
+          labels: chartData.barangayLabels,
+          datasets:[{ label: 'Volume', data: chartData.barangayValues, backgroundColor:'#475569', borderRadius: 2, borderWidth: 0 }]
       },
       options: { 
           ...chartOpt, 
