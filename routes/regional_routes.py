@@ -44,6 +44,38 @@ def get_firestore_region_name(session_region):
     return session_region_upper
 
 
+def _canonical_region(value):
+    """Normalize region strings from mixed formats to a comparable canonical value."""
+    raw = str(value or '').strip().upper()
+    if not raw:
+        return ''
+
+    # Handle common aliases/labels seen in Firestore/session data.
+    if 'MIMAROPA' in raw or 'IV-B' in raw or 'REGION IV-B' in raw or 'REGION-IV-B' in raw:
+        return 'REGION-IV-B'
+    if 'CALABARZON' in raw or 'IV-A' in raw or 'REGION IV-A' in raw or 'REGION-IV-A' in raw:
+        return 'REGION-IV-A'
+    if 'BICOL' in raw or 'REGION-V' in raw or 'REGION V' in raw:
+        return 'REGION-V'
+    if 'NCR' in raw:
+        return 'NCR'
+    if 'CARAGA' in raw:
+        return 'REGION-XIII'
+    if 'BANGSAMORO' in raw or 'ARMM' in raw:
+        return 'REGION-BANGSAMORO'
+
+    return raw.replace(' ', '').replace('_', '').replace('.', '')
+
+
+def _same_region(left, right):
+    """Best-effort region equality for mixed naming conventions."""
+    l = _canonical_region(left)
+    r = _canonical_region(right)
+    if not l or not r:
+        return False
+    return l == r
+
+
 def _resolve_regional_scope(db):
     """Resolve region + municipality scope for the current regional admin."""
     session_region = session.get('region') or session.get('user_region')
@@ -73,10 +105,35 @@ def _resolve_regional_scope(db):
 
     municipalities = []
     try:
+        # Try multiple possible document IDs, since stored IDs may use
+        # session names (e.g. MIMAROPA) or Firestore names (e.g. REGION-IV-B).
+        candidates = []
         if user_region:
-            muni_doc = db.collection('municipalities').document(user_region).get()
+            candidates.append(str(user_region).strip())
+
+        session_region = session.get('region') or session.get('user_region')
+        if session_region:
+            candidates.append(str(session_region).strip())
+
+        # Add reverse-mapped key when possible.
+        reverse_mapping = {v: k for k, v in REGION_MAPPING.items()}
+        if user_region and user_region in reverse_mapping:
+            candidates.append(reverse_mapping[user_region])
+
+        seen = set()
+        ordered_candidates = []
+        for c in candidates:
+            cu = str(c).strip()
+            if cu and cu not in seen:
+                seen.add(cu)
+                ordered_candidates.append(cu)
+
+        for key in ordered_candidates:
+            muni_doc = db.collection('municipalities').document(key).get()
             if muni_doc.exists:
                 municipalities = muni_doc.to_dict().get('municipalities', []) or []
+                if municipalities:
+                    break
     except Exception as e:
         print(f"[WARN] Unable to resolve municipalities for region {user_region}: {e}")
 
@@ -102,6 +159,8 @@ def _extract_ip_value(record):
     if not isinstance(record, dict):
         return ''
 
+    metadata = record.get('metadata') if isinstance(record.get('metadata'), dict) else {}
+
     candidates = [
         record.get('ip'),
         record.get('ip_address'),
@@ -116,6 +175,11 @@ def _extract_ip_value(record):
         record.get('requestIp'),
         record.get('requester_ip'),
         record.get('requesterIp'),
+        metadata.get('ip'),
+        metadata.get('ip_address'),
+        metadata.get('ipAddress'),
+        metadata.get('request_ip'),
+        metadata.get('requestIp'),
     ]
 
     for raw in candidates:
@@ -518,7 +582,7 @@ def api_regional_system_logs():
 
                 in_scope = bool(
                     (municipality_set and u_muni and u_muni in municipality_set)
-                    or (user_region_norm and u_region_norm and u_region_norm == user_region_norm)
+                    or (user_region_norm and u_region_norm and _same_region(u_region_norm, user_region_norm))
                     or (not user_region_norm and not municipality_set)
                 )
                 if not in_scope:
@@ -534,18 +598,21 @@ def api_regional_system_logs():
             print(f"[WARN] Failed building scoped municipal users for system logs: {e}")
 
         logs = []
+        regional_source_count = 0
+        audit_fallback_count = 0
+        system_fallback_count = 0
         regional_log_rows = system_logs_storage.list_regional_system_logs_by_region(user_region, limit=300)
         user_region_norm = str(user_region or '').strip().upper()
 
         for entry in regional_log_rows:
             action_value = str(entry.get('action') or '').strip().upper()
-            if action_value not in {'LOGIN', 'LOGOUT', 'APPROVED'}:
+            if not action_value:
                 continue
 
             actor_email = str(entry.get('actorEmail') or entry.get('user') or '').strip().lower()
             actor_id = str(entry.get('actorId') or '').strip()
             actor_role = str(entry.get('actorRole') or entry.get('role') or '').strip().lower()
-            is_municipal_actor = actor_role in {'municipal_admin', 'municipal'}
+            is_municipal_actor = actor_role in {'municipal_admin', 'municipal'} if actor_role else False
             in_scope_by_actor = bool(
                 (actor_email and actor_email in scoped_emails)
                 or (actor_id and actor_id in scoped_user_ids)
@@ -559,16 +626,22 @@ def api_regional_system_logs():
             entry_muni_norm = entry_muni.lower()
             in_scope_by_location = bool(
                 (municipality_set and entry_muni_norm and entry_muni_norm in municipality_set)
-                or (user_region_norm and entry_region_norm and entry_region_norm == user_region_norm)
+                or (user_region_norm and entry_region_norm and _same_region(entry_region_norm, user_region_norm))
                 or (not user_region_norm and not municipality_set)
             )
 
-            if not is_municipal_actor or not (in_scope_by_actor or in_scope_by_location):
+            # Accept entries when either actor OR location is in scope.
+            # Do not require role metadata because many legacy logs don't store actorRole.
+            if not (in_scope_by_actor or in_scope_by_location or is_municipal_actor):
                 continue
 
             ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
             details = entry.get('message') or ('Municipal admin signed in.' if action_value == 'LOGIN' else 'Municipal admin signed out.' if action_value == 'LOGOUT' else 'Municipal admin approved an item.')
 
+            # Extract IP and device info
+            ip_addr = _extract_ip_value(entry)
+            device_info = entry.get('device_type') or entry.get('device') or ''
+            
             logs.append({
                 'id': entry.get('id') or '',
                 'ts': _normalize_ts_for_json(ts_value),
@@ -578,17 +651,199 @@ def api_regional_system_logs():
                 'action': action_value,
                 'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
                 'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
-                'device_type': entry.get('device_type') or '',
-                'ip': _extract_ip_value(entry),
+                'device_type': device_info,
+                'ip': ip_addr,
                 'outcome': entry.get('outcome') or 'SUCCESS',
                 'message': details,
                 'municipality': entry_muni,
                 'region': entry_region,
                 'scope': 'MUNICIPAL',
             })
+            regional_source_count += 1
+
+        # Fallback source: auditLogs collection (common source for auth/decision events)
+        # This keeps the UI populated even when dedicated regional_system_logs is empty.
+        try:
+            audit_docs = db.collection('auditLogs').limit(5000).stream()
+            for audit_doc in audit_docs:
+                entry = audit_doc.to_dict() or {}
+                action_raw = str(entry.get('action') or entry.get('event') or entry.get('type') or '').strip().upper()
+                if not action_raw:
+                    continue
+
+                if 'LOGIN' in action_raw or 'SIGNIN' in action_raw or action_raw in {'LOG_IN'}:
+                    action_value = 'LOGIN'
+                elif 'LOGOUT' in action_raw or 'SIGNOUT' in action_raw or action_raw in {'LOG_OUT'}:
+                    action_value = 'LOGOUT'
+                elif 'APPROV' in action_raw:
+                    action_value = 'APPROVED'
+                else:
+                    action_value = action_raw
+
+                actor_email = str(
+                    entry.get('actorEmail')
+                    or entry.get('user_email')
+                    or entry.get('email')
+                    or entry.get('user')
+                    or ''
+                ).strip().lower()
+                actor_id = str(
+                    entry.get('actorId')
+                    or entry.get('userId')
+                    or entry.get('uid')
+                    or entry.get('user_id')
+                    or ''
+                ).strip()
+                actor_role = str(entry.get('actorRole') or entry.get('role') or '').strip().lower()
+
+                in_scope_by_actor = bool(
+                    (actor_email and actor_email in scoped_emails)
+                    or (actor_id and actor_id in scoped_user_ids)
+                )
+                # If role is absent, still allow location-based scoped entries.
+                if not in_scope_by_actor and actor_role and actor_role not in {'municipal_admin', 'municipal'}:
+                    continue
+
+                entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip()
+                entry_muni_norm = entry_muni.lower()
+                entry_region = get_firestore_region_name(
+                    entry.get('region') or entry.get('region_name') or entry.get('regionName') or user_region
+                )
+                entry_region_norm = str(entry_region or '').strip().upper()
+
+                in_scope_by_location = bool(
+                    (municipality_set and entry_muni_norm and entry_muni_norm in municipality_set)
+                    or (user_region_norm and entry_region_norm and _same_region(entry_region_norm, user_region_norm))
+                    or (not user_region_norm and not municipality_set)
+                )
+                if not (in_scope_by_actor or in_scope_by_location):
+                    continue
+
+                ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
+                details = entry.get('detail') or entry.get('description') or entry.get('message') or ''
+
+                logs.append({
+                    'id': audit_doc.id,
+                    'ts': _normalize_ts_for_json(ts_value),
+                    'user': entry.get('actorName') or entry.get('actor') or entry.get('user') or actor_email or 'Municipal Admin',
+                    'role': 'Municipal',
+                    'module': 'AUTH' if action_value in {'LOGIN', 'LOGOUT'} else 'AUDIT',
+                    'action': action_value,
+                    'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                    'targetId': entry.get('targetId') or entry.get('target_id') or audit_doc.id,
+                    'device_type': entry.get('device_type') or entry.get('device') or '',
+                    'ip': _extract_ip_value(entry),
+                    'outcome': entry.get('outcome') or 'SUCCESS',
+                    'message': details,
+                    'municipality': entry_muni,
+                    'region': entry_region,
+                    'scope': 'MUNICIPAL',
+                })
+                audit_fallback_count += 1
+        except Exception as e:
+            print(f"[WARN] Failed loading fallback auditLogs source for regional system logs: {e}")
+
+        # Fallback source 2: system_logs collection used by some app modules.
+        try:
+            sys_docs = db.collection('system_logs').limit(5000).stream()
+            for sys_doc in sys_docs:
+                entry = sys_doc.to_dict() or {}
+                action_raw = str(entry.get('action') or entry.get('event') or entry.get('type') or '').strip().upper()
+                if not action_raw:
+                    continue
+
+                if 'LOGIN' in action_raw or 'SIGNIN' in action_raw or action_raw in {'LOG_IN'}:
+                    action_value = 'LOGIN'
+                elif 'LOGOUT' in action_raw or 'SIGNOUT' in action_raw or action_raw in {'LOG_OUT'}:
+                    action_value = 'LOGOUT'
+                elif 'APPROV' in action_raw:
+                    action_value = 'APPROVED'
+                else:
+                    action_value = action_raw
+
+                actor_email = str(
+                    entry.get('actorEmail')
+                    or entry.get('user_email')
+                    or entry.get('email')
+                    or entry.get('user')
+                    or ''
+                ).strip().lower()
+                actor_id = str(
+                    entry.get('actorId')
+                    or entry.get('userId')
+                    or entry.get('uid')
+                    or entry.get('user_id')
+                    or ''
+                ).strip()
+
+                in_scope_by_actor = bool(
+                    (actor_email and actor_email in scoped_emails)
+                    or (actor_id and actor_id in scoped_user_ids)
+                )
+
+                entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip()
+                entry_muni_norm = entry_muni.lower()
+                entry_region = get_firestore_region_name(
+                    entry.get('region') or entry.get('region_name') or entry.get('regionName') or user_region
+                )
+                entry_region_norm = str(entry_region or '').strip().upper()
+
+                in_scope_by_location = bool(
+                    (municipality_set and entry_muni_norm and entry_muni_norm in municipality_set)
+                    or (user_region_norm and entry_region_norm and _same_region(entry_region_norm, user_region_norm))
+                    or (not user_region_norm and not municipality_set)
+                )
+                if not (in_scope_by_actor or in_scope_by_location):
+                    continue
+
+                ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
+                details = entry.get('message') or entry.get('detail') or entry.get('description') or entry.get('target') or ''
+
+                logs.append({
+                    'id': sys_doc.id,
+                    'ts': _normalize_ts_for_json(ts_value),
+                    'user': entry.get('actorName') or entry.get('actor') or entry.get('user') or actor_email or 'Municipal Admin',
+                    'role': 'Municipal',
+                    'module': entry.get('module') or ('AUTH' if action_value in {'LOGIN', 'LOGOUT'} else 'AUDIT'),
+                    'action': action_value,
+                    'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                    'targetId': entry.get('targetId') or entry.get('target_id') or sys_doc.id,
+                    'device_type': entry.get('device_type') or entry.get('device') or '',
+                    'ip': _extract_ip_value(entry),
+                    'outcome': entry.get('outcome') or 'SUCCESS',
+                    'message': details,
+                    'municipality': entry_muni,
+                    'region': entry_region,
+                    'scope': 'MUNICIPAL',
+                })
+                system_fallback_count += 1
+        except Exception as e:
+            print(f"[WARN] Failed loading fallback system_logs source for regional system logs: {e}")
+
+        # De-duplicate entries that can appear in both sources.
+        deduped = []
+        seen = set()
+        for row in logs:
+            key = (
+                str(row.get('id') or ''),
+                str(row.get('ts') or ''),
+                str(row.get('user') or '').lower(),
+                str(row.get('action') or '').upper(),
+                str(row.get('targetId') or ''),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(row)
+        logs = deduped
 
         logs.sort(key=lambda x: x.get('ts') or '', reverse=True)
         logs = logs[:40]
+        print(
+            f"[DEBUG] Regional system logs -> region={user_region}, municipalities={len(municipality_set)}, "
+            f"scoped_users={len(scoped_emails)}, regional_source={regional_source_count}, "
+            f"audit_fallback={audit_fallback_count}, system_fallback={system_fallback_count}, returned={len(logs)}"
+        )
         return jsonify({'success': True, 'logs': logs, 'region': user_region}), 200
     except Exception as e:
         print(f"[ERROR] Regional system logs failed: {e}")
@@ -818,7 +1073,42 @@ def api_regional_forwarded_audit_decision(log_id):
 @bp.route('/system-logs') 
 @role_required('regional','regional_admin')
 def system_logs_view():
-    return render_template('regional/logs/system-logs.html')
+    db = get_firestore_db()
+    user_region, municipality_set = _resolve_regional_scope(db)
+    municipalities = sorted({m.title() for m in municipality_set})
+
+    # Optional user filter list in UI; derived from scoped municipal users.
+    system_users = []
+    try:
+        user_region_norm = str(user_region or '').strip().upper()
+        users_docs = db.collection('users').limit(5000).stream()
+        for user_doc in users_docs:
+            ud = user_doc.to_dict() or {}
+            role_value = str(ud.get('role') or '').strip().lower()
+            if role_value not in {'municipal_admin', 'municipal'}:
+                continue
+
+            u_email = str(ud.get('email') or '').strip()
+            u_muni = str(ud.get('municipality') or ud.get('municipality_name') or '').strip().lower()
+            u_region = get_firestore_region_name(ud.get('region') or ud.get('region_name') or ud.get('regionName'))
+            u_region_norm = str(u_region or '').strip().upper()
+
+            in_scope = bool(
+                (municipality_set and u_muni and u_muni in municipality_set)
+                or (user_region_norm and u_region_norm and _same_region(u_region_norm, user_region_norm))
+                or (not user_region_norm and not municipality_set)
+            )
+            if in_scope and u_email:
+                system_users.append(u_email)
+    except Exception as e:
+        print(f"[WARN] Failed loading scoped system users for logs view: {e}")
+
+    return render_template(
+        'regional/logs/system-logs.html',
+        user_region=user_region,
+        municipalities=municipalities,
+        system_users=sorted(set(system_users)),
+    )
 
 @bp.route('/application-view/<application_id>')
 @role_required('regional','regional_admin')

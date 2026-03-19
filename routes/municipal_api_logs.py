@@ -807,6 +807,10 @@ def api_get_expenses():
 def api_add_expense():
     """Add a new expense category"""
     try:
+        municipality_scope = _get_current_municipality_scope()
+        if not municipality_scope:
+            return jsonify({'status': 'error', 'message': 'Could not determine your municipality'}), 403
+
         data = request.get_json()
         result = expense_storage.add_expense_category(
             name=data.get('name'),
@@ -816,10 +820,14 @@ def api_add_expense():
             office=data.get('office'),
             budget_code=data.get('budget_code'),
             fund_type=data.get('fund_type'),
-            status=data.get('status'),
+            status=data.get('status') or 'ACTIVE',
             description=data.get('description'),
-            municipality=data.get('municipality')
+            municipality=municipality_scope
         )
+
+        if not result:
+            return jsonify({'status': 'error', 'message': 'Failed to add expense category'}), 500
+
         return jsonify({'status': 'success', 'category': result}), 201
     except Exception as e:
         print(f"[ERROR] Adding expense: {e}")

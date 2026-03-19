@@ -260,6 +260,9 @@
 
 <script>
   function expensePage(){
+    let trendChartRef = null;
+    let taxChartRef = null;
+
     return {
       categories: [],
       filteredCategories: [],
@@ -281,7 +284,6 @@
         active: 0
       },
       treasuryCount: 0,
-      charts: { trendChart: null, taxChart: null },
 
       async init(){
         await this.loadCategories();
@@ -396,38 +398,48 @@
       },
 
       renderCharts(){
+        if (typeof Chart === 'undefined') {
+          return;
+        }
+
         Chart.defaults.font.family = "Verdana, Arial, sans-serif";
         Chart.defaults.font.size = 9;
         Chart.defaults.color = "#64748b";
-        const chartConfig = { responsive:true, maintainAspectRatio:false, layout:{ padding:0 } };
-
-        // Destroy existing charts
-        if(this.charts.trendChart) this.charts.trendChart.destroy();
-        if(this.charts.taxChart) this.charts.taxChart.destroy();
+        const chartConfig = { responsive:true, maintainAspectRatio:false, layout:{ padding:0 }, animation:false };
 
         // Trend Chart
-        const trendCtx = document.getElementById('trendChart');
+        const trendCanvas = document.getElementById('trendChart');
+        const trendCtx = trendCanvas && typeof trendCanvas.getContext === 'function' ? trendCanvas.getContext('2d') : null;
         if(trendCtx){
-          this.charts.trendChart = new Chart(trendCtx, {
-            type: 'line',
-            data: {
-              labels: ['J','F','M','A','M','J','J','A'],
-              datasets: [{
-                label: 'Expense Categories',
-                data: [2,3,3,4,5,6,7,this.stats.total],
-                borderColor: '#be123c',
-                backgroundColor: 'rgba(190, 18, 60, 0.10)',
-                borderWidth: 1.5,
-                fill: true,
-                pointRadius: 0
-              }]
-            },
-            options: {
-              ...chartConfig,
-              plugins: { legend: { display:false } },
-              scales: { x: { display:false }, y: { display:false } }
-            }
-          });
+          const trendLabels = ['J','F','M','A','M','J','J','A'];
+          const trendValues = [2,3,3,4,5,6,7,this.stats.total];
+
+          if (!trendChartRef) {
+            trendChartRef = new Chart(trendCtx, {
+              type: 'line',
+              data: {
+                labels: trendLabels,
+                datasets: [{
+                  label: 'Expense Categories',
+                  data: trendValues,
+                  borderColor: '#be123c',
+                  backgroundColor: 'rgba(190, 18, 60, 0.10)',
+                  borderWidth: 1.5,
+                  fill: true,
+                  pointRadius: 0
+                }]
+              },
+              options: {
+                ...chartConfig,
+                plugins: { legend: { display:false } },
+                scales: { x: { display:false }, y: { display:false } }
+              }
+            });
+          } else {
+            trendChartRef.data.labels = trendLabels;
+            trendChartRef.data.datasets[0].data = trendValues;
+            trendChartRef.update('none');
+          }
         }
 
         // Tax Distribution Chart
@@ -437,24 +449,34 @@
           taxTypes[type] = (taxTypes[type] || 0) + 1;
         });
 
-        const taxCtx = document.getElementById('taxChart');
+        const taxCanvas = document.getElementById('taxChart');
+        const taxCtx = taxCanvas && typeof taxCanvas.getContext === 'function' ? taxCanvas.getContext('2d') : null;
         if(taxCtx){
-          this.charts.taxChart = new Chart(taxCtx, {
-            type: 'doughnut',
-            data: {
-              labels: Object.keys(taxTypes),
-              datasets: [{
-                data: Object.values(taxTypes),
-                backgroundColor: ['#3b82f6', '#f59e0b', '#cbd5e1', '#10b981'],
-                borderWidth: 0
-              }]
-            },
-            options: {
-              ...chartConfig,
-              cutout: '65%',
-              plugins: { legend: { position:'right', labels: { boxWidth:8, font:{ size:8 } } } }
-            }
-          });
+          const labels = Object.keys(taxTypes);
+          const values = Object.values(taxTypes);
+
+          if (!taxChartRef) {
+            taxChartRef = new Chart(taxCtx, {
+              type: 'doughnut',
+              data: {
+                labels,
+                datasets: [{
+                  data: values,
+                  backgroundColor: ['#3b82f6', '#f59e0b', '#cbd5e1', '#10b981'],
+                  borderWidth: 0
+                }]
+              },
+              options: {
+                ...chartConfig,
+                cutout: '65%',
+                plugins: { legend: { position:'right', labels: { boxWidth:8, font:{ size:8 } } } }
+              }
+            });
+          } else {
+            taxChartRef.data.labels = labels;
+            taxChartRef.data.datasets[0].data = values;
+            taxChartRef.update('none');
+          }
         }
       }
     }

@@ -188,8 +188,8 @@
                                     <i class="fa-solid fa-circle-check me-2"></i> Approve License
                                 </button>
                                 
-                                <button onclick="updateLicenseStatus('pending')" class="btn btn-warning bg-blue-600 border-0 btn-action text-white shadow-sm">
-                                    <i class="fa-solid fa-clock me-2"></i> Mark as Pending
+                                <button onclick="updateLicenseStatus('to-review')" class="btn btn-warning bg-blue-600 border-0 btn-action text-white shadow-sm">
+                                    <i class="fa-solid fa-arrow-up-right-from-square me-2"></i> Forward to Regional
                                 </button>
                                 
                                 <button onclick="updateLicenseStatus('rejected')" class="btn btn-danger bg-red-600 border-0 btn-action shadow-sm">
@@ -219,6 +219,7 @@
         let currentLicenseId = null;
         let licenseData = null;
         let userData = null;
+        let isUpdatingLicenseStatus = false;
 
         // Get license ID from URL
         const pathParts = window.location.pathname.split('/');
@@ -279,6 +280,15 @@
             }
         }
 
+        function setActionButtonsDisabled(disabled) {
+            const actionButtons = document.querySelectorAll('.btn-action');
+            actionButtons.forEach((btn) => {
+                btn.disabled = disabled;
+                btn.style.opacity = disabled ? '0.6' : '1';
+                btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+            });
+        }
+
         function displayLicenseDetails() {
             console.log('Starting displayLicenseDetails');
             console.log('License data:', licenseData);
@@ -312,19 +322,40 @@
 
                 // Status badge
                 const statusBadge = document.getElementById('statusBadge');
-                const status = licenseData.status || 'pending';
+                const status = String(licenseData.status || 'pending').toLowerCase();
+                const approvedByLevel = (licenseData.approvedByLevel || '').trim();
+                const rejectedByLevel = (licenseData.rejectedByLevel || '').trim();
+                const forwardedToLevel = (licenseData.forwardedToLevel || '').trim();
                 console.log('License status:', status);
+
+                let statusLabel = 'Pending Review';
                 
                 if (status === 'approved' || status === 'accepted') {
                     statusBadge.className = 'bg-green-100 text-green-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-green-200';
-                    statusBadge.textContent = 'Status: Approved';
+                    statusLabel = approvedByLevel ? `Approved by ${approvedByLevel}` : 'Approved';
+                    statusBadge.textContent = `Status: ${statusLabel}`;
                 } else if (status === 'rejected') {
                     statusBadge.className = 'bg-red-100 text-red-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-red-200';
-                    statusBadge.textContent = 'Status: Rejected';
+                    statusLabel = rejectedByLevel ? `Rejected by ${rejectedByLevel}` : 'Rejected';
+                    statusBadge.textContent = `Status: ${statusLabel}`;
+                } else if (status === 'to-review' || status.includes('forward')) {
+                    statusBadge.className = 'bg-blue-100 text-blue-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-blue-200';
+                    const forwardTarget = (forwardedToLevel || 'Regional').toUpperCase();
+                    statusLabel = `Forwarded to ${forwardTarget}`;
+                    statusBadge.textContent = `Status: ${statusLabel}`;
                 } else {
                     statusBadge.className = 'bg-amber-100 text-amber-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-amber-200';
-                    statusBadge.textContent = 'Status: Pending Review';
+                    statusLabel = 'Pending Review';
+                    statusBadge.textContent = `Status: ${statusLabel}`;
                 }
+
+                // Lock action buttons once a decision/forward action exists
+                const isActionLocked = status === 'approved' ||
+                                     status === 'accepted' ||
+                                     status === 'rejected' ||
+                                     status === 'to-review' ||
+                                     status.includes('forward');
+                setActionButtonsDisabled(isActionLocked || isUpdatingLicenseStatus);
 
                 // License details
                 console.log('Setting license details...');
@@ -337,7 +368,7 @@
                 document.getElementById('category').textContent = licenseData.applicationType || 'N/A';
                 document.getElementById('municipality').textContent = licenseData.formData?.municipality || 'N/A';
                 document.getElementById('province').textContent = licenseData.formData?.province || 'N/A';
-                document.getElementById('statusField').textContent = status.toUpperCase();
+                document.getElementById('statusField').textContent = statusLabel.toUpperCase();
                 
                 // Handle filed date
                 if (date) {
@@ -391,26 +422,67 @@
         }
 
         window.updateLicenseStatus = async function(newStatus) {
+            if (isUpdatingLicenseStatus) return;
+
             const statusText = newStatus === 'approved' ? 'approve' : 
                              newStatus === 'rejected' ? 'reject' : 
-                             newStatus === 'pending' ? 'mark as pending' :
+                             newStatus === 'to-review' ? 'forward to regional review' :
                              'update';
             const confirmed = confirm(`Are you sure you want to ${statusText} this license/permit?\n\nRef: ${document.getElementById('refNumber').textContent}\nApplicant: ${document.getElementById('applicantName').textContent}`);
             
             if (!confirmed) return;
 
             try {
+                isUpdatingLicenseStatus = true;
+                setActionButtonsDisabled(true);
+
                 // Update license status
-                await updateDoc(doc(db, 'license_applications', currentLicenseId), {
+                const updateFields = {
                     status: newStatus,
                     updatedAt: serverTimestamp()
-                });
+                };
+
+                if (newStatus === 'approved') {
+                    updateFields.approvedByLevel = 'Municipal';
+                    updateFields.approvedByEmail = auth.currentUser ? auth.currentUser.email : '';
+                    updateFields.rejectedByLevel = '';
+                    updateFields.rejectedByEmail = '';
+                    updateFields.forwardedByLevel = '';
+                    updateFields.forwardedToLevel = '';
+                }
+
+                if (newStatus === 'rejected') {
+                    updateFields.rejectedByLevel = 'Municipal';
+                    updateFields.rejectedByEmail = auth.currentUser ? auth.currentUser.email : '';
+                    updateFields.approvedByLevel = '';
+                    updateFields.approvedByEmail = '';
+                    updateFields.forwardedByLevel = '';
+                    updateFields.forwardedToLevel = '';
+                }
+
+                if (newStatus === 'to-review') {
+                    updateFields.forwardedAt = serverTimestamp();
+                    updateFields.forwardedBy = auth.currentUser ? auth.currentUser.uid : null;
+                    updateFields.forwardedByEmail = auth.currentUser ? auth.currentUser.email : null;
+                    updateFields.forwardedByLevel = 'Municipal';
+                    updateFields.forwardedToLevel = 'Regional';
+                    updateFields.regionalStatus = 'pending';
+                    updateFields.approvedByLevel = '';
+                    updateFields.approvedByEmail = '';
+                    updateFields.rejectedByLevel = '';
+                    updateFields.rejectedByEmail = '';
+                }
+
+                await updateDoc(doc(db, 'license_applications', currentLicenseId), updateFields);
                 
                 alert(`License/Permit ${statusText} successfully!`);
                 await loadLicenseDetails(); // Reload to show updated status
+                isUpdatingLicenseStatus = false;
             } catch (error) {
                 console.error('Error updating status:', error);
                 alert('Failed to update license status: ' + error.message);
+                isUpdatingLicenseStatus = false;
+                setActionButtonsDisabled(false);
             }
         };
 
