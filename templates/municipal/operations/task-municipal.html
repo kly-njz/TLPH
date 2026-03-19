@@ -374,6 +374,7 @@
   }
 
   const taskTableBody = document.querySelector('#taskTable tbody');
+  const noTaskRowId = 'noTaskRow';
   const taskViewModal = document.getElementById('taskViewModal');
   const taskViewCloseIcon = document.getElementById('taskViewCloseIcon');
   const taskViewCloseBtn = document.getElementById('taskViewCloseBtn');
@@ -425,6 +426,72 @@
     }
   });
 
+  function getAllTaskRows() {
+    return Array.from(document.querySelectorAll('#taskTable tbody tr.task-row'));
+  }
+
+  function toTitleCaseStatus(statusUpper) {
+    if (statusUpper === 'IN PROGRESS') return 'In Progress';
+    if (statusUpper === 'COMPLETED') return 'Completed';
+    return 'Pending';
+  }
+
+  function refreshDashboardFromRows() {
+    const rows = getAllTaskRows();
+    let pending = 0;
+    let inProgress = 0;
+    let completed = 0;
+    const unitCounts = {};
+
+    rows.forEach((row) => {
+      const status = (row.dataset.stat || '').toUpperCase();
+      if (status === 'COMPLETED') completed += 1;
+      else if (status === 'IN PROGRESS') inProgress += 1;
+      else pending += 1;
+
+      const assignee = (row.querySelector('td:nth-child(2)')?.innerText || 'N/A').trim();
+      unitCounts[assignee] = (unitCounts[assignee] || 0) + 1;
+    });
+
+    const total = rows.length;
+    const metricTotal = document.getElementById('metricTotalTasks');
+    const metricPending = document.getElementById('metricPendingTasks');
+    const metricInProgress = document.getElementById('metricInProgressTasks');
+    const metricCompleted = document.getElementById('metricCompletedTasks');
+    if (metricTotal) metricTotal.textContent = String(total);
+    if (metricPending) metricPending.textContent = String(pending);
+    if (metricInProgress) metricInProgress.textContent = String(inProgress);
+    if (metricCompleted) metricCompleted.textContent = String(completed);
+
+    taskStatusChart.data.datasets[0].data = [pending, inProgress, completed];
+    taskStatusChart.update();
+
+    const topUnits = Object.entries(unitCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
+    const labels = topUnits.length ? topUnits.map(x => x[0]) : ['No Data'];
+    const values = topUnits.length ? topUnits.map(x => x[1]) : [0];
+    taskUnitChart.data.labels = labels;
+    taskUnitChart.data.datasets[0].data = values;
+    taskUnitChart.update();
+  }
+
+  function ensureNoTaskRow() {
+    const tbody = document.getElementById('taskTableBody');
+    if (!tbody) return;
+    const rows = getAllTaskRows();
+    const existingNoTask = document.getElementById(noTaskRowId);
+    if (rows.length === 0 && !existingNoTask) {
+      const tr = document.createElement('tr');
+      tr.id = noTaskRowId;
+      tr.innerHTML = '<td colspan="6" class="px-4 py-6 text-center text-slate-400 font-bold">No municipal tasks found for your location.</td>';
+      tbody.appendChild(tr);
+    }
+    if (rows.length > 0 && existingNoTask) {
+      existingNoTask.remove();
+    }
+  }
+
   // --- FILTER LOGIC ---
   function filterTable() {
     const q = document.getElementById('searchTask').value.toLowerCase().trim();
@@ -450,6 +517,7 @@
     });
 
     document.getElementById('visibleCount').innerText = visible;
+    refreshDashboardFromRows();
   }
 
   document.getElementById('searchTask').addEventListener('input', filterTable);
@@ -617,9 +685,9 @@
     const statusBadge = row.querySelector('td:nth-child(4) span');
     if (statusBadge) {
       statusBadge.className = statusBadgeClass('COMPLETED');
-      statusBadge.textContent = 'COMPLETED';
+      statusBadge.textContent = 'Completed';
     }
-    location.reload();
+    refreshDashboardFromRows();
   }
 
   async function deleteTaskRow(row) {
@@ -643,7 +711,8 @@
       return;
     }
     row.remove();
-    location.reload();
+    ensureNoTaskRow();
+    refreshDashboardFromRows();
   }
 
   async function handleTaskSubmit(event) {
@@ -724,7 +793,7 @@
     const statusSpan = document.createElement('span');
     statusSpan.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border';
 
-    const upperStatus = status.toUpperCase();
+    const upperStatus = (saveData.task.status || status).toUpperCase();
     if (upperStatus === 'PENDING') {
       statusSpan.classList.add('bg-amber-50', 'text-amber-700', 'border-amber-200');
     } else if (upperStatus === 'IN PROGRESS') {
@@ -735,7 +804,7 @@
       statusSpan.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200');
     }
 
-    statusSpan.textContent = status;
+    statusSpan.textContent = toTitleCaseStatus(upperStatus);
     statusCell.appendChild(statusSpan);
 
     const dueDateCell = document.createElement('td');
@@ -757,14 +826,19 @@
     row.appendChild(dueDateCell);
     row.appendChild(actionsCell);
 
-    if (tbody.firstChild) {
-      tbody.insertBefore(row, tbody.firstChild);
+    const existingNoTask = document.getElementById(noTaskRowId);
+    if (existingNoTask) existingNoTask.remove();
+
+    const firstTaskRow = tbody.querySelector('tr.task-row');
+    if (firstTaskRow) {
+      tbody.insertBefore(row, firstTaskRow);
     } else {
       tbody.appendChild(row);
     }
 
     closeTaskModal();
-    location.reload();
+    filterTable();
+    refreshDashboardFromRows();
   }
 
   function exportTaskTableToCSV() {
