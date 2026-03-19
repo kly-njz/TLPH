@@ -76,7 +76,7 @@
             <div class="flex justify-between items-start">
               <div>
                 <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Tasks</div>
-                <div class="text-xl font-black text-slate-900 leading-none mt-1">{{ total_tasks|default("42") }}</div>
+                <div class="text-xl font-black text-slate-900 leading-none mt-1" id="metricTotalTasks">{{ total_tasks|default(0) }}</div>
               </div>
               <span class="material-icons-round text-slate-300 text-[20px]">assignment</span>
             </div>
@@ -86,7 +86,7 @@
             <div class="flex justify-between items-start">
               <div>
                 <div class="text-[9px] font-black uppercase text-amber-800 tracking-widest">Pending</div>
-                <div class="text-xl font-black text-amber-700 leading-none mt-1">{{ pending_tasks|default("15") }}</div>
+                <div class="text-xl font-black text-amber-700 leading-none mt-1" id="metricPendingTasks">{{ pending_tasks|default(0) }}</div>
               </div>
               <span class="material-icons-round text-amber-200 text-[20px]">hourglass_top</span>
             </div>
@@ -96,7 +96,7 @@
             <div class="flex justify-between items-start">
               <div>
                 <div class="text-[9px] font-black uppercase text-blue-800 tracking-widest">In Progress</div>
-                <div class="text-xl font-black text-blue-700 leading-none mt-1">{{ in_progress_tasks|default("18") }}</div>
+                <div class="text-xl font-black text-blue-700 leading-none mt-1" id="metricInProgressTasks">{{ in_progress_tasks|default(0) }}</div>
               </div>
               <span class="material-icons-round text-blue-200 text-[20px]">play_circle</span>
             </div>
@@ -106,7 +106,7 @@
             <div class="flex justify-between items-start">
               <div>
                 <div class="text-[9px] font-black uppercase text-emerald-800 tracking-widest">Completed</div>
-                <div class="text-xl font-black text-emerald-700 leading-none mt-1">{{ completed_tasks|default("9") }}</div>
+                <div class="text-xl font-black text-emerald-700 leading-none mt-1" id="metricCompletedTasks">{{ completed_tasks|default(0) }}</div>
               </div>
               <span class="material-icons-round text-emerald-200 text-[20px]">check_circle</span>
             </div>
@@ -146,14 +146,14 @@
                 <input id="searchTask" type="text" placeholder="Search task / assignee..." class="gov-input pl-6 w-full" oninput="filterTable()">
               </div>
 
-              <select id="barangayFilter" class="gov-input cursor-pointer min-w-[120px]" onchange="filterTable()">
+              <select id="barangayFilter" title="Filter tasks by barangay" class="gov-input cursor-pointer min-w-[120px]" onchange="filterTable()">
                 <option value="">All Barangays</option>
-                <option value="Barangay 1">Barangay 1</option>
-                <option value="Barangay 2">Barangay 2</option>
-                <option value="Barangay 3">Barangay 3</option>
+                {% for b in barangay_options %}
+                <option value="{{ b }}">{{ b }}</option>
+                {% endfor %}
               </select>
 
-              <select id="statusFilter" class="gov-input cursor-pointer min-w-[120px]" onchange="filterTable()">
+              <select id="statusFilter" title="Filter tasks by status" class="gov-input cursor-pointer min-w-[120px]" onchange="filterTable()">
                 <option value="">All Status</option>
                 <option value="Pending">Pending</option>
                 <option value="In Progress">In Progress</option>
@@ -179,29 +179,9 @@
                 </tr>
               </thead>
 
-              <tbody class="text-[10px] divide-y divide-slate-100">
-
-                <tr class="hover:bg-blue-50 transition task-row" data-stat="PENDING">
-                  <td class="px-4 py-3 align-middle font-bold text-slate-900 border-r border-slate-100 uppercase">Barangay Cleanup & Waste Segregation Drive</td>
-                  <td class="px-4 py-3 align-middle font-bold text-blue-800 border-r border-slate-100 uppercase">Municipal ENRO</td>
-                  <td class="px-4 py-3 align-middle font-bold text-slate-700 border-r border-slate-100 uppercase">Barangay 2</td>
-                  <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
-                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-amber-50 text-amber-700 border border-amber-200 w-20 text-center">
-                      Pending
-                    </span>
-                  </td>
-                  <td class="px-4 py-3 align-middle font-mono text-slate-600 border-r border-slate-100 text-center">Mar 01, 2026</td>
-                  <td class="px-4 py-3 align-middle text-center">
-                    <div class="flex justify-center gap-1">
-                        <button class="btn-action btn-view" title="View Details"><span class="material-icons-round text-[14px]">visibility</span></button>
-                        <button class="btn-action btn-approve" title="Mark as Done"><span class="material-icons-round text-[14px]">check</span></button>
-                        <button class="btn-action btn-delete" title="Revoke/Delete"><span class="material-icons-round text-[14px]">delete</span></button>
-                    </div>
-                  </td>
-                </tr>
-
+              <tbody class="text-[10px] divide-y divide-slate-100" id="taskTableBody">
                 {% for task in tasks %}
-                <tr class="hover:bg-blue-50 transition task-row" data-stat="{{ task.status|upper }}">
+                <tr class="hover:bg-blue-50 transition task-row" data-task-id="{{ task.id }}" data-stat="{{ task.status|upper }}" data-barangay="{{ task.barangay|lower }}">
                   <td class="px-4 py-3 align-middle font-bold text-slate-900 border-r border-slate-100 uppercase">{{ task.title }}</td>
                   <td class="px-4 py-3 align-middle font-bold text-blue-800 border-r border-slate-100 uppercase">{{ task.assigned_to }}</td>
                   <td class="px-4 py-3 align-middle font-bold text-slate-700 border-r border-slate-100 uppercase">{{ task.barangay }}</td>
@@ -224,6 +204,12 @@
                   </td>
                 </tr>
                 {% endfor %}
+
+                {% if not tasks %}
+                <tr id="noTaskRow">
+                  <td colspan="6" class="px-4 py-6 text-center text-slate-400 font-bold">No municipal tasks found for your location.</td>
+                </tr>
+                {% endif %}
 
               </tbody>
             </table>
@@ -365,9 +351,9 @@
     }
   };
 
-  const pendingVal  = Number("{{ pending_tasks|default(15) }}");
-  const progVal     = Number("{{ in_progress_tasks|default(18) }}");
-  const doneVal     = Number("{{ completed_tasks|default(9) }}");
+  const pendingVal  = Number("{{ pending_tasks|default(0) }}");
+  const progVal     = Number("{{ in_progress_tasks|default(0) }}");
+  const doneVal     = Number("{{ completed_tasks|default(0) }}");
 
   const taskTableBody = document.querySelector('#taskTable tbody');
   const taskViewModal = document.getElementById('taskViewModal');
@@ -380,7 +366,7 @@
   const viewTaskDueDate = document.getElementById('viewTaskDueDate');
 
   // Status Doughnut
-  new Chart(document.getElementById('taskStatusChart'), {
+  const taskStatusChart = new Chart(document.getElementById('taskStatusChart'), {
     type: 'doughnut',
     data: {
       labels: ['Pending', 'In Progress', 'Completed'],
@@ -399,13 +385,13 @@
   });
 
   // Unit Bar Chart
-  new Chart(document.getElementById('taskUnitChart'), {
+  const taskUnitChart = new Chart(document.getElementById('taskUnitChart'), {
     type: 'bar',
     data: {
-      labels: ['ENRO', 'Admin', 'Treasury', 'Engineering'],
+      labels: {{ unit_labels_json|default('[]')|safe }},
       datasets: [{
         label: 'Tasks',
-        data: [12, 8, 10, 7],
+        data: {{ unit_values_json|default('[]')|safe }},
         backgroundColor: '#1e40af',
         borderRadius: 2,
         borderWidth: 0
@@ -433,10 +419,11 @@
     rows.forEach(row => {
       const text = row.innerText.toLowerCase();
       const rowStat = row.dataset.stat;
+      const rowBrgy = (row.dataset.barangay || '').toLowerCase();
       
       const matchQ = text.includes(q);
       const matchStatus = !status || status === 'ALL STATUS' || rowStat === status;
-      const matchBrgy = !brgy || text.includes(brgy);
+      const matchBrgy = !brgy || rowBrgy === brgy.toLowerCase();
       
       const show = matchQ && matchStatus && matchBrgy;
       row.style.display = show ? '' : 'none';
@@ -585,22 +572,60 @@
     taskModal.classList.remove('flex');
   }
 
-  function markTaskRowCompleted(row) {
+  function statusBadgeClass(statusUpper) {
+    if (statusUpper === 'PENDING') return 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-amber-50 text-amber-700 border-amber-200';
+    if (statusUpper === 'IN PROGRESS') return 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-blue-50 text-blue-700 border-blue-200';
+    if (statusUpper === 'COMPLETED') return 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-emerald-50 text-emerald-700 border-emerald-200';
+    return 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-slate-100 text-slate-600 border-slate-200';
+  }
+
+  async function markTaskRowCompleted(row) {
     if (!row) return;
+    const taskId = row.dataset.taskId;
+    if (!taskId) return;
+
+    const res = await fetch(`/municipal/operations/tasks-municipal/api/${encodeURIComponent(taskId)}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'COMPLETED' })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      alert(data.error || 'Failed to update task status.');
+      return;
+    }
 
     row.dataset.stat = 'COMPLETED';
+    const statusBadge = row.querySelector('td:nth-child(4) span');
+    if (statusBadge) {
+      statusBadge.className = statusBadgeClass('COMPLETED');
+      statusBadge.textContent = 'COMPLETED';
+    }
+    location.reload();
+  }
 
-    const cells = row.querySelectorAll('td');
-    if (!cells || cells.length < 4) return;
+  async function deleteTaskRow(row) {
+    if (!row) return;
+    const taskId = row.dataset.taskId;
+    if (!taskId) {
+      row.remove();
+      filterTable();
+      return;
+    }
 
-    const statusCell = cells[3];
-    if (!statusCell) return;
+    const confirmed = window.confirm('Delete this task?');
+    if (!confirmed) return;
 
-    const statusBadge = statusCell.querySelector('span');
-    if (!statusBadge) return;
-
-    statusBadge.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-emerald-50 text-emerald-700 border-emerald-200';
-    statusBadge.textContent = 'Completed';
+    const res = await fetch(`/municipal/operations/tasks-municipal/api/${encodeURIComponent(taskId)}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      alert(data.error || 'Failed to delete task.');
+      return;
+    }
+    row.remove();
+    location.reload();
   }
 
   function handleTaskSubmit(event) {
@@ -632,9 +657,30 @@
       return;
     }
 
+    const payload = {
+      title,
+      assigned_to: assignee,
+      barangay,
+      status: status.toUpperCase(),
+      due_date: dueDate
+    };
+
+    const saveResponse = await fetch('/municipal/operations/tasks-municipal/api/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const saveData = await saveResponse.json();
+    if (!saveResponse.ok || !saveData.success) {
+      alert(saveData.error || 'Failed to save task.');
+      return;
+    }
+
     const row = document.createElement('tr');
     row.className = 'hover:bg-blue-50 transition task-row';
-    row.dataset.stat = status.toUpperCase();
+    row.dataset.taskId = saveData.task.id;
+    row.dataset.stat = saveData.task.status.toUpperCase();
+    row.dataset.barangay = barangay.toLowerCase();
 
     const titleCell = document.createElement('td');
     titleCell.className = 'px-4 py-3 align-middle font-bold text-slate-900 border-r border-slate-100 uppercase';
@@ -670,7 +716,7 @@
 
     const dueDateCell = document.createElement('td');
     dueDateCell.className = 'px-4 py-3 align-middle font-mono text-slate-600 border-r border-slate-100 text-center';
-    dueDateCell.textContent = dueDate;
+    dueDateCell.textContent = saveData.task.due_date;
 
     const actionsCell = document.createElement('td');
     actionsCell.className = 'px-4 py-3 align-middle text-center';
@@ -694,7 +740,7 @@
     }
 
     closeTaskModal();
-    filterTable();
+    location.reload();
   }
 
   function exportTaskTableToCSV() {
