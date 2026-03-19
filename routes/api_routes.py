@@ -532,6 +532,7 @@ def logout():
         )
 
         if user_role in {'municipal', 'municipal_admin'}:
+            print(f'[LOGOUT_CAPTURE] Recording logout event for {user_email} in municipality={municipality}, region={region}')
             system_logs_storage.add_regional_system_log(
                 region=region,
                 municipality=municipality,
@@ -549,6 +550,7 @@ def logout():
                 user_agent=user_agent,
                 metadata={'source': 'logout'}
             )
+            print(f'[LOGOUT_CAPTURE] ✅ Logout event recorded successfully for {user_email}')
         
         session.clear()
         return jsonify({'success': True, 'message': 'Logged out successfully'})
