@@ -631,6 +631,10 @@ def api_regional_system_logs():
             ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
             details = entry.get('message') or ('Municipal admin signed in.' if action_value == 'LOGIN' else 'Municipal admin signed out.' if action_value == 'LOGOUT' else 'Municipal admin approved an item.')
 
+            # Extract IP and device info
+            ip_addr = entry.get('ip') or entry.get('ipAddress') or entry.get('ip_address') or ''
+            device_info = entry.get('device_type') or entry.get('device') or ''
+            
             logs.append({
                 'id': entry.get('id') or '',
                 'ts': _normalize_ts_for_json(ts_value),
@@ -640,8 +644,8 @@ def api_regional_system_logs():
                 'action': action_value,
                 'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
                 'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
-                'device_type': entry.get('device_type') or '',
-                'ip': _extract_ip_value(entry),
+                'device_type': device_info,
+                'ip': ip_addr,
                 'outcome': entry.get('outcome') or 'SUCCESS',
                 'message': details,
                 'municipality': entry_muni,
