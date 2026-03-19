@@ -629,6 +629,26 @@ def tasks_municipal():
             variants.add(normalize_scope(normalized.replace(' MUNICIPALITY', '')))
         return {x for x in variants if x}
 
+    def get_municipality_query_values(value):
+        raw = str(value or '').strip()
+        if not raw:
+            return []
+        candidates = {raw}
+        if ',' in raw:
+            candidates.add(raw.split(',', 1)[0].strip())
+        if ' - ' in raw:
+            candidates.add(raw.split(' - ', 1)[0].strip())
+        if '(' in raw:
+            candidates.add(raw.split('(', 1)[0].strip())
+        raw_upper = raw.upper()
+        if raw_upper.startswith('CITY OF '):
+            candidates.add(raw[8:].strip())
+        if raw_upper.startswith('MUNICIPALITY OF '):
+            candidates.add(raw[16:].strip())
+        if raw_upper.endswith(' MUNICIPALITY'):
+            candidates.add(raw[:-13].strip())
+        return [c for c in candidates if c]
+
     def municipality_matches(item_value, accepted_variants):
         item_key = normalize_scope(item_value)
         if not accepted_variants:
@@ -643,36 +663,70 @@ def tasks_municipal():
     municipality_key = normalize_scope(user_municipality)
     region_key = normalize_scope(user_region)
     municipality_variants = get_municipality_variants(user_municipality)
+    municipality_query_values = get_municipality_query_values(user_municipality)
     region_variants = get_region_variants(user_region)
 
     tasks = []
     try:
-        query = db.collection('municipal_tasks').stream()
-        for doc in query:
-            item = doc.to_dict() or {}
-            item_muni_key = item.get('municipality_key') or item.get('municipality')
-            if not municipality_matches(item_muni_key, municipality_variants):
-                continue
-            item_region_key = normalize_scope(item.get('region_key') or item.get('region'))
-            if region_variants and item_region_key not in region_variants:
-                continue
-            item['id'] = doc.id
-            item['title'] = item.get('title') or 'N/A'
-            item['assigned_to'] = item.get('assigned_to') or 'N/A'
-            item['barangay'] = item.get('barangay') or 'N/A'
-            item['status'] = str(item.get('status') or 'PENDING').upper()
-            item['due_date'] = item.get('due_date') or 'N/A'
-            created_at = item.get('created_at')
-            if isinstance(created_at, datetime):
-                item['_created_at'] = created_at
-            elif hasattr(created_at, 'to_datetime'):
-                try:
-                    item['_created_at'] = created_at.to_datetime()
-                except Exception:
+        seen_ids = set()
+
+        # Primary fetch: use municipality field directly as requested.
+        for municipality_value in municipality_query_values:
+            query = db.collection('municipal_tasks').where('municipality', '==', municipality_value).stream()
+            for doc in query:
+                if doc.id in seen_ids:
+                    continue
+                item = doc.to_dict() or {}
+                item_region_key = normalize_scope(item.get('region_key') or item.get('region'))
+                if region_variants and item_region_key not in region_variants:
+                    continue
+                item['id'] = doc.id
+                item['title'] = item.get('title') or 'N/A'
+                item['assigned_to'] = item.get('assigned_to') or 'N/A'
+                item['barangay'] = item.get('barangay') or 'N/A'
+                item['status'] = str(item.get('status') or 'PENDING').upper()
+                item['due_date'] = item.get('due_date') or 'N/A'
+                created_at = item.get('created_at')
+                if isinstance(created_at, datetime):
+                    item['_created_at'] = created_at
+                elif hasattr(created_at, 'to_datetime'):
+                    try:
+                        item['_created_at'] = created_at.to_datetime()
+                    except Exception:
+                        item['_created_at'] = datetime.min
+                else:
                     item['_created_at'] = datetime.min
-            else:
-                item['_created_at'] = datetime.min
-            tasks.append(item)
+                tasks.append(item)
+                seen_ids.add(doc.id)
+
+        # Fallback: if no results via municipality field, try broader matching.
+        if not tasks:
+            query = db.collection('municipal_tasks').stream()
+            for doc in query:
+                item = doc.to_dict() or {}
+                item_muni_key = item.get('municipality_key') or item.get('municipality')
+                if not municipality_matches(item_muni_key, municipality_variants):
+                    continue
+                item_region_key = normalize_scope(item.get('region_key') or item.get('region'))
+                if region_variants and item_region_key not in region_variants:
+                    continue
+                item['id'] = doc.id
+                item['title'] = item.get('title') or 'N/A'
+                item['assigned_to'] = item.get('assigned_to') or 'N/A'
+                item['barangay'] = item.get('barangay') or 'N/A'
+                item['status'] = str(item.get('status') or 'PENDING').upper()
+                item['due_date'] = item.get('due_date') or 'N/A'
+                created_at = item.get('created_at')
+                if isinstance(created_at, datetime):
+                    item['_created_at'] = created_at
+                elif hasattr(created_at, 'to_datetime'):
+                    try:
+                        item['_created_at'] = created_at.to_datetime()
+                    except Exception:
+                        item['_created_at'] = datetime.min
+                else:
+                    item['_created_at'] = datetime.min
+                tasks.append(item)
     except Exception as e:
         print(f"[WARN] tasks_municipal scoped query failed, trying fallback: {e}")
         try:
