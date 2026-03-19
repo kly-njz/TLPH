@@ -22,6 +22,8 @@
     .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
     .gov-input:focus { border-color: #1e40af; }
     .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+    .gov-icon-btn { width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+    .gov-icon-btn .material-icons-round { font-size: 14px; line-height: 1; }
     
     /* Dense Table Formatting */
     th { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 6px 8px !important; position: sticky; top: 0; z-index: 10; }
@@ -65,7 +67,7 @@
               <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">National Asset Allocation & Dispatch Log</p>
             </div>
           </div>
-          <button class="gov-btn bg-slate-800 hover:bg-slate-900 text-white shadow-sm flex items-center gap-1.5">
+          <button id="addRecordBtn" class="gov-btn bg-slate-800 hover:bg-slate-900 text-white shadow-sm flex items-center gap-1.5">
             <span class="material-icons-round text-[14px]">add</span> Add Record
           </button>
         </header>
@@ -175,7 +177,7 @@
                             <td class="border-r border-slate-100 text-right font-mono font-black text-blue-700 qty-cell">100</td>
                             <td class="text-center border-r border-slate-100 font-mono text-slate-600 date-cell">2026-02-17</td>
                             <td class="text-center no-print">
-                                <button class="text-blue-700 font-bold uppercase hover:underline text-[9px]">View Detail</button>
+                                <button class="text-blue-700 font-bold uppercase hover:underline text-[9px] btn-view-detail">View Detail</button>
                             </td>
                         </tr>
 
@@ -189,7 +191,7 @@
                             </td>
                             <td class="text-center border-r border-slate-100 font-mono text-slate-600 date-cell">{{ record.date }}</td>
                             <td class="text-center no-print">
-                                <button class="text-blue-700 font-bold uppercase hover:underline text-[9px]">View Detail</button>
+                                <button class="text-blue-700 font-bold uppercase hover:underline text-[9px] btn-view-detail">View Detail</button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -206,7 +208,7 @@
 
             <div class="bg-slate-50 border-t border-slate-200 px-3 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 shrink-0">
                 <span id="recordCountDisplay" class="font-bold uppercase tracking-widest text-[9px] italic">Showing <b class="text-slate-700">0</b> records</span>
-                <button class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1 no-print">
+                <button id="exportDistBtn" class="gov-btn border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 shadow-sm flex items-center gap-1 no-print">
                     <span class="material-icons-round text-[12px]">file_download</span> Export CSV
                 </button>
             </div>
@@ -216,7 +218,229 @@
     </main>
   </div>
 
+  <!-- Add Record Modal -->
+  <div id="recordModal" class="fixed inset-0 z-50 bg-slate-900/50 hidden items-center justify-center px-4">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
+      <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[14px]">add_box</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black uppercase tracking-tight m-0 text-white">Add Dispatch Record</h2>
+            <p class="text-[9px] font-bold text-slate-300 uppercase tracking-widest m-0">Log new product distribution</p>
+          </div>
+        </div>
+        <button id="recordCloseBtn" type="button" class="text-slate-300 hover:text-white" aria-label="Close">
+          <span class="material-icons-round text-[18px]">close</span>
+        </button>
+      </div>
+
+      <form id="recordForm" class="px-3 py-2 space-y-2">
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Product Name</label>
+          <input id="recordProductInput" type="text" class="gov-input w-full" required />
+        </div>
+
+        <div>
+          <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Recipient / Region</label>
+          <input id="recordRecipientInput" type="text" class="gov-input w-full" required />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Quantity</label>
+            <input id="recordQtyInput" type="number" min="0" class="gov-input w-full" required />
+          </div>
+          <div>
+            <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Date Dispatched</label>
+            <input id="recordDateInput" type="date" class="gov-input w-full" required />
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-200 mt-2 mb-2">
+          <button id="recordCancelBtn" type="button" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+          <button id="recordSubmitBtn" type="submit" class="gov-btn bg-slate-800 hover:bg-slate-900 text-white">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- View Detail Modal -->
+  <div id="detailModal" class="fixed inset-0 z-50 bg-slate-900/50 hidden items-center justify-center px-4">
+    <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
+      <div class="bg-slate-800 px-4 py-2 flex justify-between items-center text-white">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[14px]">visibility</span>
+          <div class="leading-tight">
+            <h2 class="text-[11px] font-black uppercase tracking-tight m-0 text-white">Dispatch Detail</h2>
+            <p class="text-[9px] font-bold text-slate-300 uppercase tracking-widest m-0">Distribution record overview</p>
+          </div>
+        </div>
+        <button id="detailCloseBtn" type="button" class="text-slate-300 hover:text-white" aria-label="Close">
+          <span class="material-icons-round text-[18px]">close</span>
+        </button>
+      </div>
+
+      <div class="px-3 py-3 space-y-2 text-[10px]">
+        <div class="flex justify-between border-b border-slate-100 pb-1">
+          <span class="font-black uppercase text-slate-500">Product</span>
+          <span id="detailProduct" class="font-black text-slate-900 uppercase"></span>
+        </div>
+        <div class="flex justify-between border-b border-slate-100 pb-1">
+          <span class="font-black uppercase text-slate-500">Recipient</span>
+          <span id="detailRecipient" class="font-black text-slate-900 uppercase"></span>
+        </div>
+        <div class="flex justify-between border-b border-slate-100 pb-1">
+          <span class="font-black uppercase text-slate-500">Quantity</span>
+          <span id="detailQty" class="font-black text-slate-900"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="font-black uppercase text-slate-500">Date</span>
+          <span id="detailDate" class="font-black text-slate-900"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
+    function openRecordModal() {
+        const modal = document.getElementById('recordModal');
+        const form = document.getElementById('recordForm');
+        if (!modal || !form) return;
+        form.reset();
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeRecordModal() {
+        const modal = document.getElementById('recordModal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function openDetailModal(row) {
+        const modal = document.getElementById('detailModal');
+        if (!modal || !row || !row.cells) return;
+
+        const product = (row.cells[0]?.innerText || '').trim();
+        const recipient = (row.cells[1]?.innerText || '').trim();
+        const qty = (row.cells[2]?.innerText || '').trim();
+        const date = (row.cells[3]?.innerText || '').trim();
+
+        const detailProduct = document.getElementById('detailProduct');
+        const detailRecipient = document.getElementById('detailRecipient');
+        const detailQty = document.getElementById('detailQty');
+        const detailDate = document.getElementById('detailDate');
+
+        if (detailProduct) detailProduct.textContent = product;
+        if (detailRecipient) detailRecipient.textContent = recipient;
+        if (detailQty) detailQty.textContent = qty;
+        if (detailDate) detailDate.textContent = date;
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeDetailModal() {
+        const modal = document.getElementById('detailModal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function handleRecordSubmit(event) {
+        event.preventDefault();
+
+        const productInput = document.getElementById('recordProductInput');
+        const recipientInput = document.getElementById('recordRecipientInput');
+        const qtyInput = document.getElementById('recordQtyInput');
+        const dateInput = document.getElementById('recordDateInput');
+
+        if (!productInput || !recipientInput || !qtyInput || !dateInput) return;
+
+        const product = productInput.value.trim();
+        const recipient = recipientInput.value.trim();
+        const qtyValue = qtyInput.value.trim();
+        const date = dateInput.value.trim();
+
+        if (!product || !recipient || !date || qtyValue === '') return;
+
+        const qty = Number(qtyValue);
+        if (Number.isNaN(qty) || qty < 0) return;
+
+        const qtyClass = qty > 500 ? 'text-rose-700' : 'text-blue-700';
+        const qtyDisplay = qty.toLocaleString('en-PH');
+
+        const tbody = document.getElementById('distTableBody');
+        if (!tbody) return;
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-blue-50 transition data-row';
+        tr.innerHTML = `
+            <td class="border-r border-slate-100 font-bold text-slate-900 uppercase">${product}</td>
+            <td class="border-r border-slate-100 font-bold text-slate-700 uppercase rec-cell">${recipient}</td>
+            <td class="border-r border-slate-100 text-right font-mono font-black qty-cell ${qtyClass}">${qtyDisplay}</td>
+            <td class="text-center border-r border-slate-100 font-mono text-slate-600 date-cell">${date}</td>
+            <td class="text-center no-print">
+                <button class="text-blue-700 font-bold uppercase hover:underline text-[9px] btn-view-detail">View Detail</button>
+            </td>
+        `;
+
+        const emptyRow = document.getElementById('emptyStateRow');
+        if (emptyRow) {
+            emptyRow.style.display = 'none';
+        }
+
+        if (tbody.firstChild) {
+            tbody.insertBefore(tr, tbody.firstChild);
+        } else {
+            tbody.appendChild(tr);
+        }
+
+        closeRecordModal();
+        applyFilters();
+    }
+
+    function exportDistCsv() {
+        const rows = Array.from(document.querySelectorAll('#distTableBody tr.data-row'))
+            .filter(row => row.style.display !== 'none');
+
+        const header = ['Asset / Product Name', 'Official Recipient', 'Volume / Qty', 'Date Dispatched'];
+        const lines = [];
+        lines.push(header.map(value => '"' + value.replace(/"/g, '""') + '"').join(','));
+
+        rows.forEach(row => {
+            const cells = row.cells;
+            if (!cells || cells.length < 4) return;
+
+            const product = (cells[0].innerText || '').trim().replace(/\s+/g, ' ');
+            const recipient = (cells[1].innerText || '').trim().replace(/\s+/g, ' ');
+            const qty = (cells[2].innerText || '').trim().replace(/\s+/g, ' ');
+            const date = (cells[3].innerText || '').trim().replace(/\s+/g, ' ');
+
+            const values = [product, recipient, qty, date].map(v => {
+                const safe = v.replace(/"/g, '""');
+                return '"' + safe + '"';
+            });
+
+            lines.push(values.join(','));
+        });
+
+        const csvContent = lines.join('\r\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        const dateStr = new Date().toISOString().slice(0, 10);
+        link.href = url;
+        link.download = `distributed_products_${dateStr}.csv`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
     // Live Filter & Dynamic KPI Engine
     function applyFilters() {
         const searchVal = document.getElementById('searchInput').value.toLowerCase();
@@ -304,6 +528,66 @@
     // Run filters immediately on load to calculate initial KPIs
     document.addEventListener('DOMContentLoaded', () => {
         applyFilters();
+
+        const addRecordBtn = document.getElementById('addRecordBtn');
+        const recordModal = document.getElementById('recordModal');
+        const recordForm = document.getElementById('recordForm');
+        const recordCancelBtn = document.getElementById('recordCancelBtn');
+        const recordCloseBtn = document.getElementById('recordCloseBtn');
+        const detailModal = document.getElementById('detailModal');
+        const detailCloseBtn = document.getElementById('detailCloseBtn');
+        const distTableBody = document.getElementById('distTableBody');
+        const exportDistBtn = document.getElementById('exportDistBtn');
+
+        if (addRecordBtn) {
+            addRecordBtn.addEventListener('click', openRecordModal);
+        }
+
+        if (recordCancelBtn) {
+            recordCancelBtn.addEventListener('click', closeRecordModal);
+        }
+
+        if (recordCloseBtn) {
+            recordCloseBtn.addEventListener('click', closeRecordModal);
+        }
+
+        if (recordModal) {
+            recordModal.addEventListener('click', (event) => {
+                if (event.target === recordModal) {
+                    closeRecordModal();
+                }
+            });
+        }
+
+        if (recordForm) {
+            recordForm.addEventListener('submit', handleRecordSubmit);
+        }
+
+        if (exportDistBtn) {
+            exportDistBtn.addEventListener('click', exportDistCsv);
+        }
+
+        if (detailCloseBtn) {
+            detailCloseBtn.addEventListener('click', closeDetailModal);
+        }
+
+        if (detailModal) {
+            detailModal.addEventListener('click', (event) => {
+                if (event.target === detailModal) {
+                    closeDetailModal();
+                }
+            });
+        }
+
+        if (distTableBody) {
+            distTableBody.addEventListener('click', (event) => {
+                const viewBtn = event.target.closest('.btn-view-detail');
+                if (!viewBtn) return;
+                const row = viewBtn.closest('tr');
+                if (!row) return;
+                openDetailModal(row);
+            });
+        }
     });
   </script>
 
