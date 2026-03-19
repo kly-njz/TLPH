@@ -730,6 +730,7 @@ def applicants_municipal():
         )
         for doc in query:
             item = doc.to_dict() or {}
+            item['id'] = doc.id
             raw_created = item.get('created_at')
             created_dt = _safe_datetime(raw_created)
             item['created_at_dt'] = created_dt
@@ -749,6 +750,7 @@ def applicants_municipal():
             fallback_docs = db.collection('municipal_denr_applicant_jobs').stream()
             for doc in fallback_docs:
                 item = doc.to_dict() or {}
+                item['id'] = doc.id
                 if normalize_scope(item.get('municipality_key') or item.get('municipality')) != municipality_key:
                     continue
                 if normalize_scope(item.get('region_key') or item.get('region')) != region_key:
@@ -815,6 +817,83 @@ def applicants_municipal():
         user_region=user_region,
         user_municipality=user_municipality
     )
+
+
+@bp.route('/operations/applicants-municipal/job/<job_id>', methods=['GET'])
+@role_required('municipal','municipal_admin')
+def applicants_municipal_job_detail(job_id):
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
+    user_region = (_resolve_region_from_user_context() or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    try:
+        doc = db.collection('municipal_denr_applicant_jobs').document(job_id).get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Applicant job not found'}), 404
+
+        data = doc.to_dict() or {}
+        if normalize_scope(data.get('municipality_key') or data.get('municipality')) != normalize_scope(user_municipality):
+            return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
+        if normalize_scope(data.get('region_key') or data.get('region')) != normalize_scope(user_region):
+            return jsonify({'success': False, 'error': 'Access denied for region'}), 403
+
+        return jsonify({'success': True, 'job': {
+            'id': doc.id,
+            'reference_id': data.get('reference_id') or doc.id,
+            'applicant_name': data.get('applicant_name') or 'N/A',
+            'category': data.get('category') or 'DENR Application',
+            'barangay': data.get('barangay') or 'N/A',
+            'status': str(data.get('status') or 'PENDING').upper(),
+            'date_filed': data.get('date_filed') or 'N/A',
+            'job_title': data.get('job_title') or 'DENR Applicant Job',
+            'job_description': data.get('job_description') or ''
+        }})
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch applicant job detail: {e}")
+        return jsonify({'success': False, 'error': 'Failed to fetch applicant job detail'}), 500
+
+
+@bp.route('/operations/applicants-municipal/job/<job_id>/status', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def applicants_municipal_job_update_status(job_id):
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
+    user_region = (_resolve_region_from_user_context() or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    data = request.get_json(silent=True) or {}
+    new_status = str(data.get('status') or '').strip().upper()
+    if new_status not in {'APPROVED', 'REJECTED', 'PENDING'}:
+        return jsonify({'success': False, 'error': 'Invalid status value'}), 400
+
+    try:
+        doc_ref = db.collection('municipal_denr_applicant_jobs').document(job_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Applicant job not found'}), 404
+
+        existing = doc.to_dict() or {}
+        if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
+            return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
+        if normalize_scope(existing.get('region_key') or existing.get('region')) != normalize_scope(user_region):
+            return jsonify({'success': False, 'error': 'Access denied for region'}), 403
+
+        doc_ref.set({
+            'status': new_status,
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }, merge=True)
+
+        return jsonify({'success': True, 'status': new_status})
+    except Exception as e:
+        print(f"[ERROR] Failed to update applicant job status: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update applicant job status'}), 500
 
 # --- Accounting ---
 @bp.route('/accounting/dashboard-municipal')
