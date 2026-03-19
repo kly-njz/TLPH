@@ -637,14 +637,31 @@ def applicants_municipal():
     # Ensure Firestore collection exists and has DENR applicant jobs for this scope.
     # This creates/updates a denormalized jobs collection scoped by region + municipality.
     try:
-        source_query = (
+        source_docs = list(
             db.collection('applications')
             .where('municipality', '==', user_municipality)
             .stream()
         )
-        for source_doc in source_query:
+        if not source_docs:
+            source_docs = list(db.collection('applications').stream())
+
+        for source_doc in source_docs:
             src = source_doc.to_dict() or {}
-            src_region = normalize_scope(src.get('region') or src.get('region_name') or src.get('regionName'))
+            src_municipality = normalize_scope(
+                src.get('municipality')
+                or src.get('municipality_name')
+                or src.get('municipalityName')
+                or src.get('target_municipality')
+            )
+            src_region = normalize_scope(
+                src.get('region')
+                or src.get('region_name')
+                or src.get('regionName')
+                or src.get('target_region')
+            )
+
+            if src_municipality and src_municipality != municipality_key:
+                continue
             if src_region and src_region != region_key:
                 continue
 
@@ -674,6 +691,9 @@ def applicants_municipal():
                 or src.get('ref_code')
                 or source_doc.id[:8].upper()
             )
+            reference_id = str(reference_id).strip()
+            if reference_id.upper().startswith('APP-'):
+                reference_id = reference_id[4:]
             created_raw = src.get('date_filed') or src.get('created_at') or src.get('timestamp')
             created_dt = _safe_datetime(created_raw)
 
@@ -686,7 +706,7 @@ def applicants_municipal():
                 'job_description': 'Validate DENR applicant documents and requirements for municipal processing.',
                 'status': status,
                 'barangay': str(barangay).strip(),
-                'reference_id': str(reference_id).strip(),
+                'reference_id': reference_id,
                 'municipality': user_municipality,
                 'region': user_region,
                 'municipality_key': municipality_key,
@@ -714,7 +734,10 @@ def applicants_municipal():
             created_dt = _safe_datetime(raw_created)
             item['created_at_dt'] = created_dt
             item['date_filed'] = item.get('date_filed') or (created_dt.strftime('%Y-%m-%d') if created_dt else 'N/A')
-            item['reference_id'] = item.get('reference_id') or doc.id[:8].upper()
+            ref_value = str(item.get('reference_id') or doc.id[:8].upper()).strip()
+            if ref_value.upper().startswith('APP-'):
+                ref_value = ref_value[4:]
+            item['reference_id'] = ref_value
             item['applicant_name'] = item.get('applicant_name') or 'N/A'
             item['category'] = item.get('category') or 'DENR Application'
             item['barangay'] = item.get('barangay') or 'N/A'
@@ -734,7 +757,10 @@ def applicants_municipal():
                 created_dt = _safe_datetime(raw_created)
                 item['created_at_dt'] = created_dt
                 item['date_filed'] = item.get('date_filed') or (created_dt.strftime('%Y-%m-%d') if created_dt else 'N/A')
-                item['reference_id'] = item.get('reference_id') or doc.id[:8].upper()
+                ref_value = str(item.get('reference_id') or doc.id[:8].upper()).strip()
+                if ref_value.upper().startswith('APP-'):
+                    ref_value = ref_value[4:]
+                item['reference_id'] = ref_value
                 item['applicant_name'] = item.get('applicant_name') or 'N/A'
                 item['category'] = item.get('category') or 'DENR Application'
                 item['barangay'] = item.get('barangay') or 'N/A'
