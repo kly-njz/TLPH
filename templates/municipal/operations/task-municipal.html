@@ -258,9 +258,9 @@
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Barangay *</label>
             <select id="taskBarangayInput" class="gov-input w-full cursor-pointer" required>
               <option value="">Select Barangay</option>
-              <option value="Barangay 1">Barangay 1</option>
-              <option value="Barangay 2">Barangay 2</option>
-              <option value="Barangay 3">Barangay 3</option>
+              {% for b in barangay_options %}
+              <option value="{{ b }}">{{ b }}</option>
+              {% endfor %}
             </select>
           </div>
         </div>
@@ -506,7 +506,7 @@
       }
 
       if (taskTableBody) {
-        taskTableBody.addEventListener('click', (event) => {
+        taskTableBody.addEventListener('click', async (event) => {
           const viewBtn = event.target.closest('.btn-view');
           if (viewBtn) {
             const row = viewBtn.closest('tr');
@@ -520,7 +520,7 @@
             const row = approveBtn.closest('tr');
             if (!row) return;
 
-            markTaskRowCompleted(row);
+            await markTaskRowCompleted(row);
             filterTable();
             return;
           }
@@ -530,7 +530,7 @@
             const row = deleteBtn.closest('tr');
             if (!row) return;
 
-            row.remove();
+            await deleteTaskRow(row);
             filterTable();
             return;
           }
@@ -628,7 +628,7 @@
     location.reload();
   }
 
-  function handleTaskSubmit(event) {
+  async function handleTaskSubmit(event) {
     event.preventDefault();
 
     const titleInput = document.getElementById('taskTitleInput');
@@ -665,14 +665,20 @@
       due_date: dueDate
     };
 
-    const saveResponse = await fetch('/municipal/operations/tasks-municipal/api/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const saveData = await saveResponse.json();
-    if (!saveResponse.ok || !saveData.success) {
-      alert(saveData.error || 'Failed to save task.');
+    let saveData = null;
+    try {
+      const saveResponse = await fetch('/municipal/operations/tasks-municipal/api/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      saveData = await saveResponse.json();
+      if (!saveResponse.ok || !saveData.success) {
+        alert(saveData.error || 'Failed to save task.');
+        return;
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to save task.');
       return;
     }
 
