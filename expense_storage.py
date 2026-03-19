@@ -61,16 +61,28 @@ def get_all_expense_categories(municipality=None):
         expenses_ref = get_expenses_collection()
         
         if municipality:
-            query = expenses_ref.where('municipality', '==', municipality).order_by('created_at', direction=firestore.Query.DESCENDING)
-            docs = query.stream()
+            # Avoid requiring a composite Firestore index for where + order_by.
+            # Fetch scoped docs first, then sort in memory.
+            docs = expenses_ref.where('municipality', '==', municipality).stream()
         else:
-            docs = expenses_ref.order_by('created_at', direction=firestore.Query.DESCENDING).stream()
+            docs = expenses_ref.stream()
         
         categories = []
         for doc in docs:
             category = doc.to_dict()
             category['id'] = doc.id
             categories.append(category)
+
+        def to_sort_key(item):
+            ts = item.get('created_at')
+            if hasattr(ts, 'timestamp'):
+                try:
+                    return ts.timestamp()
+                except Exception:
+                    return 0
+            return 0
+
+        categories.sort(key=to_sort_key, reverse=True)
         
         return categories
     except Exception as e:
