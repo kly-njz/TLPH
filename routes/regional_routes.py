@@ -44,6 +44,38 @@ def get_firestore_region_name(session_region):
     return session_region_upper
 
 
+def _canonical_region(value):
+    """Normalize region strings from mixed formats to a comparable canonical value."""
+    raw = str(value or '').strip().upper()
+    if not raw:
+        return ''
+
+    # Handle common aliases/labels seen in Firestore/session data.
+    if 'MIMAROPA' in raw or 'IV-B' in raw or 'REGION IV-B' in raw or 'REGION-IV-B' in raw:
+        return 'REGION-IV-B'
+    if 'CALABARZON' in raw or 'IV-A' in raw or 'REGION IV-A' in raw or 'REGION-IV-A' in raw:
+        return 'REGION-IV-A'
+    if 'BICOL' in raw or 'REGION-V' in raw or 'REGION V' in raw:
+        return 'REGION-V'
+    if 'NCR' in raw:
+        return 'NCR'
+    if 'CARAGA' in raw:
+        return 'REGION-XIII'
+    if 'BANGSAMORO' in raw or 'ARMM' in raw:
+        return 'REGION-BANGSAMORO'
+
+    return raw.replace(' ', '').replace('_', '').replace('.', '')
+
+
+def _same_region(left, right):
+    """Best-effort region equality for mixed naming conventions."""
+    l = _canonical_region(left)
+    r = _canonical_region(right)
+    if not l or not r:
+        return False
+    return l == r
+
+
 def _resolve_regional_scope(db):
     """Resolve region + municipality scope for the current regional admin."""
     session_region = session.get('region') or session.get('user_region')
@@ -73,10 +105,35 @@ def _resolve_regional_scope(db):
 
     municipalities = []
     try:
+        # Try multiple possible document IDs, since stored IDs may use
+        # session names (e.g. MIMAROPA) or Firestore names (e.g. REGION-IV-B).
+        candidates = []
         if user_region:
-            muni_doc = db.collection('municipalities').document(user_region).get()
+            candidates.append(str(user_region).strip())
+
+        session_region = session.get('region') or session.get('user_region')
+        if session_region:
+            candidates.append(str(session_region).strip())
+
+        # Add reverse-mapped key when possible.
+        reverse_mapping = {v: k for k, v in REGION_MAPPING.items()}
+        if user_region and user_region in reverse_mapping:
+            candidates.append(reverse_mapping[user_region])
+
+        seen = set()
+        ordered_candidates = []
+        for c in candidates:
+            cu = str(c).strip()
+            if cu and cu not in seen:
+                seen.add(cu)
+                ordered_candidates.append(cu)
+
+        for key in ordered_candidates:
+            muni_doc = db.collection('municipalities').document(key).get()
             if muni_doc.exists:
                 municipalities = muni_doc.to_dict().get('municipalities', []) or []
+                if municipalities:
+                    break
     except Exception as e:
         print(f"[WARN] Unable to resolve municipalities for region {user_region}: {e}")
 
@@ -518,7 +575,7 @@ def api_regional_system_logs():
 
                 in_scope = bool(
                     (municipality_set and u_muni and u_muni in municipality_set)
-                    or (user_region_norm and u_region_norm and u_region_norm == user_region_norm)
+                    or (user_region_norm and u_region_norm and _same_region(u_region_norm, user_region_norm))
                     or (not user_region_norm and not municipality_set)
                 )
                 if not in_scope:
@@ -559,7 +616,7 @@ def api_regional_system_logs():
             entry_muni_norm = entry_muni.lower()
             in_scope_by_location = bool(
                 (municipality_set and entry_muni_norm and entry_muni_norm in municipality_set)
-                or (user_region_norm and entry_region_norm and entry_region_norm == user_region_norm)
+                or (user_region_norm and entry_region_norm and _same_region(entry_region_norm, user_region_norm))
                 or (not user_region_norm and not municipality_set)
             )
 
@@ -638,7 +695,7 @@ def api_regional_system_logs():
 
                 in_scope_by_location = bool(
                     (municipality_set and entry_muni_norm and entry_muni_norm in municipality_set)
-                    or (user_region_norm and entry_region_norm and entry_region_norm == user_region_norm)
+                    or (user_region_norm and entry_region_norm and _same_region(entry_region_norm, user_region_norm))
                     or (not user_region_norm and not municipality_set)
                 )
                 if not (in_scope_by_actor or in_scope_by_location):
@@ -938,7 +995,7 @@ def system_logs_view():
 
             in_scope = bool(
                 (municipality_set and u_muni and u_muni in municipality_set)
-                or (user_region_norm and u_region_norm and u_region_norm == user_region_norm)
+                or (user_region_norm and u_region_norm and _same_region(u_region_norm, user_region_norm))
                 or (not user_region_norm and not municipality_set)
             )
             if in_scope and u_email:
