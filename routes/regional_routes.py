@@ -591,6 +591,8 @@ def api_regional_system_logs():
             print(f"[WARN] Failed building scoped municipal users for system logs: {e}")
 
         logs = []
+        regional_source_count = 0
+        audit_fallback_count = 0
         regional_log_rows = system_logs_storage.list_regional_system_logs_by_region(user_region, limit=300)
         user_region_norm = str(user_region or '').strip().upper()
 
@@ -643,6 +645,7 @@ def api_regional_system_logs():
                 'region': entry_region,
                 'scope': 'MUNICIPAL',
             })
+            regional_source_count += 1
 
         # Fallback source: auditLogs collection (common source for auth/decision events)
         # This keeps the UI populated even when dedicated regional_system_logs is empty.
@@ -721,6 +724,7 @@ def api_regional_system_logs():
                     'region': entry_region,
                     'scope': 'MUNICIPAL',
                 })
+                audit_fallback_count += 1
         except Exception as e:
             print(f"[WARN] Failed loading fallback auditLogs source for regional system logs: {e}")
 
@@ -743,7 +747,11 @@ def api_regional_system_logs():
 
         logs.sort(key=lambda x: x.get('ts') or '', reverse=True)
         logs = logs[:40]
-        print(f"[DEBUG] Regional system logs -> region={user_region}, scoped_users={len(scoped_emails)}, returned={len(logs)}")
+        print(
+            f"[DEBUG] Regional system logs -> region={user_region}, municipalities={len(municipality_set)}, "
+            f"scoped_users={len(scoped_emails)}, regional_source={regional_source_count}, "
+            f"audit_fallback={audit_fallback_count}, returned={len(logs)}"
+        )
         return jsonify({'success': True, 'logs': logs, 'region': user_region}), 200
     except Exception as e:
         print(f"[ERROR] Regional system logs failed: {e}")
