@@ -396,17 +396,36 @@
       },
 
       renderCharts(){
+        if (typeof Chart === 'undefined') {
+          return;
+        }
+
         Chart.defaults.font.family = "Verdana, Arial, sans-serif";
         Chart.defaults.font.size = 9;
         Chart.defaults.color = "#64748b";
         const chartConfig = { responsive:true, maintainAspectRatio:false, layout:{ padding:0 } };
 
-        // Destroy existing charts
-        if(this.charts.trendChart) this.charts.trendChart.destroy();
-        if(this.charts.taxChart) this.charts.taxChart.destroy();
+        const destroyChartSafe = (chartRefKey) => {
+          const chart = this.charts[chartRefKey];
+          if (!chart) return;
+          try {
+            if (chart.ctx) {
+              chart.destroy();
+            }
+          } catch (e) {
+            console.warn(`Chart destroy skipped for ${chartRefKey}:`, e);
+          } finally {
+            this.charts[chartRefKey] = null;
+          }
+        };
+
+        // Destroy existing charts safely
+        destroyChartSafe('trendChart');
+        destroyChartSafe('taxChart');
 
         // Trend Chart
-        const trendCtx = document.getElementById('trendChart');
+        const trendCanvas = document.getElementById('trendChart');
+        const trendCtx = trendCanvas && typeof trendCanvas.getContext === 'function' ? trendCanvas.getContext('2d') : null;
         if(trendCtx){
           this.charts.trendChart = new Chart(trendCtx, {
             type: 'line',
@@ -437,7 +456,8 @@
           taxTypes[type] = (taxTypes[type] || 0) + 1;
         });
 
-        const taxCtx = document.getElementById('taxChart');
+        const taxCanvas = document.getElementById('taxChart');
+        const taxCtx = taxCanvas && typeof taxCanvas.getContext === 'function' ? taxCanvas.getContext('2d') : null;
         if(taxCtx){
           this.charts.taxChart = new Chart(taxCtx, {
             type: 'doughnut',
