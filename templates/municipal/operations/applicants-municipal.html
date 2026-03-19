@@ -30,10 +30,16 @@
     td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 
     /* Action Buttons (Compact 22x22) */
-    .btn-action { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; color: #94a3b8; cursor: pointer; }
+    .btn-action { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; color: #94a3b8; cursor: pointer; flex-shrink: 0; touch-action: manipulation; }
     .btn-view:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
     .btn-approve:hover { color: white; background: #10b981; border-color: #059669; }
     .btn-reject:hover { color: white; background: #ef4444; border-color: #dc2626; }
+
+    .manage-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+
+    @media (max-width: 640px) {
+      .btn-action { width: 26px; height: 26px; }
+    }
   </style>
 </head>
 
@@ -210,10 +216,10 @@
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 align-middle text-center">
-                                    <div class="flex justify-center gap-1">
-                                    <button class="btn-action btn-view" title="View" onclick="viewApplicantJob('{{ app.id }}')"><span class="material-icons-round text-[14px]">visibility</span></button>
-                                    <button class="btn-action btn-approve" title="Approve" onclick="updateApplicantJobStatus('{{ app.id }}', 'APPROVED', this)"><span class="material-icons-round text-[14px]">check_circle</span></button>
-                                    <button class="btn-action btn-reject" title="Reject" onclick="updateApplicantJobStatus('{{ app.id }}', 'REJECTED', this)"><span class="material-icons-round text-[14px]">cancel</span></button>
+                                    <div class="manage-actions">
+                                    <button type="button" class="btn-action btn-view" title="View" onclick="viewApplicantJob('{{ app.id }}')"><span class="material-icons-round text-[14px]">visibility</span></button>
+                                    <button type="button" class="btn-action btn-approve" title="Approve" onclick="updateApplicantJobStatus('{{ app.id }}', 'APPROVED', this)"><span class="material-icons-round text-[14px]">check_circle</span></button>
+                                    <button type="button" class="btn-action btn-reject" title="Reject" onclick="updateApplicantJobStatus('{{ app.id }}', 'REJECTED', this)"><span class="material-icons-round text-[14px]">cancel</span></button>
                                     </div>
                                 </td>
                             </tr>
@@ -243,9 +249,12 @@
 
 <div id="applicantDetailModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
   <div class="bg-white w-[92vw] max-w-[560px] rounded-[2px] border border-slate-300 shadow-lg">
-    <div class="px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-      <h3 class="text-[11px] font-black uppercase tracking-wider text-slate-700">Applicant Job Details</h3>
-      <button type="button" onclick="closeApplicantModal()" class="text-slate-500 hover:text-slate-700">
+    <div class="px-4 py-2 border-b border-slate-200 flex items-center justify-between bg-blue-900 text-white">
+      <h3 class="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5">
+        <span class="material-icons-round text-[16px]">badge</span>
+        Applicant Job Details
+      </h3>
+      <button type="button" onclick="closeApplicantModal()" class="text-white/80 hover:text-white">
         <span class="material-icons-round text-[18px]">close</span>
       </button>
     </div>
@@ -481,38 +490,72 @@
     modal.classList.add('flex');
   }
 
+  const applicantJobCache = new Map();
+  let applicantFetchController = null;
+
+  function renderApplicantJobDetails(job) {
+    const body = document.getElementById('applicantDetailBody');
+    if (!body) return;
+    body.innerHTML = `
+      <div class="grid grid-cols-2 gap-2">
+        <div><span class="font-black text-slate-600">Reference:</span><div class="font-mono text-slate-900">APP-${job.reference_id || 'N/A'}</div></div>
+        <div><span class="font-black text-slate-600">Status:</span><div class="font-black text-slate-900">${job.status || 'N/A'}</div></div>
+        <div><span class="font-black text-slate-600">Applicant:</span><div class="text-slate-900">${job.applicant_name || 'N/A'}</div></div>
+        <div><span class="font-black text-slate-600">Date Filed:</span><div class="text-slate-900">${job.date_filed || 'N/A'}</div></div>
+        <div><span class="font-black text-slate-600">Category:</span><div class="text-slate-900">${job.category || 'N/A'}</div></div>
+        <div><span class="font-black text-slate-600">Barangay:</span><div class="text-slate-900">${job.barangay || 'N/A'}</div></div>
+      </div>
+      <div class="pt-2 border-t border-slate-100 mt-2">
+        <div class="font-black text-slate-600">Job Title</div>
+        <div class="text-slate-900">${job.job_title || 'N/A'}</div>
+        <div class="font-black text-slate-600 mt-2">Description</div>
+        <div class="text-slate-700">${job.job_description || 'No description provided.'}</div>
+      </div>
+    `;
+  }
+
   async function viewApplicantJob(jobId) {
     try {
       const body = document.getElementById('applicantDetailBody');
-      body.innerHTML = '<p class="text-slate-500">Loading...</p>';
+      if (body) body.innerHTML = '<p class="text-slate-500">Loading...</p>';
       openApplicantModal();
 
-      const res = await fetch(`/municipal/operations/applicants-municipal/job/${encodeURIComponent(jobId)}`);
+      if (applicantJobCache.has(jobId)) {
+        renderApplicantJobDetails(applicantJobCache.get(jobId));
+        return;
+      }
+
+      if (applicantFetchController) {
+        applicantFetchController.abort();
+      }
+      applicantFetchController = new AbortController();
+      const timeoutId = setTimeout(() => {
+        applicantFetchController.abort();
+      }, 8000);
+
+      const res = await fetch(`/municipal/operations/applicants-municipal/job/${encodeURIComponent(jobId)}`, {
+        signal: applicantFetchController.signal
+      });
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok || !data.success) {
-        body.innerHTML = `<p class="text-rose-700 font-bold">${data.error || 'Failed to load applicant job details.'}</p>`;
+        if (body) {
+          body.innerHTML = `<p class="text-rose-700 font-bold">${data.error || 'Failed to load applicant job details.'}</p>`;
+        }
         return;
       }
 
       const job = data.job || {};
-      body.innerHTML = `
-        <div class="grid grid-cols-2 gap-2">
-          <div><span class="font-black text-slate-600">Reference:</span><div class="font-mono text-slate-900">APP-${job.reference_id || 'N/A'}</div></div>
-          <div><span class="font-black text-slate-600">Status:</span><div class="font-black text-slate-900">${job.status || 'N/A'}</div></div>
-          <div><span class="font-black text-slate-600">Applicant:</span><div class="text-slate-900">${job.applicant_name || 'N/A'}</div></div>
-          <div><span class="font-black text-slate-600">Date Filed:</span><div class="text-slate-900">${job.date_filed || 'N/A'}</div></div>
-          <div><span class="font-black text-slate-600">Category:</span><div class="text-slate-900">${job.category || 'N/A'}</div></div>
-          <div><span class="font-black text-slate-600">Barangay:</span><div class="text-slate-900">${job.barangay || 'N/A'}</div></div>
-        </div>
-        <div class="pt-2 border-t border-slate-100 mt-2">
-          <div class="font-black text-slate-600">Job Title</div>
-          <div class="text-slate-900">${job.job_title || 'N/A'}</div>
-          <div class="font-black text-slate-600 mt-2">Description</div>
-          <div class="text-slate-700">${job.job_description || 'No description provided.'}</div>
-        </div>
-      `;
+      applicantJobCache.set(jobId, job);
+      renderApplicantJobDetails(job);
     } catch (err) {
-      document.getElementById('applicantDetailBody').innerHTML = `<p class="text-rose-700 font-bold">${err.message || 'Unexpected error.'}</p>`;
+      const body = document.getElementById('applicantDetailBody');
+      if (body) {
+        const msg = err.name === 'AbortError'
+          ? 'Request timed out. Please try again.'
+          : (err.message || 'Unexpected error.');
+        body.innerHTML = `<p class="text-rose-700 font-bold">${msg}</p>`;
+      }
     }
   }
 

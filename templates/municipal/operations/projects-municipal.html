@@ -244,7 +244,7 @@
   <!-- New Project Modal -->
   <div id="projectModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/60">
     <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
-      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
+      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-blue-800 text-white">
         <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
           <span class="material-icons-round text-[14px]">playlist_add</span>
           Register Municipal Project
@@ -277,15 +277,15 @@
         </div>
 
         <div class="grid grid-cols-2 gap-2">
-          <div>
+          <div id="projectStatusField" class="hidden">
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
-            <select id="projectStatusInput" title="Select project status" class="gov-input w-full cursor-pointer" required>
+            <select id="projectStatusInput" title="Select project status" class="gov-input w-full cursor-pointer">
               <option value="Pending">Pending</option>
               <option value="In Progress">In Progress</option>
               <option value="Completed">Completed</option>
             </select>
           </div>
-          <div>
+          <div id="projectMunicipalityField" class="col-span-2">
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Municipality</label>
             <div class="gov-input w-full bg-slate-50 text-slate-700 font-black">
               {{ user_municipality or 'Quezon City' }}
@@ -304,7 +304,7 @@
   <!-- Project Details View Modal -->
   <div id="projectViewModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/60">
     <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
-      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
+      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-blue-800 text-white">
         <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
           <span class="material-icons-round text-[14px]">visibility</span>
           Project Details
@@ -314,21 +314,19 @@
         </button>
       </div>
 
-      <div class="p-3 space-y-2 text-[10px] text-slate-700">
-        <div>
+      <div class="p-3 text-[10px] text-slate-700 grid grid-cols-2 gap-2">
+        <div class="col-span-2">
           <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Project Name</div>
           <div id="viewProjectName" class="font-black uppercase text-slate-900"></div>
         </div>
 
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Barangay / Area</div>
-            <div id="viewProjectBarangay" class="font-bold uppercase text-slate-900"></div>
-          </div>
-          <div>
-            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Municipality</div>
-            <div id="viewProjectMunicipality" class="font-bold uppercase text-slate-900"></div>
-          </div>
+        <div>
+          <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Barangay / Area</div>
+          <div id="viewProjectBarangay" class="font-bold uppercase text-slate-900"></div>
+        </div>
+        <div>
+          <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Municipality</div>
+          <div id="viewProjectMunicipality" class="font-bold uppercase text-slate-900"></div>
         </div>
 
         <div>
@@ -456,6 +454,7 @@
 
   // Track which row is being edited (if any)
   let editingRow = null;
+  let editingStatus = '';
 
   const projectViewModal = document.getElementById('projectViewModal');
   const projectViewCloseIcon = document.getElementById('projectViewCloseIcon');
@@ -475,6 +474,8 @@
   const projectBarangayInput = document.getElementById('projectBarangayInput');
   const projectStartDateInput = document.getElementById('projectStartDateInput');
   const projectStatusInput = document.getElementById('projectStatusInput');
+  const projectStatusField = document.getElementById('projectStatusField');
+  const projectMunicipalityField = document.getElementById('projectMunicipalityField');
 
   function filterTable() {
     const q = (searchInput.value || '').toLowerCase().trim();
@@ -721,7 +722,14 @@
   function openProjectModal() {
     if (!projectModal || !projectForm) return;
     editingRow = null;
+    editingStatus = '';
     projectForm.reset();
+    if (projectStatusField) {
+      projectStatusField.classList.add('hidden');
+    }
+    if (projectMunicipalityField) {
+      projectMunicipalityField.classList.add('col-span-2');
+    }
     if (projectTitleEl) {
       projectTitleEl.innerHTML = '<span class="material-icons-round text-[14px]">playlist_add<\/span> Register Municipal Project';
     }
@@ -730,7 +738,7 @@
   }
 
   function openProjectEditModal(row) {
-    if (!projectModal || !projectForm || !row || !projectNameInput || !projectBarangayInput || !projectStartDateInput || !projectStatusInput) return;
+    if (!projectModal || !projectForm || !row || !projectNameInput || !projectBarangayInput || !projectStartDateInput) return;
 
     const cells = row.querySelectorAll('td');
     if (!cells.length) return;
@@ -754,7 +762,14 @@
       projectStartDateInput.value = startDateText;
     }
 
-    if (statusText) {
+    editingStatus = statusText ? normalizeStatusText(statusText) : '';
+    if (projectStatusField) {
+      projectStatusField.classList.remove('hidden');
+    }
+    if (projectMunicipalityField) {
+      projectMunicipalityField.classList.remove('col-span-2');
+    }
+    if (projectStatusInput) {
       const normalizedStatus = normalizeStatusText(statusText);
       setSelectValueFromText(projectStatusInput, normalizedStatus);
     }
@@ -771,6 +786,13 @@
     if (!projectModal || !projectForm) return;
     projectForm.reset();
     editingRow = null;
+    editingStatus = '';
+    if (projectStatusField) {
+      projectStatusField.classList.add('hidden');
+    }
+    if (projectMunicipalityField) {
+      projectMunicipalityField.classList.add('col-span-2');
+    }
     projectModal.classList.add('hidden');
     projectModal.classList.remove('flex');
   }
@@ -778,14 +800,16 @@
   async function handleProjectSubmit(event) {
     event.preventDefault();
 
-    if (!projectNameInput || !projectBarangayInput || !projectStartDateInput || !projectStatusInput) {
+    if (!projectNameInput || !projectBarangayInput || !projectStartDateInput) {
       return;
     }
 
     const name = (projectNameInput.value || '').trim();
     const barangay = (projectBarangayInput.value || '').trim();
     const startDate = (projectStartDateInput.value || '').trim();
-    const status = (projectStatusInput.value || '').trim() || 'Pending';
+    const status = editingRow
+      ? ((projectStatusInput && projectStatusInput.value ? projectStatusInput.value.trim() : '') || editingStatus || 'Pending')
+      : 'Pending';
 
     if (!name || !barangay || !startDate) {
       return;
