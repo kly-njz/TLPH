@@ -558,9 +558,10 @@
         />
         <select id="licensesStatusFilter" class="gov-input" onchange="filterTable('licenses')" style="width: 120px;">
           <option value="">Status: ALL</option>
-          <option value="approved">APPROVED</option>
+          <option value="approved">APPROVED BY</option>
+          <option value="rejected">REJECTED BY</option>
+          <option value="forwarded">FORWARDED TO</option>
           <option value="pending">PENDING</option>
-          <option value="rejected">REJECTED</option>
         </select>
       </div>
       <div style="overflow-x: auto;">
@@ -802,6 +803,37 @@
       return status.toUpperCase();
     }
 
+    // Resolve license status with level context (approved by, rejected by, forwarded to)
+    function resolveLicenseStatus(item) {
+      const rawStatus = item.nationalStatus === 'approved' || item.nationalStatus === 'rejected'
+        ? item.nationalStatus
+        : item.regionalStatus || item.status || 'pending';
+
+      const status = (rawStatus || '').toLowerCase().replace(/\s+/g, '-');
+      const approvedLevel = item.approvedByLevel || '';
+      const rejectedLevel = item.rejectedByLevel || '';
+      const forwardedToLevel = item.forwardedToLevel || '';
+
+      if (status === 'approved' || status === 'accepted') {
+        const level = (approvedLevel || (item.nationalStatus === 'approved' ? 'National' : (item.regionalStatus === 'approved' ? 'Regional' : 'Municipal'))).trim();
+        return { status: 'approved', label: `APPROVED BY ${level.toUpperCase()}` };
+      }
+
+      if (status === 'rejected') {
+        const level = (rejectedLevel || (item.nationalStatus === 'rejected' ? 'National' : (item.regionalStatus === 'rejected' ? 'Regional' : 'Municipal'))).trim();
+        return { status: 'rejected', label: `REJECTED BY ${level.toUpperCase()}` };
+      }
+
+      if (status === 'to-review' || status.includes('forward')) {
+        const target = (forwardedToLevel || (status === 'forwarded-to-national' || status === 'forwarded-national' ? 'National' : 'Regional')).toUpperCase();
+        const statusKey = target === 'NATIONAL' ? 'forwarded-to-national' : 'to-review';
+        return { status: statusKey, label: `FORWARDED TO ${target}` };
+      }
+
+      // No municipal action yet
+      return { status: 'pending', label: 'PENDING' };
+    }
+
     // Resolve application status with level context (approved by, rejected by, forwarded to)
     function resolveApplicationStatus(item) {
       const rawStatus = (item.nationalStatus === 'approved' || item.nationalStatus === 'rejected')
@@ -1031,7 +1063,7 @@
       tbody.innerHTML = allLicenses.map((license, idx) => `
         <tr>
           <td data-label="Permit Type">${license.permitType}</td>
-          <td data-label="Status"><span class="status-label ${getStatusClass(license.status)}">${getStatusLabel(license.status)}</span></td>
+          <td data-label="Status"><span class="status-label ${getStatusClass(license.status)}">${license.statusDisplay || getStatusLabel(license.status)}</span></td>
           <td data-label="Date">${license.date}</td>
           <td data-label="ID"><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${license.id.substring(0, 8)}</code></td>
           <td data-label="Action" style="text-align: center;">
@@ -1245,11 +1277,19 @@
           const date = item.createdAt ? new Date(item.createdAt.toDate()).toLocaleDateString('en-PH', {
             year: 'numeric', month: 'short', day: 'numeric'
           }) : 'N/A';
+          const resolvedStatus = resolveLicenseStatus(item);
 
           licenses.push({
             id: doc.id,
             permitType: (item.applicationType || 'License/Permit').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-            status: item.status || 'pending',
+            status: resolvedStatus.status,
+            statusDisplay: resolvedStatus.label,
+            approvedByLevel: item.approvedByLevel || '',
+            rejectedByLevel: item.rejectedByLevel || '',
+            forwardedByLevel: item.forwardedByLevel || '',
+            forwardedToLevel: item.forwardedToLevel || '',
+            regionalStatus: item.regionalStatus || '',
+            nationalStatus: item.nationalStatus || '',
             date: date
           });
         });
