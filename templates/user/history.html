@@ -780,6 +780,7 @@
       if (normalized === 'pending' || normalized === 'submitted') return 'status-pending';
       if (normalized === 'rejected') return 'status-rejected';
       if (normalized.includes('review')) return 'status-under-review';
+      if (normalized === 'forwarded-to-national') return 'status-forwarded-national';
       if (normalized === 'forwarded-national') return 'status-forwarded-national';
       if (normalized.includes('forward') || normalized === 'to-review') return 'status-forwarded';
       return 'status-pending';
@@ -795,10 +796,53 @@
       if (normalized === 'rejected') return 'REJECTED';
       if (normalized === 'under-review' || normalized.includes('review')) return 'UNDER REVIEW';
       if (normalized === 'to-review') return 'FWD → REGIONAL';
+      if (normalized === 'forwarded-to-national') return 'FWD → NATIONAL';
       if (normalized === 'forwarded-national') return 'FWD → NATIONAL';
       if (normalized.includes('forward')) return 'FORWARDED';
       return status.toUpperCase();
     }
+
+    // Resolve application status with level context (approved by, rejected by, forwarded to)
+    function resolveApplicationStatus(item) {
+      const rawStatus = (item.nationalStatus === 'approved' || item.nationalStatus === 'rejected')
+        ? item.nationalStatus
+        : (item.regionalStatus || item.status || 'pending');
+
+      const status = (rawStatus || '').toLowerCase().replace(/\s+/g, '-');
+      const approvedLevel = item.approvedByLevel || '';
+      const rejectedLevel = item.rejectedByLevel || '';
+      const forwardedToLevel = item.forwardedToLevel || '';
+
+      if (status === 'approved') {
+        const level = (approvedLevel || (item.nationalStatus === 'approved' ? 'National' : (item.regionalStatus === 'approved' ? 'Regional' : ''))).trim();
+        if (level) return { status, label: `APPROVED BY ${level.toUpperCase()}` };
+        return { status, label: 'APPROVED' };
+      }
+
+      if (status === 'rejected') {
+        const level = (rejectedLevel || (item.nationalStatus === 'rejected' ? 'National' : (item.regionalStatus === 'rejected' ? 'Regional' : ''))).trim();
+        if (level) return { status, label: `REJECTED BY ${level.toUpperCase()}` };
+        return { status, label: 'REJECTED' };
+      }
+
+      if (status === 'to-review') {
+        return { status, label: 'FWD → REGIONAL' };
+      }
+
+      if (status === 'forwarded-to-national' || status === 'forwarded-national') {
+        return { status: 'forwarded-to-national', label: 'FWD → NATIONAL' };
+      }
+
+      if (status.includes('forward')) {
+        const lvl = forwardedToLevel.toUpperCase();
+        if (lvl === 'NATIONAL') return { status: 'forwarded-to-national', label: 'FWD → NATIONAL' };
+        if (lvl === 'REGIONAL') return { status, label: 'FWD → REGIONAL' };
+        return { status, label: 'FORWARDED FOR REVIEW' };
+      }
+
+      return { status, label: getStatusLabel(status) };
+    }
+
     // Resolve inventory status with level context (approved by, rejected by, forwarded to)
     function resolveInventoryStatus(item) {
       const paymentStatus = (item.paymentStatus || item.payment_status || item.payment || '').toLowerCase();
@@ -911,7 +955,7 @@
       tbody.innerHTML = allApplications.map((app, idx) => `
         <tr>
           <td data-label="Category">${app.category}</td>
-          <td data-label="Status"><span class="status-label ${getStatusClass(app.status)}">${getStatusLabel(app.status)}</span></td>
+          <td data-label="Status"><span class="status-label ${getStatusClass(app.status)}">${app.statusDisplay || getStatusLabel(app.status)}</span></td>
           <td data-label="Date">${app.date}</td>
           <td data-label="Amount">${peso.format(app.amount)}</td>
           <td data-label="ID"><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${app.id.substring(0, 8)}</code></td>
@@ -1021,13 +1065,21 @@
             const date = app.submittedAt ? new Date(app.submittedAt.toDate()).toLocaleDateString('en-PH', {
               year: 'numeric', month: 'short', day: 'numeric'
             }) : 'N/A';
+            const resolvedStatus = resolveApplicationStatus(app);
 
             applications.push({
               id: doc.id,
               category: categoryLabel,
-              status: getEffectiveStatus(app),
+              status: resolvedStatus.status,
+              statusDisplay: resolvedStatus.label,
               date: date,
               amount: Number(app.investmentQty || 0),
+              approvedByLevel: app.approvedByLevel || '',
+              rejectedByLevel: app.rejectedByLevel || '',
+              forwardedByLevel: app.forwardedByLevel || '',
+              forwardedToLevel: app.forwardedToLevel || '',
+              regionalStatus: app.regionalStatus || '',
+              nationalStatus: app.nationalStatus || '',
               detailsLink: `/user/inventory/stock-info/${doc.id}`,
               source: 'firebase'
             });
