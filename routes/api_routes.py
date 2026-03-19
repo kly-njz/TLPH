@@ -476,6 +476,7 @@ def set_session():
         )
 
         if user_role in {'municipal', 'municipal_admin'}:
+            print(f'[LOGIN_CAPTURE] Recording login event for {user_email} in municipality={municipality}, region={region}')
             system_logs_storage.add_regional_system_log(
                 region=region,
                 municipality=municipality,
@@ -493,6 +494,7 @@ def set_session():
                 user_agent=user_agent,
                 metadata={'source': 'set-session'}
             )
+            print(f'[LOGIN_CAPTURE] ✅ Login event recorded successfully for {user_email}')
 
         return jsonify({'success': True, 'message': 'Session set successfully'})
     
