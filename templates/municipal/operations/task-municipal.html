@@ -256,7 +256,7 @@
           </div>
           <div>
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Barangay *</label>
-            <select id="taskBarangayInput" class="gov-input w-full cursor-pointer" required>
+            <select id="taskBarangayInput" title="Select barangay" class="gov-input w-full cursor-pointer" required>
               <option value="">Select Barangay</option>
               {% for b in barangay_options %}
               <option value="{{ b }}">{{ b }}</option>
@@ -268,7 +268,7 @@
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
-            <select id="taskStatusInput" class="gov-input w-full cursor-pointer" required>
+            <select id="taskStatusInput" title="Select task status" class="gov-input w-full cursor-pointer" required>
               <option value="Pending">Pending</option>
               <option value="In Progress">In Progress</option>
               <option value="Completed">Completed</option>
@@ -276,7 +276,7 @@
           </div>
           <div>
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Due Date *</label>
-            <input id="taskDueDateInput" type="date" class="gov-input w-full" required>
+            <input id="taskDueDateInput" type="date" title="Select due date" class="gov-input w-full" required>
           </div>
         </div>
 
@@ -336,6 +336,13 @@
     </div>
   </div>
 
+<script id="taskChartData" type="application/json">
+{
+  "unitLabels": {{ unit_labels_json|default('[]')|safe }},
+  "unitValues": {{ unit_values_json|default('[]')|safe }}
+}
+</script>
+
 <script>
   // --- Chart Implementations ---
   Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -354,6 +361,17 @@
   const pendingVal  = Number("{{ pending_tasks|default(0) }}");
   const progVal     = Number("{{ in_progress_tasks|default(0) }}");
   const doneVal     = Number("{{ completed_tasks|default(0) }}");
+  let taskChartData = { unitLabels: ['No Data'], unitValues: [0] };
+  try {
+    const rawTaskChartData = document.getElementById('taskChartData')?.textContent || '{}';
+    taskChartData = { ...taskChartData, ...JSON.parse(rawTaskChartData) };
+    if (!Array.isArray(taskChartData.unitLabels) || taskChartData.unitLabels.length === 0) {
+      taskChartData.unitLabels = ['No Data'];
+      taskChartData.unitValues = [0];
+    }
+  } catch (e) {
+    console.warn('Failed to parse task chart data', e);
+  }
 
   const taskTableBody = document.querySelector('#taskTable tbody');
   const taskViewModal = document.getElementById('taskViewModal');
@@ -388,10 +406,10 @@
   const taskUnitChart = new Chart(document.getElementById('taskUnitChart'), {
     type: 'bar',
     data: {
-      labels: {{ unit_labels_json|default('[]')|safe }},
+      labels: taskChartData.unitLabels,
       datasets: [{
         label: 'Tasks',
-        data: {{ unit_values_json|default('[]')|safe }},
+        data: taskChartData.unitValues,
         backgroundColor: '#1e40af',
         borderRadius: 2,
         borderWidth: 0
