@@ -612,19 +612,47 @@ def tasks_municipal():
                 variants.add(k)
         return {x for x in variants if x}
 
+    def get_municipality_variants(value):
+        normalized = normalize_scope(value)
+        variants = {normalized} if normalized else set()
+        if ',' in normalized:
+            variants.add(normalize_scope(normalized.split(',', 1)[0]))
+        if ' - ' in normalized:
+            variants.add(normalize_scope(normalized.split(' - ', 1)[0]))
+        if '(' in normalized:
+            variants.add(normalize_scope(normalized.split('(', 1)[0]))
+        if normalized.startswith('CITY OF '):
+            variants.add(normalize_scope(normalized.replace('CITY OF ', '', 1)))
+        if normalized.startswith('MUNICIPALITY OF '):
+            variants.add(normalize_scope(normalized.replace('MUNICIPALITY OF ', '', 1)))
+        if normalized.endswith(' MUNICIPALITY'):
+            variants.add(normalize_scope(normalized.replace(' MUNICIPALITY', '')))
+        return {x for x in variants if x}
+
+    def municipality_matches(item_value, accepted_variants):
+        item_key = normalize_scope(item_value)
+        if not accepted_variants:
+            return False
+        if item_key in accepted_variants:
+            return True
+        for v in accepted_variants:
+            if item_key.startswith(v + ',') or item_key.startswith(v + ' - ') or item_key.startswith(v + ' ('):
+                return True
+        return False
+
     municipality_key = normalize_scope(user_municipality)
     region_key = normalize_scope(user_region)
+    municipality_variants = get_municipality_variants(user_municipality)
     region_variants = get_region_variants(user_region)
 
     tasks = []
     try:
-        query = (
-            db.collection('municipal_tasks')
-            .where('municipality_key', '==', municipality_key)
-            .stream()
-        )
+        query = db.collection('municipal_tasks').stream()
         for doc in query:
             item = doc.to_dict() or {}
+            item_muni_key = item.get('municipality_key') or item.get('municipality')
+            if not municipality_matches(item_muni_key, municipality_variants):
+                continue
             item_region_key = normalize_scope(item.get('region_key') or item.get('region'))
             if region_variants and item_region_key not in region_variants:
                 continue
@@ -650,7 +678,7 @@ def tasks_municipal():
         try:
             for doc in db.collection('municipal_tasks').stream():
                 item = doc.to_dict() or {}
-                if normalize_scope(item.get('municipality_key') or item.get('municipality')) != municipality_key:
+                if not municipality_matches(item.get('municipality_key') or item.get('municipality'), municipality_variants):
                     continue
                 item_region_key = normalize_scope(item.get('region_key') or item.get('region'))
                 if region_variants and item_region_key not in region_variants:
@@ -728,7 +756,25 @@ def tasks_municipal_create():
         normalized = normalize_scope(value)
         return aliases.get(normalized, normalized)
 
-    municipality_key = normalize_scope(user_municipality)
+    def get_municipality_variants(value):
+        normalized = normalize_scope(value)
+        variants = {normalized} if normalized else set()
+        if ',' in normalized:
+            variants.add(normalize_scope(normalized.split(',', 1)[0]))
+        if ' - ' in normalized:
+            variants.add(normalize_scope(normalized.split(' - ', 1)[0]))
+        if '(' in normalized:
+            variants.add(normalize_scope(normalized.split('(', 1)[0]))
+        if normalized.startswith('CITY OF '):
+            variants.add(normalize_scope(normalized.replace('CITY OF ', '', 1)))
+        if normalized.startswith('MUNICIPALITY OF '):
+            variants.add(normalize_scope(normalized.replace('MUNICIPALITY OF ', '', 1)))
+        if normalized.endswith(' MUNICIPALITY'):
+            variants.add(normalize_scope(normalized.replace(' MUNICIPALITY', '')))
+        return {x for x in variants if x}
+
+    municipality_variants = get_municipality_variants(user_municipality)
+    municipality_key = min(municipality_variants, key=len) if municipality_variants else normalize_scope(user_municipality)
     region_key = canonical_region(user_region)
 
     data = request.get_json(silent=True) or {}
@@ -747,9 +793,11 @@ def tasks_municipal_create():
     if not user_region:
         try:
             # Reuse existing scoped tasks to infer missing region for this municipality.
-            docs = db.collection('municipal_tasks').where('municipality_key', '==', municipality_key).limit(1).stream()
-            for d in docs:
+            for d in db.collection('municipal_tasks').stream():
                 existing = d.to_dict() or {}
+                existing_muni = normalize_scope(existing.get('municipality_key') or existing.get('municipality'))
+                if existing_muni != municipality_key and not existing_muni.startswith(municipality_key + ','):
+                    continue
                 inferred = existing.get('region_key') or existing.get('region')
                 if inferred:
                     user_region = str(inferred).strip()
@@ -818,6 +866,35 @@ def tasks_municipal_update_status(task_id):
                 variants.add(k)
         return {x for x in variants if x}
 
+    def get_municipality_variants(value):
+        normalized = normalize_scope(value)
+        variants = {normalized} if normalized else set()
+        if ',' in normalized:
+            variants.add(normalize_scope(normalized.split(',', 1)[0]))
+        if ' - ' in normalized:
+            variants.add(normalize_scope(normalized.split(' - ', 1)[0]))
+        if '(' in normalized:
+            variants.add(normalize_scope(normalized.split('(', 1)[0]))
+        if normalized.startswith('CITY OF '):
+            variants.add(normalize_scope(normalized.replace('CITY OF ', '', 1)))
+        if normalized.startswith('MUNICIPALITY OF '):
+            variants.add(normalize_scope(normalized.replace('MUNICIPALITY OF ', '', 1)))
+        if normalized.endswith(' MUNICIPALITY'):
+            variants.add(normalize_scope(normalized.replace(' MUNICIPALITY', '')))
+        return {x for x in variants if x}
+
+    def municipality_matches(item_value, accepted_variants):
+        item_key = normalize_scope(item_value)
+        if not accepted_variants:
+            return False
+        if item_key in accepted_variants:
+            return True
+        for v in accepted_variants:
+            if item_key.startswith(v + ',') or item_key.startswith(v + ' - ') or item_key.startswith(v + ' ('):
+                return True
+        return False
+
+    municipality_variants = get_municipality_variants(user_municipality)
     region_variants = get_region_variants(user_region)
 
     data = request.get_json(silent=True) or {}
@@ -832,7 +909,7 @@ def tasks_municipal_update_status(task_id):
             return jsonify({'success': False, 'error': 'Task not found'}), 404
 
         existing = doc.to_dict() or {}
-        if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
+        if not municipality_matches(existing.get('municipality_key') or existing.get('municipality'), municipality_variants):
             return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
         existing_region = normalize_scope(existing.get('region_key') or existing.get('region'))
         if region_variants and existing_region not in region_variants:
@@ -872,6 +949,35 @@ def tasks_municipal_delete(task_id):
                 variants.add(k)
         return {x for x in variants if x}
 
+    def get_municipality_variants(value):
+        normalized = normalize_scope(value)
+        variants = {normalized} if normalized else set()
+        if ',' in normalized:
+            variants.add(normalize_scope(normalized.split(',', 1)[0]))
+        if ' - ' in normalized:
+            variants.add(normalize_scope(normalized.split(' - ', 1)[0]))
+        if '(' in normalized:
+            variants.add(normalize_scope(normalized.split('(', 1)[0]))
+        if normalized.startswith('CITY OF '):
+            variants.add(normalize_scope(normalized.replace('CITY OF ', '', 1)))
+        if normalized.startswith('MUNICIPALITY OF '):
+            variants.add(normalize_scope(normalized.replace('MUNICIPALITY OF ', '', 1)))
+        if normalized.endswith(' MUNICIPALITY'):
+            variants.add(normalize_scope(normalized.replace(' MUNICIPALITY', '')))
+        return {x for x in variants if x}
+
+    def municipality_matches(item_value, accepted_variants):
+        item_key = normalize_scope(item_value)
+        if not accepted_variants:
+            return False
+        if item_key in accepted_variants:
+            return True
+        for v in accepted_variants:
+            if item_key.startswith(v + ',') or item_key.startswith(v + ' - ') or item_key.startswith(v + ' ('):
+                return True
+        return False
+
+    municipality_variants = get_municipality_variants(user_municipality)
     region_variants = get_region_variants(user_region)
 
     try:
@@ -881,7 +987,7 @@ def tasks_municipal_delete(task_id):
             return jsonify({'success': False, 'error': 'Task not found'}), 404
 
         existing = doc.to_dict() or {}
-        if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
+        if not municipality_matches(existing.get('municipality_key') or existing.get('municipality'), municipality_variants):
             return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
         existing_region = normalize_scope(existing.get('region_key') or existing.get('region'))
         if region_variants and existing_region not in region_variants:
