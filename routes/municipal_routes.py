@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, jsonify, session, redirec
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
 from config import Config
-from .municipal_api_logs import _resolve_municipality_from_user_context, _resolve_region_from_user_context
+from .municipal_api_logs import _resolve_municipality_from_user_context, _resolve_region_from_user_context, api_get_municipal_payment_deposits
 import json
 from datetime import datetime
 from collections import Counter
@@ -2028,6 +2028,37 @@ def accounting_dashboard_municipal():
                 'general_fund': 0
             }
         }
+
+    # Keep dashboard Total Deposit aligned with Accounting > Payment Deposits page source.
+    try:
+        deposits_response = api_get_municipal_payment_deposits()
+        if isinstance(deposits_response, tuple):
+            response_obj, status_code = deposits_response
+        else:
+            response_obj = deposits_response
+            status_code = getattr(response_obj, 'status_code', 200)
+
+        if status_code == 200 and hasattr(response_obj, 'get_json'):
+            payload = response_obj.get_json(silent=True) or {}
+            deposits = payload.get('deposits') or []
+            total_deposit_amount = 0.0
+            for row in deposits:
+                try:
+                    total_deposit_amount += float(row.get('amount') or 0)
+                except Exception:
+                    continue
+
+            if not isinstance(finance_data, dict):
+                finance_data = {}
+            if not isinstance(finance_data.get('treasury'), dict):
+                finance_data['treasury'] = {}
+            finance_data['treasury']['total_deposit'] = total_deposit_amount
+            print(f"[DEBUG] Dashboard total_deposit synced from municipal payment deposits: {total_deposit_amount}")
+        else:
+            print(f"[WARN] Could not sync dashboard total_deposit from payment deposits (status={status_code})")
+    except Exception as e:
+        print(f"[WARN] Failed syncing dashboard total_deposit from payment deposits: {e}")
+
     revenue_mix = []
     try:
         if municipality_name:
