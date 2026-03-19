@@ -583,7 +583,277 @@ def quotations_municipal():
 @bp.route('/operations/projects-municipal')
 @role_required('municipal','municipal_admin')
 def projects_municipal():
-    return render_template('municipal/operations/projects-municipal.html')
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+    user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    def get_municipality_query_values(value):
+        raw = str(value or '').strip()
+        if not raw:
+            return []
+        candidates = {raw}
+        if ',' in raw:
+            candidates.add(raw.split(',', 1)[0].strip())
+        if ' - ' in raw:
+            candidates.add(raw.split(' - ', 1)[0].strip())
+        if '(' in raw:
+            candidates.add(raw.split('(', 1)[0].strip())
+        raw_upper = raw.upper()
+        if raw_upper.startswith('CITY OF '):
+            candidates.add(raw[8:].strip())
+        if raw_upper.startswith('MUNICIPALITY OF '):
+            candidates.add(raw[16:].strip())
+        if raw_upper.endswith(' MUNICIPALITY'):
+            candidates.add(raw[:-13].strip())
+        return [c for c in candidates if c]
+
+    def to_status_text(status):
+        s = str(status or '').strip().upper()
+        if s == 'IN PROGRESS':
+            return 'In Progress'
+        if s == 'COMPLETED':
+            return 'Completed'
+        if s == 'PENDING':
+            return 'Pending'
+        return str(status or 'Pending').strip() or 'Pending'
+
+    municipality_query_values = get_municipality_query_values(user_municipality)
+    municipality_key = normalize_scope(user_municipality)
+
+    projects = []
+    seen_ids = set()
+    try:
+        # Primary: fetch by municipality field.
+        for municipality_value in municipality_query_values:
+            query = db.collection('municipal_projects').where('municipality', '==', municipality_value).stream()
+            for doc in query:
+                if doc.id in seen_ids:
+                    continue
+                item = doc.to_dict() or {}
+                status_upper = str(item.get('status') or 'PENDING').strip().upper()
+                if status_upper == 'ARCHIVED':
+                    continue
+                item['id'] = doc.id
+                item['name'] = item.get('name') or 'N/A'
+                item['barangay'] = item.get('barangay') or 'N/A'
+                item['municipality'] = item.get('municipality') or user_municipality or 'N/A'
+                item['start_date'] = item.get('start_date') or 'N/A'
+                item['status'] = to_status_text(status_upper)
+                created_at = item.get('created_at')
+                if isinstance(created_at, datetime):
+                    item['_created_at'] = created_at
+                elif hasattr(created_at, 'to_datetime'):
+                    try:
+                        item['_created_at'] = created_at.to_datetime()
+                    except Exception:
+                        item['_created_at'] = datetime.min
+                else:
+                    item['_created_at'] = datetime.min
+                projects.append(item)
+                seen_ids.add(doc.id)
+
+        # Fallback: municipality_key-based filtering for older records.
+        if not projects:
+            for doc in db.collection('municipal_projects').stream():
+                item = doc.to_dict() or {}
+                item_muni_key = normalize_scope(item.get('municipality_key') or item.get('municipality'))
+                if not item_muni_key:
+                    continue
+                if item_muni_key != municipality_key and not item_muni_key.startswith(municipality_key + ','):
+                    continue
+                status_upper = str(item.get('status') or 'PENDING').strip().upper()
+                if status_upper == 'ARCHIVED':
+                    continue
+                item['id'] = doc.id
+                item['name'] = item.get('name') or 'N/A'
+                item['barangay'] = item.get('barangay') or 'N/A'
+                item['municipality'] = item.get('municipality') or user_municipality or 'N/A'
+                item['start_date'] = item.get('start_date') or 'N/A'
+                item['status'] = to_status_text(status_upper)
+                created_at = item.get('created_at')
+                if isinstance(created_at, datetime):
+                    item['_created_at'] = created_at
+                elif hasattr(created_at, 'to_datetime'):
+                    try:
+                        item['_created_at'] = created_at.to_datetime()
+                    except Exception:
+                        item['_created_at'] = datetime.min
+                else:
+                    item['_created_at'] = datetime.min
+                projects.append(item)
+    except Exception as e:
+        print(f"[ERROR] projects_municipal fetch failed: {e}")
+
+    projects.sort(key=lambda p: p.get('_created_at') or datetime.min, reverse=True)
+
+    total_projects = len(projects)
+    in_progress = len([p for p in projects if str(p.get('status')).upper() == 'IN PROGRESS'])
+    completed = len([p for p in projects if str(p.get('status')).upper() == 'COMPLETED'])
+    pending = len([p for p in projects if str(p.get('status')).upper() == 'PENDING'])
+
+    barangay_options = sorted(list({(p.get('barangay') or '').strip() for p in projects if (p.get('barangay') or '').strip()}))
+
+    monthly_counts = Counter()
+    for p in projects:
+        date_raw = str(p.get('start_date') or '').strip()
+        try:
+            dt = datetime.fromisoformat(date_raw)
+            monthly_counts[dt.strftime('%b')] += 1
+        except Exception:
+            continue
+    ordered_months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    trend_labels = [m for m in ordered_months if monthly_counts.get(m)]
+    trend_values = [monthly_counts[m] for m in trend_labels]
+    if not trend_labels:
+        trend_labels = ['No Data']
+        trend_values = [0]
+
+    area_counts = Counter([(p.get('barangay') or 'N/A') for p in projects])
+    top_areas = area_counts.most_common(6)
+    area_labels = [x[0] for x in top_areas] if top_areas else ['No Data']
+    area_values = [x[1] for x in top_areas] if top_areas else [0]
+
+    return render_template(
+        'municipal/operations/projects-municipal.html',
+        projects=projects,
+        total_projects=total_projects,
+        in_progress=in_progress,
+        completed=completed,
+        pending=pending,
+        barangay_options=barangay_options,
+        user_municipality=user_municipality,
+        trend_labels_json=json.dumps(trend_labels),
+        trend_values_json=json.dumps(trend_values),
+        area_labels_json=json.dumps(area_labels),
+        area_values_json=json.dumps(area_values)
+    )
+
+
+@bp.route('/operations/projects-municipal/api/create', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def projects_municipal_create():
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+    user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name') or '').strip()
+    barangay = str(data.get('barangay') or '').strip()
+    start_date = str(data.get('start_date') or '').strip()
+    status = str(data.get('status') or 'PENDING').strip().upper()
+    if status not in {'PENDING', 'IN PROGRESS', 'COMPLETED'}:
+        status = 'PENDING'
+
+    if not name or not barangay or not start_date:
+        return jsonify({'success': False, 'error': 'Missing required project fields'}), 400
+
+    try:
+        payload = {
+            'name': name,
+            'barangay': barangay,
+            'municipality': user_municipality,
+            'region': user_region,
+            'start_date': start_date,
+            'status': status,
+            'municipality_key': normalize_scope(user_municipality),
+            'region_key': normalize_scope(user_region),
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }
+        ref = db.collection('municipal_projects').document()
+        ref.set(payload)
+        return jsonify({'success': True, 'project': {
+            'id': ref.id,
+            'name': name,
+            'barangay': barangay,
+            'municipality': user_municipality,
+            'start_date': start_date,
+            'status': status
+        }})
+    except Exception as e:
+        print(f"[ERROR] projects_municipal_create failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create project'}), 500
+
+
+@bp.route('/operations/projects-municipal/api/<project_id>/update', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def projects_municipal_update(project_id):
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name') or '').strip()
+    barangay = str(data.get('barangay') or '').strip()
+    start_date = str(data.get('start_date') or '').strip()
+    status = str(data.get('status') or '').strip().upper()
+    if status not in {'PENDING', 'IN PROGRESS', 'COMPLETED'}:
+        return jsonify({'success': False, 'error': 'Invalid status'}), 400
+
+    if not name or not barangay or not start_date:
+        return jsonify({'success': False, 'error': 'Missing required project fields'}), 400
+
+    try:
+        ref = db.collection('municipal_projects').document(project_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+
+        existing = doc.to_dict() or {}
+        if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
+            return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
+
+        ref.set({
+            'name': name,
+            'barangay': barangay,
+            'start_date': start_date,
+            'status': status,
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }, merge=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] projects_municipal_update failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update project'}), 500
+
+
+@bp.route('/operations/projects-municipal/api/<project_id>/archive', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def projects_municipal_archive(project_id):
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    try:
+        ref = db.collection('municipal_projects').document(project_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+
+        existing = doc.to_dict() or {}
+        if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
+            return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
+
+        ref.set({'status': 'ARCHIVED', 'updated_at': firestore.SERVER_TIMESTAMP}, merge=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] projects_municipal_archive failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to archive project'}), 500
 
 @bp.route('/operations/tasks-municipal')
 @role_required('municipal','municipal_admin')
