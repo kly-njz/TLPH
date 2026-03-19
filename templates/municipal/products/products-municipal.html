@@ -36,6 +36,12 @@
     .btn-action { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #e2e8f0; background: #f8fafc; color: #94a3b8; cursor: pointer; }
     .btn-edit:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
     .btn-delete:hover { color: white; background: #ef4444; border-color: #dc2626; }
+
+    /* Modal Header (Blue) */
+    .modal-header { background: #1e40af; color: white; }
+    .modal-header .modal-subtitle { color: #dbeafe; }
+    .modal-header .btn-action { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.3); color: white; }
+    .modal-header .btn-action:hover { background: rgba(255,255,255,0.22); }
   </style>
 </head>
 
@@ -327,12 +333,12 @@
   <!-- Add Product Modal -->
   <div id="productModal" class="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4 hidden">
     <div class="bg-white rounded-[2px] shadow-lg w-full max-w-md border border-slate-300">
-      <div class="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+      <div class="modal-header flex items-center justify-between px-3 py-2 border-b border-slate-200">
         <div class="flex items-center gap-2">
-          <span class="material-icons-round text-[16px] text-blue-800">add_box</span>
+          <span class="material-icons-round text-[16px] text-white">add_box</span>
           <div class="leading-tight">
-            <h2 id="productModalTitle" class="text-[11px] font-black text-slate-900 uppercase tracking-tight m-0">Add Product</h2>
-            <p id="productModalSubtitle" class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Register a new inventory item</p>
+            <h2 id="productModalTitle" class="text-[11px] font-black text-white uppercase tracking-tight m-0">Add Product</h2>
+            <p id="productModalSubtitle" class="modal-subtitle text-[9px] font-bold uppercase tracking-widest m-0">Register a new inventory item</p>
           </div>
         </div>
         <button id="productCloseBtn" type="button" class="btn-action" title="Close">
@@ -346,8 +352,8 @@
           <input id="productNameInput" type="text" class="gov-input w-full" required />
         </div>
 
-        <div class="grid grid-cols-2 gap-2">
-          <div>
+        <div id="categoryStatusRow" class="grid grid-cols-2 gap-2">
+          <div id="categoryField" class="col-span-2">
             <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Category</label>
             <select id="productCategoryInput" class="gov-input w-full" required>
               <option value="">Select category</option>
@@ -357,9 +363,9 @@
               <option>Others</option>
             </select>
           </div>
-          <div>
+          <div id="statusField" class="hidden">
             <label class="block text-[9px] font-black uppercase text-slate-600 mb-0.5">Status</label>
-            <select id="productStatusInput" class="gov-input w-full" required>
+            <select id="productStatusInput" class="gov-input w-full">
               <option value="">Select status</option>
               <option>Available</option>
               <option>Low Stock</option>
@@ -503,6 +509,10 @@
       const titleEl = document.getElementById('productModalTitle');
       const subtitleEl = document.getElementById('productModalSubtitle');
       const submitBtn = document.getElementById('productSubmitBtn');
+      const statusField = document.getElementById('statusField');
+      const categoryStatusRow = document.getElementById('categoryStatusRow');
+      const categoryField = document.getElementById('categoryField');
+      const statusInput = document.getElementById('productStatusInput');
 
       if (mode === 'add') {
         editingRow = null;
@@ -520,6 +530,26 @@
           submitBtn.textContent = 'Save Product';
         }
       }
+
+      if (statusField && categoryStatusRow && categoryField && statusInput) {
+        if (mode === 'edit') {
+          statusField.classList.remove('hidden');
+          categoryStatusRow.classList.remove('grid-cols-1');
+          categoryStatusRow.classList.add('grid-cols-2');
+          categoryField.classList.remove('col-span-2');
+          statusInput.required = true;
+          statusInput.disabled = false;
+        } else {
+          statusField.classList.add('hidden');
+          categoryStatusRow.classList.remove('grid-cols-2');
+          categoryStatusRow.classList.add('grid-cols-1');
+          categoryField.classList.add('col-span-2');
+          statusInput.required = false;
+          statusInput.disabled = true;
+          statusInput.value = '';
+        }
+      }
+
       productModal.classList.remove('hidden');
       productModal.classList.add('flex');
     }
@@ -539,15 +569,16 @@
       const categoryInput = document.getElementById('productCategoryInput');
       const statusInput = document.getElementById('productStatusInput');
       const stockInput = document.getElementById('productStockInput');
+      const isEdit = Boolean(editingRow);
 
-      if (!nameInput || !categoryInput || !statusInput || !stockInput) return;
+      if (!nameInput || !categoryInput || !stockInput || (isEdit && !statusInput)) return;
 
       const name = nameInput.value.trim();
       const category = categoryInput.value.trim();
-      const status = statusInput.value.trim();
+      const status = isEdit && statusInput ? statusInput.value.trim() : 'Available';
       const stockValue = stockInput.value.trim();
 
-      if (!name || !category || !status || stockValue === '') {
+      if (!name || !category || stockValue === '' || (isEdit && !status)) {
         return;
       }
 
