@@ -76,7 +76,7 @@
             <div class="flex items-start justify-between">
               <div>
                 <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Projects</div>
-                <div class="text-xl font-black text-slate-900 leading-none mt-1">{{ total_projects|default("24") }}</div>
+                <div class="text-xl font-black text-slate-900 leading-none mt-1">{{ total_projects|default(0) }}</div>
               </div>
               <span class="material-icons-round text-slate-300 text-[20px]">folder_copy</span>
             </div>
@@ -86,7 +86,7 @@
             <div class="flex items-start justify-between">
               <div>
                 <div class="text-[9px] font-black uppercase text-emerald-800 tracking-widest">In Progress</div>
-                <div class="text-xl font-black text-emerald-700 leading-none mt-1">{{ in_progress|default("9") }}</div>
+                <div class="text-xl font-black text-emerald-700 leading-none mt-1">{{ in_progress|default(0) }}</div>
               </div>
               <span class="material-icons-round text-emerald-200 text-[20px]">play_circle</span>
             </div>
@@ -96,7 +96,7 @@
             <div class="flex items-start justify-between">
               <div>
                 <div class="text-[9px] font-black uppercase text-blue-800 tracking-widest">Completed</div>
-                <div class="text-xl font-black text-blue-700 leading-none mt-1">{{ completed|default("12") }}</div>
+                <div class="text-xl font-black text-blue-700 leading-none mt-1">{{ completed|default(0) }}</div>
               </div>
               <span class="material-icons-round text-blue-200 text-[20px]">task_alt</span>
             </div>
@@ -106,7 +106,7 @@
             <div class="flex items-start justify-between">
               <div>
                 <div class="text-[9px] font-black uppercase text-amber-800 tracking-widest">Pending</div>
-                <div class="text-xl font-black text-amber-700 leading-none mt-1">{{ pending|default("3") }}</div>
+                <div class="text-xl font-black text-amber-700 leading-none mt-1">{{ pending|default(0) }}</div>
               </div>
               <span class="material-icons-round text-amber-200 text-[20px]">pause_circle</span>
             </div>
@@ -157,14 +157,14 @@
                 <input id="searchProject" type="text" placeholder="Search project / barangay..." class="gov-input pl-6 w-full" oninput="filterTable()">
               </div>
 
-              <select id="barangayFilter" class="gov-input cursor-pointer min-w-[120px]" onchange="filterTable()">
+              <select id="barangayFilter" title="Filter by barangay" class="gov-input cursor-pointer min-w-[120px]" onchange="filterTable()">
                 <option value="">All Barangays</option>
-                <option value="Barangay 1">Barangay 1</option>
-                <option value="Barangay 2">Barangay 2</option>
-                <option value="Barangay 3">Barangay 3</option>
+                {% for b in barangay_options %}
+                <option value="{{ b }}">{{ b }}</option>
+                {% endfor %}
               </select>
 
-              <select id="statusFilter" class="gov-input cursor-pointer min-w-[120px]" onchange="filterTable()">
+              <select id="statusFilter" title="Filter by status" class="gov-input cursor-pointer min-w-[120px]" onchange="filterTable()">
                 <option value="">All Status</option>
                 <option value="Pending">Pending</option>
                 <option value="In Progress">In Progress</option>
@@ -190,29 +190,9 @@
                 </tr>
               </thead>
 
-              <tbody class="text-[10px] divide-y divide-slate-100">
-
-                <tr class="hover:bg-blue-50 transition proj-row" data-stat="IN PROGRESS">
-                  <td class="px-4 py-3 align-middle font-black text-slate-900 border-r border-slate-100 uppercase">Municipal Solid Waste Recovery</td>
-                  <td class="px-4 py-3 align-middle font-bold text-blue-800 border-r border-slate-100 uppercase text-center">Barangay 2</td>
-                  <td class="px-4 py-3 align-middle font-bold text-slate-700 border-r border-slate-100 uppercase text-center">{{ user_municipality or 'Quezon City' }}</td>
-                  <td class="px-4 py-3 align-middle font-mono text-slate-600 border-r border-slate-100 text-center">Feb 10, 2026</td>
-                  <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
-                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 w-24 text-center">
-                      In Progress
-                    </span>
-                  </td>
-                  <td class="px-4 py-3 align-middle text-center">
-                    <div class="flex justify-center gap-1">
-                        <button class="btn-action btn-view" title="View Details"><span class="material-icons-round text-[14px]">visibility</span></button>
-                        <button class="btn-action btn-edit" title="Edit"><span class="material-icons-round text-[14px]">edit</span></button>
-                        <button class="btn-action btn-archive" title="Archive"><span class="material-icons-round text-[14px]">archive</span></button>
-                    </div>
-                  </td>
-                </tr>
-
+              <tbody class="text-[10px] divide-y divide-slate-100" id="projectTableBody">
                 {% for project in projects %}
-                <tr class="hover:bg-blue-50 transition proj-row" data-stat="{{ project.status|upper }}">
+                <tr class="hover:bg-blue-50 transition proj-row" data-project-id="{{ project.id }}" data-barangay="{{ project.barangay|lower }}" data-stat="{{ project.status|upper }}">
                   <td class="px-4 py-3 align-middle font-black text-slate-900 border-r border-slate-100 uppercase">{{ project.name }}</td>
                   <td class="px-4 py-3 align-middle font-bold text-blue-800 border-r border-slate-100 uppercase text-center">{{ project.barangay }}</td>
                   <td class="px-4 py-3 align-middle font-bold text-slate-700 border-r border-slate-100 uppercase text-center">{{ project.municipality }}</td>
@@ -235,6 +215,12 @@
                   </td>
                 </tr>
                 {% endfor %}
+
+                {% if not projects %}
+                <tr id="noProjectRow">
+                  <td colspan="6" class="px-4 py-6 text-center text-slate-400 font-bold">No municipal projects found for your location.</td>
+                </tr>
+                {% endif %}
 
               </tbody>
             </table>
@@ -277,23 +263,23 @@
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Barangay / Area *</label>
-            <select id="projectBarangayInput" class="gov-input w-full cursor-pointer" required>
+            <select id="projectBarangayInput" title="Select barangay" class="gov-input w-full cursor-pointer" required>
               <option value="">Select Barangay</option>
-              <option value="Barangay 1">Barangay 1</option>
-              <option value="Barangay 2">Barangay 2</option>
-              <option value="Barangay 3">Barangay 3</option>
+              {% for b in barangay_options %}
+              <option value="{{ b }}">{{ b }}</option>
+              {% endfor %}
             </select>
           </div>
           <div>
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Start Date *</label>
-            <input id="projectStartDateInput" type="date" class="gov-input w-full" required>
+            <input id="projectStartDateInput" type="date" title="Select start date" class="gov-input w-full" required>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
-            <select id="projectStatusInput" class="gov-input w-full cursor-pointer" required>
+            <select id="projectStatusInput" title="Select project status" class="gov-input w-full cursor-pointer" required>
               <option value="Pending">Pending</option>
               <option value="In Progress">In Progress</option>
               <option value="Completed">Completed</option>
@@ -362,6 +348,15 @@
     </div>
   </div>
 
+<script id="projectChartData" type="application/json">
+{
+  "trendLabels": {{ trend_labels_json|default('[]')|safe }},
+  "trendValues": {{ trend_values_json|default('[]')|safe }},
+  "areaLabels": {{ area_labels_json|default('[]')|safe }},
+  "areaValues": {{ area_values_json|default('[]')|safe }}
+}
+</script>
+
 <script>
   // --- Chart Implementations ---
   Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -379,12 +374,19 @@
     }
   };
 
-  const completedVal = Number("{{ completed|default(12) }}");
-  const progressVal = Number("{{ in_progress|default(9) }}");
-  const pendingVal = Number("{{ pending|default(5) }}");
+  const completedVal = Number("{{ completed|default(0) }}");
+  const progressVal = Number("{{ in_progress|default(0) }}");
+  const pendingVal = Number("{{ pending|default(0) }}");
+  let projectChartData = { trendLabels: ['No Data'], trendValues: [0], areaLabels: ['No Data'], areaValues: [0] };
+  try {
+    const rawProjectChartData = document.getElementById('projectChartData')?.textContent || '{}';
+    projectChartData = { ...projectChartData, ...JSON.parse(rawProjectChartData) };
+  } catch (e) {
+    console.warn('Failed to parse project chart data', e);
+  }
 
   // 1) Status Mix Chart
-  new Chart(document.getElementById('statusMixChart'), {
+  const statusMixChart = new Chart(document.getElementById('statusMixChart'), {
     type: 'doughnut',
     data: {
       labels: ['Completed', 'In Progress', 'Pending'],
@@ -398,13 +400,13 @@
   });
 
   // 2) Monthly Trend Chart
-  new Chart(document.getElementById('projectTrendChart'), {
+  const projectTrendChart = new Chart(document.getElementById('projectTrendChart'), {
     type: 'line',
     data: {
-      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+      labels: projectChartData.trendLabels,
       datasets: [{
         label: 'Projects',
-        data: [2, 5, 3, 8, 4, 6],
+        data: projectChartData.trendValues,
         borderColor: '#1e3a8a',
         backgroundColor: 'rgba(30, 64, 175, 0.1)',
         borderWidth: 1.5,
@@ -424,13 +426,13 @@
   });
 
   // 3) Area/Barangay Volume
-  new Chart(document.getElementById('areaVolumeChart'), {
+  const areaVolumeChart = new Chart(document.getElementById('areaVolumeChart'), {
     type: 'bar',
     data: {
-      labels: ['Brgy 1', 'Brgy 2', 'Brgy 3'],
+      labels: projectChartData.areaLabels,
       datasets: [{
         label: 'Projects',
-        data: [6, 10, 4],
+        data: projectChartData.areaValues,
         backgroundColor: '#475569',
         borderRadius: 2,
         borderWidth: 0
@@ -450,7 +452,7 @@
   const searchInput = document.getElementById('searchProject');
   const statusFilter = document.getElementById('statusFilter');
   const barangayFilter = document.getElementById('barangayFilter');
-  const projectTableBody = document.querySelector('#projectTable tbody');
+  const projectTableBody = document.getElementById('projectTableBody');
 
   // Track which row is being edited (if any)
   let editingRow = null;
@@ -488,7 +490,8 @@
       
       const matchQ = text.includes(q);
       const matchSt = !st || rowStat === st;
-      const matchBrgy = !brgy || text.includes(brgy);
+      const rowBrgy = (row.dataset.barangay || '').toLowerCase();
+      const matchBrgy = !brgy || rowBrgy === brgy;
       
       const show = matchQ && matchSt && matchBrgy;
       row.style.display = show ? '' : 'none';
@@ -651,7 +654,7 @@
       }
 
       if (projectTableBody) {
-        projectTableBody.addEventListener('click', (event) => {
+        projectTableBody.addEventListener('click', async (event) => {
           const viewBtn = event.target.closest('.btn-view');
           const editBtn = event.target.closest('.btn-edit');
           const archiveBtn = event.target.closest('.btn-archive');
@@ -680,8 +683,20 @@
             const confirmed = window.confirm(`Archive ${projectName}? This will remove it from the current registry view.`);
             if (!confirmed) return;
 
+            const projectId = row.dataset.projectId;
+            if (!projectId) {
+              row.remove();
+              filterTable();
+              return;
+            }
+            const res = await fetch(`/municipal/operations/projects-municipal/api/${encodeURIComponent(projectId)}/archive`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+              alert(data.error || 'Failed to archive project.');
+              return;
+            }
             row.remove();
-            filterTable();
+            location.reload();
             return;
           }
         });
@@ -760,7 +775,7 @@
     projectModal.classList.remove('flex');
   }
 
-  function handleProjectSubmit(event) {
+  async function handleProjectSubmit(event) {
     event.preventDefault();
 
     if (!projectNameInput || !projectBarangayInput || !projectStartDateInput || !projectStatusInput) {
@@ -784,6 +799,28 @@
 
     // If editing an existing row, update it instead of creating a new one
     if (editingRow) {
+      const projectId = editingRow.dataset.projectId;
+      if (!projectId) {
+        alert('Missing project id for update.');
+        return;
+      }
+      const updatePayload = {
+        name,
+        barangay,
+        start_date: startDate,
+        status: status.toUpperCase()
+      };
+      const updateResponse = await fetch(`/municipal/operations/projects-municipal/api/${encodeURIComponent(projectId)}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload)
+      });
+      const updateData = await updateResponse.json();
+      if (!updateResponse.ok || !updateData.success) {
+        alert(updateData.error || 'Failed to update project.');
+        return;
+      }
+
       const cells = editingRow.querySelectorAll('td');
       if (cells[0]) {
         cells[0].textContent = name;
@@ -822,14 +859,33 @@
       editingRow.dataset.stat = status.toUpperCase();
       editingRow = null;
       closeProjectModal();
-      filterTable();
+      location.reload();
+      return;
+    }
+
+    const createPayload = {
+      name,
+      barangay,
+      start_date: startDate,
+      status: status.toUpperCase()
+    };
+    const createResponse = await fetch('/municipal/operations/projects-municipal/api/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createPayload)
+    });
+    const createData = await createResponse.json();
+    if (!createResponse.ok || !createData.success) {
+      alert(createData.error || 'Failed to create project.');
       return;
     }
 
     // Otherwise, create a new row
     const row = document.createElement('tr');
     row.className = 'hover:bg-blue-50 transition proj-row';
-    row.dataset.stat = status.toUpperCase();
+    row.dataset.projectId = createData.project.id;
+    row.dataset.stat = createData.project.status.toUpperCase();
+    row.dataset.barangay = barangay.toLowerCase();
 
     const nameCell = document.createElement('td');
     nameCell.className = 'px-4 py-3 align-middle font-black text-slate-900 border-r border-slate-100 uppercase';
@@ -841,11 +897,11 @@
 
     const municipalityCell = document.createElement('td');
     municipalityCell.className = 'px-4 py-3 align-middle font-bold text-slate-700 border-r border-slate-100 uppercase text-center';
-    municipalityCell.textContent = defaultMunicipality || 'Municipality';
+    municipalityCell.textContent = createData.project.municipality || defaultMunicipality || 'Municipality';
 
     const startDateCell = document.createElement('td');
     startDateCell.className = 'px-4 py-3 align-middle font-mono text-slate-600 border-r border-slate-100 text-center';
-    startDateCell.textContent = startDate;
+    startDateCell.textContent = createData.project.start_date;
 
     const statusCell = document.createElement('td');
     statusCell.className = 'px-4 py-3 align-middle text-center border-r border-slate-100';
@@ -889,7 +945,7 @@
     }
 
     closeProjectModal();
-    filterTable();
+    location.reload();
   }
 </script>
 </body>
