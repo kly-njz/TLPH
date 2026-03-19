@@ -593,18 +593,19 @@ def api_regional_system_logs():
         logs = []
         regional_source_count = 0
         audit_fallback_count = 0
+        system_fallback_count = 0
         regional_log_rows = system_logs_storage.list_regional_system_logs_by_region(user_region, limit=300)
         user_region_norm = str(user_region or '').strip().upper()
 
         for entry in regional_log_rows:
             action_value = str(entry.get('action') or '').strip().upper()
-            if action_value not in {'LOGIN', 'LOGOUT', 'APPROVED'}:
+            if not action_value:
                 continue
 
             actor_email = str(entry.get('actorEmail') or entry.get('user') or '').strip().lower()
             actor_id = str(entry.get('actorId') or '').strip()
             actor_role = str(entry.get('actorRole') or entry.get('role') or '').strip().lower()
-            is_municipal_actor = actor_role in {'municipal_admin', 'municipal'}
+            is_municipal_actor = actor_role in {'municipal_admin', 'municipal'} if actor_role else False
             in_scope_by_actor = bool(
                 (actor_email and actor_email in scoped_emails)
                 or (actor_id and actor_id in scoped_user_ids)
@@ -622,7 +623,9 @@ def api_regional_system_logs():
                 or (not user_region_norm and not municipality_set)
             )
 
-            if not is_municipal_actor or not (in_scope_by_actor or in_scope_by_location):
+            # Accept entries when either actor OR location is in scope.
+            # Do not require role metadata because many legacy logs don't store actorRole.
+            if not (in_scope_by_actor or in_scope_by_location or is_municipal_actor):
                 continue
 
             ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
@@ -664,7 +667,7 @@ def api_regional_system_logs():
                 elif 'APPROV' in action_raw:
                     action_value = 'APPROVED'
                 else:
-                    continue
+                    action_value = action_raw
 
                 actor_email = str(
                     entry.get('actorEmail')
@@ -686,7 +689,8 @@ def api_regional_system_logs():
                     (actor_email and actor_email in scoped_emails)
                     or (actor_id and actor_id in scoped_user_ids)
                 )
-                if not in_scope_by_actor and actor_role not in {'municipal_admin', 'municipal'}:
+                # If role is absent, still allow location-based scoped entries.
+                if not in_scope_by_actor and actor_role and actor_role not in {'municipal_admin', 'municipal'}:
                     continue
 
                 entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip()
@@ -728,6 +732,83 @@ def api_regional_system_logs():
         except Exception as e:
             print(f"[WARN] Failed loading fallback auditLogs source for regional system logs: {e}")
 
+        # Fallback source 2: system_logs collection used by some app modules.
+        try:
+            sys_docs = db.collection('system_logs').limit(5000).stream()
+            for sys_doc in sys_docs:
+                entry = sys_doc.to_dict() or {}
+                action_raw = str(entry.get('action') or entry.get('event') or entry.get('type') or '').strip().upper()
+                if not action_raw:
+                    continue
+
+                if 'LOGIN' in action_raw or 'SIGNIN' in action_raw or action_raw in {'LOG_IN'}:
+                    action_value = 'LOGIN'
+                elif 'LOGOUT' in action_raw or 'SIGNOUT' in action_raw or action_raw in {'LOG_OUT'}:
+                    action_value = 'LOGOUT'
+                elif 'APPROV' in action_raw:
+                    action_value = 'APPROVED'
+                else:
+                    action_value = action_raw
+
+                actor_email = str(
+                    entry.get('actorEmail')
+                    or entry.get('user_email')
+                    or entry.get('email')
+                    or entry.get('user')
+                    or ''
+                ).strip().lower()
+                actor_id = str(
+                    entry.get('actorId')
+                    or entry.get('userId')
+                    or entry.get('uid')
+                    or entry.get('user_id')
+                    or ''
+                ).strip()
+
+                in_scope_by_actor = bool(
+                    (actor_email and actor_email in scoped_emails)
+                    or (actor_id and actor_id in scoped_user_ids)
+                )
+
+                entry_muni = str(entry.get('municipality') or entry.get('municipality_name') or '').strip()
+                entry_muni_norm = entry_muni.lower()
+                entry_region = get_firestore_region_name(
+                    entry.get('region') or entry.get('region_name') or entry.get('regionName') or user_region
+                )
+                entry_region_norm = str(entry_region or '').strip().upper()
+
+                in_scope_by_location = bool(
+                    (municipality_set and entry_muni_norm and entry_muni_norm in municipality_set)
+                    or (user_region_norm and entry_region_norm and _same_region(entry_region_norm, user_region_norm))
+                    or (not user_region_norm and not municipality_set)
+                )
+                if not (in_scope_by_actor or in_scope_by_location):
+                    continue
+
+                ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
+                details = entry.get('message') or entry.get('detail') or entry.get('description') or entry.get('target') or ''
+
+                logs.append({
+                    'id': sys_doc.id,
+                    'ts': _normalize_ts_for_json(ts_value),
+                    'user': entry.get('actorName') or entry.get('actor') or entry.get('user') or actor_email or 'Municipal Admin',
+                    'role': 'Municipal',
+                    'module': entry.get('module') or ('AUTH' if action_value in {'LOGIN', 'LOGOUT'} else 'AUDIT'),
+                    'action': action_value,
+                    'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                    'targetId': entry.get('targetId') or entry.get('target_id') or sys_doc.id,
+                    'device_type': entry.get('device_type') or entry.get('device') or '',
+                    'ip': _extract_ip_value(entry),
+                    'outcome': entry.get('outcome') or 'SUCCESS',
+                    'message': details,
+                    'municipality': entry_muni,
+                    'region': entry_region,
+                    'scope': 'MUNICIPAL',
+                })
+                system_fallback_count += 1
+        except Exception as e:
+            print(f"[WARN] Failed loading fallback system_logs source for regional system logs: {e}")
+
         # De-duplicate entries that can appear in both sources.
         deduped = []
         seen = set()
@@ -750,7 +831,7 @@ def api_regional_system_logs():
         print(
             f"[DEBUG] Regional system logs -> region={user_region}, municipalities={len(municipality_set)}, "
             f"scoped_users={len(scoped_emails)}, regional_source={regional_source_count}, "
-            f"audit_fallback={audit_fallback_count}, returned={len(logs)}"
+            f"audit_fallback={audit_fallback_count}, system_fallback={system_fallback_count}, returned={len(logs)}"
         )
         return jsonify({'success': True, 'logs': logs, 'region': user_region}), 200
     except Exception as e:
