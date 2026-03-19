@@ -588,7 +588,221 @@ def projects_municipal():
 @bp.route('/operations/tasks-municipal')
 @role_required('municipal','municipal_admin')
 def tasks_municipal():
-    return render_template('municipal/operations/task-municipal.html')
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
+    user_region = (_resolve_region_from_user_context() or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    municipality_key = normalize_scope(user_municipality)
+    region_key = normalize_scope(user_region)
+
+    tasks = []
+    try:
+        query = (
+            db.collection('municipal_tasks')
+            .where('municipality_key', '==', municipality_key)
+            .where('region_key', '==', region_key)
+            .stream()
+        )
+        for doc in query:
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            item['title'] = item.get('title') or 'N/A'
+            item['assigned_to'] = item.get('assigned_to') or 'N/A'
+            item['barangay'] = item.get('barangay') or 'N/A'
+            item['status'] = str(item.get('status') or 'PENDING').upper()
+            item['due_date'] = item.get('due_date') or 'N/A'
+            created_at = item.get('created_at')
+            if isinstance(created_at, datetime):
+                item['_created_at'] = created_at
+            elif hasattr(created_at, 'to_datetime'):
+                try:
+                    item['_created_at'] = created_at.to_datetime()
+                except Exception:
+                    item['_created_at'] = datetime.min
+            else:
+                item['_created_at'] = datetime.min
+            tasks.append(item)
+    except Exception as e:
+        print(f"[WARN] tasks_municipal scoped query failed, trying fallback: {e}")
+        try:
+            for doc in db.collection('municipal_tasks').stream():
+                item = doc.to_dict() or {}
+                if normalize_scope(item.get('municipality_key') or item.get('municipality')) != municipality_key:
+                    continue
+                if normalize_scope(item.get('region_key') or item.get('region')) != region_key:
+                    continue
+                item['id'] = doc.id
+                item['title'] = item.get('title') or 'N/A'
+                item['assigned_to'] = item.get('assigned_to') or 'N/A'
+                item['barangay'] = item.get('barangay') or 'N/A'
+                item['status'] = str(item.get('status') or 'PENDING').upper()
+                item['due_date'] = item.get('due_date') or 'N/A'
+                created_at = item.get('created_at')
+                if isinstance(created_at, datetime):
+                    item['_created_at'] = created_at
+                elif hasattr(created_at, 'to_datetime'):
+                    try:
+                        item['_created_at'] = created_at.to_datetime()
+                    except Exception:
+                        item['_created_at'] = datetime.min
+                else:
+                    item['_created_at'] = datetime.min
+                tasks.append(item)
+        except Exception as fallback_error:
+            print(f"[ERROR] tasks_municipal fallback query failed: {fallback_error}")
+
+    tasks.sort(key=lambda t: t.get('_created_at') or datetime.min, reverse=True)
+
+    total_tasks = len(tasks)
+    pending_tasks = len([t for t in tasks if t.get('status') == 'PENDING'])
+    in_progress_tasks = len([t for t in tasks if t.get('status') == 'IN PROGRESS'])
+    completed_tasks = len([t for t in tasks if t.get('status') == 'COMPLETED'])
+
+    barangay_options = sorted(list({(t.get('barangay') or '').strip() for t in tasks if (t.get('barangay') or '').strip()}))
+
+    unit_counts = Counter()
+    for t in tasks:
+        unit_counts[(t.get('assigned_to') or 'N/A').strip()] += 1
+    top_units = unit_counts.most_common(6)
+    unit_labels = [u[0] for u in top_units] if top_units else ['No Data']
+    unit_values = [u[1] for u in top_units] if top_units else [0]
+
+    return render_template(
+        'municipal/operations/task-municipal.html',
+        tasks=tasks,
+        total_tasks=total_tasks,
+        pending_tasks=pending_tasks,
+        in_progress_tasks=in_progress_tasks,
+        completed_tasks=completed_tasks,
+        barangay_options=barangay_options,
+        unit_labels_json=json.dumps(unit_labels),
+        unit_values_json=json.dumps(unit_values)
+    )
+
+
+@bp.route('/operations/tasks-municipal/api/create', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def tasks_municipal_create():
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
+    user_region = (_resolve_region_from_user_context() or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    municipality_key = normalize_scope(user_municipality)
+    region_key = normalize_scope(user_region)
+
+    data = request.get_json(silent=True) or {}
+    title = str(data.get('title') or '').strip()
+    assigned_to = str(data.get('assigned_to') or '').strip()
+    barangay = str(data.get('barangay') or '').strip()
+    due_date = str(data.get('due_date') or '').strip()
+    status = str(data.get('status') or 'PENDING').strip().upper()
+
+    if status not in {'PENDING', 'IN PROGRESS', 'COMPLETED'}:
+        status = 'PENDING'
+
+    if not title or not assigned_to or not barangay or not due_date:
+        return jsonify({'success': False, 'error': 'Missing required task fields'}), 400
+
+    try:
+        payload = {
+            'title': title,
+            'assigned_to': assigned_to,
+            'barangay': barangay,
+            'status': status,
+            'due_date': due_date,
+            'municipality': user_municipality,
+            'region': user_region,
+            'municipality_key': municipality_key,
+            'region_key': region_key,
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }
+        ref = db.collection('municipal_tasks').document()
+        ref.set(payload)
+        return jsonify({'success': True, 'task': {
+            'id': ref.id,
+            'title': title,
+            'assigned_to': assigned_to,
+            'barangay': barangay,
+            'status': status,
+            'due_date': due_date
+        }})
+    except Exception as e:
+        print(f"[ERROR] tasks_municipal_create failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create task'}), 500
+
+
+@bp.route('/operations/tasks-municipal/api/<task_id>/status', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def tasks_municipal_update_status(task_id):
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
+    user_region = (_resolve_region_from_user_context() or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    data = request.get_json(silent=True) or {}
+    status = str(data.get('status') or '').strip().upper()
+    if status not in {'PENDING', 'IN PROGRESS', 'COMPLETED'}:
+        return jsonify({'success': False, 'error': 'Invalid status'}), 400
+
+    try:
+        ref = db.collection('municipal_tasks').document(task_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Task not found'}), 404
+
+        existing = doc.to_dict() or {}
+        if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
+            return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
+        if normalize_scope(existing.get('region_key') or existing.get('region')) != normalize_scope(user_region):
+            return jsonify({'success': False, 'error': 'Access denied for region'}), 403
+
+        ref.set({'status': status, 'updated_at': firestore.SERVER_TIMESTAMP}, merge=True)
+        return jsonify({'success': True, 'status': status})
+    except Exception as e:
+        print(f"[ERROR] tasks_municipal_update_status failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update task status'}), 500
+
+
+@bp.route('/operations/tasks-municipal/api/<task_id>', methods=['DELETE'])
+@role_required('municipal','municipal_admin')
+def tasks_municipal_delete(task_id):
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
+    user_region = (_resolve_region_from_user_context() or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    try:
+        ref = db.collection('municipal_tasks').document(task_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Task not found'}), 404
+
+        existing = doc.to_dict() or {}
+        if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
+            return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
+        if normalize_scope(existing.get('region_key') or existing.get('region')) != normalize_scope(user_region):
+            return jsonify({'success': False, 'error': 'Access denied for region'}), 403
+
+        ref.delete()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] tasks_municipal_delete failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to delete task'}), 500
 
 @bp.route('/operations/applicants-municipal')
 @role_required('municipal','municipal_admin')
