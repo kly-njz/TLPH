@@ -589,25 +589,45 @@ def projects_municipal():
 @role_required('municipal','municipal_admin')
 def tasks_municipal():
     db = get_firestore_db()
-    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
-    user_region = (_resolve_region_from_user_context() or '').strip()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+    user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
 
     def normalize_scope(value):
         return ' '.join(str(value or '').strip().upper().split())
 
+    def get_region_variants(value):
+        aliases = {
+            'MIMAROPA': 'REGION-IV-B',
+            'REGION IV-B': 'REGION-IV-B',
+            'REGION-IV-B': 'REGION-IV-B',
+            'CALABARZON': 'REGION-IV-A',
+            'REGION IV-A': 'REGION-IV-A',
+            'REGION-IV-A': 'REGION-IV-A',
+        }
+        normalized = normalize_scope(value)
+        canonical = aliases.get(normalized, normalized)
+        variants = {canonical, normalized}
+        for k, v in aliases.items():
+            if v == canonical:
+                variants.add(k)
+        return {x for x in variants if x}
+
     municipality_key = normalize_scope(user_municipality)
     region_key = normalize_scope(user_region)
+    region_variants = get_region_variants(user_region)
 
     tasks = []
     try:
         query = (
             db.collection('municipal_tasks')
             .where('municipality_key', '==', municipality_key)
-            .where('region_key', '==', region_key)
             .stream()
         )
         for doc in query:
             item = doc.to_dict() or {}
+            item_region_key = normalize_scope(item.get('region_key') or item.get('region'))
+            if region_variants and item_region_key not in region_variants:
+                continue
             item['id'] = doc.id
             item['title'] = item.get('title') or 'N/A'
             item['assigned_to'] = item.get('assigned_to') or 'N/A'
@@ -632,7 +652,8 @@ def tasks_municipal():
                 item = doc.to_dict() or {}
                 if normalize_scope(item.get('municipality_key') or item.get('municipality')) != municipality_key:
                     continue
-                if normalize_scope(item.get('region_key') or item.get('region')) != region_key:
+                item_region_key = normalize_scope(item.get('region_key') or item.get('region'))
+                if region_variants and item_region_key not in region_variants:
                     continue
                 item['id'] = doc.id
                 item['title'] = item.get('title') or 'N/A'
@@ -689,14 +710,26 @@ def tasks_municipal_create():
     from firebase_admin import firestore
 
     db = get_firestore_db()
-    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
-    user_region = (_resolve_region_from_user_context() or '').strip()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+    user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
 
     def normalize_scope(value):
         return ' '.join(str(value or '').strip().upper().split())
 
+    def canonical_region(value):
+        aliases = {
+            'MIMAROPA': 'REGION-IV-B',
+            'REGION IV-B': 'REGION-IV-B',
+            'REGION-IV-B': 'REGION-IV-B',
+            'CALABARZON': 'REGION-IV-A',
+            'REGION IV-A': 'REGION-IV-A',
+            'REGION-IV-A': 'REGION-IV-A',
+        }
+        normalized = normalize_scope(value)
+        return aliases.get(normalized, normalized)
+
     municipality_key = normalize_scope(user_municipality)
-    region_key = normalize_scope(user_region)
+    region_key = canonical_region(user_region)
 
     data = request.get_json(silent=True) or {}
     title = str(data.get('title') or '').strip()
@@ -710,6 +743,22 @@ def tasks_municipal_create():
 
     if not title or not assigned_to or not barangay or not due_date:
         return jsonify({'success': False, 'error': 'Missing required task fields'}), 400
+
+    if not user_region:
+        try:
+            # Reuse existing scoped tasks to infer missing region for this municipality.
+            docs = db.collection('municipal_tasks').where('municipality_key', '==', municipality_key).limit(1).stream()
+            for d in docs:
+                existing = d.to_dict() or {}
+                inferred = existing.get('region_key') or existing.get('region')
+                if inferred:
+                    user_region = str(inferred).strip()
+                    break
+        except Exception:
+            pass
+    if not user_region:
+        user_region = 'MIMAROPA'
+    region_key = canonical_region(user_region)
 
     try:
         payload = {
@@ -746,11 +795,30 @@ def tasks_municipal_update_status(task_id):
     from firebase_admin import firestore
 
     db = get_firestore_db()
-    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
-    user_region = (_resolve_region_from_user_context() or '').strip()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+    user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
 
     def normalize_scope(value):
         return ' '.join(str(value or '').strip().upper().split())
+
+    def get_region_variants(value):
+        aliases = {
+            'MIMAROPA': 'REGION-IV-B',
+            'REGION IV-B': 'REGION-IV-B',
+            'REGION-IV-B': 'REGION-IV-B',
+            'CALABARZON': 'REGION-IV-A',
+            'REGION IV-A': 'REGION-IV-A',
+            'REGION-IV-A': 'REGION-IV-A',
+        }
+        normalized = normalize_scope(value)
+        canonical = aliases.get(normalized, normalized)
+        variants = {canonical, normalized}
+        for k, v in aliases.items():
+            if v == canonical:
+                variants.add(k)
+        return {x for x in variants if x}
+
+    region_variants = get_region_variants(user_region)
 
     data = request.get_json(silent=True) or {}
     status = str(data.get('status') or '').strip().upper()
@@ -766,7 +834,8 @@ def tasks_municipal_update_status(task_id):
         existing = doc.to_dict() or {}
         if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
             return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
-        if normalize_scope(existing.get('region_key') or existing.get('region')) != normalize_scope(user_region):
+        existing_region = normalize_scope(existing.get('region_key') or existing.get('region'))
+        if region_variants and existing_region not in region_variants:
             return jsonify({'success': False, 'error': 'Access denied for region'}), 403
 
         ref.set({'status': status, 'updated_at': firestore.SERVER_TIMESTAMP}, merge=True)
@@ -780,11 +849,30 @@ def tasks_municipal_update_status(task_id):
 @role_required('municipal','municipal_admin')
 def tasks_municipal_delete(task_id):
     db = get_firestore_db()
-    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
-    user_region = (_resolve_region_from_user_context() or '').strip()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+    user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
 
     def normalize_scope(value):
         return ' '.join(str(value or '').strip().upper().split())
+
+    def get_region_variants(value):
+        aliases = {
+            'MIMAROPA': 'REGION-IV-B',
+            'REGION IV-B': 'REGION-IV-B',
+            'REGION-IV-B': 'REGION-IV-B',
+            'CALABARZON': 'REGION-IV-A',
+            'REGION IV-A': 'REGION-IV-A',
+            'REGION-IV-A': 'REGION-IV-A',
+        }
+        normalized = normalize_scope(value)
+        canonical = aliases.get(normalized, normalized)
+        variants = {canonical, normalized}
+        for k, v in aliases.items():
+            if v == canonical:
+                variants.add(k)
+        return {x for x in variants if x}
+
+    region_variants = get_region_variants(user_region)
 
     try:
         ref = db.collection('municipal_tasks').document(task_id)
@@ -795,7 +883,8 @@ def tasks_municipal_delete(task_id):
         existing = doc.to_dict() or {}
         if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
             return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
-        if normalize_scope(existing.get('region_key') or existing.get('region')) != normalize_scope(user_region):
+        existing_region = normalize_scope(existing.get('region_key') or existing.get('region'))
+        if region_variants and existing_region not in region_variants:
             return jsonify({'success': False, 'error': 'Access denied for region'}), 403
 
         ref.delete()
