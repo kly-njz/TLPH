@@ -2,9 +2,10 @@ from flask import Blueprint, render_template, request, jsonify, session, redirec
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
 from config import Config
-from .municipal_api_logs import _resolve_municipality_from_user_context
+from .municipal_api_logs import _resolve_municipality_from_user_context, _resolve_region_from_user_context
 import json
 from datetime import datetime
+from collections import Counter
 
 bp = Blueprint('municipal', __name__, url_prefix='/municipal')
 
@@ -592,7 +593,202 @@ def tasks_municipal():
 @bp.route('/operations/applicants-municipal')
 @role_required('municipal','municipal_admin')
 def applicants_municipal():
-    return render_template('municipal/operations/applicants-municipal.html')
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or '').strip()
+    user_region = (_resolve_region_from_user_context() or '').strip()
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    municipality_key = normalize_scope(user_municipality)
+    region_key = normalize_scope(user_region)
+
+    # If nothing can be resolved from user context, render gracefully.
+    if not municipality_key or not region_key:
+        return render_template(
+            'municipal/operations/applicants-municipal.html',
+            applications=[],
+            total_count=0,
+            approved_count=0,
+            pending_count=0,
+            rejected_count=0,
+            barangay_options=[],
+            trend_labels_json=json.dumps([]),
+            trend_values_json=json.dumps([]),
+            status_values_json=json.dumps([0, 0, 0]),
+            barangay_labels_json=json.dumps([]),
+            barangay_values_json=json.dumps([]),
+            user_region=user_region,
+            user_municipality=user_municipality
+        )
+
+    def _safe_datetime(value):
+        if isinstance(value, datetime):
+            return value
+        if hasattr(value, 'to_datetime'):
+            try:
+                return value.to_datetime()
+            except Exception:
+                return None
+        return None
+
+    # Ensure Firestore collection exists and has DENR applicant jobs for this scope.
+    # This creates/updates a denormalized jobs collection scoped by region + municipality.
+    try:
+        source_query = (
+            db.collection('applications')
+            .where('municipality', '==', user_municipality)
+            .stream()
+        )
+        for source_doc in source_query:
+            src = source_doc.to_dict() or {}
+            src_region = normalize_scope(src.get('region') or src.get('region_name') or src.get('regionName'))
+            if src_region and src_region != region_key:
+                continue
+
+            applicant_name = (
+                src.get('applicant_name')
+                or src.get('applicantName')
+                or src.get('fullName')
+                or src.get('name')
+                or 'N/A'
+            )
+            category = (
+                src.get('category')
+                or src.get('application_type')
+                or src.get('applicantCategory')
+                or 'DENR Application'
+            )
+            status = str(src.get('status') or 'PENDING').strip().upper()
+            barangay = (
+                src.get('barangay')
+                or src.get('barangay_name')
+                or src.get('address_barangay')
+                or 'N/A'
+            )
+            reference_id = (
+                src.get('reference_id')
+                or src.get('referenceId')
+                or src.get('ref_code')
+                or source_doc.id[:8].upper()
+            )
+            created_raw = src.get('date_filed') or src.get('created_at') or src.get('timestamp')
+            created_dt = _safe_datetime(created_raw)
+
+            denr_job = {
+                'source_id': source_doc.id,
+                'source_collection': 'applications',
+                'applicant_name': str(applicant_name).strip(),
+                'category': str(category).strip(),
+                'job_title': f"{str(category).strip()} Review",
+                'job_description': 'Validate DENR applicant documents and requirements for municipal processing.',
+                'status': status,
+                'barangay': str(barangay).strip(),
+                'reference_id': str(reference_id).strip(),
+                'municipality': user_municipality,
+                'region': user_region,
+                'municipality_key': municipality_key,
+                'region_key': region_key,
+                'date_filed': created_dt.strftime('%Y-%m-%d') if created_dt else datetime.utcnow().strftime('%Y-%m-%d'),
+                'created_at': created_dt or firestore.SERVER_TIMESTAMP,
+                'updated_at': firestore.SERVER_TIMESTAMP
+            }
+
+            db.collection('municipal_denr_applicant_jobs').document(f"APP-{source_doc.id}").set(denr_job, merge=True)
+    except Exception as e:
+        print(f"[WARN] Could not sync municipal_denr_applicant_jobs from applications: {e}")
+
+    applications = []
+    try:
+        query = (
+            db.collection('municipal_denr_applicant_jobs')
+            .where('municipality_key', '==', municipality_key)
+            .where('region_key', '==', region_key)
+            .stream()
+        )
+        for doc in query:
+            item = doc.to_dict() or {}
+            raw_created = item.get('created_at')
+            created_dt = _safe_datetime(raw_created)
+            item['created_at_dt'] = created_dt
+            item['date_filed'] = item.get('date_filed') or (created_dt.strftime('%Y-%m-%d') if created_dt else 'N/A')
+            item['reference_id'] = item.get('reference_id') or doc.id[:8].upper()
+            item['applicant_name'] = item.get('applicant_name') or 'N/A'
+            item['category'] = item.get('category') or 'DENR Application'
+            item['barangay'] = item.get('barangay') or 'N/A'
+            item['status'] = str(item.get('status') or 'PENDING').upper()
+            applications.append(item)
+    except Exception as e:
+        print(f"[WARN] Scoped query failed, fallback filtering in-memory: {e}")
+        try:
+            fallback_docs = db.collection('municipal_denr_applicant_jobs').stream()
+            for doc in fallback_docs:
+                item = doc.to_dict() or {}
+                if normalize_scope(item.get('municipality_key') or item.get('municipality')) != municipality_key:
+                    continue
+                if normalize_scope(item.get('region_key') or item.get('region')) != region_key:
+                    continue
+                raw_created = item.get('created_at')
+                created_dt = _safe_datetime(raw_created)
+                item['created_at_dt'] = created_dt
+                item['date_filed'] = item.get('date_filed') or (created_dt.strftime('%Y-%m-%d') if created_dt else 'N/A')
+                item['reference_id'] = item.get('reference_id') or doc.id[:8].upper()
+                item['applicant_name'] = item.get('applicant_name') or 'N/A'
+                item['category'] = item.get('category') or 'DENR Application'
+                item['barangay'] = item.get('barangay') or 'N/A'
+                item['status'] = str(item.get('status') or 'PENDING').upper()
+                applications.append(item)
+        except Exception as fallback_error:
+            print(f"[ERROR] Fallback query failed for municipal_denr_applicant_jobs: {fallback_error}")
+
+    applications.sort(key=lambda x: x.get('created_at_dt') or datetime.min, reverse=True)
+
+    total_count = len(applications)
+    approved_count = len([a for a in applications if a.get('status') == 'APPROVED'])
+    pending_count = len([a for a in applications if a.get('status') == 'PENDING'])
+    rejected_count = len([a for a in applications if a.get('status') == 'REJECTED'])
+
+    barangay_counts = Counter([(a.get('barangay') or 'N/A') for a in applications])
+    barangay_options = sorted([b for b in barangay_counts.keys() if b and b != 'N/A'])
+
+    monthly_counts = Counter()
+    for app in applications:
+        month_key = 'N/A'
+        dt = app.get('created_at_dt')
+        if dt:
+            month_key = dt.strftime('%b')
+        monthly_counts[month_key] += 1
+    ordered_months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    trend_labels = [m for m in ordered_months if monthly_counts.get(m)]
+    trend_values = [monthly_counts[m] for m in trend_labels]
+    if not trend_labels:
+        trend_labels = ['No Data']
+        trend_values = [0]
+
+    status_values = [approved_count, pending_count, rejected_count]
+
+    top_barangays = barangay_counts.most_common(5)
+    barangay_labels = [x[0] for x in top_barangays] if top_barangays else ['No Data']
+    barangay_values = [x[1] for x in top_barangays] if top_barangays else [0]
+
+    return render_template(
+        'municipal/operations/applicants-municipal.html',
+        applications=applications,
+        total_count=total_count,
+        approved_count=approved_count,
+        pending_count=pending_count,
+        rejected_count=rejected_count,
+        barangay_options=barangay_options,
+        trend_labels_json=json.dumps(trend_labels),
+        trend_values_json=json.dumps(trend_values),
+        status_values_json=json.dumps(status_values),
+        barangay_labels_json=json.dumps(barangay_labels),
+        barangay_values_json=json.dumps(barangay_values),
+        user_region=user_region,
+        user_municipality=user_municipality
+    )
 
 # --- Accounting ---
 @bp.route('/accounting/dashboard-municipal')
