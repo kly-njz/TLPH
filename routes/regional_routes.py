@@ -159,6 +159,8 @@ def _extract_ip_value(record):
     if not isinstance(record, dict):
         return ''
 
+    metadata = record.get('metadata') if isinstance(record.get('metadata'), dict) else {}
+
     candidates = [
         record.get('ip'),
         record.get('ip_address'),
@@ -173,6 +175,11 @@ def _extract_ip_value(record):
         record.get('requestIp'),
         record.get('requester_ip'),
         record.get('requesterIp'),
+        metadata.get('ip'),
+        metadata.get('ip_address'),
+        metadata.get('ipAddress'),
+        metadata.get('request_ip'),
+        metadata.get('requestIp'),
     ]
 
     for raw in candidates:
@@ -632,7 +639,7 @@ def api_regional_system_logs():
             details = entry.get('message') or ('Municipal admin signed in.' if action_value == 'LOGIN' else 'Municipal admin signed out.' if action_value == 'LOGOUT' else 'Municipal admin approved an item.')
 
             # Extract IP and device info
-            ip_addr = entry.get('ip') or entry.get('ipAddress') or entry.get('ip_address') or ''
+            ip_addr = _extract_ip_value(entry)
             device_info = entry.get('device_type') or entry.get('device') or ''
             
             logs.append({

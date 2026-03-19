@@ -348,6 +348,7 @@ def login_user():
             # Log failed login attempt
             device_type = detect_device_from_request()
             user_agent = request.headers.get('User-Agent', '')
+            request_ip = system_logs_storage.extract_request_ip(request)
             municipality = 'unknown'  # User not found, can't fetch municipality
             system_logs_storage.add_system_log(
                 municipality=municipality,
@@ -357,6 +358,7 @@ def login_user():
                 module='AUTH',
                 outcome='FAILED',
                 message='Invalid credentials - user not found',
+                ip_address=request_ip,
                 device_type=device_type,
                 user_agent=user_agent
             )
@@ -368,6 +370,7 @@ def login_user():
             municipality = _normalize_municipality(user.get('data', {}).get('municipality', 'unknown'))
             device_type = detect_device_from_request()
             user_agent = request.headers.get('User-Agent', '')
+            request_ip = system_logs_storage.extract_request_ip(request)
             system_logs_storage.add_system_log(
                 municipality=municipality,
                 user=email,
@@ -376,6 +379,7 @@ def login_user():
                 module='AUTH',
                 outcome='FAILED',
                 message='Invalid credentials - wrong password',
+                ip_address=request_ip,
                 device_type=device_type,
                 user_agent=user_agent
             )
@@ -395,6 +399,7 @@ def login_user():
         # Log successful login with normalized municipality from user data
         device_type = detect_device_from_request()
         user_agent = request.headers.get('User-Agent', '')
+        request_ip = system_logs_storage.extract_request_ip(request)
         system_logs_storage.add_system_log(
             municipality=municipality,
             user=email,
@@ -403,6 +408,7 @@ def login_user():
             module='AUTH',
             outcome='SUCCESS',
             message=f'User {email} logged in successfully',
+            ip_address=request_ip,
             device_type=device_type,
             user_agent=user_agent
         )
@@ -471,6 +477,7 @@ def set_session():
             module='AUTH',
             outcome='SUCCESS',
             message=f'User {user_email} ({user_role}) logged in successfully via Firebase',
+            ip_address=request_ip,
             device_type=device_type,
             user_agent=user_agent
         )
@@ -527,6 +534,7 @@ def logout():
             module='AUTH',
             outcome='SUCCESS',
             message=f'User {user_email} logged out',
+            ip_address=request_ip,
             device_type=device_type,
             user_agent=user_agent
         )
