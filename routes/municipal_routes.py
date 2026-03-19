@@ -666,6 +666,9 @@ def tasks_municipal():
     municipality_query_values = get_municipality_query_values(user_municipality)
     region_variants = get_region_variants(user_region)
 
+    print(f"[DEBUG] tasks_municipal scope -> municipality='{user_municipality}', region='{user_region}'")
+    print(f"[DEBUG] tasks_municipal query values -> municipality_query_values={municipality_query_values}, region_variants={sorted(list(region_variants)) if region_variants else []}")
+
     tasks = []
     try:
         seen_ids = set()
@@ -727,6 +730,34 @@ def tasks_municipal():
                 else:
                     item['_created_at'] = datetime.min
                 tasks.append(item)
+
+        # Safety fallback: municipality-only fetch without region filtering.
+        if not tasks and municipality_query_values:
+            seen_ids = set()
+            for municipality_value in municipality_query_values:
+                query = db.collection('municipal_tasks').where('municipality', '==', municipality_value).stream()
+                for doc in query:
+                    if doc.id in seen_ids:
+                        continue
+                    item = doc.to_dict() or {}
+                    item['id'] = doc.id
+                    item['title'] = item.get('title') or 'N/A'
+                    item['assigned_to'] = item.get('assigned_to') or 'N/A'
+                    item['barangay'] = item.get('barangay') or 'N/A'
+                    item['status'] = str(item.get('status') or 'PENDING').upper()
+                    item['due_date'] = item.get('due_date') or 'N/A'
+                    created_at = item.get('created_at')
+                    if isinstance(created_at, datetime):
+                        item['_created_at'] = created_at
+                    elif hasattr(created_at, 'to_datetime'):
+                        try:
+                            item['_created_at'] = created_at.to_datetime()
+                        except Exception:
+                            item['_created_at'] = datetime.min
+                    else:
+                        item['_created_at'] = datetime.min
+                    tasks.append(item)
+                    seen_ids.add(doc.id)
     except Exception as e:
         print(f"[WARN] tasks_municipal scoped query failed, trying fallback: {e}")
         try:
@@ -756,6 +787,8 @@ def tasks_municipal():
                 tasks.append(item)
         except Exception as fallback_error:
             print(f"[ERROR] tasks_municipal fallback query failed: {fallback_error}")
+
+    print(f"[DEBUG] tasks_municipal fetched tasks count={len(tasks)}")
 
     tasks.sort(key=lambda t: t.get('_created_at') or datetime.min, reverse=True)
 
