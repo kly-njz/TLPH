@@ -194,13 +194,13 @@
                         <tbody id="tbody" class="text-[10px] divide-y divide-slate-100">
 
                             {% for app in applications %}
-                            <tr class="hover:bg-blue-50 transition app-row" data-stat="{{ app.status|upper }}" data-barangay="{{ app.barangay|upper }}">
+                            <tr class="hover:bg-blue-50 transition app-row" data-job-id="{{ app.id }}" data-stat="{{ app.status|upper }}" data-barangay="{{ app.barangay|upper }}">
                                 <td class="px-4 py-3 align-middle font-mono text-slate-600 border-r border-slate-100">{{ app.date_filed }}</td>
                                 <td class="px-4 py-3 align-middle font-black text-slate-900 border-r border-slate-100">APP-{{ app.reference_id }}</td>
                                 <td class="px-4 py-3 align-middle font-bold text-blue-800 uppercase border-r border-slate-100">{{ app.applicant_name }}</td>
                                 <td class="px-4 py-3 align-middle text-center font-bold text-slate-700 uppercase border-r border-slate-100">{{ app.category }}</td>
                                 <td class="px-4 py-3 align-middle text-center font-bold text-slate-700 uppercase border-r border-slate-100">{{ app.barangay }}</td>
-                                <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
+                                <td class="px-4 py-3 align-middle text-center border-r border-slate-100 status-cell">
                                     <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-16 text-center border
                                         {% if app.status|upper == 'APPROVED' %} bg-emerald-50 text-emerald-700 border-emerald-200
                                         {% elif app.status|upper == 'PENDING' %} bg-amber-50 text-amber-700 border-amber-200
@@ -211,9 +211,9 @@
                                 </td>
                                 <td class="px-4 py-3 align-middle text-center">
                                     <div class="flex justify-center gap-1">
-                                        <button class="btn-action btn-view" title="View"><span class="material-icons-round text-[14px]">visibility</span></button>
-                                        <button class="btn-action btn-approve" title="Approve"><span class="material-icons-round text-[14px]">check_circle</span></button>
-                                        <button class="btn-action btn-reject" title="Reject"><span class="material-icons-round text-[14px]">cancel</span></button>
+                                    <button class="btn-action btn-view" title="View" onclick="viewApplicantJob('{{ app.id }}')"><span class="material-icons-round text-[14px]">visibility</span></button>
+                                    <button class="btn-action btn-approve" title="Approve" onclick="updateApplicantJobStatus('{{ app.id }}', 'APPROVED', this)"><span class="material-icons-round text-[14px]">check_circle</span></button>
+                                    <button class="btn-action btn-reject" title="Reject" onclick="updateApplicantJobStatus('{{ app.id }}', 'REJECTED', this)"><span class="material-icons-round text-[14px]">cancel</span></button>
                                     </div>
                                 </td>
                             </tr>
@@ -238,6 +238,23 @@
             </section>
         </div>
     </main>
+  </div>
+</div>
+
+<div id="applicantDetailModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white w-[92vw] max-w-[560px] rounded-[2px] border border-slate-300 shadow-lg">
+    <div class="px-4 py-2 border-b border-slate-200 flex items-center justify-between">
+      <h3 class="text-[11px] font-black uppercase tracking-wider text-slate-700">Applicant Job Details</h3>
+      <button type="button" onclick="closeApplicantModal()" class="text-slate-500 hover:text-slate-700">
+        <span class="material-icons-round text-[18px]">close</span>
+      </button>
+    </div>
+    <div class="p-4 text-[11px] space-y-2" id="applicantDetailBody">
+      <p class="text-slate-500">Loading...</p>
+    </div>
+    <div class="px-4 py-2 border-t border-slate-200 flex justify-end">
+      <button type="button" onclick="closeApplicantModal()" class="px-3 py-1 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-[10px] font-black uppercase rounded-[2px]">Close</button>
+    </div>
   </div>
 </div>
 
@@ -358,6 +375,96 @@
     document.getElementById('barangayFilter').value = 'ALL';
     document.getElementById('statusFilter').value = 'ALL';
     filterTable();
+  }
+
+  function closeApplicantModal() {
+    const modal = document.getElementById('applicantDetailModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function openApplicantModal() {
+    const modal = document.getElementById('applicantDetailModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  async function viewApplicantJob(jobId) {
+    try {
+      const body = document.getElementById('applicantDetailBody');
+      body.innerHTML = '<p class="text-slate-500">Loading...</p>';
+      openApplicantModal();
+
+      const res = await fetch(`/municipal/operations/applicants-municipal/job/${encodeURIComponent(jobId)}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        body.innerHTML = `<p class="text-rose-700 font-bold">${data.error || 'Failed to load applicant job details.'}</p>`;
+        return;
+      }
+
+      const job = data.job || {};
+      body.innerHTML = `
+        <div class="grid grid-cols-2 gap-2">
+          <div><span class="font-black text-slate-600">Reference:</span><div class="font-mono text-slate-900">APP-${job.reference_id || 'N/A'}</div></div>
+          <div><span class="font-black text-slate-600">Status:</span><div class="font-black text-slate-900">${job.status || 'N/A'}</div></div>
+          <div><span class="font-black text-slate-600">Applicant:</span><div class="text-slate-900">${job.applicant_name || 'N/A'}</div></div>
+          <div><span class="font-black text-slate-600">Date Filed:</span><div class="text-slate-900">${job.date_filed || 'N/A'}</div></div>
+          <div><span class="font-black text-slate-600">Category:</span><div class="text-slate-900">${job.category || 'N/A'}</div></div>
+          <div><span class="font-black text-slate-600">Barangay:</span><div class="text-slate-900">${job.barangay || 'N/A'}</div></div>
+        </div>
+        <div class="pt-2 border-t border-slate-100 mt-2">
+          <div class="font-black text-slate-600">Job Title</div>
+          <div class="text-slate-900">${job.job_title || 'N/A'}</div>
+          <div class="font-black text-slate-600 mt-2">Description</div>
+          <div class="text-slate-700">${job.job_description || 'No description provided.'}</div>
+        </div>
+      `;
+    } catch (err) {
+      document.getElementById('applicantDetailBody').innerHTML = `<p class="text-rose-700 font-bold">${err.message || 'Unexpected error.'}</p>`;
+    }
+  }
+
+  function statusBadgeClass(status) {
+    if (status === 'APPROVED') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (status === 'PENDING') return 'bg-amber-50 text-amber-700 border-amber-200';
+    if (status === 'REJECTED') return 'bg-rose-50 text-rose-700 border-rose-200';
+    return 'bg-slate-100 text-slate-600 border-slate-200';
+  }
+
+  async function updateApplicantJobStatus(jobId, status, triggerBtn) {
+    const row = triggerBtn.closest('tr');
+    const currentStatus = (row?.dataset?.stat || '').toUpperCase();
+    if (currentStatus === status) {
+      return;
+    }
+
+    try {
+      triggerBtn.disabled = true;
+      const res = await fetch(`/municipal/operations/applicants-municipal/job/${encodeURIComponent(jobId)}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.error || 'Failed to update status.');
+        return;
+      }
+
+      if (row) {
+        row.dataset.stat = status;
+        const statusCell = row.querySelector('.status-cell span');
+        if (statusCell) {
+          statusCell.className = `inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-16 text-center border ${statusBadgeClass(status)}`;
+          statusCell.textContent = status;
+        }
+      }
+      filterTable();
+    } catch (err) {
+      alert(err.message || 'Unexpected error while updating status.');
+    } finally {
+      triggerBtn.disabled = false;
+    }
   }
 
   // Init
