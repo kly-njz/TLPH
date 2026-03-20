@@ -681,7 +681,17 @@ def quotation():
 @bp.route('/projects')
 @role_required('national', 'national_admin')
 def projects():
-    return render_template('national/operations/projects.html')
+    try:
+        import projects_storage
+        projects = projects_storage.get_projects_national()
+        return render_template(
+            'national/operations/projects.html',
+            projects=projects,
+            user_email=session.get('user_email', 'Unknown')
+        )
+    except Exception as e:
+        print(f"[ERROR] Loading national projects: {e}")
+        return render_template('national/operations/projects.html', projects=[], user_email=session.get('user_email', 'Unknown'))
 
 
 @bp.route('/tasks')
