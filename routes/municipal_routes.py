@@ -872,8 +872,38 @@ def projects_municipal():
         pending = len([p for p in projects if 'pending' in str(p.get('status')).lower()])
         completed = len([p for p in projects if str(p.get('status')).upper() == 'COMPLETED'])
         
-        # Get barangay options (if applicable from projects data)
-        barangay_options = ['Barangay 1', 'Barangay 2', 'Barangay 3']  # Default placeholder
+        # Build filter options and chart data from real projects
+        barangay_options = sorted(list({
+            (p.get('barangay') or '').strip()
+            for p in projects
+            if (p.get('barangay') or '').strip()
+        }))
+
+        monthly_counts = Counter()
+        for p in projects:
+            date_raw = str(p.get('start_date') or '').strip()
+            if not date_raw:
+                continue
+            try:
+                dt = datetime.fromisoformat(date_raw)
+            except Exception:
+                try:
+                    dt = datetime.fromisoformat(date_raw[:10])
+                except Exception:
+                    continue
+            monthly_counts[dt.strftime('%b')] += 1
+
+        ordered_months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        trend_labels = [m for m in ordered_months if monthly_counts.get(m)]
+        trend_values = [monthly_counts[m] for m in trend_labels]
+
+        area_counts = Counter([
+            (p.get('barangay') or p.get('municipality') or 'N/A')
+            for p in projects
+        ])
+        top_areas = area_counts.most_common(6)
+        area_labels = [x[0] for x in top_areas] if top_areas else []
+        area_values = [x[1] for x in top_areas] if top_areas else []
         
         return render_template(
             'municipal/operations/projects-municipal.html',
@@ -886,10 +916,10 @@ def projects_municipal():
             user_municipality=user_municipality,
             user_region=user_region,
             user_email=session.get('user_email', 'Unknown'),
-            trend_labels_json=json.dumps(['Jan', 'Feb', 'Mar']),
-            trend_values_json=json.dumps([2, 5, 3]),
-            area_labels_json=json.dumps(['Area A', 'Area B']),
-            area_values_json=json.dumps([8, 5])
+            trend_labels_json=json.dumps(trend_labels),
+            trend_values_json=json.dumps(trend_values),
+            area_labels_json=json.dumps(area_labels),
+            area_values_json=json.dumps(area_values)
         )
     except Exception as e:
         print(f"[ERROR] Loading municipal projects: {e}")
