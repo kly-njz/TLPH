@@ -864,14 +864,28 @@ def projects_municipal():
         user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
         
         # Get projects for this municipal admin
-        projects = projects_storage.get_projects_municipal(user_municipality, user_region)
-        
+        projects = projects_storage.get_projects_municipal(user_municipality, user_region, session.get('user_email', ''))
+
+        # Map backend status to display status for UI
+        def map_status(status):
+            s = (status or '').lower()
+            if s == 'active':
+                return 'In Progress'
+            if s == 'completed':
+                return 'Completed'
+            if s.startswith('pending'):
+                return 'Pending'
+            return s.title() if s else 'Pending'
+
+        for p in projects:
+            p['status'] = map_status(p.get('status'))
+
         # Calculate stats
         total_projects = len(projects)
-        in_progress = len([p for p in projects if str(p.get('status')).upper() == 'ACTIVE'])
-        pending = len([p for p in projects if 'pending' in str(p.get('status')).lower()])
-        completed = len([p for p in projects if str(p.get('status')).upper() == 'COMPLETED'])
-        
+        in_progress = len([p for p in projects if p.get('status') == 'In Progress'])
+        pending = len([p for p in projects if p.get('status') == 'Pending'])
+        completed = len([p for p in projects if p.get('status') == 'Completed'])
+
         # Build filter options and chart data from real projects
         barangay_options = sorted(list({
             (p.get('barangay') or '').strip()
@@ -904,7 +918,7 @@ def projects_municipal():
         top_areas = area_counts.most_common(6)
         area_labels = [x[0] for x in top_areas] if top_areas else []
         area_values = [x[1] for x in top_areas] if top_areas else []
-        
+
         return render_template(
             'municipal/operations/projects-municipal.html',
             projects=projects,
