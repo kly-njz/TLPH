@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify
+from flask import Blueprint, render_template, jsonify, session
 from firebase_config import get_firestore_db
 from datetime import datetime
 from firebase_auth_middleware import role_required
