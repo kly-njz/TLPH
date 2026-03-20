@@ -4052,6 +4052,45 @@ def projects_regional():
         )
 
 
+# --- API: Mark Project as DONE by Regional ---
+@bp.route('/api/projects/<project_id>/status', methods=['POST'])
+@role_required('regional', 'regional_admin')
+def api_regional_project_mark_done(project_id):
+    """Mark a project as DONE by regional admin."""
+    from firebase_admin import firestore
+    db = get_firestore_db()
+    data = request.get_json(silent=True) or {}
+    new_status = str(data.get('status', '')).strip().upper()
+    if new_status not in {'DONE', 'COMPLETED', 'DONE_BY_REGIONAL'}:
+        return jsonify({'success': False, 'error': 'Invalid status'}), 400
+
+    # Only allow marking as DONE/COMPLETED
+    try:
+        project_ref = db.collection('projects').document(project_id)
+        project_doc = project_ref.get()
+        if not project_doc.exists:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+
+        project = project_doc.to_dict() or {}
+        # Optionally: check if user is allowed to update this project (region match)
+        user_region = session.get('user_region', '').strip().upper()
+        project_region = str(project.get('region', '')).strip().upper()
+        if user_region and project_region and user_region != project_region:
+            return jsonify({'success': False, 'error': 'Region mismatch'}), 403
+
+        update_payload = {
+            'status': 'Completed',
+            'status_code': 'DONE_BY_REGIONAL',
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': session.get('user_email', 'system'),
+        }
+        project_ref.update(update_payload)
+        return jsonify({'success': True, 'id': project_id, 'status': 'Completed'}), 200
+    except Exception as e:
+        print(f"[ERROR] Failed to update project status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/operations/applicants')
 @role_required('regional', 'regional_admin')
 def applicants_regional():
