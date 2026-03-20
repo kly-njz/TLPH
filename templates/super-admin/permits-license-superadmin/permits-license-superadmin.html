@@ -367,7 +367,7 @@
 
         let myIssuanceChart, myPermitTypeChart, modalChartInstance = null;
 
-        function renderTable() {
+        function getFilteredData() {
             const body = document.getElementById('appTableBody');
             const search = document.getElementById('searchInput').value.toLowerCase();
             const sector = document.getElementById('catFilter').value;
@@ -379,6 +379,11 @@
                 const matchRegion = region === 'all' || item.reg === region;
                 return matchSearch && matchSector && matchRegion;
             });
+            return { filtered, body };
+        }
+
+        function renderTable() {
+            const { filtered, body } = getFilteredData();
 
             body.innerHTML = '';
             document.getElementById('resCount').textContent = filtered.length;
@@ -495,7 +500,43 @@
         }
 
         function exportTableToCSV() { 
-            alert("Generating Manifest..."); 
+            const { filtered } = getFilteredData();
+            if (!filtered.length) {
+                alert('No records to export.');
+                return;
+            }
+
+            const headers = ['Issuance Date', 'License No', 'Holder Name', 'Legal Sector', 'Region', 'Status'];
+            const rows = filtered.map(row => ([
+                row.date,
+                row.ref,
+                row.name,
+                row.category,
+                `Region ${row.reg}`,
+                row.status
+            ]));
+
+            const escapeCell = (val) => {
+                const str = String(val ?? '');
+                if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+                return str;
+            };
+
+            const csv = [
+                headers.map(escapeCell).join(','),
+                ...rows.map(r => r.map(escapeCell).join(','))
+            ].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const dateStamp = new Date().toISOString().slice(0, 10);
+            a.href = url;
+            a.download = `permits_export_${dateStamp}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         function openIssuePermitModal() {
