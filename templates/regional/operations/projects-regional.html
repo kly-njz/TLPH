@@ -66,7 +66,7 @@
             </span>
           </div>
 
-          <button class="gov-btn bg-emerald-800 hover:bg-emerald-900 text-white shadow-sm flex items-center gap-1">
+          <button onclick="openRegionalProjectModal()" class="gov-btn bg-emerald-800 hover:bg-emerald-900 text-white shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">add</span> New Project
           </button>
         </div>
@@ -241,6 +241,52 @@
     </main>
   </div>
 
+  <div id="regionalProjectModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60">
+    <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
+      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-emerald-800 text-white">
+        <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
+          <span class="material-icons-round text-[14px]">playlist_add</span>
+          Register Regional Project
+        </h2>
+        <button type="button" onclick="closeRegionalProjectModal()" class="text-slate-300 hover:text-white">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <form id="regionalProjectForm" class="p-3 space-y-2" onsubmit="submitRegionalProject(event)">
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Project Name *</label>
+          <input id="rpName" type="text" class="gov-input w-full" required>
+        </div>
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Municipality *</label>
+          <select id="rpMunicipality" class="gov-input w-full cursor-pointer" required>
+            <option value="">Select Municipality</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Barangay *</label>
+          <select id="rpBarangay" class="gov-input w-full cursor-pointer" required>
+            <option value="">Select Barangay</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Start Date *</label>
+          <input id="rpStartDate" type="date" class="gov-input w-full" required>
+        </div>
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Description</label>
+          <textarea id="rpDescription" rows="2" class="gov-input w-full resize-none"></textarea>
+        </div>
+        <div id="rpError" class="hidden text-[9px] font-bold text-rose-600 uppercase"></div>
+        <div class="flex justify-end gap-2 pt-2 mt-1 border-t border-slate-200">
+          <button type="button" onclick="closeRegionalProjectModal()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+          <button type="submit" class="gov-btn bg-emerald-800 hover:bg-emerald-900 text-white">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     // --- Chart Implementations ---
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -342,6 +388,128 @@
     });
 
     // --- Search & Filter Logic ---
+    const regionalProjectModal = document.getElementById('regionalProjectModal');
+
+    function openRegionalProjectModal() {
+      if (!regionalProjectModal) return;
+      regionalProjectModal.classList.remove('hidden');
+      regionalProjectModal.classList.add('flex');
+      document.getElementById('rpError')?.classList.add('hidden');
+      loadRegionalMunicipalities();
+    }
+
+    function closeRegionalProjectModal() {
+      if (!regionalProjectModal) return;
+      regionalProjectModal.classList.add('hidden');
+      regionalProjectModal.classList.remove('flex');
+      const form = document.getElementById('regionalProjectForm');
+      if (form) form.reset();
+    }
+
+    async function loadRegionalMunicipalities() {
+      const municipalitySelect = document.getElementById('rpMunicipality');
+      if (!municipalitySelect) return;
+      municipalitySelect.innerHTML = '<option value="">Loading municipalities...</option>';
+
+      try {
+        const region = String("{{ user_region|default('') }}").toUpperCase();
+        if (region.includes('MIMAROPA') || region.includes('IV-B')) {
+          const res = await fetch('/api/locations/mimaropa/municipalities');
+          const data = await res.json();
+          const municipalities = Array.isArray(data.municipalities) ? data.municipalities : [];
+          municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
+          municipalities.forEach((m) => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            municipalitySelect.appendChild(opt);
+          });
+        } else {
+          municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
+          const fromRows = [...new Set(projectRows.map((r) => (r.getAttribute('data-municipality') || '').trim()).filter(Boolean))].sort();
+          fromRows.forEach((m) => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            municipalitySelect.appendChild(opt);
+          });
+        }
+      } catch (e) {
+        municipalitySelect.innerHTML = '<option value="">Failed to load municipalities</option>';
+      }
+    }
+
+    async function loadRegionalBarangays() {
+      const municipality = (document.getElementById('rpMunicipality')?.value || '').trim();
+      const barangaySelect = document.getElementById('rpBarangay');
+      if (!barangaySelect) return;
+      barangaySelect.innerHTML = '<option value="">Loading barangays...</option>';
+      if (!municipality) {
+        barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
+        return;
+      }
+      try {
+        const res = await fetch(`/api/locations/mimaropa/barangays?municipality=${encodeURIComponent(municipality)}`);
+        const data = await res.json();
+        const barangays = Array.isArray(data.barangays) ? data.barangays : [];
+        barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
+        barangays.forEach((b) => {
+          const opt = document.createElement('option');
+          opt.value = b;
+          opt.textContent = b;
+          barangaySelect.appendChild(opt);
+        });
+      } catch (e) {
+        barangaySelect.innerHTML = '<option value="">Failed to load barangays</option>';
+      }
+    }
+
+    async function submitRegionalProject(event) {
+      event.preventDefault();
+      const name = (document.getElementById('rpName')?.value || '').trim();
+      const municipality = (document.getElementById('rpMunicipality')?.value || '').trim();
+      const barangay = (document.getElementById('rpBarangay')?.value || '').trim();
+      const startDate = (document.getElementById('rpStartDate')?.value || '').trim();
+      const description = (document.getElementById('rpDescription')?.value || '').trim();
+      const region = String("{{ user_region|default('') }}").trim();
+
+      if (!name || !municipality || !barangay || !startDate || !region) {
+        const err = document.getElementById('rpError');
+        if (err) {
+          err.textContent = 'Please complete required fields.';
+          err.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const res = await fetch('/api/projects/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          region,
+          municipality,
+          barangay,
+          start_date: startDate,
+          description
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        const err = document.getElementById('rpError');
+        if (err) {
+          err.textContent = data.error || 'Failed to create project.';
+          err.classList.remove('hidden');
+        }
+        return;
+      }
+
+      closeRegionalProjectModal();
+      location.reload();
+    }
+
+    document.getElementById('rpMunicipality')?.addEventListener('change', loadRegionalBarangays);
+
     function filterTable() {
       const q = (document.getElementById('searchProject').value || '').toLowerCase().trim();
       const status = (document.getElementById('statusFilter').value || 'ALL').toUpperCase();
