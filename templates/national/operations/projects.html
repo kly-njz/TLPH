@@ -439,37 +439,49 @@
 
     function submitNewProject(e) {
       e.preventDefault();
-      const name      = document.getElementById('npName').value.trim();
-      const region    = document.getElementById('npRegion').value.trim();
-      const status    = 'Pending';
-      const startDate = document.getElementById('npStartDate').value;
+      const name        = document.getElementById('npName').value.trim();
+      const region      = document.getElementById('npRegion').value.trim();
+      const municipality = document.getElementById('npMunicipality').value.trim();
+      const startDate   = document.getElementById('npStartDate').value;
+      const description = document.getElementById('npDescription').value.trim();
 
-      if (!name || !region || !startDate) {
+      if (!name || !region || !municipality || !startDate) {
         const err = document.getElementById('npError');
         err.textContent = 'Please fill in all required fields.';
         err.classList.remove('hidden');
         return;
       }
 
-      const tbody = document.getElementById('projectTable');
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-blue-50 transition';
-      tr.innerHTML = `
-        <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">${name}</td>
-        <td class="font-bold text-blue-800 border-r border-slate-100 uppercase">${region}</td>
-        <td class="text-center border-r border-slate-100">
-          <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center ${statusBadgeClass(status)}">${status}</span>
-        </td>
-        <td class="font-mono text-slate-500 border-r border-slate-100 text-center">${formatDate(startDate)}</td>
-        <td class="text-center">
-          <div class="flex justify-center gap-2">
-            <button onclick="openViewModal(this)" class="text-blue-700 font-bold uppercase hover:underline">View</button>
-            <button onclick="openEditModal(this)" class="text-blue-700 font-bold uppercase hover:underline">Edit</button>
-            <button onclick="archiveRow(this)" class="text-rose-700 font-bold uppercase hover:underline">Archive</button>
-          </div>
-        </td>`;
-      tbody.prepend(tr);
-      closeNewProjectModal();
+      // Call API to create project
+      fetch('/api/projects/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          region: region,
+          municipality: municipality,
+          start_date: startDate,
+          description: description
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert('✅ Project created successfully!');
+          closeNewProjectModal();
+          // Reload page to show new project
+          setTimeout(() => location.reload(), 500);
+        } else {
+          const err = document.getElementById('npError');
+          err.textContent = data.error || 'Failed to create project';
+          err.classList.remove('hidden');
+        }
+      })
+      .catch(err => {
+        const errDiv = document.getElementById('npError');
+        errDiv.textContent = 'Network error: ' + err.message;
+        errDiv.classList.remove('hidden');
+      });
     }
 
     function resetFilters() {
