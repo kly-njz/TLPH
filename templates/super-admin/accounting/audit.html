@@ -346,7 +346,39 @@
         }
 
         function exportLogs() {
-            alert('Exporting currently filtered audit logs to CSV...');
+            const rows = Array.from(document.querySelectorAll('#auditTableBody .data-row'))
+                .filter(row => row.style.display !== 'none');
+
+            if (!rows.length) {
+                alert('No rows to export.');
+                return;
+            }
+
+            const headers = Array.from(document.querySelectorAll('table thead th'))
+                .map(th => csvEscape(th.textContent));
+
+            const lines = [headers.join(',')];
+
+            rows.forEach(row => {
+                const cells = Array.from(row.querySelectorAll('td'))
+                    .map(td => csvEscape(td.textContent));
+                lines.push(cells.join(','));
+            });
+
+            const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+            const stamp = new Date().toISOString().slice(0, 10);
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `audit-logs-${stamp}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+        }
+
+        function csvEscape(value) {
+            const safe = (value ?? '').toString().replace(/\r?\n/g, ' ').trim();
+            return /[",]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
         }
 
         // Attach event listeners for LIVE filtering (triggers immediately on typing/changing)
