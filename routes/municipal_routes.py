@@ -967,19 +967,21 @@ def projects_municipal_create():
         return jsonify({'success': False, 'error': 'Missing required project fields'}), 400
 
     try:
+        # Save directly to the main 'projects' collection for unified workflow
         payload = {
             'name': name,
             'barangay': barangay,
-            'municipality': user_municipality,
-            'region': user_region,
+            'municipality': user_municipality.upper(),
+            'region': user_region.upper(),
             'start_date': start_date,
-            'status': status,
-            'municipality_key': normalize_scope(user_municipality),
-            'region_key': normalize_scope(user_region),
+            'status': 'active' if status == 'IN PROGRESS' else status.lower(),
+            'created_by': session.get('user_email', ''),
+            'created_by_role': 'municipal_admin',
             'created_at': firestore.SERVER_TIMESTAMP,
-            'updated_at': firestore.SERVER_TIMESTAMP
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'approval_chain': ['municipal'],
         }
-        ref = db.collection('municipal_projects').document()
+        ref = db.collection('projects').document()
         ref.set(payload)
         return jsonify({'success': True, 'project': {
             'id': ref.id,
@@ -987,7 +989,7 @@ def projects_municipal_create():
             'barangay': barangay,
             'municipality': user_municipality,
             'start_date': start_date,
-            'status': status
+            'status': payload['status']
         }})
     except Exception as e:
         print(f"[ERROR] projects_municipal_create failed: {e}")
