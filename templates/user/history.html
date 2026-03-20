@@ -805,9 +805,42 @@
 
     // Resolve license status with level context (approved by, rejected by, forwarded to)
     function resolveLicenseStatus(item) {
-      const rawStatus = item.nationalStatus === 'approved' || item.nationalStatus === 'rejected'
-        ? item.nationalStatus
-        : item.regionalStatus || item.status || 'pending';
+      const normalizeStatus = (value) => (value || '').toLowerCase().trim().replace(/\s+/g, '-');
+      const mainStatus = normalizeStatus(item.status);
+      const regionalStatus = normalizeStatus(item.regionalStatus);
+      const nationalStatus = normalizeStatus(item.nationalStatus);
+
+      let rawStatus = 'pending';
+
+      if (nationalStatus === 'approved' || nationalStatus === 'rejected') {
+        rawStatus = nationalStatus;
+      } else if (
+        mainStatus === 'approved' ||
+        mainStatus === 'accepted' ||
+        mainStatus === 'rejected' ||
+        mainStatus === 'to-review' ||
+        mainStatus === 'under-review' ||
+        mainStatus === 'forwarded-to-national' ||
+        mainStatus === 'forwarded-national' ||
+        mainStatus.includes('forward')
+      ) {
+        // Keep explicit workflow status from the main status field.
+        // This avoids showing forwarded records as "pending" when regionalStatus is "pending".
+        rawStatus = mainStatus;
+      } else if (
+        regionalStatus === 'approved' ||
+        regionalStatus === 'accepted' ||
+        regionalStatus === 'rejected' ||
+        regionalStatus === 'to-review' ||
+        regionalStatus === 'under-review' ||
+        regionalStatus === 'forwarded-to-national' ||
+        regionalStatus === 'forwarded-national' ||
+        regionalStatus.includes('forward')
+      ) {
+        rawStatus = regionalStatus;
+      } else {
+        rawStatus = mainStatus || regionalStatus || 'pending';
+      }
 
       const status = (rawStatus || '').toLowerCase().replace(/\s+/g, '-');
       const approvedLevel = item.approvedByLevel || '';
@@ -824,7 +857,7 @@
         return { status: 'rejected', label: `REJECTED BY ${level.toUpperCase()}` };
       }
 
-      if (status === 'to-review' || status.includes('forward')) {
+      if (status === 'to-review' || status.includes('forward') || (status === 'pending' && forwardedToLevel)) {
         const target = (forwardedToLevel || (status === 'forwarded-to-national' || status === 'forwarded-national' ? 'National' : 'Regional')).toUpperCase();
         const statusKey = target === 'NATIONAL' ? 'forwarded-to-national' : 'to-review';
         return { status: statusKey, label: `FORWARDED TO ${target}` };
@@ -1612,9 +1645,11 @@
           return;
         }
         const d = snap.data();
-        const status = (d.status || 'pending').toLowerCase();
+        const resolved = resolveLicenseStatus(d);
+        const status = (resolved.status || 'pending').toLowerCase();
         const isRejected = status === 'rejected';
         const isApproved = status === 'approved';
+        const isForwarded = status === 'to-review' || status.includes('forward');
 
         const fmtDate = (ts) => {
           if (!ts) return 'N/A';
@@ -1649,15 +1684,15 @@
 
         // Core info
         const applicationType = (d.applicationType || 'License/Permit').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        const statusColor = isRejected ? 'text-red-600' : isApproved ? 'text-green-700' : 'text-amber-600';
-        const statusBg = isRejected ? 'bg-red-50 border-red-200' : isApproved ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200';
+        const statusColor = isRejected ? 'text-red-600' : isApproved ? 'text-green-700' : isForwarded ? 'text-indigo-700' : 'text-amber-600';
+        const statusBg = isRejected ? 'bg-red-50 border-red-200' : isApproved ? 'bg-green-50 border-green-200' : isForwarded ? 'bg-indigo-50 border-indigo-200' : 'bg-amber-50 border-amber-200';
 
         html += `
           <div class="mb-4 p-3 rounded-lg border ${statusBg}">
             <p class="text-[10px] font-black uppercase text-gray-500 mb-1">Application Type</p>
             <p class="font-black text-green-800 text-sm mb-2">${applicationType}</p>
             <div class="flex items-center gap-2">
-              <span class="inline-block px-3 py-1 rounded text-[10px] font-black uppercase border ${statusBg} ${statusColor}">${(d.status || 'PENDING').toUpperCase()}</span>
+              <span class="inline-block px-3 py-1 rounded text-[10px] font-black uppercase border ${statusBg} ${statusColor}">${resolved.label || (d.status || 'PENDING').toUpperCase()}</span>
               <span class="text-[10px] text-gray-400 font-semibold">${fmtDate(d.createdAt)}</span>
             </div>
           </div>
