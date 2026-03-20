@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, jsonify, request, session
 from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required
-from google.cloud.firestore_v1.base_query import FieldFilter
+
 from datetime import datetime
 from firebase_admin import firestore
 import system_logs_storage
@@ -2824,6 +2824,7 @@ def payroll_system_view():
 def accounting_dashboard_view():
     from firebase_admin import firestore
     from flask import session
+    from datetime import datetime, timedelta
     db = firestore.client()
     finance_data = {}
     user_region = (session.get('region') or session.get('user_region') or '').upper().replace('–', '-').replace('—', '-').replace('  ', ' ').replace(' ', '-')
@@ -2900,14 +2901,146 @@ def accounting_dashboard_view():
     except Exception as e:
         print(f"[DEBUG] Error fetching regional fund distributions: {e}")
 
-    return render_template('regional/accounting/dashboard-regional.html', finance=finance_data, municipalities=municipalities, regional_funds=regional_funds, municipal_funds=municipal_funds, user_region=user_region)
+    def _to_float(value):
+        if value is None:
+            return 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            cleaned = str(value).replace('₱', '').replace(',', '').strip()
+            return float(cleaned) if cleaned else 0.0
+        except Exception:
+            return 0.0
+
+    def _format_currency(value):
+        return f"₱ {value:,.2f}"
+
+    def _parse_ts(value):
+        if not value:
+            return None
+        if hasattr(value, 'to_datetime'):
+            try:
+                return value.to_datetime()
+            except Exception:
+                return None
+        if hasattr(value, 'strftime'):
+            return value
+        try:
+            return datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        except Exception:
+            return None
+
+    # Normalize finance documents into known department buckets so template cards
+    # don't show N/A when document IDs/structures vary.
+    department_keys = ['treasury', 'accounting', 'budget', 'engineering']
+    department_finance = {k: {} for k in department_keys}
+
+    for doc_id, payload in finance_data.items():
+        if not isinstance(payload, dict):
+            continue
+
+        lower_id = str(doc_id or '').strip().lower()
+        if lower_id in department_finance:
+            department_finance[lower_id] = payload
+
+        for dept in department_keys:
+            # Pattern 1: document contains nested department key.
+            nested = payload.get(dept)
+            if isinstance(nested, dict) and nested:
+                department_finance[dept] = nested
+
+            # Pattern 2: document has "department" field + values in same object.
+            doc_dept = str(payload.get('department') or payload.get('dept') or '').strip().lower()
+            if doc_dept == dept:
+                department_finance[dept] = payload
+
+    # Build per-department display values.
+    department_cards = {}
+    for dept in department_keys:
+        row = department_finance.get(dept) or {}
+        gf = (
+            row.get('general_fund')
+            if row.get('general_fund') is not None
+            else row.get('generalFund')
+        )
+        gf_value = _to_float(gf)
+        department_cards[dept] = {
+            'general_fund_display': _format_currency(gf_value) if gf_value else 'N/A'
+        }
+
+    # Aggregate real stats for snapshot cards.
+    total_deposits = 0.0
+    total_expenses = 0.0
+
+    for dept in department_keys:
+        row = department_finance.get(dept) or {}
+        total_deposits += _to_float(
+            row.get('total_deposit')
+            if row.get('total_deposit') is not None
+            else row.get('total_deposits')
+            if row.get('total_deposits') is not None
+            else row.get('deposits')
+        )
+        total_expenses += _to_float(
+            row.get('total_expenses')
+            if row.get('total_expenses') is not None
+            else row.get('expenses')
+        )
+
+    # Fallback to transferred fund records when finance totals are not populated.
+    if total_deposits == 0.0:
+        total_deposits = sum(_to_float(f.get('amount')) for f in regional_funds)
+    if total_expenses == 0.0:
+        total_expenses = sum(_to_float(f.get('amount')) for f in municipal_funds)
+
+    net_movement = total_deposits - total_expenses
+
+    # Growth rate: compare recent 30 days vs previous 30 days using fund movement data.
+    now = datetime.utcnow()
+    current_cutoff = now - timedelta(days=30)
+    previous_cutoff = now - timedelta(days=60)
+    current_period_total = 0.0
+    previous_period_total = 0.0
+
+    for row in (regional_funds + municipal_funds):
+        ts = _parse_ts(row.get('timestamp') or row.get('date') or row.get('created_at'))
+        amount = _to_float(row.get('amount'))
+        if not ts:
+            continue
+        if ts >= current_cutoff:
+            current_period_total += amount
+        elif ts >= previous_cutoff:
+            previous_period_total += amount
+
+    if previous_period_total > 0:
+        growth_rate = ((current_period_total - previous_period_total) / previous_period_total) * 100.0
+    else:
+        growth_rate = 0.0
+
+    dashboard_stats = {
+        'total_deposits_display': _format_currency(total_deposits),
+        'total_expenses_display': _format_currency(total_expenses),
+        'net_movement_display': _format_currency(net_movement),
+        'growth_rate_display': f"{growth_rate:+.1f}%",
+    }
+
+    return render_template(
+        'regional/accounting/dashboard-regional.html',
+        finance=finance_data,
+        municipalities=municipalities,
+        regional_funds=regional_funds,
+        municipal_funds=municipal_funds,
+        user_region=user_region,
+        department_cards=department_cards,
+        dashboard_stats=dashboard_stats,
+    )
 
 @bp.route('/accounting/distribute-fund', methods=['POST'])
 @role_required('regional','regional_admin')
 def distribute_fund():
     from flask import request, jsonify
     from firebase_admin import firestore
-    from google.cloud.firestore_v1.base_query import FieldFilter
+
     db = firestore.client()
     data = request.json
     muni = data.get('municipality', '').strip()
@@ -3887,6 +4020,93 @@ def create_regional_expense():
     except Exception as e:
         print(f"[ERROR] Failed to record expense: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ==================== PROJECT MANAGEMENT ====================
+
+@bp.route('/operations/projects')
+@role_required('regional', 'regional_admin')
+def projects_regional():
+    """Regional admin project management view"""
+    try:
+        import projects_storage
+        user_region = session.get('user_region', '')
+        projects = projects_storage.get_projects_regional(user_region)
+        pending_approval = projects_storage.get_projects_for_approval('regional', user_region)
+        
+        return render_template(
+            'regional/operations/projects-regional.html',
+            projects=projects,
+            pending_approval=pending_approval,
+            user_email=session.get('user_email', 'Unknown'),
+            user_region=user_region
+        )
+    except Exception as e:
+        print(f"[ERROR] Loading regional projects: {e}")
+        return render_template(
+            'regional/operations/projects-regional.html',
+            projects=[],
+            pending_approval=[],
+            user_email=session.get('user_email', 'Unknown'),
+            user_region=session.get('user_region', '')
+        )
+
+
+# --- API: Mark Project as DONE by Regional ---
+@bp.route('/api/projects/<project_id>/status', methods=['POST'])
+@role_required('regional', 'regional_admin')
+def api_regional_project_mark_done(project_id):
+    """Mark a project as DONE by regional admin."""
+    from firebase_admin import firestore
+    db = get_firestore_db()
+    data = request.get_json(silent=True) or {}
+    new_status = str(data.get('status', '')).strip().upper()
+    if new_status not in {'DONE', 'COMPLETED', 'DONE_BY_REGIONAL'}:
+        return jsonify({'success': False, 'error': 'Invalid status'}), 400
+
+    # Only allow marking as DONE/COMPLETED
+    try:
+        project_ref = db.collection('projects').document(project_id)
+        project_doc = project_ref.get()
+        if not project_doc.exists:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+
+        project = project_doc.to_dict() or {}
+        # Optionally: check if user is allowed to update this project (region match)
+        user_region = session.get('user_region', '').strip().upper()
+        project_region = str(project.get('region', '')).strip().upper()
+        if user_region and project_region and user_region != project_region:
+            return jsonify({'success': False, 'error': 'Region mismatch'}), 403
+
+        update_payload = {
+            'status': 'Completed',
+            'status_code': 'DONE_BY_REGIONAL',
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': session.get('user_email', 'system'),
+        }
+        project_ref.update(update_payload)
+        return jsonify({'success': True, 'id': project_id, 'status': 'Completed'}), 200
+    except Exception as e:
+        print(f"[ERROR] Failed to update project status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/operations/applicants')
+@role_required('regional', 'regional_admin')
+def applicants_regional():
+    return render_template('regional/operations/applicants-regional.html')
+
+
+@bp.route('/operations/quotation')
+@role_required('regional', 'regional_admin')
+def quotation_regional():
+    return render_template('regional/operations/quotation-regional.html')
+
+
+@bp.route('/operations/task')
+@role_required('regional', 'regional_admin')
+def task_regional():
+    return render_template('regional/operations/task-regional.html')
 
 @bp.route('/api/accounting/expenses/<expense_id>', methods=['PUT'])
 @role_required('regional','regional_admin')

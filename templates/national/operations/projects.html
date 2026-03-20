@@ -59,15 +59,15 @@
         <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
           <div class="gov-card p-2 px-3 border-l-4 border-l-slate-600">
             <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Projects</span>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">26</div>
+            <div id="totalProjectsCount" class="text-lg font-black text-slate-800 mt-0.5 leading-none">{{ projects|length }}</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
-            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">In Progress</span>
-            <div class="text-lg font-black text-emerald-700 mt-0.5 leading-none">9</div>
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Active</span>
+            <div id="activeProjectsCount" class="text-lg font-black text-emerald-700 mt-0.5 leading-none">0</div>
           </div>
           <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
-            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Completed</span>
-            <div class="text-lg font-black text-blue-700 mt-0.5 leading-none">12</div>
+            <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Pending Approval</span>
+            <div id="pendingProjectsCount" class="text-lg font-black text-blue-700 mt-0.5 leading-none">0</div>
           </div>
         </section>
 
@@ -126,41 +126,35 @@
                 </tr>
               </thead>
               <tbody id="projectTable" class="text-[10px] divide-y divide-slate-100">
-                
-                <tr class="hover:bg-blue-50 transition">
-                  <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">Manila Bay Rehab Phase IV</td>
-                  <td class="font-bold text-blue-800 border-r border-slate-100 uppercase">NCR Central</td>
-                  <td class="text-center border-r border-slate-100">
-                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 w-20 text-center">In Progress</span>
-                  </td>
-                  <td class="font-mono text-slate-500 border-r border-slate-100 text-center">Feb 10, 2026</td>
-                  <td class="text-center">
-                    <div class="flex justify-center gap-2">
-                        <button onclick="openViewModal(this)" class="text-blue-700 font-bold hover:underline uppercase">View</button>
-                        <button onclick="openEditModal(this)" class="text-blue-700 font-bold hover:underline uppercase">Edit</button>
-                        <button onclick="archiveRow(this)" class="text-rose-700 font-bold hover:underline uppercase">Archive</button>
-                    </div>
-                  </td>
-                </tr>
 
                 {% for project in projects %}
-                <tr class="hover:bg-blue-50 transition">
+                <tr class="hover:bg-blue-50 transition" data-project-status="{{ project.get('status', 'active') }}">
                   <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">{{ project.name }}</td>
                   <td class="font-bold text-blue-800 border-r border-slate-100 uppercase">{{ project.region }}</td>
                   <td class="text-center border-r border-slate-100">
-                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center
-                      {% if project.status == 'In Progress' %} bg-emerald-50 text-emerald-700 border border-emerald-200
-                      {% elif project.status == 'Completed' %} bg-blue-50 text-blue-700 border border-blue-200
+                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-24 text-center
+                      {% if project.status == 'active' or project.status == 'Active' %} bg-emerald-50 text-emerald-700 border border-emerald-200
+                      {% elif project.status == 'pending_regional_approval' %} bg-amber-50 text-amber-700 border border-amber-200
+                      {% elif project.status == 'pending_national_approval' %} bg-yellow-50 text-yellow-700 border border-yellow-200
+                      {% elif project.status == 'rejected' %} bg-rose-50 text-rose-700 border border-rose-200
                       {% else %} bg-slate-100 text-slate-600 border border-slate-200 {% endif %}">
-                      {{ project.status }}
+                      {{ project.status|replace('_', ' ')|title }}
                     </span>
                   </td>
                   <td class="font-mono text-slate-500 border-r border-slate-100 text-center">{{ project.start_date }}</td>
                   <td class="text-center">
                     <div class="flex justify-center gap-2">
-                        <button onclick="openViewModal(this)" class="text-blue-700 font-bold uppercase hover:underline">View</button>
-                        <button onclick="openEditModal(this)" class="text-blue-700 font-bold uppercase hover:underline">Edit</button>
-                        <button onclick="archiveRow(this)" class="text-rose-700 font-bold uppercase hover:underline">Archive</button>
+                        <button onclick="openViewModal(this)" class="text-blue-700 font-bold uppercase hover:underline text-[8px]">View</button>
+                        {% if project.status == 'pending_national_approval' %}
+                          <button onclick="approveProject('{{ project.id }}')" class="text-emerald-700 font-bold uppercase hover:underline text-[8px]">Approve</button>
+                          <button onclick="rejectProject('{{ project.id }}')" class="text-rose-700 font-bold uppercase hover:underline text-[8px]">Reject</button>
+                        {% else %}
+                          <button onclick="openEditModal(this)" class="text-blue-700 font-bold uppercase hover:underline text-[8px]">Edit</button>
+                        {% endif %}
+                        <button onclick="deleteProject('{{ project.id }}')" class="text-rose-700 font-bold uppercase hover:underline text-[8px]">Delete</button>
+                        {% if project.status == 'Done by Regional' or project.status == 'done_by_regional' %}
+                          <button onclick="markProjectComplete('{{ project.id }}')" class="text-emerald-700 font-bold uppercase hover:underline text-[8px]">Complete</button>
+                        {% endif %}
                     </div>
                   </td>
                 </tr>
@@ -203,9 +197,36 @@
         </div>
 
         <div class="flex flex-col gap-1">
-          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Region / Entity <span class="text-rose-600">*</span></label>
-          <input id="npRegion" type="text" required placeholder="e.g. NCR Central"
-            class="gov-input w-full" />
+          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Region <span class="text-rose-600">*</span></label>
+          <select id="npRegion" required class="gov-input w-full cursor-pointer">
+            <option value="">Select Region</option>
+            <option value="NCR">NCR (National Capital Region)</option>
+            <option value="Cordillera">Cordillera Administrative Region</option>
+            <option value="Ilocos">Ilocos Region</option>
+            <option value="Cagayan Valley">Cagayan Valley</option>
+            <option value="Central Luzon">Central Luzon</option>
+            <option value="Calabarzon">Calabarzon</option>
+            <option value="Mimaropa">Mimaropa</option>
+            <option value="Bicol">Bicol Region</option>
+            <option value="Western Visayas">Western Visayas</option>
+            <option value="Central Visayas">Central Visayas</option>
+            <option value="Eastern Visayas">Eastern Visayas</option>
+            <option value="Mindanao">Mindanao</option>
+          </select>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Municipality <span class="text-rose-600">*</span></label>
+          <select id="npMunicipality" required class="gov-input w-full cursor-pointer">
+            <option value="">Select Municipality</option>
+          </select>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Barangay <span class="text-rose-600">*</span></label>
+          <select id="npBarangay" required class="gov-input w-full cursor-pointer">
+            <option value="">Select Barangay</option>
+          </select>
         </div>
 
         <div class="flex flex-col gap-1">
@@ -226,7 +247,7 @@
             class="gov-btn bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200">Cancel</button>
           <button type="submit"
             class="gov-btn bg-blue-800 hover:bg-blue-900 text-white flex items-center gap-1">
-            <span class="material-icons-round text-[12px]">save</span> Save Project
+            <span class="material-icons-round text-[12px]">save</span> Create Project
           </button>
         </div>
 
@@ -323,6 +344,42 @@
     Chart.defaults.font.size = 8;
     Chart.defaults.color = "#64748b";
 
+    const projectRows = Array.from(document.querySelectorAll('#projectTable tr'));
+
+    function normalizeProjectStatus(raw) {
+      const s = String(raw || '').trim().toLowerCase();
+      if (s === 'active' || s === 'completed' || s === 'in progress') return s;
+      if (s.includes('pending')) return 'pending';
+      if (s.includes('reject')) return 'rejected';
+      return s || 'pending';
+    }
+
+    const statusCounts = { active: 0, completed: 0, pending: 0 };
+    const monthlyCounts = {};
+
+    projectRows.forEach((row) => {
+      const statusRaw = row.getAttribute('data-project-status') || row.querySelector('td:nth-child(3)')?.innerText || '';
+      const status = normalizeProjectStatus(statusRaw);
+      if (status === 'active' || status === 'in progress') statusCounts.active += 1;
+      else if (status === 'completed') statusCounts.completed += 1;
+      else statusCounts.pending += 1;
+
+      const dateText = row.querySelector('td:nth-child(4)')?.innerText?.trim() || '';
+      const date = new Date(dateText);
+      if (!Number.isNaN(date.getTime())) {
+        const key = date.toLocaleString('en-US', { month: 'short' });
+        monthlyCounts[key] = (monthlyCounts[key] || 0) + 1;
+      }
+    });
+
+    const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const trendLabels = monthOrder.filter((m) => monthlyCounts[m]);
+    const trendValues = trendLabels.map((m) => monthlyCounts[m]);
+
+    document.getElementById('totalProjectsCount').innerText = projectRows.length;
+    document.getElementById('activeProjectsCount').innerText = statusCounts.active;
+    document.getElementById('pendingProjectsCount').innerText = statusCounts.pending;
+
     const commonOptions = {
         responsive: true,
         maintainAspectRatio: false,
@@ -339,8 +396,8 @@
     new Chart(document.getElementById('statusMixChart'), {
       type: 'doughnut',
       data: {
-        labels: ['Completed', 'Ongoing', 'Pending'],
-        datasets: [{ data: [12, 9, 5], backgroundColor: ['#1e3a8a', '#10b981', '#cbd5e1'], borderWidth: 0 }]
+        labels: ['Completed', 'Active', 'Pending'],
+        datasets: [{ data: [statusCounts.completed, statusCounts.active, statusCounts.pending], backgroundColor: ['#1e3a8a', '#10b981', '#cbd5e1'], borderWidth: 0 }]
       },
       options: { ...commonOptions, cutout: '70%' }
     });
@@ -349,10 +406,10 @@
     new Chart(document.getElementById('projectTrendChart'), {
       type: 'line',
       data: {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        labels: trendLabels.length ? trendLabels : ['No Data'],
         datasets: [{
           label: 'Projects',
-          data: [2, 5, 3, 8, 4, 6],
+          data: trendValues.length ? trendValues : [0],
           borderColor: '#1e3a8a',
           backgroundColor: 'rgba(30, 64, 175, 0.1)',
           borderWidth: 1.5,
@@ -414,38 +471,114 @@
 
     function submitNewProject(e) {
       e.preventDefault();
-      const name      = document.getElementById('npName').value.trim();
-      const region    = document.getElementById('npRegion').value.trim();
-      const status    = 'Pending';
-      const startDate = document.getElementById('npStartDate').value;
+      const name        = document.getElementById('npName').value.trim();
+      const region      = document.getElementById('npRegion').value.trim();
+      const municipality = document.getElementById('npMunicipality').value.trim();
+      const barangay    = document.getElementById('npBarangay').value.trim();
+      const startDate   = document.getElementById('npStartDate').value;
+      const description = document.getElementById('npDescription').value.trim();
 
-      if (!name || !region || !startDate) {
+      if (!name || !region || !municipality || !barangay || !startDate) {
         const err = document.getElementById('npError');
         err.textContent = 'Please fill in all required fields.';
         err.classList.remove('hidden');
         return;
       }
 
-      const tbody = document.getElementById('projectTable');
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-blue-50 transition';
-      tr.innerHTML = `
-        <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">${name}</td>
-        <td class="font-bold text-blue-800 border-r border-slate-100 uppercase">${region}</td>
-        <td class="text-center border-r border-slate-100">
-          <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center ${statusBadgeClass(status)}">${status}</span>
-        </td>
-        <td class="font-mono text-slate-500 border-r border-slate-100 text-center">${formatDate(startDate)}</td>
-        <td class="text-center">
-          <div class="flex justify-center gap-2">
-            <button onclick="openViewModal(this)" class="text-blue-700 font-bold uppercase hover:underline">View</button>
-            <button onclick="openEditModal(this)" class="text-blue-700 font-bold uppercase hover:underline">Edit</button>
-            <button onclick="archiveRow(this)" class="text-rose-700 font-bold uppercase hover:underline">Archive</button>
-          </div>
-        </td>`;
-      tbody.prepend(tr);
-      closeNewProjectModal();
+      // Call API to create project
+      fetch('/api/projects/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          region: region,
+          municipality: municipality,
+          barangay: barangay,
+          start_date: startDate,
+          description: description
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert('✅ Project created successfully!');
+          closeNewProjectModal();
+          // Reload page to show new project
+          setTimeout(() => location.reload(), 500);
+        } else {
+          const err = document.getElementById('npError');
+          err.textContent = data.error || 'Failed to create project';
+          err.classList.remove('hidden');
+        }
+      })
+      .catch(err => {
+        const errDiv = document.getElementById('npError');
+        errDiv.textContent = 'Network error: ' + err.message;
+        errDiv.classList.remove('hidden');
+      });
     }
+
+    async function loadNationalMunicipalities() {
+      const region = (document.getElementById('npRegion')?.value || '').trim().toUpperCase();
+      const municipalitySelect = document.getElementById('npMunicipality');
+      const barangaySelect = document.getElementById('npBarangay');
+      if (!municipalitySelect || !barangaySelect) return;
+
+      municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
+      barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
+
+      if (region !== 'MIMAROPA') {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'Municipality list currently enabled for MIMAROPA';
+        municipalitySelect.appendChild(opt);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/locations/mimaropa/municipalities');
+        const data = await res.json();
+        const municipalities = Array.isArray(data.municipalities) ? data.municipalities : [];
+        municipalities.forEach((m) => {
+          const opt = document.createElement('option');
+          opt.value = m;
+          opt.textContent = m;
+          municipalitySelect.appendChild(opt);
+        });
+      } catch (e) {
+        console.warn('Failed to load municipalities', e);
+      }
+    }
+
+    async function loadNationalBarangays() {
+      const municipality = (document.getElementById('npMunicipality')?.value || '').trim();
+      const barangaySelect = document.getElementById('npBarangay');
+      if (!barangaySelect) return;
+
+      barangaySelect.innerHTML = '<option value="">Loading barangays...</option>';
+      if (!municipality) {
+        barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/locations/mimaropa/barangays?municipality=${encodeURIComponent(municipality)}`);
+        const data = await res.json();
+        const barangays = Array.isArray(data.barangays) ? data.barangays : [];
+        barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
+        barangays.forEach((b) => {
+          const opt = document.createElement('option');
+          opt.value = b;
+          opt.textContent = b;
+          barangaySelect.appendChild(opt);
+        });
+      } catch (e) {
+        barangaySelect.innerHTML = '<option value="">Failed to load barangays</option>';
+      }
+    }
+
+    document.getElementById('npRegion')?.addEventListener('change', loadNationalMunicipalities);
+    document.getElementById('npMunicipality')?.addEventListener('change', loadNationalBarangays);
 
     function resetFilters() {
       document.getElementById('searchProject').value = '';
@@ -494,6 +627,49 @@
       document.getElementById('editProjectModal').classList.add('hidden');
       editingRow = null;
     }
+
+    // --- Project Approval/Rejection ---
+    function approveProject(projectId) {
+      if (!confirm('Approve this project?')) return;
+      const notes = prompt('Optional notes:');
+      
+      fetch(`/api/projects/approve/${projectId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: notes || '' })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert('✅ ' + data.message);
+          setTimeout(() => location.reload(), 500);
+        } else {
+          alert('❌ ' + (data.error || 'Failed to approve'));
+        }
+      });
+    }
+
+    function rejectProject(projectId) {
+      if (!confirm('Reject this project?')) return;
+      const notes = prompt('Reason for rejection:');
+      if (!notes) return;
+      
+      fetch(`/api/projects/reject/${projectId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: notes })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert('✅ ' + data.message);
+          setTimeout(() => location.reload(), 500);
+        } else {
+          alert('❌ ' + (data.error || 'Failed to reject'));
+        }
+      });
+    }
+
     document.getElementById('editProjectModal').addEventListener('click', function(e) {
       if (e.target === this) closeEditModal();
     });

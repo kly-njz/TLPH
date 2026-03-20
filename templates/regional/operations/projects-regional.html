@@ -66,7 +66,7 @@
             </span>
           </div>
 
-          <button class="gov-btn bg-emerald-800 hover:bg-emerald-900 text-white shadow-sm flex items-center gap-1">
+          <button onclick="openRegionalProjectModal()" class="gov-btn bg-emerald-800 hover:bg-emerald-900 text-white shadow-sm flex items-center gap-1">
             <span class="material-icons-round text-[14px]">add</span> New Project
           </button>
         </div>
@@ -97,17 +97,11 @@
           <!-- Municipality filter -->
           <select id="municipalityFilter" class="gov-input cursor-pointer" onchange="filterTable()" aria-label="Municipality Filter">
             <option value="ALL">All Municipalities</option>
-            <option>Municipality A</option>
-            <option>Municipality B</option>
-            <option>Municipality C</option>
           </select>
 
           <!-- Fiscal Year filter -->
           <select id="fyFilter" class="gov-input cursor-pointer" onchange="filterTable()" title="Fiscal Year Filter">
             <option value="ALL">All Fiscal Years</option>
-            <option>FY 2026</option>
-            <option>FY 2025</option>
-            <option>FY 2024</option>
           </select>
         </div>
       </section>
@@ -116,19 +110,19 @@
       <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
         <div class="gov-card p-2 px-3 border-l-4 border-l-slate-600">
           <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Projects</span>
-          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">26</div>
+          <div id="totalProjectsCount" class="text-lg font-black text-slate-800 mt-0.5 leading-none">0</div>
           <div class="text-[9px] font-bold uppercase tracking-wider text-slate-500 mt-0.5">Regional scope</div>
         </div>
 
         <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
           <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">In Progress</span>
-          <div class="text-lg font-black text-emerald-700 mt-0.5 leading-none">9</div>
+          <div id="inProgressCount" class="text-lg font-black text-emerald-700 mt-0.5 leading-none">0</div>
           <div class="text-[9px] font-bold uppercase tracking-wider text-slate-500 mt-0.5">Active projects</div>
         </div>
 
         <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
           <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Completed</span>
-          <div class="text-lg font-black text-blue-700 mt-0.5 leading-none">12</div>
+          <div id="completedCount" class="text-lg font-black text-blue-700 mt-0.5 leading-none">0</div>
           <div class="text-[9px] font-bold uppercase tracking-wider text-slate-500 mt-0.5">Closed items</div>
         </div>
       </section>
@@ -200,27 +194,6 @@
             </thead>
 
             <tbody id="projectTable" class="text-[10px] divide-y divide-slate-100">
-
-              <!-- Static Example -->
-              <tr class="hover:bg-emerald-50 transition project-row"
-                  data-status="IN PROGRESS" data-municipality="MUNICIPALITY A" data-fy="FY 2026">
-                <td class="font-bold text-slate-900 border-r border-slate-100 uppercase">Manila Bay Rehab Phase IV</td>
-                <td class="font-bold text-emerald-800 border-r border-slate-100 uppercase">Municipality A</td>
-                <td class="text-center border-r border-slate-100">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 w-20 text-center">
-                    In Progress
-                  </span>
-                </td>
-                <td class="font-mono text-slate-500 border-r border-slate-100 text-center">Feb 10, 2026</td>
-                <td class="text-center">
-                  <div class="flex justify-center gap-2">
-                    <button class="text-emerald-800 font-bold hover:underline uppercase">View</button>
-                    <button class="text-emerald-800 font-bold hover:underline uppercase">Edit</button>
-                    <button class="text-rose-700 font-bold hover:underline uppercase">Archive</button>
-                  </div>
-                </td>
-              </tr>
-
               <!-- Jinja Loop -->
               {% for project in projects %}
               {# Optional: server-side regional enforcement #}
@@ -244,6 +217,9 @@
                   <div class="flex justify-center gap-2">
                     <button class="text-emerald-800 font-bold uppercase hover:underline">Edit</button>
                     <button class="text-rose-700 font-bold uppercase hover:underline">Delete</button>
+                    {% if project.status == 'Done by Municipal' or project.status == 'done_by_municipal' %}
+                      <button class="text-emerald-700 font-bold uppercase hover:underline" onclick="markProjectDoneRegional('{{ project.id }}')">Project Done</button>
+                    {% endif %}
                   </div>
                 </td>
               </tr>
@@ -268,11 +244,107 @@
     </main>
   </div>
 
+  <div id="regionalProjectModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60">
+    <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
+      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-emerald-800 text-white">
+        <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
+          <span class="material-icons-round text-[14px]">playlist_add</span>
+          Register Regional Project
+        </h2>
+        <button type="button" onclick="closeRegionalProjectModal()" class="text-slate-300 hover:text-white">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+
+      <form id="regionalProjectForm" class="p-3 space-y-2" onsubmit="submitRegionalProject(event)">
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Project Name *</label>
+          <input id="rpName" type="text" class="gov-input w-full" required>
+        </div>
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Municipality *</label>
+          <select id="rpMunicipality" class="gov-input w-full cursor-pointer" required>
+            <option value="">Select Municipality</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Barangay *</label>
+          <select id="rpBarangay" class="gov-input w-full cursor-pointer" required>
+            <option value="">Select Barangay</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Start Date *</label>
+          <input id="rpStartDate" type="date" class="gov-input w-full" required>
+        </div>
+        <div>
+          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Description</label>
+          <textarea id="rpDescription" rows="2" class="gov-input w-full resize-none"></textarea>
+        </div>
+        <div id="rpError" class="hidden text-[9px] font-bold text-rose-600 uppercase"></div>
+        <div class="flex justify-end gap-2 pt-2 mt-1 border-t border-slate-200">
+          <button type="button" onclick="closeRegionalProjectModal()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+          <button type="submit" class="gov-btn bg-emerald-800 hover:bg-emerald-900 text-white">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     // --- Chart Implementations ---
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
     Chart.defaults.font.size = 8;
     Chart.defaults.color = "#64748b";
+
+    const projectRows = Array.from(document.querySelectorAll('.project-row'));
+    const statusCounts = { completed: 0, inProgress: 0, pending: 0 };
+  </script>
+
+  <!-- Regional Project Actions JS -->
+  <script src="/static/js/projects-regional.js"></script>
+  <script>
+    const monthCounts = {};
+
+    projectRows.forEach((row) => {
+      const rowStatus = (row.getAttribute('data-status') || '').toUpperCase();
+      if (rowStatus.includes('COMPLETED')) statusCounts.completed += 1;
+      else if (rowStatus.includes('IN PROGRESS') || rowStatus.includes('ACTIVE')) statusCounts.inProgress += 1;
+      else statusCounts.pending += 1;
+
+      const dateText = row.querySelector('td:nth-child(4)')?.innerText?.trim() || '';
+      const date = new Date(dateText);
+      if (!Number.isNaN(date.getTime())) {
+        const month = date.toLocaleString('en-US', { month: 'short' });
+        monthCounts[month] = (monthCounts[month] || 0) + 1;
+      }
+    });
+
+    const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const trendLabels = monthOrder.filter((m) => monthCounts[m]);
+    const trendValues = trendLabels.map((m) => monthCounts[m]);
+
+    const municipalityFilter = document.getElementById('municipalityFilter');
+    const fyFilter = document.getElementById('fyFilter');
+    const municipalities = [...new Set(projectRows.map((r) => (r.getAttribute('data-municipality') || '').trim()).filter(Boolean))].sort();
+    const fiscalYears = [...new Set(projectRows.map((r) => (r.getAttribute('data-fy') || '').trim()).filter((fy) => fy && fy !== 'ALL'))].sort().reverse();
+
+    municipalities.forEach((mun) => {
+      const option = document.createElement('option');
+      option.value = mun;
+      option.textContent = mun;
+      municipalityFilter.appendChild(option);
+    });
+
+    fiscalYears.forEach((fy) => {
+      const option = document.createElement('option');
+      option.value = fy;
+      option.textContent = fy;
+      fyFilter.appendChild(option);
+    });
+
+    document.getElementById('totalProjectsCount').innerText = projectRows.length;
+    document.getElementById('inProgressCount').innerText = statusCounts.inProgress;
+    document.getElementById('completedCount').innerText = statusCounts.completed;
 
     const commonOptions = {
       responsive: true,
@@ -292,7 +364,7 @@
       data: {
         labels: ['Completed', 'In Progress', 'Pending'],
         datasets: [{
-          data: [12, 9, 5],
+          data: [statusCounts.completed, statusCounts.inProgress, statusCounts.pending],
           backgroundColor: ['#1e3a8a', '#10b981', '#cbd5e1'],
           borderWidth: 0
         }]
@@ -304,10 +376,10 @@
     new Chart(document.getElementById('projectTrendChart'), {
       type: 'line',
       data: {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        labels: trendLabels.length ? trendLabels : ['No Data'],
         datasets: [{
           label: 'Projects',
-          data: [2, 5, 3, 8, 4, 6],
+          data: trendValues.length ? trendValues : [0],
           borderColor: '#065f46',
           backgroundColor: 'rgba(6, 95, 70, 0.12)',
           borderWidth: 1.5,
@@ -324,6 +396,128 @@
     });
 
     // --- Search & Filter Logic ---
+    const regionalProjectModal = document.getElementById('regionalProjectModal');
+
+    function openRegionalProjectModal() {
+      if (!regionalProjectModal) return;
+      regionalProjectModal.classList.remove('hidden');
+      regionalProjectModal.classList.add('flex');
+      document.getElementById('rpError')?.classList.add('hidden');
+      loadRegionalMunicipalities();
+    }
+
+    function closeRegionalProjectModal() {
+      if (!regionalProjectModal) return;
+      regionalProjectModal.classList.add('hidden');
+      regionalProjectModal.classList.remove('flex');
+      const form = document.getElementById('regionalProjectForm');
+      if (form) form.reset();
+    }
+
+    async function loadRegionalMunicipalities() {
+      const municipalitySelect = document.getElementById('rpMunicipality');
+      if (!municipalitySelect) return;
+      municipalitySelect.innerHTML = '<option value="">Loading municipalities...</option>';
+
+      try {
+        const region = String("{{ user_region|default('') }}").toUpperCase();
+        if (region.includes('MIMAROPA') || region.includes('IV-B')) {
+          const res = await fetch('/api/locations/mimaropa/municipalities');
+          const data = await res.json();
+          const municipalities = Array.isArray(data.municipalities) ? data.municipalities : [];
+          municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
+          municipalities.forEach((m) => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            municipalitySelect.appendChild(opt);
+          });
+        } else {
+          municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
+          const fromRows = [...new Set(projectRows.map((r) => (r.getAttribute('data-municipality') || '').trim()).filter(Boolean))].sort();
+          fromRows.forEach((m) => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            municipalitySelect.appendChild(opt);
+          });
+        }
+      } catch (e) {
+        municipalitySelect.innerHTML = '<option value="">Failed to load municipalities</option>';
+      }
+    }
+
+    async function loadRegionalBarangays() {
+      const municipality = (document.getElementById('rpMunicipality')?.value || '').trim();
+      const barangaySelect = document.getElementById('rpBarangay');
+      if (!barangaySelect) return;
+      barangaySelect.innerHTML = '<option value="">Loading barangays...</option>';
+      if (!municipality) {
+        barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
+        return;
+      }
+      try {
+        const res = await fetch(`/api/locations/mimaropa/barangays?municipality=${encodeURIComponent(municipality)}`);
+        const data = await res.json();
+        const barangays = Array.isArray(data.barangays) ? data.barangays : [];
+        barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
+        barangays.forEach((b) => {
+          const opt = document.createElement('option');
+          opt.value = b;
+          opt.textContent = b;
+          barangaySelect.appendChild(opt);
+        });
+      } catch (e) {
+        barangaySelect.innerHTML = '<option value="">Failed to load barangays</option>';
+      }
+    }
+
+    async function submitRegionalProject(event) {
+      event.preventDefault();
+      const name = (document.getElementById('rpName')?.value || '').trim();
+      const municipality = (document.getElementById('rpMunicipality')?.value || '').trim();
+      const barangay = (document.getElementById('rpBarangay')?.value || '').trim();
+      const startDate = (document.getElementById('rpStartDate')?.value || '').trim();
+      const description = (document.getElementById('rpDescription')?.value || '').trim();
+      const region = String("{{ user_region|default('') }}").trim();
+
+      if (!name || !municipality || !barangay || !startDate || !region) {
+        const err = document.getElementById('rpError');
+        if (err) {
+          err.textContent = 'Please complete required fields.';
+          err.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const res = await fetch('/api/projects/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          region,
+          municipality,
+          barangay,
+          start_date: startDate,
+          description
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        const err = document.getElementById('rpError');
+        if (err) {
+          err.textContent = data.error || 'Failed to create project.';
+          err.classList.remove('hidden');
+        }
+        return;
+      }
+
+      closeRegionalProjectModal();
+      location.reload();
+    }
+
+    document.getElementById('rpMunicipality')?.addEventListener('change', loadRegionalBarangays);
+
     function filterTable() {
       const q = (document.getElementById('searchProject').value || '').toLowerCase().trim();
       const status = (document.getElementById('statusFilter').value || 'ALL').toUpperCase();

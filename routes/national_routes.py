@@ -1,9 +1,24 @@
-from flask import Blueprint, render_template, jsonify
+# --- DELETE PROJECT ENDPOINT ---
+from flask import Blueprint, request, jsonify
+from firebase_config import get_firestore_db
+
+bp = Blueprint('national', __name__, url_prefix='/national')
+
+@bp.route('/operations/projects/api/<project_id>/delete', methods=['DELETE'])
+def delete_project_national(project_id):
+    db = get_firestore_db()
+    try:
+        db.collection('projects').document(project_id).delete()
+        return jsonify({'success': True, 'message': 'Project deleted.'})
+    except Exception as e:
+        print(f"[ERROR] Failed to delete project: {e}")
+        return jsonify({'success': False, 'error': 'Failed to delete project.'}), 500
+from flask import Blueprint, render_template, jsonify, session
 from firebase_config import get_firestore_db
 from datetime import datetime
 from firebase_auth_middleware import role_required
 from entities_storage import list_entities
-from google.cloud.firestore_v1.base_query import FieldFilter
+
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -681,7 +696,17 @@ def quotation():
 @bp.route('/projects')
 @role_required('national', 'national_admin')
 def projects():
-    return render_template('national/operations/projects.html')
+    try:
+        import projects_storage
+        projects = projects_storage.get_projects_national()
+        return render_template(
+            'national/operations/projects.html',
+            projects=projects,
+            user_email=session.get('user_email', 'Unknown')
+        )
+    except Exception as e:
+        print(f"[ERROR] Loading national projects: {e}")
+        return render_template('national/operations/projects.html', projects=[], user_email=session.get('user_email', 'Unknown'))
 
 
 @bp.route('/tasks')

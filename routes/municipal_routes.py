@@ -857,153 +857,104 @@ def quotations_municipal_delete(quotation_id):
 @bp.route('/operations/projects-municipal')
 @role_required('municipal','municipal_admin')
 def projects_municipal():
-    db = get_firestore_db()
-    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
-    user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
-
-    def normalize_scope(value):
-        return ' '.join(str(value or '').strip().upper().split())
-
-    def get_municipality_query_values(value):
-        raw = str(value or '').strip()
-        if not raw:
-            return []
-        candidates = {raw}
-        if ',' in raw:
-            candidates.add(raw.split(',', 1)[0].strip())
-        if ' - ' in raw:
-            candidates.add(raw.split(' - ', 1)[0].strip())
-        if '(' in raw:
-            candidates.add(raw.split('(', 1)[0].strip())
-        raw_upper = raw.upper()
-        if raw_upper.startswith('CITY OF '):
-            candidates.add(raw[8:].strip())
-        if raw_upper.startswith('MUNICIPALITY OF '):
-            candidates.add(raw[16:].strip())
-        if raw_upper.endswith(' MUNICIPALITY'):
-            candidates.add(raw[:-13].strip())
-        return [c for c in candidates if c]
-
-    def to_status_text(status):
-        s = str(status or '').strip().upper()
-        if s == 'IN PROGRESS':
-            return 'In Progress'
-        if s == 'COMPLETED':
-            return 'Completed'
-        if s == 'PENDING':
-            return 'Pending'
-        return str(status or 'Pending').strip() or 'Pending'
-
-    municipality_query_values = get_municipality_query_values(user_municipality)
-    municipality_key = normalize_scope(user_municipality)
-
-    projects = []
-    seen_ids = set()
+    """Municipal admin project management view"""
     try:
-        # Primary: fetch by municipality field.
-        for municipality_value in municipality_query_values:
-            query = db.collection('municipal_projects').where('municipality', '==', municipality_value).stream()
-            for doc in query:
-                if doc.id in seen_ids:
-                    continue
-                item = doc.to_dict() or {}
-                status_upper = str(item.get('status') or 'PENDING').strip().upper()
-                if status_upper == 'ARCHIVED':
-                    continue
-                item['id'] = doc.id
-                item['name'] = item.get('name') or 'N/A'
-                item['barangay'] = item.get('barangay') or 'N/A'
-                item['municipality'] = item.get('municipality') or user_municipality or 'N/A'
-                item['start_date'] = item.get('start_date') or 'N/A'
-                item['status'] = to_status_text(status_upper)
-                created_at = item.get('created_at')
-                if isinstance(created_at, datetime):
-                    item['_created_at'] = created_at
-                elif hasattr(created_at, 'to_datetime'):
-                    try:
-                        item['_created_at'] = created_at.to_datetime()
-                    except Exception:
-                        item['_created_at'] = datetime.min
-                else:
-                    item['_created_at'] = datetime.min
-                projects.append(item)
-                seen_ids.add(doc.id)
+        import projects_storage
+        user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+        user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
+        
+        # Get projects for this municipal admin
+        projects = projects_storage.get_projects_municipal(user_municipality, user_region, session.get('user_email', ''))
 
-        # Fallback: municipality_key-based filtering for older records.
-        if not projects:
-            for doc in db.collection('municipal_projects').stream():
-                item = doc.to_dict() or {}
-                item_muni_key = normalize_scope(item.get('municipality_key') or item.get('municipality'))
-                if not item_muni_key:
+        # Map backend status to display status for UI
+        def map_status(status):
+            s = (status or '').lower()
+            if s == 'active':
+                return 'In Progress'
+            if s == 'completed':
+                return 'Completed'
+            if s.startswith('pending'):
+                return 'Pending'
+            return s.title() if s else 'Pending'
+
+        for p in projects:
+            p['status'] = map_status(p.get('status'))
+
+        # Calculate stats
+        total_projects = len(projects)
+        in_progress = len([p for p in projects if p.get('status') == 'In Progress'])
+        pending = len([p for p in projects if p.get('status') == 'Pending'])
+        completed = len([p for p in projects if p.get('status') == 'Completed'])
+
+        # Build filter options and chart data from real projects
+        barangay_options = sorted(list({
+            (p.get('barangay') or '').strip()
+            for p in projects
+            if (p.get('barangay') or '').strip()
+        }))
+
+        monthly_counts = Counter()
+        for p in projects:
+            date_raw = str(p.get('start_date') or '').strip()
+            if not date_raw:
+                continue
+            try:
+                dt = datetime.fromisoformat(date_raw)
+            except Exception:
+                try:
+                    dt = datetime.fromisoformat(date_raw[:10])
+                except Exception:
                     continue
-                if item_muni_key != municipality_key and not item_muni_key.startswith(municipality_key + ','):
-                    continue
-                status_upper = str(item.get('status') or 'PENDING').strip().upper()
-                if status_upper == 'ARCHIVED':
-                    continue
-                item['id'] = doc.id
-                item['name'] = item.get('name') or 'N/A'
-                item['barangay'] = item.get('barangay') or 'N/A'
-                item['municipality'] = item.get('municipality') or user_municipality or 'N/A'
-                item['start_date'] = item.get('start_date') or 'N/A'
-                item['status'] = to_status_text(status_upper)
-                created_at = item.get('created_at')
-                if isinstance(created_at, datetime):
-                    item['_created_at'] = created_at
-                elif hasattr(created_at, 'to_datetime'):
-                    try:
-                        item['_created_at'] = created_at.to_datetime()
-                    except Exception:
-                        item['_created_at'] = datetime.min
-                else:
-                    item['_created_at'] = datetime.min
-                projects.append(item)
-    except Exception as e:
-        print(f"[ERROR] projects_municipal fetch failed: {e}")
-
-    projects.sort(key=lambda p: p.get('_created_at') or datetime.min, reverse=True)
-
-    total_projects = len(projects)
-    in_progress = len([p for p in projects if str(p.get('status')).upper() == 'IN PROGRESS'])
-    completed = len([p for p in projects if str(p.get('status')).upper() == 'COMPLETED'])
-    pending = len([p for p in projects if str(p.get('status')).upper() == 'PENDING'])
-
-    barangay_options = sorted(list({(p.get('barangay') or '').strip() for p in projects if (p.get('barangay') or '').strip()}))
-
-    monthly_counts = Counter()
-    for p in projects:
-        date_raw = str(p.get('start_date') or '').strip()
-        try:
-            dt = datetime.fromisoformat(date_raw)
             monthly_counts[dt.strftime('%b')] += 1
-        except Exception:
-            continue
-    ordered_months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    trend_labels = [m for m in ordered_months if monthly_counts.get(m)]
-    trend_values = [monthly_counts[m] for m in trend_labels]
-    if not trend_labels:
-        trend_labels = ['No Data']
-        trend_values = [0]
 
-    area_counts = Counter([(p.get('barangay') or 'N/A') for p in projects])
-    top_areas = area_counts.most_common(6)
-    area_labels = [x[0] for x in top_areas] if top_areas else ['No Data']
-    area_values = [x[1] for x in top_areas] if top_areas else [0]
+        ordered_months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        trend_labels = [m for m in ordered_months if monthly_counts.get(m)]
+        trend_values = [monthly_counts[m] for m in trend_labels]
 
-    return render_template(
-        'municipal/operations/projects-municipal.html',
-        projects=projects,
-        total_projects=total_projects,
-        in_progress=in_progress,
-        completed=completed,
-        pending=pending,
-        barangay_options=barangay_options,
-        user_municipality=user_municipality,
-        trend_labels_json=json.dumps(trend_labels),
-        trend_values_json=json.dumps(trend_values),
-        area_labels_json=json.dumps(area_labels),
-        area_values_json=json.dumps(area_values)
-    )
+        area_counts = Counter([
+            (p.get('barangay') or p.get('municipality') or 'N/A')
+            for p in projects
+        ])
+        top_areas = area_counts.most_common(6)
+        area_labels = [x[0] for x in top_areas] if top_areas else []
+        area_values = [x[1] for x in top_areas] if top_areas else []
+
+        return render_template(
+            'municipal/operations/projects-municipal.html',
+            projects=projects,
+            total_projects=total_projects,
+            in_progress=in_progress,
+            completed=completed,
+            pending=pending,
+            barangay_options=barangay_options,
+            user_municipality=user_municipality,
+            user_region=user_region,
+            user_email=session.get('user_email', 'Unknown'),
+            trend_labels_json=json.dumps(trend_labels),
+            trend_values_json=json.dumps(trend_values),
+            area_labels_json=json.dumps(area_labels),
+            area_values_json=json.dumps(area_values)
+        )
+    except Exception as e:
+        print(f"[ERROR] Loading municipal projects: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template(
+            'municipal/operations/projects-municipal.html',
+            projects=[],
+            total_projects=0,
+            in_progress=0,
+            completed=0,
+            pending=0,
+            barangay_options=[],
+            user_municipality=session.get('user_municipality', 'Unknown'),
+            user_region=session.get('user_region', 'Unknown'),
+            user_email=session.get('user_email', 'Unknown'),
+            trend_labels_json=json.dumps([]),
+            trend_values_json=json.dumps([]),
+            area_labels_json=json.dumps([]),
+            area_values_json=json.dumps([])
+        )
 
 
 @bp.route('/operations/projects-municipal/api/create', methods=['POST'])
@@ -1030,19 +981,21 @@ def projects_municipal_create():
         return jsonify({'success': False, 'error': 'Missing required project fields'}), 400
 
     try:
+        # Save directly to the main 'projects' collection for unified workflow
         payload = {
             'name': name,
             'barangay': barangay,
-            'municipality': user_municipality,
-            'region': user_region,
+            'municipality': user_municipality.upper(),
+            'region': user_region.upper(),
             'start_date': start_date,
-            'status': status,
-            'municipality_key': normalize_scope(user_municipality),
-            'region_key': normalize_scope(user_region),
+            'status': 'active' if status == 'IN PROGRESS' else status.lower(),
+            'created_by': session.get('user_email', ''),
+            'created_by_role': 'municipal_admin',
             'created_at': firestore.SERVER_TIMESTAMP,
-            'updated_at': firestore.SERVER_TIMESTAMP
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'approval_chain': ['municipal'],
         }
-        ref = db.collection('municipal_projects').document()
+        ref = db.collection('projects').document()
         ref.set(payload)
         return jsonify({'success': True, 'project': {
             'id': ref.id,
@@ -1050,7 +1003,7 @@ def projects_municipal_create():
             'barangay': barangay,
             'municipality': user_municipality,
             'start_date': start_date,
-            'status': status
+            'status': payload['status']
         }})
     except Exception as e:
         print(f"[ERROR] projects_municipal_create failed: {e}")
