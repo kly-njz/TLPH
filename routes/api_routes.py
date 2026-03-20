@@ -1028,3 +1028,293 @@ def superadmin_application_audit():
             return jsonify({'success': True, 'entries': entries})
         except Exception as e2:
             return jsonify({'success': False, 'message': str(e2)}), 500
+
+
+# ==================== PROJECT MANAGEMENT ====================
+
+@bp.route('/projects/create', methods=['POST'])
+def create_project():
+    """
+    Create a new project based on admin role
+    National: Direct creation (auto-approved, visible to all)
+    Regional: Pending national approval (visible to region)
+    Municipal: Pending regional review (visible to municipality and regional)
+    """
+    try:
+        import projects_storage
+        from firebase_admin import auth as firebase_auth
+        
+        data = request.get_json() or {}
+        user_role = session.get('user_role', '').lower()
+        user_email = session.get('user_email', '')
+        
+        if not user_role or not user_email:
+            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+        
+        # Validate required fields
+        name = (data.get('name') or '').strip()
+        description = (data.get('description') or '').strip()
+        region = (data.get('region') or '').strip()
+        municipality = (data.get('municipality') or '').strip()
+        start_date = (data.get('start_date') or '').strip()
+        
+        if not all([name, region, municipality, start_date]):
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        
+        # Create based on role
+        if user_role == 'national':
+            result = projects_storage.create_project_national(
+                name=name,
+                description=description,
+                region=region,
+                municipality=municipality,
+                start_date=start_date,
+                created_by_email=user_email
+            )
+        elif user_role == 'regional':
+            result = projects_storage.create_project_regional(
+                name=name,
+                description=description,
+                region=region,
+                municipality=municipality,
+                start_date=start_date,
+                created_by_email=user_email
+            )
+        elif user_role in ['municipal', 'municipal_admin']:
+            result = projects_storage.create_project_municipal(
+                name=name,
+                description=description,
+                region=region,
+                municipality=municipality,
+                start_date=start_date,
+                created_by_email=user_email
+            )
+        else:
+            return jsonify({'success': False, 'error': 'Unauthorized role'}), 403
+        
+        if result['success']:
+            # Add to system logs
+            system_logs_storage.add_system_log(
+                municipality=municipality,
+                user=user_email,
+                action='PROJECT_CREATED',
+                target='Projects',
+                target_id=result.get('project_id', 'n/a'),
+                module='PROJECTS',
+                outcome='SUCCESS',
+                message=f'Project "{name}" created by {user_role}',
+                device_type=detect_device_from_request(),
+                user_agent=request.headers.get('User-Agent', '')
+            )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        import traceback
+        print(f'[PROJECT_ERROR] create_project failed: {e}')
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/projects/approve/<project_id>', methods=['POST'])
+def approve_project(project_id):
+    """
+    Approve a project (national admin only)
+    Moves pending_national_approval → active
+    """
+    try:
+        import projects_storage
+        
+        user_role = session.get('user_role', '').lower()
+        user_email = session.get('user_email', '')
+        
+        if user_role != 'national':
+            return jsonify({'success': False, 'error': 'Only National Admin can approve'}), 403
+        
+        data = request.get_json() or {}
+        notes = (data.get('notes') or '').strip()
+        
+        result = projects_storage.approve_project_national(
+            project_id=project_id,
+            reviewer_email=user_email,
+            notes=notes
+        )
+        
+        if result['success']:
+            system_logs_storage.add_system_log(
+                municipality='National',
+                user=user_email,
+                action='PROJECT_APPROVED',
+                target='Projects',
+                target_id=project_id,
+                module='PROJECTS',
+                outcome='SUCCESS',
+                message='Project approved by National Admin',
+                device_type=detect_device_from_request(),
+                user_agent=request.headers.get('User-Agent', '')
+            )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'[PROJECT_ERROR] approve_project failed: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/projects/reject/<project_id>', methods=['POST'])
+def reject_project(project_id):
+    """
+    Reject a project (national admin only)
+    Moves to rejected status
+    """
+    try:
+        import projects_storage
+        
+        user_role = session.get('user_role', '').lower()
+        user_email = session.get('user_email', '')
+        
+        if user_role != 'national':
+            return jsonify({'success': False, 'error': 'Only National Admin can reject'}), 403
+        
+        data = request.get_json() or {}
+        notes = (data.get('notes') or '').strip()
+        
+        result = projects_storage.reject_project_national(
+            project_id=project_id,
+            reviewer_email=user_email,
+            notes=notes
+        )
+        
+        if result['success']:
+            system_logs_storage.add_system_log(
+                municipality='National',
+                user=user_email,
+                action='PROJECT_REJECTED',
+                target='Projects',
+                target_id=project_id,
+                module='PROJECTS',
+                outcome='SUCCESS',
+                message='Project rejected by National Admin',
+                device_type=detect_device_from_request(),
+                user_agent=request.headers.get('User-Agent', '')
+            )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'[PROJECT_ERROR] reject_project failed: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/projects/review-regional/<project_id>', methods=['POST'])
+def review_project_regional(project_id):
+    """
+    Regional admin reviews/approves a municipal project
+    Moves pending_regional_approval → pending_national_approval
+    """
+    try:
+        import projects_storage
+        
+        user_role = session.get('user_role', '').lower()
+        user_email = session.get('user_email', '')
+        
+        if user_role != 'regional':
+            return jsonify({'success': False, 'error': 'Only Regional Admin can review regionally'}), 403
+        
+        data = request.get_json() or {}
+        action = (data.get('action') or '').strip().lower()
+        notes = (data.get('notes') or '').strip()
+        
+        if action == 'approve':
+            result = projects_storage.approve_project_regional(
+                project_id=project_id,
+                reviewer_email=user_email,
+                notes=notes
+            )
+        elif action == 'reject':
+            result = projects_storage.reject_project_regional(
+                project_id=project_id,
+                reviewer_email=user_email,
+                notes=notes
+            )
+        else:
+            return jsonify({'success': False, 'error': 'Invalid action. Use approve or reject'}), 400
+        
+        if result['success']:
+            system_logs_storage.add_system_log(
+                municipality='Regional',
+                user=user_email,
+                action=f'PROJECT_{action.upper()}_REGIONAL',
+                target='Projects',
+                target_id=project_id,
+                module='PROJECTS',
+                outcome='SUCCESS',
+                message=f'Project {action} by Regional Admin',
+                device_type=detect_device_from_request(),
+                user_agent=request.headers.get('User-Agent', '')
+            )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'[PROJECT_ERROR] review_project_regional failed: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/projects/list', methods=['GET'])
+def list_projects():
+    """
+    Get projects based on user role
+    """
+    try:
+        import projects_storage
+        
+        user_role = session.get('user_role', '').lower()
+        user_region = session.get('user_region', '')
+        user_municipality = session.get('user_municipality', '')
+        
+        if not user_role:
+            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+        
+        if user_role == 'national':
+            projects = projects_storage.get_projects_national()
+        elif user_role == 'regional':
+            projects = projects_storage.get_projects_regional(user_region)
+        elif user_role in ['municipal', 'municipal_admin']:
+            projects = projects_storage.get_projects_municipal(user_municipality, user_region)
+        else:
+            projects = []
+        
+        return jsonify({'success': True, 'projects': projects})
+        
+    except Exception as e:
+        print(f'[PROJECT_ERROR] list_projects failed: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/projects/pending-approval', methods=['GET'])
+def get_projects_pending_approval():
+    """
+    Get projects pending approval for current user's role
+    """
+    try:
+        import projects_storage
+        
+        user_role = session.get('user_role', '').lower()
+        user_region = session.get('user_region', '')
+        
+        if not user_role:
+            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+        
+        if user_role == 'regional':
+            projects = projects_storage.get_projects_for_approval('regional', user_region)
+        elif user_role == 'national':
+            projects = projects_storage.get_projects_for_approval('national')
+        else:
+            projects = []
+        
+        return jsonify({'success': True, 'pending_projects': projects})
+        
+    except Exception as e:
+        print(f'[PROJECT_ERROR] get_projects_pending_approval failed: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
