@@ -17,7 +17,7 @@ db = firestore.client()
 logger = logging.getLogger(__name__)
 
 
-def create_project_national(name, description, region, municipality, start_date, created_by_email):
+def create_project_national(name, description, region, municipality, start_date, created_by_email, barangay=''):
     """
     National admin creates project - direct creation with auto-approval
     Project is immediately visible to all admins
@@ -28,6 +28,7 @@ def create_project_national(name, description, region, municipality, start_date,
             'description': description,
             'region': region,
             'municipality': municipality,
+            'barangay': barangay,
             'start_date': start_date,
             'created_by': created_by_email,
             'created_by_role': 'national_admin',
@@ -48,7 +49,7 @@ def create_project_national(name, description, region, municipality, start_date,
         return {'success': False, 'error': str(e)}
 
 
-def create_project_regional(name, description, region, municipality, start_date, created_by_email):
+def create_project_regional(name, description, region, municipality, start_date, created_by_email, barangay=''):
     """
     Regional admin creates project - pending national approval
     Project visible to: regional admin (creator), national admin
@@ -59,6 +60,7 @@ def create_project_regional(name, description, region, municipality, start_date,
             'description': description,
             'region': region,
             'municipality': municipality,
+            'barangay': barangay,
             'start_date': start_date,
             'created_by': created_by_email,
             'created_by_role': 'regional_admin',
@@ -88,7 +90,7 @@ def create_project_regional(name, description, region, municipality, start_date,
         return {'success': False, 'error': str(e)}
 
 
-def create_project_municipal(name, description, region, municipality, start_date, created_by_email):
+def create_project_municipal(name, description, region, municipality, start_date, created_by_email, barangay=''):
     """
     Municipal admin creates project - requires regional review, then national approval
     Project visible to: municipal admin (creator), regional admin (assigned to region), national admin
@@ -99,6 +101,7 @@ def create_project_municipal(name, description, region, municipality, start_date
             'description': description,
             'region': region,
             'municipality': municipality,
+            'barangay': barangay,
             'start_date': start_date,
             'created_by': created_by_email,
             'created_by_role': 'municipal_admin',
