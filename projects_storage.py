@@ -9,8 +9,7 @@ Workflow:
 """
 
 from firebase_admin import firestore
-from datetime import datetime, timedelta
-## Use only firestore.SERVER_TIMESTAMP from firebase_admin
+from datetime import datetime, timezone
 import logging
 
 db = firestore.client()
@@ -32,7 +31,7 @@ def create_project_national(name, description, region, municipality, start_date,
             'start_date': start_date,
             'created_by': created_by_email,
             'created_by_role': 'national_admin',
-            'created_at': firestore.SERVER_TIMESTAMP,
+            'created_at': firestore.SERVER_TIMESTAMP, # Top-level Sentinel is fine
             'status': 'active',
             'status_level': 'active',
             'approval_chain': [],
@@ -42,7 +41,12 @@ def create_project_national(name, description, region, municipality, start_date,
         doc_ref.set(project_data)
         
         logger.info(f"[PROJECT_CREATION] National admin created project: {name} ({region})")
-        return {'success': True, 'project_id': doc_ref.id, 'project': project_data}
+        
+        # Create a JSON-safe return dictionary
+        return_data = project_data.copy()
+        return_data['created_at'] = 'SERVER_TIMESTAMP' 
+        
+        return {'success': True, 'project_id': doc_ref.id, 'project': return_data}
         
     except Exception as e:
         logger.error(f"[PROJECT_ERROR] Failed to create national project: {e}")
@@ -55,6 +59,8 @@ def create_project_regional(name, description, region, municipality, start_date,
     Project visible to: regional admin (creator), national admin
     """
     try:
+        current_time = datetime.now(timezone.utc) # Safe for inside arrays
+        
         project_data = {
             'name': name,
             'description': description,
@@ -71,7 +77,7 @@ def create_project_regional(name, description, region, municipality, start_date,
                 {
                     'role': 'national',
                     'status': 'pending',
-                    'requested_at': firestore.SERVER_TIMESTAMP,
+                    'requested_at': current_time,
                     'reviewer': None,
                     'reviewed_at': None,
                     'notes': ''
@@ -83,7 +89,11 @@ def create_project_regional(name, description, region, municipality, start_date,
         doc_ref.set(project_data)
         
         logger.info(f"[PROJECT_CREATION] Regional admin created project awaiting national approval: {name}")
-        return {'success': True, 'project_id': doc_ref.id, 'project': project_data}
+        
+        return_data = project_data.copy()
+        return_data['created_at'] = 'SERVER_TIMESTAMP'
+        
+        return {'success': True, 'project_id': doc_ref.id, 'project': return_data}
         
     except Exception as e:
         logger.error(f"[PROJECT_ERROR] Failed to create regional project: {e}")
@@ -96,6 +106,8 @@ def create_project_municipal(name, description, region, municipality, start_date
     Project visible to: municipal admin (creator), regional admin (assigned to region), national admin
     """
     try:
+        current_time = datetime.now(timezone.utc) # Safe for inside arrays
+        
         project_data = {
             'name': name,
             'description': description,
@@ -112,7 +124,7 @@ def create_project_municipal(name, description, region, municipality, start_date
                 {
                     'role': 'regional',
                     'status': 'pending',
-                    'requested_at': firestore.SERVER_TIMESTAMP,
+                    'requested_at': current_time,
                     'reviewer': None,
                     'reviewed_at': None,
                     'notes': ''
@@ -120,7 +132,7 @@ def create_project_municipal(name, description, region, municipality, start_date
                 {
                     'role': 'national',
                     'status': 'pending',
-                    'requested_at': firestore.SERVER_TIMESTAMP,
+                    'requested_at': current_time,
                     'reviewer': None,
                     'reviewed_at': None,
                     'notes': ''
@@ -132,7 +144,11 @@ def create_project_municipal(name, description, region, municipality, start_date
         doc_ref.set(project_data)
         
         logger.info(f"[PROJECT_CREATION] Municipal admin created project awaiting regional review: {name}")
-        return {'success': True, 'project_id': doc_ref.id, 'project': project_data}
+        
+        return_data = project_data.copy()
+        return_data['created_at'] = 'SERVER_TIMESTAMP'
+        
+        return {'success': True, 'project_id': doc_ref.id, 'project': return_data}
         
     except Exception as e:
         logger.error(f"[PROJECT_ERROR] Failed to create municipal project: {e}")
@@ -153,19 +169,16 @@ def approve_project_regional(project_id, reviewer_email, notes=''):
         
         project_data = project.to_dict()
         
-        # Only municipal-created projects can be reviewed by regional
         if project_data.get('status') != 'pending_regional_approval':
             return {'success': False, 'error': 'Project is not pending regional approval'}
         
-        # Update approval chain
         approval_chain = project_data.get('approval_chain', [])
         if approval_chain and approval_chain[0]['role'] == 'regional':
             approval_chain[0]['status'] = 'approved'
             approval_chain[0]['reviewer'] = reviewer_email
-            approval_chain[0]['reviewed_at'] = firestore.SERVER_TIMESTAMP
+            approval_chain[0]['reviewed_at'] = datetime.now(timezone.utc)
             approval_chain[0]['notes'] = notes
         
-        # Update project status
         project_ref.update({
             'status': 'pending_national_approval',
             'status_level': 'pending_national_approval',
@@ -197,12 +210,11 @@ def reject_project_regional(project_id, reviewer_email, notes=''):
         if project_data.get('status') != 'pending_regional_approval':
             return {'success': False, 'error': 'Project is not pending regional approval'}
         
-        # Update approval chain
         approval_chain = project_data.get('approval_chain', [])
         if approval_chain and approval_chain[0]['role'] == 'regional':
             approval_chain[0]['status'] = 'rejected'
             approval_chain[0]['reviewer'] = reviewer_email
-            approval_chain[0]['reviewed_at'] = firestore.SERVER_TIMESTAMP
+            approval_chain[0]['reviewed_at'] = datetime.now(timezone.utc)
             approval_chain[0]['notes'] = notes
         
         project_ref.update({
@@ -237,13 +249,12 @@ def approve_project_national(project_id, reviewer_email, notes=''):
         if project_data.get('status') != 'pending_national_approval':
             return {'success': False, 'error': 'Project is not pending national approval'}
         
-        # Update approval chain - find national role
         approval_chain = project_data.get('approval_chain', [])
         for approval in approval_chain:
             if approval['role'] == 'national':
                 approval['status'] = 'approved'
                 approval['reviewer'] = reviewer_email
-                approval['reviewed_at'] = firestore.SERVER_TIMESTAMP
+                approval['reviewed_at'] = datetime.now(timezone.utc)
                 approval['notes'] = notes
         
         project_ref.update({
@@ -277,13 +288,12 @@ def reject_project_national(project_id, reviewer_email, notes=''):
         if project_data.get('status') != 'pending_national_approval':
             return {'success': False, 'error': 'Project is not pending national approval'}
         
-        # Update approval chain
         approval_chain = project_data.get('approval_chain', [])
         for approval in approval_chain:
             if approval['role'] == 'national':
                 approval['status'] = 'rejected'
                 approval['reviewer'] = reviewer_email
-                approval['reviewed_at'] = firestore.SERVER_TIMESTAMP
+                approval['reviewed_at'] = datetime.now(timezone.utc)
                 approval['notes'] = notes
         
         project_ref.update({
@@ -327,21 +337,18 @@ def get_projects_regional(user_region):
     try:
         projects = []
         
-        # Active projects in this region
         active_query = db.collection('projects').where('region', '==', user_region).where('status', '==', 'active').stream()
         for doc in active_query:
             item = doc.to_dict()
             item['id'] = doc.id
             projects.append(item)
         
-        # Pending regional projects created by regional admin in this region
         pending_regional = db.collection('projects').where('region', '==', user_region).where('created_by_role', '==', 'regional_admin').where('status', '==', 'pending_national_approval').stream()
         for doc in pending_regional:
             item = doc.to_dict()
             item['id'] = doc.id
             projects.append(item)
         
-        # Pending municipal projects (need regional review) in this region
         pending_municipal = db.collection('projects').where('region', '==', user_region).where('created_by_role', '==', 'municipal_admin').where('status', '==', 'pending_regional_approval').stream()
         for doc in pending_municipal:
             item = doc.to_dict()
@@ -354,7 +361,7 @@ def get_projects_regional(user_region):
         return []
 
 
-def get_projects_municipal(municipality, region):
+def get_projects_municipal(municipality, region, user_email):
     """
     Municipal admin sees:
     - All active projects in their municipality
@@ -365,24 +372,21 @@ def get_projects_municipal(municipality, region):
     try:
         projects = []
         
-        # Active projects in this municipality
         active_mun = db.collection('projects').where('municipality', '==', municipality).where('status', '==', 'active').stream()
         for doc in active_mun:
             item = doc.to_dict()
             item['id'] = doc.id
             projects.append(item)
         
-        # Active projects in this region
         active_region = db.collection('projects').where('region', '==', region).where('status', '==', 'active').stream()
         for doc in active_region:
             item = doc.to_dict()
             item['id'] = doc.id
-            # Avoid duplicates
             if item['id'] not in [p.get('id') for p in projects]:
                 projects.append(item)
         
-        # All projects created by this user
-        my_projects = db.collection('projects').where('created_by', '==', municipality).stream()
+        # FIXED BUG: Now filtering by the actual user_email instead of the municipality string
+        my_projects = db.collection('projects').where('created_by', '==', user_email).stream()
         for doc in my_projects:
             item = doc.to_dict()
             item['id'] = doc.id
@@ -405,7 +409,6 @@ def get_projects_for_approval(role, user_region=None):
         projects = []
         
         if role == 'regional' and user_region:
-            # Projects pending regional approval in this region
             query = db.collection('projects').where('status', '==', 'pending_regional_approval').where('region', '==', user_region).stream()
             for doc in query:
                 item = doc.to_dict()
@@ -413,7 +416,6 @@ def get_projects_for_approval(role, user_region=None):
                 projects.append(item)
         
         elif role == 'national':
-            # All projects pending national approval
             query = db.collection('projects').where('status', '==', 'pending_national_approval').stream()
             for doc in query:
                 item = doc.to_dict()
@@ -455,7 +457,6 @@ def update_project(project_id, update_data):
         
         project_data = project.to_dict()
         
-        # Can only edit active projects
         if project_data.get('status') != 'active':
             return {'success': False, 'error': 'Can only edit active projects'}
         
