@@ -4051,6 +4051,24 @@ def projects_regional():
             user_region=session.get('user_region', '')
         )
 
+
+@bp.route('/operations/applicants')
+@role_required('regional', 'regional_admin')
+def applicants_regional():
+    return render_template('regional/operations/applicants-regional.html')
+
+
+@bp.route('/operations/quotation')
+@role_required('regional', 'regional_admin')
+def quotation_regional():
+    return render_template('regional/operations/quotation-regional.html')
+
+
+@bp.route('/operations/task')
+@role_required('regional', 'regional_admin')
+def task_regional():
+    return render_template('regional/operations/task-regional.html')
+
 @bp.route('/api/accounting/expenses/<expense_id>', methods=['PUT'])
 @role_required('regional','regional_admin')
 def update_regional_expense(expense_id):
