@@ -3,7 +3,7 @@ from firebase_config import get_firestore_db
 from datetime import datetime
 from firebase_auth_middleware import role_required
 from entities_storage import list_entities
-from google.cloud.firestore_v1.base_query import FieldFilter
+
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 

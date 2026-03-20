@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, jsonify, request, session
 from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required
-from google.cloud.firestore_v1.base_query import FieldFilter
+
 from datetime import datetime
 from firebase_admin import firestore
 import system_logs_storage
@@ -3040,7 +3040,7 @@ def accounting_dashboard_view():
 def distribute_fund():
     from flask import request, jsonify
     from firebase_admin import firestore
-    from google.cloud.firestore_v1.base_query import FieldFilter
+
     db = firestore.client()
     data = request.json
     muni = data.get('municipality', '').strip()

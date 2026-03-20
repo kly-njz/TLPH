@@ -7,7 +7,7 @@ from urllib.request import urlopen
 from urllib.parse import quote_plus
 from firebase_auth_middleware import firebase_auth_required
 import system_logs_storage
-from google.cloud.firestore_v1.base_query import FieldFilter
+
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 

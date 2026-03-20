@@ -1,7 +1,7 @@
 """System Logs Management for Municipal Scope"""
 import firebase_admin
 from firebase_admin import credentials, firestore
-from google.cloud.firestore_v1.base_query import FieldFilter
+
 import re
 from datetime import datetime, timedelta
 import random
