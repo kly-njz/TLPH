@@ -103,8 +103,8 @@
                         </h2>
                     </div>
                     
-                    <div class="flex-1 overflow-y-auto custom-scrollbar p-2 flex flex-col gap-1.5 bg-slate-50/50">
-                        <div onclick="selectTemplate('standard')" class="border border-emerald-300 bg-emerald-50 rounded-[2px] p-2 cursor-pointer hover:bg-emerald-100 transition border-l-4 border-l-emerald-600 shadow-sm">
+                    <div id="templateList" class="flex-1 overflow-y-auto custom-scrollbar p-2 flex flex-col gap-1.5 bg-slate-50/50">
+                        <div onclick="selectTemplate('standard')" class="border border-emerald-300 bg-emerald-50 rounded-[2px] p-2 cursor-pointer hover:bg-emerald-100 transition border-l-4 border-l-emerald-600 shadow-sm" data-template-id="standard" data-template-name="DENR Standard v2.1">
                             <div class="flex items-center justify-between mb-1">
                                 <h3 class="text-[10px] font-black text-slate-900 uppercase m-0">DENR Standard v2.1</h3>
                                 <span class="status-badge bg-emerald-600 text-white">Active</span>
@@ -117,7 +117,7 @@
                             </div>
                         </div>
 
-                        <div onclick="selectTemplate('regional')" class="border border-slate-200 bg-white rounded-[2px] p-2 cursor-pointer hover:bg-slate-50 transition border-l-4 border-l-slate-400 shadow-sm">
+                        <div onclick="selectTemplate('regional')" class="border border-slate-200 bg-white rounded-[2px] p-2 cursor-pointer hover:bg-slate-50 transition border-l-4 border-l-slate-400 shadow-sm" data-template-id="regional" data-template-name="Regional Custom">
                             <div class="flex items-center justify-between mb-1">
                                 <h3 class="text-[10px] font-black text-slate-700 uppercase m-0">Regional Custom</h3>
                                 <span class="status-badge bg-slate-200 text-slate-600">Inactive</span>
@@ -457,6 +457,12 @@
 
         function selectTemplate(id) {
             console.log('Selected template:', id);
+            const selected = document.querySelector(`[data-template-id="${id}"]`);
+            const name = selected?.getAttribute('data-template-name') || '';
+            const headerBadge = document.querySelector('.bg-slate-50.border-b .text-emerald-700');
+            if (headerBadge && name) {
+                headerBadge.textContent = name;
+            }
             // Example of visual selection handling can be added here
         }
 
@@ -474,14 +480,50 @@
                 alert('Please enter a template name.');
                 return;
             }
-            // Placeholder action until wired to backend
+            const version = (document.getElementById('templateVersion').value || '').trim();
+            const base = document.getElementById('templateBase').value;
+            const description = (document.getElementById('templateDescription').value || '').trim();
+            const templateId = `tmpl-${Date.now()}`;
+
+            const list = document.getElementById('templateList');
+            if (list) {
+                const card = document.createElement('div');
+                card.className = 'border border-emerald-300 bg-emerald-50 rounded-[2px] p-2 cursor-pointer hover:bg-emerald-100 transition border-l-4 border-l-emerald-600 shadow-sm';
+                card.setAttribute('data-template-id', templateId);
+                card.setAttribute('data-template-name', version ? `${name} ${version}` : name);
+                card.setAttribute('onclick', `selectTemplate('${templateId}')`);
+                const title = version ? `${name} ${version}` : name;
+                card.innerHTML = `
+                    <div class="flex items-center justify-between mb-1">
+                        <h3 class="text-[10px] font-black text-slate-900 uppercase m-0">${title}</h3>
+                        <span class="status-badge bg-emerald-600 text-white">Active</span>
+                    </div>
+                    <p class="text-[9px] text-slate-600 font-bold m-0 leading-tight">${description || 'New COA template'}</p>
+                    <div class="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-emerald-200/50 text-[8px] font-bold text-emerald-800 uppercase tracking-widest">
+                        <span>0 Accounts</span>
+                        <span>â€¢</span>
+                        <span>0 Entities</span>
+                    </div>
+                `;
+                list.prepend(card);
+            }
+
             closeAddCOA();
+            resetCreateTemplateForm();
+            selectTemplate(templateId);
             console.log('Create template:', {
                 name,
-                version: document.getElementById('templateVersion').value,
-                base: document.getElementById('templateBase').value,
-                description: document.getElementById('templateDescription').value
+                version,
+                base,
+                description
             });
+        }
+
+        function resetCreateTemplateForm() {
+            document.getElementById('templateName').value = '';
+            document.getElementById('templateVersion').value = '';
+            document.getElementById('templateBase').value = 'standard';
+            document.getElementById('templateDescription').value = '';
         }
 
         function openAddAccount() {
