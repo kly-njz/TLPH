@@ -477,6 +477,38 @@
   const projectStatusField = document.getElementById('projectStatusField');
   const projectMunicipalityField = document.getElementById('projectMunicipalityField');
 
+  async function loadMunicipalityBarangays() {
+    if (!projectBarangayInput) return;
+    const municipality = (defaultMunicipality || '').trim();
+    projectBarangayInput.innerHTML = '<option value="">Loading barangays...</option>';
+    if (!municipality) {
+      projectBarangayInput.innerHTML = '<option value="">Select Barangay</option>';
+      return;
+    }
+
+    try {
+      const url = `/api/locations/mimaropa/barangays?municipality=${encodeURIComponent(municipality)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const barangays = Array.isArray(data.barangays) ? data.barangays : [];
+
+      projectBarangayInput.innerHTML = '<option value="">Select Barangay</option>';
+      if (barangays.length) {
+        barangays.forEach((b) => {
+          const opt = document.createElement('option');
+          opt.value = b;
+          opt.textContent = b;
+          projectBarangayInput.appendChild(opt);
+        });
+      } else {
+        projectBarangayInput.innerHTML = '<option value="">No barangays found for municipality</option>';
+      }
+    } catch (e) {
+      projectBarangayInput.innerHTML = '<option value="">Failed to load barangays</option>';
+      console.warn('Failed to load barangays', e);
+    }
+  }
+
   function filterTable() {
     const q = (searchInput.value || '').toLowerCase().trim();
     const st = (statusFilter.value || '').toUpperCase();
@@ -724,6 +756,7 @@
     editingRow = null;
     editingStatus = '';
     projectForm.reset();
+    loadMunicipalityBarangays();
     if (projectStatusField) {
       projectStatusField.classList.add('hidden');
     }
@@ -893,10 +926,17 @@
       start_date: startDate,
       status: status.toUpperCase()
     };
-    const createResponse = await fetch('/municipal/operations/projects-municipal/api/create', {
+    const createResponse = await fetch('/api/projects/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(createPayload)
+      body: JSON.stringify({
+        name,
+        region: "{{ user_region|default('MIMAROPA') }}",
+        municipality: defaultMunicipality || "{{ user_municipality|default('') }}",
+        barangay,
+        start_date: startDate,
+        description: ''
+      })
     });
     const createData = await createResponse.json();
     if (!createResponse.ok || !createData.success) {
