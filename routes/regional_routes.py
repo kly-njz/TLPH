@@ -4021,6 +4021,36 @@ def create_regional_expense():
         print(f"[ERROR] Failed to record expense: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# ==================== PROJECT MANAGEMENT ====================
+
+@bp.route('/operations/projects')
+@role_required('regional', 'regional_admin')
+def projects_regional():
+    """Regional admin project management view"""
+    try:
+        import projects_storage
+        user_region = session.get('user_region', '')
+        projects = projects_storage.get_projects_regional(user_region)
+        pending_approval = projects_storage.get_projects_for_approval('regional', user_region)
+        
+        return render_template(
+            'regional/operations/projects-regional.html',
+            projects=projects,
+            pending_approval=pending_approval,
+            user_email=session.get('user_email', 'Unknown'),
+            user_region=user_region
+        )
+    except Exception as e:
+        print(f"[ERROR] Loading regional projects: {e}")
+        return render_template(
+            'regional/operations/projects-regional.html',
+            projects=[],
+            pending_approval=[],
+            user_email=session.get('user_email', 'Unknown'),
+            user_region=session.get('user_region', '')
+        )
+
 @bp.route('/api/accounting/expenses/<expense_id>', methods=['PUT'])
 @role_required('regional','regional_admin')
 def update_regional_expense(expense_id):
