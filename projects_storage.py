@@ -10,7 +10,7 @@ Workflow:
 
 from firebase_admin import firestore
 from datetime import datetime, timedelta
-from google.cloud.firestore import SERVER_TIMESTAMP, FieldFilter
+## Use only firestore.SERVER_TIMESTAMP from firebase_admin
 import logging
 
 db = firestore.client()
@@ -32,7 +32,7 @@ def create_project_national(name, description, region, municipality, start_date,
             'start_date': start_date,
             'created_by': created_by_email,
             'created_by_role': 'national_admin',
-            'created_at': SERVER_TIMESTAMP,
+            'created_at': firestore.SERVER_TIMESTAMP,
             'status': 'active',
             'status_level': 'active',
             'approval_chain': [],
@@ -64,14 +64,14 @@ def create_project_regional(name, description, region, municipality, start_date,
             'start_date': start_date,
             'created_by': created_by_email,
             'created_by_role': 'regional_admin',
-            'created_at': SERVER_TIMESTAMP,
+            'created_at': firestore.SERVER_TIMESTAMP,
             'status': 'pending_national_approval',
             'status_level': 'pending_national_approval',
             'approval_chain': [
                 {
                     'role': 'national',
                     'status': 'pending',
-                    'requested_at': SERVER_TIMESTAMP,
+                    'requested_at': firestore.SERVER_TIMESTAMP,
                     'reviewer': None,
                     'reviewed_at': None,
                     'notes': ''
@@ -105,14 +105,14 @@ def create_project_municipal(name, description, region, municipality, start_date
             'start_date': start_date,
             'created_by': created_by_email,
             'created_by_role': 'municipal_admin',
-            'created_at': SERVER_TIMESTAMP,
+            'created_at': firestore.SERVER_TIMESTAMP,
             'status': 'pending_regional_approval',
             'status_level': 'pending_regional_approval',
             'approval_chain': [
                 {
                     'role': 'regional',
                     'status': 'pending',
-                    'requested_at': SERVER_TIMESTAMP,
+                    'requested_at': firestore.SERVER_TIMESTAMP,
                     'reviewer': None,
                     'reviewed_at': None,
                     'notes': ''
@@ -120,7 +120,7 @@ def create_project_municipal(name, description, region, municipality, start_date
                 {
                     'role': 'national',
                     'status': 'pending',
-                    'requested_at': SERVER_TIMESTAMP,
+                    'requested_at': firestore.SERVER_TIMESTAMP,
                     'reviewer': None,
                     'reviewed_at': None,
                     'notes': ''
@@ -162,7 +162,7 @@ def approve_project_regional(project_id, reviewer_email, notes=''):
         if approval_chain and approval_chain[0]['role'] == 'regional':
             approval_chain[0]['status'] = 'approved'
             approval_chain[0]['reviewer'] = reviewer_email
-            approval_chain[0]['reviewed_at'] = SERVER_TIMESTAMP
+            approval_chain[0]['reviewed_at'] = firestore.SERVER_TIMESTAMP
             approval_chain[0]['notes'] = notes
         
         # Update project status
@@ -202,7 +202,7 @@ def reject_project_regional(project_id, reviewer_email, notes=''):
         if approval_chain and approval_chain[0]['role'] == 'regional':
             approval_chain[0]['status'] = 'rejected'
             approval_chain[0]['reviewer'] = reviewer_email
-            approval_chain[0]['reviewed_at'] = SERVER_TIMESTAMP
+            approval_chain[0]['reviewed_at'] = firestore.SERVER_TIMESTAMP
             approval_chain[0]['notes'] = notes
         
         project_ref.update({
@@ -243,7 +243,7 @@ def approve_project_national(project_id, reviewer_email, notes=''):
             if approval['role'] == 'national':
                 approval['status'] = 'approved'
                 approval['reviewer'] = reviewer_email
-                approval['reviewed_at'] = SERVER_TIMESTAMP
+                approval['reviewed_at'] = firestore.SERVER_TIMESTAMP
                 approval['notes'] = notes
         
         project_ref.update({
@@ -283,7 +283,7 @@ def reject_project_national(project_id, reviewer_email, notes=''):
             if approval['role'] == 'national':
                 approval['status'] = 'rejected'
                 approval['reviewer'] = reviewer_email
-                approval['reviewed_at'] = SERVER_TIMESTAMP
+                approval['reviewed_at'] = firestore.SERVER_TIMESTAMP
                 approval['notes'] = notes
         
         project_ref.update({
@@ -474,7 +474,7 @@ def archive_project(project_id):
     """
     try:
         project_ref = db.collection('projects').document(project_id)
-        project_ref.update({'status': 'archived', 'archived_at': SERVER_TIMESTAMP})
+        project_ref.update({'status': 'archived', 'archived_at': firestore.SERVER_TIMESTAMP})
         logger.info(f"[PROJECT_ARCHIVE] Project {project_id} archived")
         return {'success': True, 'message': 'Project archived'}
         
