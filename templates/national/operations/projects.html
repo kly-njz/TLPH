@@ -213,8 +213,16 @@
 
         <div class="flex flex-col gap-1">
           <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Municipality <span class="text-rose-600">*</span></label>
-          <input id="npMunicipality" type="text" required placeholder="e.g. Quezon City, Manila"
-            class="gov-input w-full" />
+          <select id="npMunicipality" required class="gov-input w-full cursor-pointer">
+            <option value="">Select Municipality</option>
+          </select>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Barangay <span class="text-rose-600">*</span></label>
+          <select id="npBarangay" required class="gov-input w-full cursor-pointer">
+            <option value="">Select Barangay</option>
+          </select>
         </div>
 
         <div class="flex flex-col gap-1">
@@ -462,10 +470,11 @@
       const name        = document.getElementById('npName').value.trim();
       const region      = document.getElementById('npRegion').value.trim();
       const municipality = document.getElementById('npMunicipality').value.trim();
+      const barangay    = document.getElementById('npBarangay').value.trim();
       const startDate   = document.getElementById('npStartDate').value;
       const description = document.getElementById('npDescription').value.trim();
 
-      if (!name || !region || !municipality || !startDate) {
+      if (!name || !region || !municipality || !barangay || !startDate) {
         const err = document.getElementById('npError');
         err.textContent = 'Please fill in all required fields.';
         err.classList.remove('hidden');
@@ -480,6 +489,7 @@
           name: name,
           region: region,
           municipality: municipality,
+          barangay: barangay,
           start_date: startDate,
           description: description
         })
@@ -503,6 +513,68 @@
         errDiv.classList.remove('hidden');
       });
     }
+
+    async function loadNationalMunicipalities() {
+      const region = (document.getElementById('npRegion')?.value || '').trim().toUpperCase();
+      const municipalitySelect = document.getElementById('npMunicipality');
+      const barangaySelect = document.getElementById('npBarangay');
+      if (!municipalitySelect || !barangaySelect) return;
+
+      municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
+      barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
+
+      if (region !== 'MIMAROPA') {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'Municipality list currently enabled for MIMAROPA';
+        municipalitySelect.appendChild(opt);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/locations/mimaropa/municipalities');
+        const data = await res.json();
+        const municipalities = Array.isArray(data.municipalities) ? data.municipalities : [];
+        municipalities.forEach((m) => {
+          const opt = document.createElement('option');
+          opt.value = m;
+          opt.textContent = m;
+          municipalitySelect.appendChild(opt);
+        });
+      } catch (e) {
+        console.warn('Failed to load municipalities', e);
+      }
+    }
+
+    async function loadNationalBarangays() {
+      const municipality = (document.getElementById('npMunicipality')?.value || '').trim();
+      const barangaySelect = document.getElementById('npBarangay');
+      if (!barangaySelect) return;
+
+      barangaySelect.innerHTML = '<option value="">Loading barangays...</option>';
+      if (!municipality) {
+        barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/locations/mimaropa/barangays?municipality=${encodeURIComponent(municipality)}`);
+        const data = await res.json();
+        const barangays = Array.isArray(data.barangays) ? data.barangays : [];
+        barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
+        barangays.forEach((b) => {
+          const opt = document.createElement('option');
+          opt.value = b;
+          opt.textContent = b;
+          barangaySelect.appendChild(opt);
+        });
+      } catch (e) {
+        barangaySelect.innerHTML = '<option value="">Failed to load barangays</option>';
+      }
+    }
+
+    document.getElementById('npRegion')?.addEventListener('change', loadNationalMunicipalities);
+    document.getElementById('npMunicipality')?.addEventListener('change', loadNationalBarangays);
 
     function resetFilters() {
       document.getElementById('searchProject').value = '';
