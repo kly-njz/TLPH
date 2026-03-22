@@ -280,7 +280,7 @@
                     <td class="px-3 py-1.5 font-mono font-black text-emerald-700 text-right border-r border-slate-100">₱${s.amount.toLocaleString()}</td>
                     <td class="px-3 py-1.5 text-slate-500 font-bold uppercase text-[9px] text-center border-r border-slate-100">${s.date}</td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <button class="text-[9px] font-bold uppercase text-denr-green hover:underline tracking-widest cursor-pointer">Receipt</button>
+                        <button class="receipt-btn text-[9px] font-bold uppercase text-denr-green hover:underline tracking-widest cursor-pointer" data-sale-id="${s.id}">Receipt</button>
                     </td>
                 </tr>
             `).join('') : '<tr><td colspan="7" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No sales records found.</td></tr>';
@@ -334,6 +334,67 @@
             closeSaleDrawer();
             document.getElementById('newSaleForm').reset();
         });
+
+        // 3.5 RECEIPT ACTION
+        document.getElementById('saleTable').addEventListener('click', (e) => {
+            const btn = e.target.closest('.receipt-btn');
+            if (!btn) return;
+            const saleId = btn.getAttribute('data-sale-id');
+            const sale = salesData.find(s => s.id === saleId);
+            if (!sale) return;
+            openReceiptWindow(sale);
+        });
+
+        function openReceiptWindow(sale) {
+            const win = window.open('', '_blank', 'width=780,height=820');
+            if (!win) return;
+            const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Receipt ${sale.id}</title>
+  <style>
+    body { font-family: Verdana, Arial, sans-serif; color:#0f172a; margin:24px; }
+    .header { display:flex; align-items:center; gap:12px; border-bottom:2px solid #0f172a; padding-bottom:8px; margin-bottom:16px; }
+    .badge { background:#0f172a; color:#fff; font-weight:700; padding:6px 10px; font-size:12px; letter-spacing:0.08em; }
+    h1 { font-size:16px; margin:0; text-transform:uppercase; letter-spacing:0.08em; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { text-align:left; padding:8px 6px; border-bottom:1px solid #e2e8f0; font-size:12px; }
+    th { font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:#475569; }
+    .total { font-size:14px; font-weight:800; text-align:right; }
+    .note { margin-top:18px; font-size:11px; color:#64748b; }
+    @media print { body { margin:0.5in; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="badge">DENR</div>
+    <div>
+      <h1>Official Sales Receipt</h1>
+      <div style="font-size:11px; color:#475569; letter-spacing:0.08em; text-transform:uppercase;">Revenue & Sales Registry</div>
+    </div>
+  </div>
+  <table>
+    <tr><th>Receipt ID</th><td>${sale.id}</td></tr>
+    <tr><th>Buyer</th><td>${sale.buyer}</td></tr>
+    <tr><th>Category</th><td>${sale.type}</td></tr>
+    <tr><th>Product</th><td>${sale.product}</td></tr>
+    <tr><th>Quantity</th><td>${sale.qty.toLocaleString()}</td></tr>
+    <tr><th>Entry Date</th><td>${sale.date}</td></tr>
+    <tr><th>Total Amount</th><td class="total">₱${sale.amount.toLocaleString()}</td></tr>
+  </table>
+  <div class="note">This receipt is system-generated and valid without signature.</div>
+  <script>
+    window.onload = () => { setTimeout(() => window.print(), 200); };
+  <\/script>
+</body>
+</html>`;
+            win.document.open();
+            win.document.write(html);
+            win.document.close();
+        }
 
         // 4. CHARTS
         let modalChart;
