@@ -49,6 +49,67 @@ def service_details(service_id):
 def inventory():
     return render_template('municipal/inventory/inventory-dashboard.html')
 
+@bp.route('/inventory/api/<inventory_id>/status', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def update_inventory_status(inventory_id):
+    """Update inventory registration status (approve/reject/forward)"""
+    try:
+        db = get_firestore_db()
+        data = request.get_json()
+        new_status = data.get('status', '').lower()
+        
+        # Validate status
+        valid_statuses = ['approved', 'rejected', 'to-review']
+        if new_status not in valid_statuses:
+            return jsonify({'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'}), 400
+        
+        # Get the inventory document
+        inv_ref = db.collection('inventory_registrations').document(inventory_id)
+        inv_doc = inv_ref.get()
+        
+        if not inv_doc.exists:
+            return jsonify({'error': 'Inventory registration not found'}), 404
+        
+        # Get current user info for audit trail
+        user_municipality = _resolve_municipality_from_user_context()
+        
+        # Build update payload
+        update_payload = {
+            'status': new_status,
+            'updatedAt': datetime.utcnow(),
+            'updatedByMunicipality': user_municipality
+        }
+        
+        if new_status == 'approved':
+            update_payload['approvedByLevel'] = 'Municipal'
+            update_payload['approvedAt'] = datetime.utcnow()
+            update_payload['rejectedByLevel'] = ''
+            update_payload['rejectedByEmail'] = ''
+        
+        elif new_status == 'rejected':
+            update_payload['rejectedByLevel'] = 'Municipal'
+            update_payload['rejectedAt'] = datetime.utcnow()
+            update_payload['approvedByLevel'] = ''
+            update_payload['approvedByEmail'] = ''
+        
+        elif new_status == 'to-review':
+            update_payload['forwardedAt'] = datetime.utcnow()
+            update_payload['forwardedByLevel'] = 'Municipal'
+            update_payload['regionalStatus'] = 'pending'
+        
+        # Update the document
+        inv_ref.update(update_payload)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Inventory registration {new_status.replace("-", " ")} successfully',
+            'status': new_status
+        }), 200
+        
+    except Exception as e:
+        print(f'Error updating inventory status: {str(e)}')
+        return jsonify({'error': f'Failed to update inventory status: {str(e)}'}), 500
+
 @bp.route('/user-inventory')
 @role_required('municipal','municipal_admin')
 def user_inventory():
