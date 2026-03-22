@@ -913,7 +913,9 @@
       const paymentStatus = (item.paymentStatus || item.payment_status || item.payment || '').toLowerCase();
       const rawStatus = item.nationalStatus === 'approved' || item.nationalStatus === 'rejected'
         ? item.nationalStatus
-        : item.regionalStatus || item.status || 'pending';
+        : item.regionalStatus === 'approved' || item.regionalStatus === 'rejected'
+          ? item.regionalStatus
+          : item.status || 'pending';
 
       // Normalize status variants like "pending payment", "payment_pending"
       const normalizedStatus = (rawStatus || '').toLowerCase().replace(/\s+/g, '_');
@@ -926,18 +928,24 @@
       const status = normalizedStatus;
       const approvedLevel = item.approvedByLevel || '';
       const rejectedLevel = item.rejectedByLevel || '';
-      const forwardedLevel = item.forwardedToLevel || item.forwardedByLevel || '';
+      const forwardedToLevel = item.forwardedToLevel || '';
 
+      // Approved status with level
       if (status === 'approved' && approvedLevel) {
         return { status, label: `APPROVED BY ${approvedLevel.toUpperCase()}` };
       }
+      
+      // Rejected status with level
       if (status === 'rejected' && rejectedLevel) {
         return { status, label: `REJECTED BY ${rejectedLevel.toUpperCase()}` };
       }
-      if (status === 'to-review' || status.includes('forward')) {
-        const level = forwardedLevel.toUpperCase();
-        if (level === 'NATIONAL') return { status, label: 'FWD → NATIONAL' };
-        if (level === 'REGIONAL') return { status, label: 'FWD → REGIONAL' };
+      
+      // Forwarded status with destination level
+      if (status === 'to_review' || status === 'to-review') {
+        const level = forwardedToLevel.toUpperCase();
+        if (level) {
+          return { status, label: `FORWARDED TO ${level}` };
+        }
         return { status, label: 'FORWARDED FOR REVIEW' };
       }
 
@@ -1072,17 +1080,20 @@
         return;
       }
 
-      tbody.innerHTML = allInventory.map((item, idx) => `
+      tbody.innerHTML = allInventory.map((item, idx) => {
+        const resolved = resolveInventoryStatus(item);
+        return `
         <tr>
           <td data-label="Resource Name / Species">${item.resourceName}</td>
           <td data-label="Sector / Classification">${item.sector}</td>
           <td data-label="Date">${item.date}</td>
-          <td data-label="Status"><span class="status-label ${getStatusClass(item.status)}">${getStatusLabel(item.status)}</span></td>
+          <td data-label="Status"><span class="status-label ${getStatusClass(resolved.status)}">${resolved.label}</span></td>
           <td data-label="Action" style="text-align: center;">
             <a href="/user/inventory/stock-info/${item.id}" class="action-btn"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</a>
           </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function populateLicensesTable() {
