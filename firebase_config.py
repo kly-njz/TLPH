@@ -36,6 +36,7 @@ def get_firebase_client():
 # Get Firestore database reference
 def get_firestore_db():
     """Get Firestore database reference"""
+    initialize_firebase_admin()
     return firestore.client()
 
 # Get Realtime Database reference
