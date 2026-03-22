@@ -4102,12 +4102,20 @@ def applicants_regional():
 @bp.route('/operations/quotation')
 @role_required('regional', 'regional_admin')
 def quotation_regional():
-    from quotation_storage import get_quotations
+    from quotation_storage import get_quotations, get_all_quotations
     import json
     from collections import Counter
     user_region = session.get('user_region', '').strip()
-    # Fetch all regional quotations, filter by municipality in Python
-    all_quotations = get_quotations(scope='regional')
+    # DEBUG: Fetch all quotations and log them
+    all_quotations = get_all_quotations()
+    print("[DEBUG] All quotations:")
+    for q in all_quotations:
+        print(f"region: {q.get('region')}, municipality: {q.get('municipality')}, id: {q.get('id', 'N/A')}")
+
+    # Filter to only regional quotations for further filtering
+    regional_quotations = [q for q in all_quotations if str(q.get('scope', '')).lower() == 'regional']
+
+    # Always provide full list of municipalities for the user's region
     # Always provide full list of municipalities for the user's region
     from models.ph_locations import philippineLocations
     region_name = user_region
@@ -4137,10 +4145,15 @@ def quotation_regional():
     muni_set = set(m.upper() for m in municipalities)
     region_upper = region_name.upper() if region_name else ''
     quotations = [
-        q for q in all_quotations
+        q for q in regional_quotations
         if str(q.get('municipality', '')).strip().upper() in muni_set
         and str(q.get('region', '')).strip().upper() == region_upper
     ]
+
+    print(f"[DEBUG] Filtering for region={region_upper}, muni_set={muni_set}")
+    print(f"[DEBUG] Filtered quotations:")
+    for q in quotations:
+        print(f"region: {q.get('region')}, municipality: {q.get('municipality')}, id: {q.get('id', 'N/A')}")
 
     def to_float(value):
         try:

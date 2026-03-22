@@ -1,3 +1,7 @@
+def get_all_quotations():
+    db = get_firestore_db()
+    q = db.collection('quotations')
+    return [dict(doc.to_dict(), id=doc.id) for doc in q.stream()]
 # quotation_storage.py
 # Unified storage for quotations (municipal, regional, national)
 from firebase_config import get_firestore_db
