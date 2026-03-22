@@ -184,7 +184,7 @@
     <div id="dmgDrawer" class="fixed inset-0 z-[4010] hidden flex items-center justify-center p-4 no-print">
         <div id="dmgDrawerPanel" class="w-full max-w-sm bg-white shadow-2xl transform scale-95 transition-transform duration-150 flex flex-col border border-slate-400 max-h-[90vh]">
             <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
-                <h2 class="text-[11px] font-black uppercase tracking-widest leading-none flex items-center gap-2 m-0">
+                <h2 id="dmgDrawerTitle" class="text-[11px] font-black uppercase tracking-widest leading-none flex items-center gap-2 m-0">
                     <i class="fa-solid fa-file-circle-exclamation text-gov-red"></i> Report Asset Damage
                 </h2>
                 <button onclick="closeDamageDrawer()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
@@ -208,16 +208,24 @@
                             <input type="date" id="newDate" class="gov-input w-full h-8 cursor-pointer" required>
                         </div>
                     </div>
-                    <div>
-                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Reported By (Region/Office) *</label>
-                        <input type="text" id="newReporter" placeholder="e.g. Region VII" class="gov-input w-full h-8" required>
-                    </div>
-                    <div class="pt-3 mt-2 border-t border-slate-200">
-                        <button type="submit" class="gov-btn bg-gov-red text-white hover:bg-rose-800 w-full py-2">File Official Report</button>
-                    </div>
-                </form>
-            </div>
+                <div>
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Reported By (Region/Office) *</label>
+                    <input type="text" id="newReporter" placeholder="e.g. Region VII" class="gov-input w-full h-8" required>
+                </div>
+                <div id="statusWrap" class="hidden">
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Update Status *</label>
+                    <select id="newStatus" class="gov-input w-full h-8 cursor-pointer">
+                        <option value="pending">Pending</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                </div>
+                <div class="pt-3 mt-2 border-t border-slate-200">
+                    <button id="dmgSubmit" type="submit" class="gov-btn bg-gov-red text-white hover:bg-rose-800 w-full py-2">File Official Report</button>
+                </div>
+            </form>
         </div>
+    </div>
     </div>
 
     <div id="chartModal" class="gov-modal no-print">
@@ -274,7 +282,7 @@
                     </td>
                     <td class="px-3 py-1.5 text-slate-500 font-bold uppercase text-[9px] text-center border-r border-slate-100">${d.date}</td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <button class="text-[9px] font-bold uppercase text-gov-red hover:underline tracking-widest cursor-pointer">Review</button>
+                        <button onclick="openReview('${d.ref}')" class="text-[9px] font-bold uppercase text-gov-red hover:underline tracking-widest cursor-pointer">Review</button>
                     </td>
                 </tr>
             `).join('') : '<tr><td colspan="7" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No reports found.</td></tr>';
@@ -290,8 +298,40 @@
         document.getElementById('dmgSearch').addEventListener('input', filterDamages);
         document.getElementById('dmgStatusFilter').addEventListener('change', filterDamages);
         document.getElementById('dmgDateFilter').addEventListener('change', filterDamages);
+        document.getElementById('newStatus').addEventListener('change', () => {});
+
+        let currentMode = 'create';
+        let currentReviewRef = null;
+
+        function setDrawerMode(mode) {
+            currentMode = mode;
+            const title = document.getElementById('dmgDrawerTitle');
+            const submit = document.getElementById('dmgSubmit');
+            const prod = document.getElementById('newProd');
+            const qty = document.getElementById('newQty');
+            const date = document.getElementById('newDate');
+            const reporter = document.getElementById('newReporter');
+            const statusWrap = document.getElementById('statusWrap');
+
+            const isReview = mode === 'review';
+            title.innerHTML = isReview
+                ? '<i class="fa-solid fa-file-circle-exclamation text-gov-red mr-2"></i> Review Damage Report'
+                : '<i class="fa-solid fa-file-circle-exclamation text-gov-red mr-2"></i> Report Asset Damage';
+
+            submit.textContent = isReview ? 'Update Status' : 'File Official Report';
+            submit.type = 'submit';
+            submit.onclick = null;
+
+            prod.readOnly = isReview;
+            reporter.readOnly = isReview;
+            qty.disabled = isReview;
+            date.disabled = isReview;
+            statusWrap.classList.toggle('hidden', !isReview);
+        }
 
         function openDamageDrawer() {
+            setDrawerMode('create');
+            document.getElementById('newDmgForm').reset();
             document.getElementById('drawerOverlay').classList.remove('hidden');
             requestAnimationFrame(() => document.getElementById('drawerOverlay').classList.add('opacity-100'));
             const drawer = document.getElementById('dmgDrawer');
@@ -311,8 +351,38 @@
             }, 150);
         }
 
+        function openReview(ref) {
+            const record = damageData.find(d => d.ref === ref);
+            if (!record) return;
+            currentReviewRef = ref;
+
+            document.getElementById('newProd').value = record.product;
+            document.getElementById('newQty').value = record.qty;
+            document.getElementById('newDate').value = record.date;
+            document.getElementById('newReporter').value = record.reporter;
+            document.getElementById('newStatus').value = record.status;
+
+            setDrawerMode('review');
+            document.getElementById('drawerOverlay').classList.remove('hidden');
+            requestAnimationFrame(() => document.getElementById('drawerOverlay').classList.add('opacity-100'));
+            const drawer = document.getElementById('dmgDrawer');
+            const panel = document.getElementById('dmgDrawerPanel');
+            drawer.classList.remove('hidden');
+            requestAnimationFrame(() => panel.classList.replace('scale-95', 'scale-100'));
+        }
+
         document.getElementById('newDmgForm').addEventListener('submit', (e) => {
             e.preventDefault();
+            if (currentMode === 'review' && currentReviewRef) {
+                const status = document.getElementById('newStatus').value;
+                const idx = damageData.findIndex(d => d.ref === currentReviewRef);
+                if (idx !== -1) {
+                    damageData[idx].status = status;
+                }
+                filterDamages();
+                closeDamageDrawer();
+                return;
+            }
             const ref = 'DMG-26-' + (damageData.length + 1).toString().padStart(3, '0');
             damageData.unshift({
                 ref: ref,
