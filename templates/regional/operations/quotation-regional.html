@@ -34,7 +34,7 @@
   </style>
 </head>
 <body class="text-slate-800">
-  
+  {% include 'regional/sidenav.html' %}
   <div class="flex h-screen overflow-hidden">
     <main class="flex-1 flex flex-col p-4 gap-3 overflow-y-auto custom-scrollbar">
       
@@ -54,18 +54,17 @@
             <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Pending Review</span>
             <span class="material-icons-round text-amber-600 text-[14px]">pending_actions</span>
           </div>
-          <div class="text-lg font-black text-amber-700 mt-0.5 leading-none">6</div>
+          <div class="text-lg font-black text-amber-700 mt-0.5 leading-none">{{ pending_count or 0 }}</div>
           <div class="text-[9px] font-bold uppercase tracking-wider text-slate-500 mt-0.5">
             For regional review
           </div>
         </div>
-
         <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600 bg-emerald-50/30">
           <div class="flex items-center justify-between">
             <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Approved / Ready</span>
             <span class="material-icons-round text-emerald-700 text-[14px]">check_circle</span>
           </div>
-          <div class="text-lg font-black text-emerald-800 mt-0.5 leading-none">42</div>
+          <div class="text-lg font-black text-emerald-800 mt-0.5 leading-none">{{ approved_count or 0 }}</div>
           <div class="text-[9px] font-bold uppercase tracking-wider text-slate-500 mt-0.5">
             For issuance
           </div>
@@ -81,7 +80,6 @@
             <div class="chart-container"><canvas id="quoteStatusChart"></canvas></div>
           </div>
         </div>
-
         <div class="gov-card p-2 flex flex-col overflow-hidden">
           <h2 class="text-[9px] font-black uppercase text-slate-500 border-b border-slate-100 pb-1 mb-1 shrink-0">
             Monthly Quotation Value (PHP) — Regional
@@ -106,8 +104,9 @@
 
             <select id="municipalityFilter" class="gov-input cursor-pointer bg-white" onchange="filterTable()" title="Filter by Municipality">
               <option value="ALL">All Municipalities</option>
-              <option value="Municipality A">Municipality A</option>
-              <option value="Municipality B">Municipality B</option>
+              {% for m in municipalities %}
+                <option value="{{ m }}">{{ m }}</option>
+              {% endfor %}
             </select>
 
             <select id="fyFilter" class="gov-input cursor-pointer bg-white" onchange="filterTable()" title="Filter by FY">
@@ -142,22 +141,28 @@
               </tr>
             </thead>
             <tbody id="quoteTable" class="text-[10px] divide-y divide-slate-100">
-              <tr class="hover:bg-emerald-50 transition quote-row" data-status="PENDING" data-municipality="MUNICIPALITY A" data-fy="FY 2026">
-                <td class="font-black text-slate-900 border-r border-slate-100">Q-2026-001</td>
-                <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">DENR REGION - Field Office</td>
-                <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">Municipality A</td>
-                <td class="font-mono font-bold text-emerald-800 border-r border-slate-100 uppercase text-[11px]">₱25,000.00</td>
-                <td class="font-mono text-slate-500 border-r border-slate-100 text-center uppercase">2026-02-17</td>
+              {% for q in quotations %}
+              <tr class="hover:bg-emerald-50 transition quote-row" data-status="{{ q.status|upper }}" data-municipality="{{ q.municipality|upper }}" data-fy="{{ q.fy|upper }}">
+                <td class="font-black text-slate-900 border-r border-slate-100">{{ q.number }}</td>
+                <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ q.client }}</td>
+                <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ q.municipality }}</td>
+                <td class="font-mono font-bold text-emerald-800 border-r border-slate-100 uppercase text-[11px]">₱{{ '{:,.2f}'.format(q.amount) }}</td>
+                <td class="font-mono text-slate-500 border-r border-slate-100 text-center uppercase">{{ q.date }}</td>
                 <td class="text-center border-r border-slate-100">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-amber-50 text-amber-700 border border-amber-200 w-20 text-center">Pending</span>
+                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-amber-50 text-amber-700 border border-amber-200 w-20 text-center">{{ q.status }}</span>
                 </td>
                 <td class="text-center">
                   <div class="flex justify-center gap-2">
                     <button class="text-emerald-800 font-bold hover:underline uppercase text-[9px]">View</button>
+                    {% if q.status == 'Pending' %}
                     <button class="text-emerald-700 font-bold hover:underline uppercase text-[9px]">Approve</button>
+                    {% endif %}
                   </div>
                 </td>
               </tr>
+              {% else %}
+              <tr><td colspan="7" class="text-center text-slate-400 py-8">No quotations found.</td></tr>
+              {% endfor %}
             </tbody>
           </table>
         </div>
@@ -197,6 +202,15 @@
               <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Filing Date</label>
               <input type="date" id="qDate" name="qDate" class="gov-input w-full" required />
             </div>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Municipality</label>
+            <select id="qMunicipality" name="qMunicipality" class="gov-input w-full" required>
+              <option value="">Select Municipality</option>
+              {% for m in municipalities %}
+                <option value="{{ m }}">{{ m }}</option>
+              {% endfor %}
+            </select>
           </div>
           <div class="flex flex-col gap-1">
             <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Amount (₱)</label>
