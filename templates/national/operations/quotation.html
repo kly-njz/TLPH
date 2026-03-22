@@ -208,6 +208,7 @@
         <td class="text-center border-r border-slate-100">
           <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${badgeClass}">${status}</span>
         </td>
+
         <td class="text-center">
           <div class="flex justify-center gap-2">
             <button onclick="viewQuotation(this)" class="text-blue-700 font-bold uppercase text-[9px]">View</button>
@@ -215,6 +216,10 @@
             <button onclick="deleteQuotation(this)" class="text-rose-700 font-bold uppercase text-[9px]">Delete</button>
           </div>
         </td>`;
+
+      // Add data-id to row for API actions
+      row.classList.add('quote-row');
+      row.dataset.id = quotation.id || '';
 
       document.getElementById('quoteTable').prepend(row);
       closeCreateModal();
@@ -275,19 +280,27 @@
       if (e.target === this) closeViewModal();
     });
 
-    function approveQuotation(btn) {
+
+    async function approveQuotation(btn) {
       const d = getRowData(btn);
-      if (!confirm('Approve quotation ' + d.number + '?')) return;
-      if (d.statusEl) {
-        d.statusEl.textContent = 'Approved';
-        d.statusEl.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-emerald-50 text-emerald-700 border-emerald-200';
-      }
+      const row = btn.closest('tr');
+      const quotationId = row && row.dataset.id;
+      if (!quotationId) return;
+      await approveQuotationShared(quotationId, `/national/operations/quotation/api/${quotationId}/status`, () => {
+        if (d.statusEl) {
+          d.statusEl.textContent = 'Approved';
+          d.statusEl.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-emerald-50 text-emerald-700 border-emerald-200';
+        }
+      });
     }
 
-    function deleteQuotation(btn) {
-      const d = getRowData(btn);
-      if (!confirm('Delete quotation ' + d.number + '? This cannot be undone.')) return;
-      d.row.remove();
+    async function deleteQuotation(btn) {
+      const row = btn.closest('tr');
+      const quotationId = row && row.dataset.id;
+      if (!quotationId) return;
+      await deleteQuotationShared(quotationId, `/national/operations/quotation/api/${quotationId}`, () => {
+        row.remove();
+      });
     }
 
     // --- Export CSV ---
