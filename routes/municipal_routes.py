@@ -95,6 +95,7 @@ def update_inventory_status(inventory_id):
         elif new_status == 'to-review':
             update_payload['forwardedAt'] = datetime.utcnow()
             update_payload['forwardedByLevel'] = 'Municipal'
+            update_payload['forwardedToLevel'] = 'Regional'
             update_payload['regionalStatus'] = 'pending'
         
         # Update the document
