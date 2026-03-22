@@ -305,6 +305,27 @@
         let userRegion = '';
         let userRegionName = '';
         let userProvinces = [];
+        let activeModalItemId = null;
+
+        const modalEls = {
+            inventoryDetailsModal: document.getElementById('inventoryDetailsModal'),
+            btnCloseModal: document.getElementById('btnCloseModal'),
+            modalRefNumber: document.getElementById('modalRefNumber'),
+            modalResourceName: document.getElementById('modalResourceName'),
+            modalCategory: document.getElementById('modalCategory'),
+            modalQuantity: document.getElementById('modalQuantity'),
+            modalRegFee: document.getElementById('modalRegFee'),
+            modalMunicipality: document.getElementById('modalMunicipality'),
+            modalProvince: document.getElementById('modalProvince'),
+            modalDateFiled: document.getElementById('modalDateFiled'),
+            modalStatus: document.getElementById('modalStatus'),
+            modalDescription: document.getElementById('modalDescription'),
+            modalOwner: document.getElementById('modalOwner'),
+            modalActionNote: document.getElementById('modalActionNote'),
+            btnApproveStock: document.getElementById('btnApproveStock'),
+            btnForwardStock: document.getElementById('btnForwardStock'),
+            btnRejectStock: document.getElementById('btnRejectStock')
+        };
 
         function normalizeStatus(value) {
             return String(value || '').toLowerCase().trim().replace(/\s+/g, '-');
@@ -322,6 +343,116 @@
             if (regionalStatus === 'rejected' || baseStatus === 'rejected') return { code: 'rejected', label: 'REJECTED BY REGIONAL', badge: 'bg-rose-50 text-rose-700 border-rose-200' };
             if (baseStatus === 'to-review') return { code: 'to-review', label: 'PENDING REGIONAL REVIEW', badge: 'bg-amber-50 text-amber-700 border-amber-200' };
             return { code: 'pending', label: 'PENDING', badge: 'bg-slate-50 text-slate-700 border-slate-200' };
+        }
+
+        function formatDate(rawDate) {
+            if (!rawDate) return 'N/A';
+            try {
+                const dateValue = typeof rawDate?.toDate === 'function'
+                    ? rawDate.toDate()
+                    : new Date(rawDate);
+                if (Number.isNaN(dateValue.getTime())) return 'N/A';
+                return dateValue.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
+            } catch (_e) {
+                return 'N/A';
+            }
+        }
+
+        function isRegionalActionFinal(item) {
+            const st = normalizeStatus(item.status);
+            const regionalStatus = normalizeStatus(item.regionalStatus);
+            const nationalStatus = normalizeStatus(item.nationalStatus);
+            return (
+                nationalStatus === 'approved' ||
+                nationalStatus === 'rejected' ||
+                st === 'approved' ||
+                st === 'rejected' ||
+                st === 'forwarded-to-national' ||
+                regionalStatus === 'approved' ||
+                regionalStatus === 'rejected'
+            );
+        }
+
+        function setActionButtonsDisabled(disabled) {
+            [modalEls.btnApproveStock, modalEls.btnForwardStock, modalEls.btnRejectStock].forEach(btn => {
+                if (!btn) return;
+                btn.disabled = disabled;
+                btn.classList.toggle('opacity-50', disabled);
+                btn.classList.toggle('cursor-not-allowed', disabled);
+            });
+        }
+
+        function openInventoryModal(item) {
+            activeModalItemId = item.id;
+            const statusMeta = resolveRegionalInventoryStatus(item);
+            const isFinal = isRegionalActionFinal(item);
+
+            modalEls.modalRefNumber.textContent = `INV-${String(item.id).substring(0, 8).toUpperCase()}`;
+            modalEls.modalResourceName.textContent = item.name || 'N/A';
+            modalEls.modalCategory.textContent = item.category || 'N/A';
+            modalEls.modalQuantity.textContent = `${Number(item.currentQty || 0).toLocaleString()} ${item.unitOfMeasure || 'pcs'}`;
+            modalEls.modalRegFee.textContent = `₱ ${Number(item.registrationFee || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            modalEls.modalMunicipality.textContent = item.municipality || 'N/A';
+            modalEls.modalProvince.textContent = item.province || 'N/A';
+            modalEls.modalDateFiled.textContent = formatDate(item.createdAt || item.addedDate);
+            modalEls.modalStatus.textContent = statusMeta.label;
+            modalEls.modalDescription.textContent = item.description || 'N/A';
+            modalEls.modalOwner.textContent = item.owner || 'Unknown';
+            modalEls.modalActionNote.textContent = isFinal
+                ? 'This record has a final regional action. Buttons are disabled.'
+                : 'Select an action to continue the regional workflow.';
+
+            setActionButtonsDisabled(isFinal);
+            modalEls.inventoryDetailsModal.classList.remove('hidden');
+        }
+
+        function closeInventoryModal() {
+            activeModalItemId = null;
+            modalEls.inventoryDetailsModal.classList.add('hidden');
+        }
+
+        async function updateInventoryStatus(newStatus) {
+            if (!activeModalItemId) return;
+            const item = allProducts.find(p => p.id === activeModalItemId);
+            if (!item) return;
+
+            const actionText = newStatus === 'approved'
+                ? 'approve'
+                : newStatus === 'rejected'
+                    ? 'reject'
+                    : 'forward to national';
+
+            const confirmed = confirm(`Are you sure you want to ${actionText} this inventory registration?`);
+            if (!confirmed) return;
+
+            try {
+                const response = await fetch(`/regional/inventory/api/${item.id}/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.message || 'Failed to update inventory status.');
+
+                if (newStatus === 'approved') {
+                    item.status = 'approved';
+                    item.regionalStatus = 'approved';
+                } else if (newStatus === 'rejected') {
+                    item.status = 'rejected';
+                    item.regionalStatus = 'rejected';
+                } else {
+                    item.status = 'forwarded-to-national';
+                    item.regionalStatus = 'approved';
+                    item.nationalStatus = 'pending';
+                }
+
+                refresh();
+                openInventoryModal(item);
+                alert(`Inventory registration ${actionText}d successfully.`);
+            } catch (error) {
+                alert(error.message || 'Failed to update inventory status.');
+            }
         }
 
         async function loadUserRegion(user) {
@@ -486,10 +617,26 @@
             buildCharts(filtered);
         }
 
+        document.getElementById('itemsTbody').addEventListener('click', (event) => {
+            const btn = event.target.closest("button[data-action='view']");
+            if (!btn) return;
+            const rowId = String(btn.dataset.id || '');
+            const item = allProducts.find(p => p.id === rowId);
+            if (!item) return;
+            openInventoryModal(item);
+        });
+
         document.getElementById("filterProvince").addEventListener("change", refresh);
         document.getElementById("filterCategory").addEventListener("change", refresh);
         document.getElementById("searchInput").addEventListener("input", refresh);
         document.getElementById("btnPrint").addEventListener("click", () => window.print());
+        modalEls.btnCloseModal.addEventListener('click', closeInventoryModal);
+        modalEls.inventoryDetailsModal.addEventListener('click', (event) => {
+            if (event.target === modalEls.inventoryDetailsModal) closeInventoryModal();
+        });
+        modalEls.btnApproveStock.addEventListener('click', () => updateInventoryStatus('approved'));
+        modalEls.btnForwardStock.addEventListener('click', () => updateInventoryStatus('forwarded-to-national'));
+        modalEls.btnRejectStock.addEventListener('click', () => updateInventoryStatus('rejected'));
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
