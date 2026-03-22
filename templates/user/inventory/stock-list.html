@@ -430,10 +430,25 @@
 
                 console.log('✅ Approved inventory items count:', approvedInventory.length);
 
-                // Show pending notice if user has pending_payment items
-                const pendingItems = inventoryItems.filter(item =>
-                    item.status === 'pending_payment' || item.status === 'pending'
-                );
+                // Show pending notice for items awaiting municipal approval or payment
+                const pendingItems = inventoryItems.filter(item => {
+                    const status = (item.status || '').toLowerCase();
+                    const nationalStatus = (item.nationalStatus || '').toLowerCase();
+                    const regionalStatus = (item.regionalStatus || '').toLowerCase();
+                    
+                    // Item is pending if it hasn't been approved/rejected at any level yet
+                    // AND it's not in a final state
+                    const isPending = (status === 'pending' || status === 'pending_payment' || status === 'to-review' || status === 'under-review')
+                        && nationalStatus !== 'approved'
+                        && nationalStatus !== 'rejected'
+                        && regionalStatus !== 'approved'
+                        && regionalStatus !== 'rejected';
+                    
+                    return isPending;
+                });
+                
+                console.log('✅ Pending inventory items count:', pendingItems.length);
+                
                 if (pendingItems.length > 0) {
                     document.getElementById('pendingCount').textContent = pendingItems.length;
                     document.getElementById('pendingNotice').classList.remove('hidden');
