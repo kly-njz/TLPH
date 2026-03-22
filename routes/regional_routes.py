@@ -241,6 +241,90 @@ def service_info_view(doc_id=None):
 def inventory_view():
     return render_template('regional/inventory-regional-list.html')
 
+@bp.route('/inventory/api/<inventory_id>/status', methods=['POST'])
+@role_required('regional','regional_admin')
+def update_inventory_status_regional(inventory_id):
+    """Regional inventory action endpoint: approve, reject, or forward to national."""
+    try:
+        db = get_firestore_db()
+        payload = request.get_json(silent=True) or {}
+        requested_status = str(payload.get('status') or '').strip().lower()
+
+        valid_statuses = {'approved', 'rejected', 'forwarded-to-national'}
+        if requested_status not in valid_statuses:
+            return jsonify({
+                'status': 'error',
+                'message': 'Invalid status action.'
+            }), 400
+
+        inv_ref = db.collection('inventory_registrations').document(inventory_id)
+        inv_doc = inv_ref.get()
+        if not inv_doc.exists:
+            return jsonify({
+                'status': 'error',
+                'message': 'Inventory registration not found.'
+            }), 404
+
+        inv_data = inv_doc.to_dict() or {}
+        user_region, municipality_set = _resolve_regional_scope(db)
+
+        inv_municipality = str(inv_data.get('municipality') or '').strip().lower()
+        inv_region = get_firestore_region_name(
+            inv_data.get('region') or inv_data.get('region_name') or inv_data.get('regionName')
+        )
+        in_scope = True
+        if user_region or municipality_set:
+            in_scope = (bool(municipality_set and inv_municipality and inv_municipality in municipality_set)
+                        or _same_region(inv_region, user_region))
+
+        if not in_scope:
+            return jsonify({
+                'status': 'error',
+                'message': 'Inventory item is outside your regional scope.'
+            }), 403
+
+        update_data = {
+            'status': requested_status,
+            'updatedAt': datetime.utcnow(),
+        }
+
+        if requested_status == 'approved':
+            update_data.update({
+                'regionalStatus': 'approved',
+                'approvedByLevel': 'Regional',
+                'approvedAt': datetime.utcnow(),
+                'rejectedByLevel': '',
+                'rejectedByEmail': ''
+            })
+        elif requested_status == 'rejected':
+            update_data.update({
+                'regionalStatus': 'rejected',
+                'rejectedByLevel': 'Regional',
+                'rejectedAt': datetime.utcnow(),
+                'approvedByLevel': '',
+                'approvedByEmail': ''
+            })
+        elif requested_status == 'forwarded-to-national':
+            update_data.update({
+                'regionalStatus': 'approved',
+                'forwardedByLevel': 'Regional',
+                'forwardedToLevel': 'National',
+                'forwardedAt': datetime.utcnow(),
+                'nationalStatus': 'pending'
+            })
+
+        inv_ref.update(update_data)
+        return jsonify({
+            'status': 'success',
+            'message': 'Inventory status updated successfully.'
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 @bp.route('/license-view')
 @role_required('regional','regional_admin')
 def license_view():
