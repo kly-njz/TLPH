@@ -182,7 +182,7 @@
     <div id="registerDrawer" class="fixed inset-0 z-[2050] hidden flex items-center justify-center p-4 no-print">
         <div id="registerDrawerPanel" class="w-full max-w-sm bg-white shadow-2xl transform scale-95 transition-transform duration-300 flex flex-col border border-slate-400 max-h-[90vh]">
             <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
-                <h2 class="text-[11px] font-black uppercase tracking-widest leading-none flex items-center gap-2 m-0">
+                <h2 id="drawerTitle" class="text-[11px] font-black uppercase tracking-widest leading-none flex items-center gap-2 m-0">
                     <i class="fa-solid fa-box-open text-emerald-400"></i> Register New Product
                 </h2>
                 <button onclick="closeRegisterDrawer()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
@@ -216,7 +216,7 @@
                     </div>
                     
                     <div class="pt-3 mt-2 border-t border-slate-200 flex gap-2">
-                        <button type="submit" class="gov-btn bg-denr-green text-white hover:bg-green-800 flex-1 py-2">Save to Registry</button>
+                        <button id="drawerSubmit" type="submit" class="gov-btn bg-denr-green text-white hover:bg-green-800 flex-1 py-2">Save to Registry</button>
                         <button type="button" onclick="closeRegisterDrawer()" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
                     </div>
                 </form>
@@ -252,6 +252,7 @@
         ];
 
         let topProductsChartInstance, distributionChartInstance, modalChartInstance = null;
+        let currentEditSku = null;
 
         // 2. LIVE SEARCH & RENDERING LOGIC
         function filterProducts() {
@@ -282,7 +283,7 @@
                         </span>
                     </td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <button class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">Manage</button>
+                        <button data-action="manage" data-sku="${p.sku}" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">Manage</button>
                     </td>
                 </tr>
             `).join('') : '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No products match your criteria.</td></tr>';
@@ -309,6 +310,7 @@
         document.getElementById('categoryFilter').addEventListener('change', filterProducts);
 
         function openRegisterDrawer() {
+            setDrawerMode('create');
             document.getElementById('drawerOverlay').classList.remove('hidden');
             setTimeout(() => document.getElementById('drawerOverlay').classList.add('opacity-100'), 10);
             const drawer = document.getElementById('registerDrawer');
@@ -326,18 +328,65 @@
                 drawer.classList.add('hidden');
                 document.getElementById('drawerOverlay').classList.add('hidden');
             }, 300);
+            setDrawerMode('create');
         }
+
+        function setDrawerMode(mode, product = null) {
+            const title = document.getElementById('drawerTitle');
+            const submit = document.getElementById('drawerSubmit');
+            if (mode === 'edit' && product) {
+                currentEditSku = product.sku;
+                title.innerHTML = '<i class="fa-solid fa-pen-to-square text-emerald-400"></i> Manage Product';
+                submit.textContent = 'Update Product';
+                document.getElementById('newSku').value = product.sku;
+                document.getElementById('newName').value = product.name;
+                document.getElementById('newCat').value = product.cat;
+                document.getElementById('newStock').value = product.stock;
+            } else {
+                currentEditSku = null;
+                title.innerHTML = '<i class="fa-solid fa-box-open text-emerald-400"></i> Register New Product';
+                submit.textContent = 'Save to Registry';
+                document.getElementById('newProductForm').reset();
+            }
+        }
+
+        function openManageDrawer(sku) {
+            const product = productRegistry.find(p => p.sku === sku);
+            if (!product) return;
+            setDrawerMode('edit', product);
+            document.getElementById('drawerOverlay').classList.remove('hidden');
+            setTimeout(() => document.getElementById('drawerOverlay').classList.add('opacity-100'), 10);
+            const drawer = document.getElementById('registerDrawer');
+            const panel = document.getElementById('registerDrawerPanel');
+            drawer.classList.remove('hidden');
+            setTimeout(() => panel.classList.replace('scale-95', 'scale-100'), 10);
+        }
+
+        document.getElementById('productTable').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action="manage"]');
+            if (!btn) return;
+            openManageDrawer(btn.dataset.sku);
+        });
 
         document.getElementById('newProductForm').addEventListener('submit', (e) => {
             e.preventDefault();
             const stock = parseInt(document.getElementById('newStock').value);
-            productRegistry.unshift({
+            const nextProduct = {
                 sku: document.getElementById('newSku').value,
                 name: document.getElementById('newName').value,
                 cat: document.getElementById('newCat').value,
                 stock: stock,
                 status: stock < 100 ? 'Low Stock' : 'In Stock'
-            });
+            };
+
+            if (currentEditSku) {
+                const idx = productRegistry.findIndex(p => p.sku === currentEditSku);
+                if (idx !== -1) {
+                    productRegistry[idx] = nextProduct;
+                }
+            } else {
+                productRegistry.unshift(nextProduct);
+            }
             filterProducts();
             closeRegisterDrawer();
             document.getElementById('newProductForm').reset();
