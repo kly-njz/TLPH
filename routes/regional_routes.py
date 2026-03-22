@@ -4126,7 +4126,20 @@ def quotation_regional():
     from models.ph_locations import philippineLocations
     region_name = user_region
     municipalities = []
-    if region_name and region_name in philippineLocations:
+    # Map region to provinces for MIMAROPA (REGION-IV-B)
+    REGION_TO_PROVINCES = {
+        'MIMAROPA': [
+            'Occidental Mindoro', 'Oriental Mindoro', 'Marinduque', 'Romblon', 'Palawan'
+        ],
+        'REGION-IV-B': [
+            'Occidental Mindoro', 'Oriental Mindoro', 'Marinduque', 'Romblon', 'Palawan'
+        ]
+    }
+    if region_name in REGION_TO_PROVINCES:
+        for prov in REGION_TO_PROVINCES[region_name]:
+            municipalities.extend(philippineLocations.get(prov, []))
+        municipalities = sorted(set(municipalities))
+    elif region_name and region_name in philippineLocations:
         municipalities = sorted(philippineLocations[region_name])
     else:
         # fallback: use all municipalities from all regions
