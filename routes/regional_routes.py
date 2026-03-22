@@ -287,10 +287,34 @@ def update_inventory_status_regional(inventory_id):
         inv_region = get_firestore_region_name(
             inv_data.get('region') or inv_data.get('region_name') or inv_data.get('regionName')
         )
+
+        # Fallback: derive scope fields from owner profile for legacy records
+        # where municipality/region were not persisted on inventory document.
+        if (not inv_municipality or not inv_region) and inv_data.get('userId'):
+            try:
+                owner_doc = db.collection('users').document(str(inv_data.get('userId'))).get()
+                if owner_doc.exists:
+                    owner_data = owner_doc.to_dict() or {}
+                    if not inv_municipality:
+                        inv_municipality = str(owner_data.get('municipality') or '').strip().lower()
+                    if not inv_region:
+                        inv_region = get_firestore_region_name(
+                            owner_data.get('region') or owner_data.get('region_name') or owner_data.get('regionName')
+                        )
+            except Exception:
+                pass
+
         in_scope = True
         if user_region or municipality_set:
-            in_scope = (bool(municipality_set and inv_municipality and inv_municipality in municipality_set)
-                        or _same_region(inv_region, user_region))
+            has_loc_data = bool(inv_municipality or inv_region)
+            if not has_loc_data:
+                # Keep legacy records actionable if regional location metadata is missing.
+                in_scope = True
+            else:
+                in_scope = (
+                    bool(municipality_set and inv_municipality and inv_municipality in municipality_set)
+                    or _same_region(inv_region, user_region)
+                )
 
         if not in_scope:
             return jsonify({
