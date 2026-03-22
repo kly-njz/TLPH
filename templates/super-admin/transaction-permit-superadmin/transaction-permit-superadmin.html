@@ -95,7 +95,7 @@
                     <button class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm" onclick="window.print()">
                         <i class="fa-solid fa-file-invoice-dollar"></i> Financial Export
                     </button>
-                    <button class="gov-btn bg-fin-emerald text-white hover:bg-emerald-800 shadow-sm">
+                    <button id="reconcileBtn" class="gov-btn bg-fin-emerald text-white hover:bg-emerald-800 shadow-sm" onclick="openReconcileModal()">
                         Reconcile Ledger
                     </button>
                 </div>
@@ -228,6 +228,50 @@
         </div>
     </div>
 
+    <div id="reconcileModalWrapper" class="gov-modal no-print hidden">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeReconcileModal()"></div>
+        <div id="reconcileModalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-file-circle-check text-emerald-300"></i> Ledger Reconciliation
+                </h3>
+                <button onclick="closeReconcileModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-4 bg-slate-50 flex-1">
+                <div class="gov-card p-3 border border-slate-200 bg-white">
+                    <div class="text-[10px] font-black uppercase tracking-widest text-slate-500">Validation Summary</div>
+                    <div class="mt-2 grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-700">
+                        <div class="flex items-center justify-between border border-slate-200 bg-slate-50 px-2 py-1">
+                            <span>Total Transactions</span>
+                            <span id="reconcileTotal">0</span>
+                        </div>
+                        <div class="flex items-center justify-between border border-slate-200 bg-slate-50 px-2 py-1">
+                            <span>Paid</span>
+                            <span id="reconcilePaid">0</span>
+                        </div>
+                        <div class="flex items-center justify-between border border-slate-200 bg-slate-50 px-2 py-1">
+                            <span>Refunded</span>
+                            <span id="reconcileRefunded">0</span>
+                        </div>
+                        <div class="flex items-center justify-between border border-slate-200 bg-slate-50 px-2 py-1">
+                            <span>Exceptions</span>
+                            <span id="reconcileExceptions">0</span>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                        Status: <span id="reconcileStatus" class="text-slate-600">Ready to reconcile.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="border-t border-slate-200 bg-white px-4 py-3 flex justify-end gap-2">
+                <button onclick="closeReconcileModal()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">Cancel</button>
+                <button id="reconcileRunBtn" onclick="runReconcile()" class="gov-btn bg-fin-emerald text-white hover:bg-emerald-800 shadow-sm">Run Reconcile</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const MOCK_DATA = [
             { ref: "TXN-2026-001", name: "Alqz Dave", type: "Licensing/Permit", date: "2026-02-13", reg: "IV-B", status: "Paid", amount: 2500.00 },
@@ -351,6 +395,52 @@
             modalBody.classList.remove('scale-100');
             modalBody.classList.add('scale-95');
             setTimeout(() => { modalWrapper.classList.add('hidden'); if(modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; } }, 300);
+        }
+
+        function openReconcileModal() {
+            const modalWrapper = document.getElementById('reconcileModalWrapper');
+            const modalBody = document.getElementById('reconcileModalBody');
+
+            const total = MOCK_DATA.length;
+            const paid = MOCK_DATA.filter(row => row.status === 'Paid').length;
+            const refunded = MOCK_DATA.filter(row => row.status === 'Refunded').length;
+            const exceptions = MOCK_DATA.filter(row => row.status !== 'Paid' && row.status !== 'Refunded').length;
+
+            document.getElementById('reconcileTotal').textContent = total;
+            document.getElementById('reconcilePaid').textContent = paid;
+            document.getElementById('reconcileRefunded').textContent = refunded;
+            document.getElementById('reconcileExceptions').textContent = exceptions;
+            document.getElementById('reconcileStatus').textContent = 'Ready to reconcile.';
+
+            modalWrapper.classList.remove('hidden');
+            setTimeout(() => { modalWrapper.classList.add('flex'); modalBody.classList.remove('scale-95'); modalBody.classList.add('scale-100'); }, 10);
+        }
+
+        function closeReconcileModal() {
+            const modalWrapper = document.getElementById('reconcileModalWrapper');
+            const modalBody = document.getElementById('reconcileModalBody');
+
+            modalWrapper.classList.remove('flex');
+            modalBody.classList.remove('scale-100');
+            modalBody.classList.add('scale-95');
+            setTimeout(() => { modalWrapper.classList.add('hidden'); }, 300);
+        }
+
+        function runReconcile() {
+            const status = document.getElementById('reconcileStatus');
+            const btn = document.getElementById('reconcileRunBtn');
+            if (!status || !btn) return;
+
+            btn.disabled = true;
+            btn.classList.add('opacity-70', 'cursor-not-allowed');
+            status.textContent = 'Reconciling ledger entries...';
+
+            setTimeout(() => {
+                status.textContent = 'Ledger reconciled. No discrepancies detected.';
+                btn.disabled = false;
+                btn.classList.remove('opacity-70', 'cursor-not-allowed');
+                btn.textContent = 'Run Again';
+            }, 900);
         }
 
         window.onload = () => { initCharts(); renderTable(); };
