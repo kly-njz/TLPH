@@ -727,6 +727,10 @@ def quotation():
     if not trend_labels:
         trend_labels = ['No Data']
         trend_values = [0]
+    # Import province/municipality mapping for dropdowns
+    from models.ph_locations import philippineLocations
+    # Regions = sorted province keys
+    region_list = sorted(philippineLocations.keys())
     return render_template(
         'national/operations/quotation.html',
         quotations=quotations,
@@ -735,7 +739,8 @@ def quotation():
         pending_quotes=pending_quotes,
         rejected_quotes=rejected_quotes,
         total_value=total_value,
-        regions=regions,
+        regions=region_list,
+        prov_muni_map=philippineLocations,
         trend_labels_json=json.dumps(trend_labels),
         trend_values_json=json.dumps(trend_values)
     )
