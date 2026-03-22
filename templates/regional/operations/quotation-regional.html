@@ -142,7 +142,7 @@
             </thead>
             <tbody id="quoteTable" class="text-[10px] divide-y divide-slate-100">
               {% for q in quotations %}
-              <tr class="hover:bg-emerald-50 transition quote-row" data-status="{{ q.status|upper }}" data-municipality="{{ q.municipality|upper }}" data-fy="{{ q.fy|upper }}">
+              <tr class="hover:bg-emerald-50 transition quote-row" data-id="{{ q.id }}" data-status="{{ q.status|upper }}" data-municipality="{{ q.municipality|upper }}" data-fy="{{ q.fy|upper }}">
                 <td class="font-black text-slate-900 border-r border-slate-100">{{ q.number }}</td>
                 <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ q.client }}</td>
                 <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ q.municipality }}</td>
@@ -153,10 +153,40 @@
                 </td>
                 <td class="text-center">
                   <div class="flex justify-center gap-2">
-                    <button class="text-emerald-800 font-bold hover:underline uppercase text-[9px]">View</button>
+                    <button class="text-emerald-800 font-bold hover:underline uppercase text-[9px]" onclick="viewQuotation(this)">View</button>
                     {% if q.status == 'Pending' %}
-                    <button class="text-emerald-700 font-bold hover:underline uppercase text-[9px]">Approve</button>
+                    <button class="text-emerald-700 font-bold hover:underline uppercase text-[9px]" onclick="approveQuotation(this)">Approve</button>
                     {% endif %}
+                  <script>
+                  async function approveQuotation(btn) {
+                    const row = btn.closest('tr');
+                    if (!row) return;
+                    const quotationId = row.dataset.id;
+                    if (!quotationId) return;
+                    if (!confirm('Approve this quotation?')) return;
+                    try {
+                      const res = await fetch(`/regional/operations/quotation/api/${quotationId}/status`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'APPROVED' })
+                      });
+                      const data = await res.json();
+                      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to approve quotation');
+                      // Update status cell
+                      const statusCell = row.children[5];
+                      if (statusCell) {
+                        let badge = statusCell.querySelector('span');
+                        if (badge) {
+                          badge.textContent = 'Approved';
+                          badge.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 w-20 text-center';
+                        }
+                      }
+                      alert('Quotation approved.');
+                    } catch (err) {
+                      alert(err.message || 'Unable to approve quotation.');
+                    }
+                  }
+                  </script>
                   </div>
                 </td>
               </tr>
