@@ -216,6 +216,53 @@
         </div>
     </div>
 
+    <div id="inspectModal" class="hidden fixed inset-0 z-[2065] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0 no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeInspectModal()"></div>
+        <div id="inspectBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-left text-gov-red"></i> Return Record Details
+                </h3>
+                <button onclick="closeInspectModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-4 bg-slate-50">
+                <div class="grid grid-cols-2 gap-3 text-[10px]">
+                    <div>
+                        <div class="text-[8px] font-black uppercase tracking-widest text-slate-500">Return ID</div>
+                        <div id="inspectId" class="font-mono font-black text-slate-900 mt-0.5">-</div>
+                    </div>
+                    <div>
+                        <div class="text-[8px] font-black uppercase tracking-widest text-slate-500">Sale Ref</div>
+                        <div id="inspectSale" class="font-black text-slate-900 mt-0.5">-</div>
+                    </div>
+                    <div class="col-span-2">
+                        <div class="text-[8px] font-black uppercase tracking-widest text-slate-500">Product</div>
+                        <div id="inspectProduct" class="text-slate-900 mt-0.5">-</div>
+                    </div>
+                    <div>
+                        <div class="text-[8px] font-black uppercase tracking-widest text-slate-500">Quantity</div>
+                        <div id="inspectQty" class="font-mono font-black text-slate-900 mt-0.5">-</div>
+                    </div>
+                    <div>
+                        <div class="text-[8px] font-black uppercase tracking-widest text-slate-500">Return Date</div>
+                        <div id="inspectDate" class="font-black text-slate-900 mt-0.5">-</div>
+                    </div>
+                    <div class="col-span-2">
+                        <div class="text-[8px] font-black uppercase tracking-widest text-slate-500">Reason</div>
+                        <div class="mt-0.5">
+                            <span id="inspectReasonBadge" class="status-badge">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="pt-3 mt-3 border-t border-slate-200">
+                    <button onclick="closeInspectModal()" class="gov-btn bg-gov-red text-white hover:bg-rose-800 w-full py-2">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="chartModal" class="hidden fixed inset-0 z-[2060] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0 no-print">
         <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
         <div id="modalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-3xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
@@ -256,7 +303,7 @@
         function renderTable(data) {
             const tbody = document.getElementById('retTable');
             tbody.innerHTML = data.length ? data.map(r => `
-                <tr class="hover:bg-slate-50 transition-colors">
+                <tr class="hover:bg-slate-50 transition-colors" data-return-id="${r.id}">
                     <td class="px-4 py-2 font-mono font-bold text-slate-700 border-r border-slate-100">${r.id}</td>
                     <td class="px-4 py-2 font-black text-slate-900 border-r border-slate-100 uppercase">${r.sale}</td>
                     <td class="px-4 py-2 text-slate-700 border-r border-slate-100">${r.product}</td>
@@ -268,7 +315,7 @@
                     </td>
                     <td class="px-4 py-2 text-slate-500 font-bold uppercase text-[9px] text-center border-r border-slate-100">${r.date}</td>
                     <td class="px-4 py-2 text-center no-print">
-                        <button class="text-[9px] font-bold uppercase text-gov-red hover:underline tracking-widest cursor-pointer">Inspect</button>
+                        <button class="inspect-btn text-[9px] font-bold uppercase text-gov-red hover:underline tracking-widest cursor-pointer" data-return-id="${r.id}">Inspect</button>
                     </td>
                 </tr>
             `).join('') : '<tr><td colspan="7" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No return records found.</td></tr>';
@@ -320,6 +367,16 @@
             document.getElementById('newReturnForm').reset();
         });
 
+        // 3.5 INSPECT ACTION
+        document.getElementById('retTable').addEventListener('click', (e) => {
+            const btn = e.target.closest('.inspect-btn');
+            if (!btn) return;
+            const returnId = btn.getAttribute('data-return-id');
+            const record = returnData.find(r => r.id === returnId);
+            if (!record) return;
+            openInspectModal(record);
+        });
+
         // 4. CHARTS
         let modalChart;
         const reasonData = { labels:['Damaged','Defective','Wrong'], datasets:[{data:[25, 12, 5], backgroundColor:['#b91c1c','#ea580c','#f59e0b'], borderWidth: 0}]};
@@ -355,6 +412,30 @@
         function closeChartModal() {
             const m = document.getElementById('chartModal');
             const b = document.getElementById('modalBody');
+            m.classList.remove('opacity-100');
+            b.classList.replace('scale-100', 'scale-95');
+            setTimeout(() => m.classList.add('hidden'), 300);
+        }
+
+        function openInspectModal(record) {
+            const m = document.getElementById('inspectModal');
+            const b = document.getElementById('inspectBody');
+            document.getElementById('inspectId').innerText = record.id;
+            document.getElementById('inspectSale').innerText = record.sale;
+            document.getElementById('inspectProduct').innerText = record.product;
+            document.getElementById('inspectQty').innerText = record.qty;
+            const reasonLabel = record.reason.replace('_', ' ').toUpperCase();
+            const badge = document.getElementById('inspectReasonBadge');
+            badge.innerText = reasonLabel;
+            badge.className = `status-badge ${getReasonColor(record.reason)}`;
+            document.getElementById('inspectDate').innerText = record.date;
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.add('opacity-100'); b.classList.replace('scale-95', 'scale-100'); }, 10);
+        }
+
+        function closeInspectModal() {
+            const m = document.getElementById('inspectModal');
+            const b = document.getElementById('inspectBody');
             m.classList.remove('opacity-100');
             b.classList.replace('scale-100', 'scale-95');
             setTimeout(() => m.classList.add('hidden'), 300);
