@@ -4106,7 +4106,23 @@ def quotation_regional():
     import json
     from collections import Counter
     user_region = session.get('user_region', '').strip()
-    quotations = get_quotations(scope='regional', region=user_region)
+    # Support both region name variants for MIMAROPA
+    region_variants = [user_region]
+    if user_region == 'MIMAROPA':
+        region_variants.append('REGION-IV-B')
+    elif user_region == 'REGION-IV-B':
+        region_variants.append('MIMAROPA')
+    # Get all quotations for both region variants
+    all_quotations = []
+    for reg in region_variants:
+        all_quotations.extend(get_quotations(scope='regional', region=reg))
+    # Remove duplicates by id
+    seen_ids = set()
+    quotations = []
+    for q in all_quotations:
+        if q.get('id') not in seen_ids:
+            quotations.append(q)
+            seen_ids.add(q.get('id'))
     def to_float(value):
         try:
             return float(value)
@@ -4146,6 +4162,10 @@ def quotation_regional():
         for muni_list in philippineLocations.values():
             municipalities.extend(muni_list)
         municipalities = sorted(set(municipalities))
+
+    # Filter quotations to only those in the region's municipalities
+    muni_set = set(municipalities)
+    quotations = [q for q in quotations if str(q.get('municipality')).strip() in muni_set]
     monthly_amounts = Counter()
     for q in quotations:
         date_raw = str(q.get('date') or '').strip()
