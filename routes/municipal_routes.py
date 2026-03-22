@@ -575,124 +575,27 @@ def stock_reorder_municipal():
     return render_template('municipal/products/stock-reorder-municipal.html')
 
 # --- Operations (Superadmin Extra) ---
+
+# Unified quotations view using quotations collection
 @bp.route('/operations/quotations-municipal')
 @role_required('municipal','municipal_admin')
 def quotations_municipal():
-    db = get_firestore_db()
+    from quotation_storage import get_quotations
+    import json
+    from collections import Counter
     user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
     user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
 
-    def normalize_scope(value):
-        return ' '.join(str(value or '').strip().upper().split())
-
-    def get_municipality_query_values(value):
-        raw = str(value or '').strip()
-        if not raw:
-            return []
-        candidates = {raw}
-        if ',' in raw:
-            candidates.add(raw.split(',', 1)[0].strip())
-        if ' - ' in raw:
-            candidates.add(raw.split(' - ', 1)[0].strip())
-        if '(' in raw:
-            candidates.add(raw.split('(', 1)[0].strip())
-        raw_upper = raw.upper()
-        if raw_upper.startswith('CITY OF '):
-            candidates.add(raw[8:].strip())
-        if raw_upper.startswith('MUNICIPALITY OF '):
-            candidates.add(raw[16:].strip())
-        if raw_upper.endswith(' MUNICIPALITY'):
-            candidates.add(raw[:-13].strip())
-        return [c for c in candidates if c]
-
-    def to_status_text(status):
-        s = str(status or '').strip().upper()
-        if s == 'APPROVED':
-            return 'Approved'
-        if s == 'PENDING':
-            return 'Pending'
-        if s == 'REJECTED':
-            return 'Rejected'
-        return str(status or 'Pending').strip() or 'Pending'
-
+    quotations = get_quotations(scope='municipal', municipality=user_municipality)
     def to_float(value):
         try:
             return float(value)
         except Exception:
             return 0.0
-
-    municipality_query_values = get_municipality_query_values(user_municipality)
-    municipality_key = normalize_scope(user_municipality)
-
-    quotations = []
-    seen_ids = set()
-    try:
-        for municipality_value in municipality_query_values:
-            query = db.collection('municipal_quotations').where('municipality', '==', municipality_value).stream()
-            for doc in query:
-                if doc.id in seen_ids:
-                    continue
-                item = doc.to_dict() or {}
-                status_upper = str(item.get('status') or 'PENDING').strip().upper()
-                if status_upper == 'ARCHIVED':
-                    continue
-                item['id'] = doc.id
-                item['number'] = item.get('number') or 'N/A'
-                item['client'] = item.get('client') or 'N/A'
-                item['barangay'] = item.get('barangay') or 'N/A'
-                item['municipality'] = item.get('municipality') or user_municipality or 'N/A'
-                item['date'] = item.get('date') or 'N/A'
-                item['amount_value'] = to_float(item.get('amount'))
-                item['amount'] = f"{item['amount_value']:,.2f}"
-                item['status'] = to_status_text(status_upper)
-                created_at = item.get('created_at')
-                if isinstance(created_at, datetime):
-                    item['_created_at'] = created_at
-                elif hasattr(created_at, 'to_datetime'):
-                    try:
-                        item['_created_at'] = created_at.to_datetime()
-                    except Exception:
-                        item['_created_at'] = datetime.min
-                else:
-                    item['_created_at'] = datetime.min
-                quotations.append(item)
-                seen_ids.add(doc.id)
-
-        if not quotations:
-            for doc in db.collection('municipal_quotations').stream():
-                item = doc.to_dict() or {}
-                item_muni_key = normalize_scope(item.get('municipality_key') or item.get('municipality'))
-                if not item_muni_key:
-                    continue
-                if item_muni_key != municipality_key and not item_muni_key.startswith(municipality_key + ','):
-                    continue
-                status_upper = str(item.get('status') or 'PENDING').strip().upper()
-                if status_upper == 'ARCHIVED':
-                    continue
-                item['id'] = doc.id
-                item['number'] = item.get('number') or 'N/A'
-                item['client'] = item.get('client') or 'N/A'
-                item['barangay'] = item.get('barangay') or 'N/A'
-                item['municipality'] = item.get('municipality') or user_municipality or 'N/A'
-                item['date'] = item.get('date') or 'N/A'
-                item['amount_value'] = to_float(item.get('amount'))
-                item['amount'] = f"{item['amount_value']:,.2f}"
-                item['status'] = to_status_text(status_upper)
-                created_at = item.get('created_at')
-                if isinstance(created_at, datetime):
-                    item['_created_at'] = created_at
-                elif hasattr(created_at, 'to_datetime'):
-                    try:
-                        item['_created_at'] = created_at.to_datetime()
-                    except Exception:
-                        item['_created_at'] = datetime.min
-                else:
-                    item['_created_at'] = datetime.min
-                quotations.append(item)
-    except Exception as e:
-        print(f"[ERROR] quotations_municipal fetch failed: {e}")
-
-    quotations.sort(key=lambda q: q.get('_created_at') or datetime.min, reverse=True)
+    for q in quotations:
+        q['amount_value'] = to_float(q.get('amount'))
+        q['amount'] = f"{q['amount_value']:,.2f}"
+        q['status'] = str(q.get('status') or 'Pending').capitalize()
 
     total_quotes = len(quotations)
     approved_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'APPROVED'])
@@ -700,13 +603,12 @@ def quotations_municipal():
     rejected_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'REJECTED'])
     total_value_number = sum([to_float(q.get('amount_value')) for q in quotations])
     total_value = f"{total_value_number:,.2f}"
-
     barangay_options = sorted(list({(q.get('barangay') or '').strip() for q in quotations if (q.get('barangay') or '').strip()}))
-
     monthly_amounts = Counter()
     for q in quotations:
         date_raw = str(q.get('date') or '').strip()
         try:
+            from datetime import datetime
             dt = datetime.fromisoformat(date_raw)
             monthly_amounts[dt.strftime('%b')] += to_float(q.get('amount_value'))
         except Exception:
@@ -717,7 +619,6 @@ def quotations_municipal():
     if not trend_labels:
         trend_labels = ['No Data']
         trend_values = [0]
-
     return render_template(
         'municipal/operations/quotations-municipal.html',
         quotations=quotations,
@@ -733,56 +634,43 @@ def quotations_municipal():
     )
 
 
+
+# Unified quotation create endpoint
 @bp.route('/operations/quotations-municipal/api/create', methods=['POST'])
 @role_required('municipal','municipal_admin')
 def quotations_municipal_create():
-    from firebase_admin import firestore
-
-    db = get_firestore_db()
+    from quotation_storage import add_quotation
     user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
     user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
-
-    def normalize_scope(value):
-        return ' '.join(str(value or '').strip().upper().split())
-
-    def to_float(value):
-        try:
-            return float(value)
-        except Exception:
-            return 0.0
-
     data = request.get_json(silent=True) or {}
     number = str(data.get('number') or '').strip()
     client = str(data.get('client') or '').strip()
     barangay = str(data.get('barangay') or '').strip()
     date = str(data.get('date') or '').strip()
-    amount = to_float(data.get('amount'))
+    try:
+        amount = float(data.get('amount'))
+    except Exception:
+        amount = 0.0
     status = str(data.get('status') or 'PENDING').strip().upper()
     if status not in {'PENDING', 'APPROVED', 'REJECTED'}:
         status = 'PENDING'
-
     if not number or not client or not barangay or not date:
         return jsonify({'success': False, 'error': 'Missing required quotation fields'}), 400
-
+    payload = {
+        'number': number,
+        'client': client,
+        'barangay': barangay,
+        'date': date,
+        'amount': amount,
+        'status': status,
+        'municipality': user_municipality,
+        'region': user_region,
+        'scope': 'municipal'
+    }
     try:
-        payload = {
-            'number': number,
-            'client': client,
-            'barangay': barangay,
-            'date': date,
-            'amount': amount,
-            'status': status,
-            'municipality': user_municipality,
-            'region': user_region,
-            'municipality_key': normalize_scope(user_municipality),
-            'region_key': normalize_scope(user_region),
-            'created_at': firestore.SERVER_TIMESTAMP,
-            'updated_at': firestore.SERVER_TIMESTAMP
-        }
-        ref = db.collection('municipal_quotations').document()
-        ref.set(payload)
+        quotation = add_quotation(payload)
         return jsonify({'success': True, 'quotation': {
-            'id': ref.id,
+            'id': quotation['id'],
             'number': number,
             'client': client,
             'barangay': barangay,
@@ -796,59 +684,35 @@ def quotations_municipal_create():
         return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
 
 
+
+# Unified quotation status update endpoint
 @bp.route('/operations/quotations-municipal/api/<quotation_id>/status', methods=['POST'])
 @role_required('municipal','municipal_admin')
 def quotations_municipal_update_status(quotation_id):
-    from firebase_admin import firestore
-
-    db = get_firestore_db()
+    from quotation_storage import update_quotation
     user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
-
-    def normalize_scope(value):
-        return ' '.join(str(value or '').strip().upper().split())
-
     data = request.get_json(silent=True) or {}
     status = str(data.get('status') or '').strip().upper()
     if status not in {'PENDING', 'APPROVED', 'REJECTED'}:
         return jsonify({'success': False, 'error': 'Invalid status'}), 400
-
     try:
-        ref = db.collection('municipal_quotations').document(quotation_id)
-        doc = ref.get()
-        if not doc.exists:
+        updated = update_quotation(quotation_id, {'status': status, 'municipality': user_municipality})
+        if not updated:
             return jsonify({'success': False, 'error': 'Quotation not found'}), 404
-
-        existing = doc.to_dict() or {}
-        if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
-            return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
-
-        ref.set({'status': status, 'updated_at': firestore.SERVER_TIMESTAMP}, merge=True)
         return jsonify({'success': True})
     except Exception as e:
         print(f"[ERROR] quotations_municipal_update_status failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to update quotation status'}), 500
 
 
+
+# Unified quotation delete endpoint
 @bp.route('/operations/quotations-municipal/api/<quotation_id>', methods=['DELETE'])
 @role_required('municipal','municipal_admin')
 def quotations_municipal_delete(quotation_id):
-    db = get_firestore_db()
-    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
-
-    def normalize_scope(value):
-        return ' '.join(str(value or '').strip().upper().split())
-
+    from quotation_storage import delete_quotation
     try:
-        ref = db.collection('municipal_quotations').document(quotation_id)
-        doc = ref.get()
-        if not doc.exists:
-            return jsonify({'success': False, 'error': 'Quotation not found'}), 404
-
-        existing = doc.to_dict() or {}
-        if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
-            return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
-
-        ref.delete()
+        delete_quotation(quotation_id)
         return jsonify({'success': True})
     except Exception as e:
         print(f"[ERROR] quotations_municipal_delete failed: {e}")
