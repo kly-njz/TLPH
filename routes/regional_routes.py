@@ -4135,7 +4135,12 @@ def quotation_regional():
 
     # Filter quotations to only those in the region's municipalities
     muni_set = set(m.upper() for m in municipalities)
-    quotations = [q for q in all_quotations if str(q.get('municipality', '')).strip().upper() in muni_set]
+    region_upper = region_name.upper() if region_name else ''
+    quotations = [
+        q for q in all_quotations
+        if str(q.get('municipality', '')).strip().upper() in muni_set
+        and str(q.get('region', '')).strip().upper() == region_upper
+    ]
 
     def to_float(value):
         try:
