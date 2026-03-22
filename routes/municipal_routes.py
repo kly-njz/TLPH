@@ -604,6 +604,21 @@ def quotations_municipal():
     total_value_number = sum([to_float(q.get('amount_value')) for q in quotations])
     total_value = f"{total_value_number:,.2f}"
     barangay_options = sorted(list({(q.get('barangay') or '').strip() for q in quotations if (q.get('barangay') or '').strip()}))
+    # If no barangays found in quotations, fallback to all barangays for the user's municipality
+    if not barangay_options:
+        try:
+            from models.ph_locations import philippineLocations
+            user_muni = user_municipality.strip()
+            user_province = None
+            # Try to find the province for the user's municipality
+            for province, munis in philippineLocations.items():
+                if user_muni in munis:
+                    user_province = province
+                    break
+            if user_province:
+                barangay_options = sorted(munis)
+        except Exception:
+            pass
     monthly_amounts = Counter()
     for q in quotations:
         date_raw = str(q.get('date') or '').strip()
