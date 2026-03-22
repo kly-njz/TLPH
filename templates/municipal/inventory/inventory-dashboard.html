@@ -639,9 +639,17 @@
     }
 
     async function updateInventoryStatus(newStatus) {
-      if (!activeModalItemId) return;
+      console.log('updateInventoryStatus called with:', newStatus);
+      if (!activeModalItemId) {
+        console.error('No active modal item ID');
+        return;
+      }
+      
       const item = allItems.find(x => x.id === activeModalItemId);
-      if (!item) return;
+      if (!item) {
+        console.error('Item not found in allItems');
+        return;
+      }
 
       const actionText = newStatus === 'approved'
         ? 'approve'
@@ -650,9 +658,13 @@
           : 'forward to regional';
 
       const confirmed = confirm(`Are you sure you want to ${actionText} this stock registration?\n\nRef: ${els.modalRefNumber.textContent}\nResource: ${item.description}`);
-      if (!confirmed) return;
+      if (!confirmed) {
+        console.log('User cancelled the action');
+        return;
+      }
 
       try {
+        console.log('Preparing update payload for item:', item.id);
         const payload = {
           status: newStatus,
           updatedAt: serverTimestamp()
@@ -663,6 +675,7 @@
           payload.approvedByEmail = currentAdminUser?.email || '';
           payload.rejectedByLevel = '';
           payload.rejectedByEmail = '';
+          payload.approvedAt = serverTimestamp();
         }
 
         if (newStatus === 'rejected') {
@@ -670,6 +683,7 @@
           payload.rejectedByEmail = currentAdminUser?.email || '';
           payload.approvedByLevel = '';
           payload.approvedByEmail = '';
+          payload.rejectedAt = serverTimestamp();
         }
 
         if (newStatus === 'to-review') {
@@ -680,7 +694,9 @@
           payload.regionalStatus = 'pending';
         }
 
+        console.log('Updating Firestore document:', item.id, 'with payload:', payload);
         await updateDoc(doc(db, 'inventory_registrations', item.id), payload);
+        console.log('Document updated successfully');
 
         item.status = newStatus;
         if (newStatus === 'to-review') {
@@ -688,6 +704,7 @@
         }
 
         refresh();
+        console.log('Reopening modal after status update');
         openInventoryModal(item);
         alert(`Stock registration ${actionText} successfully.`);
       } catch (error) {
