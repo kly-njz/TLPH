@@ -4108,21 +4108,6 @@ def quotation_regional():
     user_region = session.get('user_region', '').strip()
     # Fetch all regional quotations, filter by municipality in Python
     all_quotations = get_quotations(scope='regional')
-    def to_float(value):
-        try:
-            return float(value)
-        except Exception:
-            return 0.0
-    for q in quotations:
-        q['amount_value'] = to_float(q.get('amount'))
-        q['amount'] = f"{q['amount_value']:,.2f}"
-        q['status'] = str(q.get('status') or 'Pending').capitalize()
-    total_quotes = len(quotations)
-    approved_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'APPROVED'])
-    pending_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'PENDING'])
-    rejected_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'REJECTED'])
-    total_value_number = sum([to_float(q.get('amount_value')) for q in quotations])
-    total_value = f"{total_value_number:,.2f}"
     # Always provide full list of municipalities for the user's region
     from models.ph_locations import philippineLocations
     region_name = user_region
@@ -4152,9 +4137,23 @@ def quotation_regional():
     muni_set = set(municipalities)
     quotations = [q for q in all_quotations if str(q.get('municipality')).strip() in muni_set]
 
-    # Filter quotations to only those in the region's municipalities
-    muni_set = set(municipalities)
-    quotations = [q for q in quotations if str(q.get('municipality')).strip() in muni_set]
+    def to_float(value):
+        try:
+            return float(value)
+        except Exception:
+            return 0.0
+
+    for q in quotations:
+        q['amount_value'] = to_float(q.get('amount'))
+        q['amount'] = f"{q['amount_value']:,.2f}"
+        q['status'] = str(q.get('status') or 'Pending').capitalize()
+
+    total_quotes = len(quotations)
+    approved_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'APPROVED'])
+    pending_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'PENDING'])
+    rejected_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'REJECTED'])
+    total_value_number = sum([to_float(q.get('amount_value')) for q in quotations])
+    total_value = f"{total_value_number:,.2f}"
     monthly_amounts = Counter()
     for q in quotations:
         date_raw = str(q.get('date') or '').strip()
