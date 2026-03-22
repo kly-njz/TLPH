@@ -687,10 +687,58 @@ def transfer_products():
     return render_template('national/logistics/transfer-products.html')
 
 
+
+# Unified quotations view for national
 @bp.route('/quotation')
 @role_required('national', 'national_admin')
 def quotation():
-    return render_template('national/operations/quotation.html')
+    from quotation_storage import get_quotations
+    import json
+    from collections import Counter
+    quotations = get_quotations(scope='national')
+    def to_float(value):
+        try:
+            return float(value)
+        except Exception:
+            return 0.0
+    for q in quotations:
+        q['amount_value'] = to_float(q.get('amount'))
+        q['amount'] = f"{q['amount_value']:,.2f}"
+        q['status'] = str(q.get('status') or 'Pending').capitalize()
+    total_quotes = len(quotations)
+    approved_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'APPROVED'])
+    pending_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'PENDING'])
+    rejected_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'REJECTED'])
+    total_value_number = sum([to_float(q.get('amount_value')) for q in quotations])
+    total_value = f"{total_value_number:,.2f}"
+    regions = sorted(list({(q.get('region') or '').strip() for q in quotations if (q.get('region') or '').strip()}))
+    monthly_amounts = Counter()
+    for q in quotations:
+        date_raw = str(q.get('date') or '').strip()
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(date_raw)
+            monthly_amounts[dt.strftime('%b')] += to_float(q.get('amount_value'))
+        except Exception:
+            continue
+    ordered_months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    trend_labels = [m for m in ordered_months if monthly_amounts.get(m)]
+    trend_values = [round(monthly_amounts[m], 2) for m in trend_labels]
+    if not trend_labels:
+        trend_labels = ['No Data']
+        trend_values = [0]
+    return render_template(
+        'national/operations/quotation.html',
+        quotations=quotations,
+        total_quotes=total_quotes,
+        approved_quotes=approved_quotes,
+        pending_quotes=pending_quotes,
+        rejected_quotes=rejected_quotes,
+        total_value=total_value,
+        regions=regions,
+        trend_labels_json=json.dumps(trend_labels),
+        trend_values_json=json.dumps(trend_values)
+    )
 
 
 @bp.route('/projects')
