@@ -268,6 +268,21 @@ def update_inventory_status_regional(inventory_id):
         inv_data = inv_doc.to_dict() or {}
         user_region, municipality_set = _resolve_regional_scope(db)
 
+        current_status = str(inv_data.get('status') or '').strip().lower()
+        current_regional = str(inv_data.get('regionalStatus') or '').strip().lower()
+        current_national = str(inv_data.get('nationalStatus') or '').strip().lower()
+
+        is_final = (
+            current_status in {'approved', 'rejected', 'forwarded-to-national'}
+            or current_regional in {'approved', 'rejected'}
+            or current_national in {'approved', 'rejected'}
+        )
+        if is_final:
+            return jsonify({
+                'status': 'error',
+                'message': 'This inventory record already has a final action and can no longer be updated.'
+            }), 409
+
         inv_municipality = str(inv_data.get('municipality') or '').strip().lower()
         inv_region = get_firestore_region_name(
             inv_data.get('region') or inv_data.get('region_name') or inv_data.get('regionName')
