@@ -241,6 +241,161 @@ def service_info_view(doc_id=None):
 def inventory_view():
     return render_template('regional/inventory-regional-list.html')
 
+@bp.route('/inventory/api/<inventory_id>/status', methods=['POST'])
+@role_required('regional','regional_admin')
+def update_inventory_status_regional(inventory_id):
+    """Regional inventory action endpoint: approve, reject, or forward to national."""
+    try:
+        db = get_firestore_db()
+        payload = request.get_json(silent=True) or {}
+        requested_status = str(payload.get('status') or '').strip().lower()
+
+        valid_statuses = {'approved', 'rejected', 'forwarded-to-national'}
+        if requested_status not in valid_statuses:
+            return jsonify({
+                'status': 'error',
+                'message': 'Invalid status action.'
+            }), 400
+
+        inv_ref = db.collection('inventory_registrations').document(inventory_id)
+        inv_doc = inv_ref.get()
+        if not inv_doc.exists:
+            return jsonify({
+                'status': 'error',
+                'message': 'Inventory registration not found.'
+            }), 404
+
+        inv_data = inv_doc.to_dict() or {}
+        user_region, municipality_set = _resolve_regional_scope(db)
+
+        current_status = str(inv_data.get('status') or '').strip().lower()
+        current_regional = str(inv_data.get('regionalStatus') or '').strip().lower()
+        current_national = str(inv_data.get('nationalStatus') or '').strip().lower()
+
+        is_final = (
+            current_status in {'approved', 'rejected', 'forwarded-to-national'}
+            or current_regional in {'approved', 'rejected'}
+            or current_national in {'approved', 'rejected'}
+        )
+        if is_final:
+            return jsonify({
+                'status': 'error',
+                'message': 'This inventory record already has a final action and can no longer be updated.'
+            }), 409
+
+        inv_municipality = str(inv_data.get('municipality') or '').strip().lower()
+        inv_province = str(inv_data.get('province') or '').strip().upper()
+        inv_region = get_firestore_region_name(
+            inv_data.get('region') or inv_data.get('region_name') or inv_data.get('regionName')
+        )
+        owner_data = {}
+
+        # Fallback: derive scope fields from owner profile for legacy records
+        # where municipality/region were not persisted on inventory document.
+        if (not inv_municipality or not inv_region) and inv_data.get('userId'):
+            try:
+                owner_doc = db.collection('users').document(str(inv_data.get('userId'))).get()
+                if owner_doc.exists:
+                    owner_data = owner_doc.to_dict() or {}
+                    if not inv_municipality:
+                        inv_municipality = str(owner_data.get('municipality') or '').strip().lower()
+                    if not inv_province:
+                        inv_province = str(owner_data.get('province') or '').strip().upper()
+                    if not inv_region:
+                        inv_region = get_firestore_region_name(
+                            owner_data.get('region') or owner_data.get('region_name') or owner_data.get('regionName')
+                        )
+            except Exception:
+                pass
+
+        # Fallback: derive actor province scope for cases where region/municipality
+        # fields are incomplete but province scope is available on regional account.
+        actor_province_set = set()
+        try:
+            actor_user_id = session.get('user_id')
+            if actor_user_id:
+                actor_doc = db.collection('users').document(str(actor_user_id)).get()
+                if actor_doc.exists:
+                    actor_data = actor_doc.to_dict() or {}
+                    actor_provinces = actor_data.get('provinces') or []
+                    if isinstance(actor_provinces, list):
+                        actor_province_set = {
+                            str(p).strip().upper()
+                            for p in actor_provinces
+                            if str(p).strip()
+                        }
+                    actor_single_province = str(actor_data.get('province') or '').strip().upper()
+                    if actor_single_province:
+                        actor_province_set.add(actor_single_province)
+        except Exception:
+            pass
+
+        in_scope = True
+        if user_region or municipality_set or actor_province_set:
+            has_loc_data = bool(inv_municipality or inv_region or inv_province)
+            if not has_loc_data:
+                # Keep legacy records actionable if regional location metadata is missing.
+                in_scope = True
+            else:
+                in_scope_by_municipality = bool(
+                    municipality_set and inv_municipality and inv_municipality in municipality_set
+                )
+                in_scope_by_region = bool(inv_region and user_region and _same_region(inv_region, user_region))
+                in_scope_by_province = bool(actor_province_set and inv_province and inv_province in actor_province_set)
+                in_scope = (
+                    in_scope_by_municipality
+                    or in_scope_by_region
+                    or in_scope_by_province
+                )
+
+        if not in_scope:
+            return jsonify({
+                'status': 'error',
+                'message': 'Inventory item is outside your regional scope.'
+            }), 403
+
+        update_data = {
+            'status': requested_status,
+            'updatedAt': datetime.utcnow(),
+        }
+
+        if requested_status == 'approved':
+            update_data.update({
+                'regionalStatus': 'approved',
+                'approvedByLevel': 'Regional',
+                'approvedAt': datetime.utcnow(),
+                'rejectedByLevel': '',
+                'rejectedByEmail': ''
+            })
+        elif requested_status == 'rejected':
+            update_data.update({
+                'regionalStatus': 'rejected',
+                'rejectedByLevel': 'Regional',
+                'rejectedAt': datetime.utcnow(),
+                'approvedByLevel': '',
+                'approvedByEmail': ''
+            })
+        elif requested_status == 'forwarded-to-national':
+            update_data.update({
+                'regionalStatus': 'approved',
+                'forwardedByLevel': 'Regional',
+                'forwardedToLevel': 'National',
+                'forwardedAt': datetime.utcnow(),
+                'nationalStatus': 'pending'
+            })
+
+        inv_ref.update(update_data)
+        return jsonify({
+            'status': 'success',
+            'message': 'Inventory status updated successfully.'
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 @bp.route('/license-view')
 @role_required('regional','regional_admin')
 def license_view():

@@ -191,12 +191,13 @@
           <table class="w-full text-left border-collapse table-fixed-header">
             <thead>
               <tr class="bg-slate-50 border-b-2 border-gray-400">
-                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[20%]">Category</th>
-                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[30%]">Description</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[18%]">Category</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[25%]">Description</th>
                 <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[10%]">Qty</th>
                 <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[15%]">Province</th>
                 <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[15%]">Municipality</th>
-                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[10%] text-right">Action</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[10%]">Status</th>
+                <th class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-gov2 text-slate-700 w-[7%] text-right">Action</th>
               </tr>
             </thead>
             <tbody id="itemsTbody" class="divide-y divide-gray-200">
@@ -465,7 +466,7 @@
       if (!list.length) {
         els.itemsTbody.innerHTML = `
           <tr>
-            <td colspan="6" class="px-3 py-6 text-center text-[10px] text-govmuted font-bold uppercase tracking-widest">
+            <td colspan="7" class="px-3 py-6 text-center text-[10px] text-govmuted font-bold uppercase tracking-widest">
               No items found in <span class="text-g900">${MY_MUNICIPALITY}</span>.
             </td>
           </tr>
@@ -474,13 +475,18 @@
         return;
       }
 
-      els.itemsTbody.innerHTML = list.map(i => `
+      els.itemsTbody.innerHTML = list.map(i => {
+        const statusMeta = getEffectiveStatus(i);
+        return `
         <tr class="hover:bg-emerald-50 transition-colors">
           <td class="px-3 py-1.5 text-[9px] font-bold text-slate-800 uppercase tracking-widest truncate">${i.category}</td>
           <td class="px-3 py-1.5 text-[10px] font-semibold text-slate-900 truncate">${i.description}</td>
           <td class="px-3 py-1.5 text-[10px] font-black text-emerald-800">${i.quantity}</td>
           <td class="px-3 py-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate">${i.province || i.region}</td>
           <td class="px-3 py-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate">${i.municipality}</td>
+          <td class="px-3 py-1.5">
+            <span class="inline-flex items-center rounded-[2px] border px-2 py-0.5 text-[8px] font-black uppercase tracking-widest ${statusMeta.className.replace('text-', 'text-').replace('800', '700')}">${statusMeta.text}</span>
+          </td>
           <td class="px-3 py-1.5 text-right">
             <button
               class="inline-flex items-center justify-center rounded-[2px] border border-govborder bg-white px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-700 hover:bg-emerald-700 hover:text-white hover:border-emerald-700 focus:outline-none transition-all shadow-sm"
@@ -489,7 +495,8 @@
             </button>
           </td>
         </tr>
-      `).join("");
+      `;
+      }).join("");
 
       els.resultsCount.textContent = `Records: ${list.length}`;
     }
@@ -522,17 +529,48 @@
     }
 
     function getEffectiveStatus(item) {
-      const status = (item.status || '').toLowerCase();
-      const nationalStatus = (item.nationalStatus || '').toLowerCase();
-      const regionalStatus = (item.regionalStatus || '').toLowerCase();
+      const normalize = (value) => String(value || '').toLowerCase().trim().replace(/\s+/g, '-');
+      const status = normalize(item.status);
+      const nationalStatus = normalize(item.nationalStatus);
+      const regionalStatus = normalize(item.regionalStatus);
+      const approvedByLevel = String(item.approvedByLevel || '').toLowerCase();
+      const rejectedByLevel = String(item.rejectedByLevel || '').toLowerCase();
 
       if (nationalStatus === 'approved') return { text: 'Approved by National', className: 'text-emerald-800' };
       if (nationalStatus === 'rejected') return { text: 'Rejected by National', className: 'text-rose-800' };
-      if (status === 'forwarded-to-national') return { text: 'Forwarded to National', className: 'text-violet-700' };
-      if (regionalStatus === 'approved' || status === 'approved') return { text: 'Approved by Regional', className: 'text-emerald-800' };
-      if (regionalStatus === 'rejected' || status === 'rejected') return { text: 'Rejected', className: 'text-rose-800' };
-      if (status === 'to-review') return { text: 'Forwarded to Regional', className: 'text-indigo-700' };
+
+      if (status === 'forwarded-to-national' || status === 'forwarded-national') {
+        return { text: 'Forwarded to National', className: 'text-violet-700' };
+      }
+
+      if (status === 'to-review' || status === 'to_review' || status.includes('forward')) {
+        return { text: 'Forwarded to Regional', className: 'text-indigo-700' };
+      }
+
+      if (status === 'approved') {
+        if (approvedByLevel.includes('municipal')) return { text: 'Approved by Municipal', className: 'text-emerald-800' };
+        if (approvedByLevel.includes('regional')) return { text: 'Approved by Regional', className: 'text-emerald-800' };
+        if (approvedByLevel.includes('national')) return { text: 'Approved by National', className: 'text-emerald-800' };
+        // Fallback inference when approvedByLevel is missing in old records
+        if (nationalStatus === 'approved') return { text: 'Approved by National', className: 'text-emerald-800' };
+        if (regionalStatus === 'approved') return { text: 'Approved by Regional', className: 'text-emerald-800' };
+        return { text: 'Approved by Municipal', className: 'text-emerald-800' };
+      }
+
+      if (status === 'rejected') {
+        if (rejectedByLevel.includes('municipal')) return { text: 'Rejected by Municipal', className: 'text-rose-800' };
+        if (rejectedByLevel.includes('regional')) return { text: 'Rejected by Regional', className: 'text-rose-800' };
+        if (rejectedByLevel.includes('national')) return { text: 'Rejected by National', className: 'text-rose-800' };
+        // Fallback inference when rejectedByLevel is missing in old records
+        if (nationalStatus === 'rejected') return { text: 'Rejected by National', className: 'text-rose-800' };
+        if (regionalStatus === 'rejected') return { text: 'Rejected by Regional', className: 'text-rose-800' };
+        return { text: 'Rejected by Municipal', className: 'text-rose-800' };
+      }
+
+      if (regionalStatus === 'approved') return { text: 'Approved by Regional', className: 'text-emerald-800' };
+      if (regionalStatus === 'rejected') return { text: 'Rejected by Regional', className: 'text-rose-800' };
       if (status === 'under-review') return { text: 'Under Review', className: 'text-blue-700' };
+
       return { text: 'Pending Review', className: 'text-amber-700' };
     }
 
@@ -616,7 +654,8 @@
 
       const nationalFinal = ['approved', 'rejected'].includes((item.nationalStatus || '').toLowerCase());
       const regionalFinal = ['approved', 'rejected'].includes((item.regionalStatus || '').toLowerCase());
-      const disableActions = nationalFinal || regionalFinal;
+      const municipalFinal = ['approved', 'rejected', 'to-review'].includes((item.status || '').toLowerCase());
+      const disableActions = nationalFinal || regionalFinal || municipalFinal;
 
       els.btnApproveStock.disabled = disableActions;
       els.btnRejectStock.disabled = disableActions;
@@ -639,9 +678,17 @@
     }
 
     async function updateInventoryStatus(newStatus) {
-      if (!activeModalItemId) return;
+      console.log('updateInventoryStatus called with:', newStatus);
+      if (!activeModalItemId) {
+        console.error('No active modal item ID');
+        return;
+      }
+      
       const item = allItems.find(x => x.id === activeModalItemId);
-      if (!item) return;
+      if (!item) {
+        console.error('Item not found in allItems');
+        return;
+      }
 
       const actionText = newStatus === 'approved'
         ? 'approve'
@@ -650,37 +697,32 @@
           : 'forward to regional';
 
       const confirmed = confirm(`Are you sure you want to ${actionText} this stock registration?\n\nRef: ${els.modalRefNumber.textContent}\nResource: ${item.description}`);
-      if (!confirmed) return;
+      if (!confirmed) {
+        console.log('User cancelled the action');
+        return;
+      }
 
       try {
-        const payload = {
-          status: newStatus,
-          updatedAt: serverTimestamp()
-        };
-
-        if (newStatus === 'approved') {
-          payload.approvedByLevel = 'Municipal';
-          payload.approvedByEmail = currentAdminUser?.email || '';
-          payload.rejectedByLevel = '';
-          payload.rejectedByEmail = '';
+        console.log('Calling backend API to update inventory status for item:', item.id);
+        
+        // Call backend API endpoint instead of direct Firestore update
+        const response = await fetch(`/municipal/inventory/api/${item.id}/status`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: newStatus
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to update inventory status');
         }
-
-        if (newStatus === 'rejected') {
-          payload.rejectedByLevel = 'Municipal';
-          payload.rejectedByEmail = currentAdminUser?.email || '';
-          payload.approvedByLevel = '';
-          payload.approvedByEmail = '';
-        }
-
-        if (newStatus === 'to-review') {
-          payload.forwardedAt = serverTimestamp();
-          payload.forwardedBy = currentAdminUser?.uid || null;
-          payload.forwardedByEmail = currentAdminUser?.email || null;
-          payload.forwardedByLevel = 'Municipal';
-          payload.regionalStatus = 'pending';
-        }
-
-        await updateDoc(doc(db, 'inventory_registrations', item.id), payload);
+        
+        console.log('Backend API response:', result);
 
         item.status = newStatus;
         if (newStatus === 'to-review') {
@@ -688,6 +730,7 @@
         }
 
         refresh();
+        console.log('Reopening modal after status update');
         openInventoryModal(item);
         alert(`Stock registration ${actionText} successfully.`);
       } catch (error) {
@@ -774,7 +817,7 @@
         init().catch(err => {
           console.error(err);
           els.itemsTbody.innerHTML = `
-            <tr><td colspan="6" class="px-3 py-6 text-center text-[10px] text-red-700 font-bold uppercase tracking-widest">
+            <tr><td colspan="7" class="px-3 py-6 text-center text-[10px] text-red-700 font-bold uppercase tracking-widest">
               Failed to load inventory. Check console for details.
             </td></tr>
           `;
