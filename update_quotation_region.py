@@ -10,7 +10,10 @@ def update_region_unknown_to_mimaropa():
     db = get_firestore_db()
     quotations_ref = db.collection('quotations')
     # Query for quotations with region 'unknown'
-    docs = quotations_ref.where('region', '==', 'unknown').stream()
+    docs = list(quotations_ref.where('region', '==', 'unknown').stream())
+    print(f"Found {len(docs)} quotations with region='unknown':")
+    for doc in docs:
+        print(f"  id: {doc.id}, data: {doc.to_dict()}")
     count = 0
     for doc in docs:
         quotations_ref.document(doc.id).update({'region': 'MIMAROPA'})
