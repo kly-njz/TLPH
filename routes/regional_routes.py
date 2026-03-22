@@ -284,9 +284,11 @@ def update_inventory_status_regional(inventory_id):
             }), 409
 
         inv_municipality = str(inv_data.get('municipality') or '').strip().lower()
+        inv_province = str(inv_data.get('province') or '').strip().upper()
         inv_region = get_firestore_region_name(
             inv_data.get('region') or inv_data.get('region_name') or inv_data.get('regionName')
         )
+        owner_data = {}
 
         # Fallback: derive scope fields from owner profile for legacy records
         # where municipality/region were not persisted on inventory document.
@@ -297,6 +299,8 @@ def update_inventory_status_regional(inventory_id):
                     owner_data = owner_doc.to_dict() or {}
                     if not inv_municipality:
                         inv_municipality = str(owner_data.get('municipality') or '').strip().lower()
+                    if not inv_province:
+                        inv_province = str(owner_data.get('province') or '').strip().upper()
                     if not inv_region:
                         inv_region = get_firestore_region_name(
                             owner_data.get('region') or owner_data.get('region_name') or owner_data.get('regionName')
@@ -304,16 +308,44 @@ def update_inventory_status_regional(inventory_id):
             except Exception:
                 pass
 
+        # Fallback: derive actor province scope for cases where region/municipality
+        # fields are incomplete but province scope is available on regional account.
+        actor_province_set = set()
+        try:
+            actor_user_id = session.get('user_id')
+            if actor_user_id:
+                actor_doc = db.collection('users').document(str(actor_user_id)).get()
+                if actor_doc.exists:
+                    actor_data = actor_doc.to_dict() or {}
+                    actor_provinces = actor_data.get('provinces') or []
+                    if isinstance(actor_provinces, list):
+                        actor_province_set = {
+                            str(p).strip().upper()
+                            for p in actor_provinces
+                            if str(p).strip()
+                        }
+                    actor_single_province = str(actor_data.get('province') or '').strip().upper()
+                    if actor_single_province:
+                        actor_province_set.add(actor_single_province)
+        except Exception:
+            pass
+
         in_scope = True
-        if user_region or municipality_set:
-            has_loc_data = bool(inv_municipality or inv_region)
+        if user_region or municipality_set or actor_province_set:
+            has_loc_data = bool(inv_municipality or inv_region or inv_province)
             if not has_loc_data:
                 # Keep legacy records actionable if regional location metadata is missing.
                 in_scope = True
             else:
+                in_scope_by_municipality = bool(
+                    municipality_set and inv_municipality and inv_municipality in municipality_set
+                )
+                in_scope_by_region = bool(inv_region and user_region and _same_region(inv_region, user_region))
+                in_scope_by_province = bool(actor_province_set and inv_province and inv_province in actor_province_set)
                 in_scope = (
-                    bool(municipality_set and inv_municipality and inv_municipality in municipality_set)
-                    or _same_region(inv_region, user_region)
+                    in_scope_by_municipality
+                    or in_scope_by_region
+                    or in_scope_by_province
                 )
 
         if not in_scope:
