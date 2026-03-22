@@ -189,6 +189,89 @@
             });
         }
 
+        function normalizeStatus(value) {
+            return String(value || '').toLowerCase().trim().replace(/\s+/g, '_');
+        }
+
+        function getInventoryStatusMeta(item) {
+            const paymentStatus = normalizeStatus(item.paymentStatus || item.payment_status || item.payment);
+            const mainStatus = normalizeStatus(item.status || 'pending');
+            const regionalStatus = normalizeStatus(item.regionalStatus);
+            const nationalStatus = normalizeStatus(item.nationalStatus);
+
+            let status = mainStatus || 'pending';
+            let levelHint = '';
+
+            if (nationalStatus === 'approved' || nationalStatus === 'rejected') {
+                status = nationalStatus;
+                levelHint = 'NATIONAL';
+            } else if (
+                status === 'to_review' ||
+                status === 'to-review' ||
+                status === 'forwarded_to_national' ||
+                status === 'forwarded-to-national' ||
+                status.includes('forward')
+            ) {
+                // Keep explicit forward workflow states from main status.
+                levelHint = '';
+            } else if (regionalStatus === 'approved' || regionalStatus === 'rejected') {
+                status = regionalStatus;
+                // Only fallback to level hint when explicit approver/rejector is absent.
+                levelHint = '';
+            }
+
+            if ((status === 'pending_payment' || status === 'payment_pending') && paymentStatus === 'paid') {
+                status = 'pending';
+            }
+
+            const approvedBy = (item.approvedByLevel || levelHint || '').toUpperCase();
+            const rejectedBy = (item.rejectedByLevel || levelHint || '').toUpperCase();
+            const forwardedTo = (item.forwardedToLevel || '').toUpperCase();
+
+            if (status === 'approved' || status === 'active') {
+                return {
+                    status,
+                    label: approvedBy ? `APPROVED BY ${approvedBy}` : 'APPROVED',
+                    className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-green-50 text-green-700 border border-green-200',
+                    icon: 'fa-check'
+                };
+            }
+
+            if (status === 'rejected') {
+                return {
+                    status,
+                    label: rejectedBy ? `REJECTED BY ${rejectedBy}` : 'REJECTED',
+                    className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-red-50 text-red-700 border border-red-200',
+                    icon: 'fa-times'
+                };
+            }
+
+            if (status === 'to-review' || status === 'to_review' || status.includes('forward')) {
+                return {
+                    status,
+                    label: forwardedTo ? `FORWARDED TO ${forwardedTo}` : 'FORWARDED FOR REVIEW',
+                    className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-indigo-50 text-indigo-700 border border-indigo-200',
+                    icon: 'fa-share'
+                };
+            }
+
+            if (status === 'pending_payment' || status === 'payment_pending') {
+                return {
+                    status,
+                    label: 'AWAITING PAYMENT',
+                    className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-orange-50 text-orange-700 border border-orange-200',
+                    icon: 'fa-credit-card'
+                };
+            }
+
+            return {
+                status,
+                label: 'PENDING',
+                className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-yellow-50 text-yellow-700 border border-yellow-200',
+                icon: 'fa-clock'
+            };
+        }
+
         function getApplicationId() {
             const pathParts = window.location.pathname.split('/');
             return pathParts[pathParts.length - 1];
@@ -237,19 +320,23 @@
 
                 // --- Status badge ---
                 const statusBadge = document.getElementById('statusBadge');
-                const st = (app.status || 'pending').toLowerCase();
-                if (st === 'approved' || st === 'active') {
+                const st = normalizeStatus(app.status || 'pending');
+                if (isInventoryReg) {
+                    const meta = getInventoryStatusMeta(app);
+                    statusBadge.className = meta.className;
+                    statusBadge.innerHTML = `<i class="fa-solid ${meta.icon} mr-1"></i> ${meta.label}`;
+                } else if (st === 'approved' || st === 'active') {
                     statusBadge.className = 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-green-50 text-green-700 border border-green-200';
-                    statusBadge.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Approved';
-                } else if (st === 'pending_payment') {
+                    statusBadge.innerHTML = '<i class="fa-solid fa-check mr-1"></i> APPROVED';
+                } else if (st === 'pending_payment' || st === 'payment_pending') {
                     statusBadge.className = 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-orange-50 text-orange-700 border border-orange-200';
-                    statusBadge.innerHTML = '<i class="fa-solid fa-credit-card mr-1"></i> Awaiting Payment';
+                    statusBadge.innerHTML = '<i class="fa-solid fa-credit-card mr-1"></i> AWAITING PAYMENT';
                 } else if (st === 'rejected') {
                     statusBadge.className = 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-red-50 text-red-700 border border-red-200';
-                    statusBadge.innerHTML = '<i class="fa-solid fa-times mr-1"></i> Rejected';
+                    statusBadge.innerHTML = '<i class="fa-solid fa-times mr-1"></i> REJECTED';
                 } else {
                     statusBadge.className = 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-yellow-50 text-yellow-700 border border-yellow-200';
-                    statusBadge.textContent = app.status.replace(/_/g, ' ').toUpperCase();
+                    statusBadge.textContent = String(app.status || 'pending').replace(/_/g, ' ').toUpperCase();
                 }
 
                 if (isInventoryReg) {

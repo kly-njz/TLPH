@@ -911,11 +911,30 @@
     // Resolve inventory status with level context (approved by, rejected by, forwarded to)
     function resolveInventoryStatus(item) {
       const paymentStatus = (item.paymentStatus || item.payment_status || item.payment || '').toLowerCase();
-      const rawStatus = item.nationalStatus === 'approved' || item.nationalStatus === 'rejected'
-        ? item.nationalStatus
-        : item.regionalStatus === 'approved' || item.regionalStatus === 'rejected'
-          ? item.regionalStatus
-          : item.status || 'pending';
+      const mainStatus = (item.status || '').toLowerCase();
+      const regionalStatus = (item.regionalStatus || '').toLowerCase();
+      const nationalStatus = (item.nationalStatus || '').toLowerCase();
+
+      let rawStatus = mainStatus || 'pending';
+
+      // National final decision has highest priority.
+      if (nationalStatus === 'approved' || nationalStatus === 'rejected') {
+        rawStatus = nationalStatus;
+      }
+      // Preserve explicit workflow states from main status (do not override as approved/rejected).
+      else if (
+        mainStatus === 'to-review' ||
+        mainStatus === 'to_review' ||
+        mainStatus === 'forwarded-to-national' ||
+        mainStatus === 'forwarded-national' ||
+        mainStatus.includes('forward')
+      ) {
+        rawStatus = mainStatus;
+      }
+      // Use regional final decision only when main status is not an explicit forward state.
+      else if (regionalStatus === 'approved' || regionalStatus === 'rejected') {
+        rawStatus = regionalStatus;
+      }
 
       // Normalize status variants like "pending payment", "payment_pending"
       const normalizedStatus = (rawStatus || '').toLowerCase().replace(/\s+/g, '_');
