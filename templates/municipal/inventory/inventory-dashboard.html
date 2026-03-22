@@ -639,9 +639,17 @@
     }
 
     async function updateInventoryStatus(newStatus) {
-      if (!activeModalItemId) return;
+      console.log('updateInventoryStatus called with:', newStatus);
+      if (!activeModalItemId) {
+        console.error('No active modal item ID');
+        return;
+      }
+      
       const item = allItems.find(x => x.id === activeModalItemId);
-      if (!item) return;
+      if (!item) {
+        console.error('Item not found in allItems');
+        return;
+      }
 
       const actionText = newStatus === 'approved'
         ? 'approve'
@@ -650,37 +658,32 @@
           : 'forward to regional';
 
       const confirmed = confirm(`Are you sure you want to ${actionText} this stock registration?\n\nRef: ${els.modalRefNumber.textContent}\nResource: ${item.description}`);
-      if (!confirmed) return;
+      if (!confirmed) {
+        console.log('User cancelled the action');
+        return;
+      }
 
       try {
-        const payload = {
-          status: newStatus,
-          updatedAt: serverTimestamp()
-        };
-
-        if (newStatus === 'approved') {
-          payload.approvedByLevel = 'Municipal';
-          payload.approvedByEmail = currentAdminUser?.email || '';
-          payload.rejectedByLevel = '';
-          payload.rejectedByEmail = '';
+        console.log('Calling backend API to update inventory status for item:', item.id);
+        
+        // Call backend API endpoint instead of direct Firestore update
+        const response = await fetch(`/municipal/inventory/api/${item.id}/status`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: newStatus
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to update inventory status');
         }
-
-        if (newStatus === 'rejected') {
-          payload.rejectedByLevel = 'Municipal';
-          payload.rejectedByEmail = currentAdminUser?.email || '';
-          payload.approvedByLevel = '';
-          payload.approvedByEmail = '';
-        }
-
-        if (newStatus === 'to-review') {
-          payload.forwardedAt = serverTimestamp();
-          payload.forwardedBy = currentAdminUser?.uid || null;
-          payload.forwardedByEmail = currentAdminUser?.email || null;
-          payload.forwardedByLevel = 'Municipal';
-          payload.regionalStatus = 'pending';
-        }
-
-        await updateDoc(doc(db, 'inventory_registrations', item.id), payload);
+        
+        console.log('Backend API response:', result);
 
         item.status = newStatus;
         if (newStatus === 'to-review') {
@@ -688,6 +691,7 @@
         }
 
         refresh();
+        console.log('Reopening modal after status update');
         openInventoryModal(item);
         alert(`Stock registration ${actionText} successfully.`);
       } catch (error) {
