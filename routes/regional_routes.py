@@ -4122,7 +4122,17 @@ def quotation_regional():
     rejected_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'REJECTED'])
     total_value_number = sum([to_float(q.get('amount_value')) for q in quotations])
     total_value = f"{total_value_number:,.2f}"
-    municipalities = sorted(list({(q.get('municipality') or '').strip() for q in quotations if (q.get('municipality') or '').strip()}))
+    # Always provide full list of municipalities for the user's region
+    from models.ph_locations import philippineLocations
+    region_name = user_region
+    municipalities = []
+    if region_name and region_name in philippineLocations:
+        municipalities = sorted(philippineLocations[region_name])
+    else:
+        # fallback: use all municipalities from all regions
+        for muni_list in philippineLocations.values():
+            municipalities.extend(muni_list)
+        municipalities = sorted(set(municipalities))
     monthly_amounts = Counter()
     for q in quotations:
         date_raw = str(q.get('date') or '').strip()
