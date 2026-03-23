@@ -55,23 +55,40 @@ def add_expense_category(name, coa_code, coa_name, expense_type, office,
         print(f"Error adding expense category: {e}")
         return None
 
-def get_all_expense_categories(municipality=None):
-    """Get all expense categories, optionally filtered by municipality"""
+def get_all_expense_categories(region=None, municipality=None):
+    """Get all expense categories, optionally filtered by region or municipality."""
     try:
         expenses_ref = get_expenses_collection()
-        
-        if municipality:
-            # Avoid requiring a composite Firestore index for where + order_by.
-            # Fetch scoped docs first, then sort in memory.
-            docs = expenses_ref.where('municipality', '==', municipality).stream()
-        else:
-            docs = expenses_ref.stream()
-        
         categories = []
-        for doc in docs:
-            category = doc.to_dict()
-            category['id'] = doc.id
-            categories.append(category)
+        if municipality:
+            docs = expenses_ref.where('municipality', '==', municipality).stream()
+            for doc in docs:
+                category = doc.to_dict()
+                category['id'] = doc.id
+                categories.append(category)
+        elif region:
+            # Get all categories for all municipalities in the region
+            from models.ph_locations import philippineLocations
+            from models.region_province_map import region_province_map
+            muni_set = set()
+            provinces = region_province_map.get(region, [])
+            for prov in provinces:
+                muni_set.update(philippineLocations.get(prov, []))
+            muni_set = set(m.strip().upper() for m in muni_set)
+            docs = expenses_ref.stream()
+            for doc in docs:
+                category = doc.to_dict()
+                category['id'] = doc.id
+                muni = (category.get('municipality') or '').strip().upper()
+                if muni in muni_set:
+                    categories.append(category)
+        else:
+            # National: get all
+            docs = expenses_ref.stream()
+            for doc in docs:
+                category = doc.to_dict()
+                category['id'] = doc.id
+                categories.append(category)
 
         def to_sort_key(item):
             ts = item.get('created_at')
@@ -83,7 +100,6 @@ def get_all_expense_categories(municipality=None):
             return 0
 
         categories.sort(key=to_sort_key, reverse=True)
-        
         return categories
     except Exception as e:
         print(f"Error fetching expense categories: {e}")
