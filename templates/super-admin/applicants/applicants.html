@@ -38,7 +38,7 @@
         /* Gov UI Utilities */
         .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; margin-bottom: 0; }
         .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; color: #1e293b; box-sizing: border-box; }
-        .gov-input:focus { border-color: #15803d; } /* Green focus for Applicants */
+        .gov-input:focus { border-color: #15803d; } 
         
         .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: none; }
         
@@ -50,7 +50,7 @@
 
         /* Modal */
         .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 2050; backdrop-filter: blur(2px); padding: 16px; }
-        .gov-modal.flex { display: flex !important; animation: fadeIn 0.15s ease-out; }
+        .gov-modal.active { display: flex !important; animation: fadeIn 0.15s ease-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         @media print {
@@ -73,7 +73,7 @@
         {% include 'super-admin/header-superadmin.html' %}
     </div>
     
-    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar flex flex-col">
+    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-y-auto custom-scrollbar transition-all duration-300 flex flex-col">
         
         <div class="max-w-[1700px] w-full mx-auto flex flex-col gap-2 h-full min-h-0">
             
@@ -166,7 +166,7 @@
                 </div>
                 
                 <div class="flex-1 overflow-auto custom-scrollbar table-wrapper bg-white relative">
-                    <table class="w-full text-left border-collapse m-0">
+                    <table id="registryTable" class="w-full text-left border-collapse m-0">
                         <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th class="border-r border-slate-200">Full Name</th>
@@ -176,16 +176,22 @@
                                 <th class="text-center no-print">Action</th>
                             </tr>
                         </thead>
-                        <tbody id="appTable" class="text-[10px] divide-y divide-slate-100">
-                            </tbody>
+                        <tbody id="appTable" class="text-[10px] divide-y divide-slate-100"></tbody>
                     </table>
+                </div>
+
+                <div class="bg-slate-50 border-t border-slate-300 px-3 py-2 flex justify-between items-center shrink-0">
+                    <span id="rowCountLabel" class="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Displaying records from registry</span>
+                    <div class="flex items-center gap-1">
+                        <button class="px-2 py-0.5 border border-slate-300 bg-white font-bold text-[9px] uppercase hover:bg-slate-100 text-slate-600">Prev</button>
+                        <button class="px-2 py-0.5 border border-slate-300 bg-white font-bold text-[9px] uppercase hover:bg-slate-100 text-slate-600">Next</button>
+                    </div>
                 </div>
             </div>
         </div>
     </main>
 
     <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[2040] hidden opacity-0 transition-opacity duration-300 no-print" onclick="closeAppDrawer()"></div>
-    
     <div id="appDrawer" class="fixed inset-y-0 right-0 z-[2050] w-full max-w-sm bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-400 no-print">
         <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
             <h2 class="text-[11px] font-black uppercase tracking-widest leading-none flex items-center gap-2 m-0">
@@ -195,7 +201,6 @@
                 <span class="material-icons-round text-sm">close</span>
             </button>
         </div>
-        
         <div class="flex-1 overflow-y-auto custom-scrollbar p-4 bg-slate-50">
             <form id="newAppForm" class="space-y-3">
                 <div>
@@ -228,6 +233,51 @@
                     <button type="submit" class="gov-btn bg-denr-green text-white hover:bg-green-800 w-full py-2">Record Application</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="reviewModal" class="gov-modal no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeReviewModal()"></div>
+        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-lg overflow-hidden relative z-10 flex flex-col">
+            <div class="bg-denr-green text-white px-4 py-3 flex justify-between items-center shrink-0 border-b border-green-900">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <span class="material-icons-round text-sm">assignment_ind</span> Review Application File
+                </h3>
+                <button onclick="closeReviewModal()" class="text-green-200 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-5 bg-white space-y-4">
+                <div class="flex items-center gap-4 border-b border-slate-100 pb-4">
+                    <div class="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 border border-slate-200">
+                        <span class="material-icons-round text-3xl">account_circle</span>
+                    </div>
+                    <div>
+                        <h2 id="revName" class="text-sm font-black text-slate-900 m-0 uppercase leading-none"></h2>
+                        <p id="revType" class="text-[9px] font-bold text-denr-green uppercase mt-1 tracking-widest"></p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-[10px]">
+                    <div class="space-y-3">
+                        <div>
+                            <p class="font-black text-slate-400 uppercase text-[8px] mb-1">Regional Office</p>
+                            <p id="revRegion" class="font-bold text-slate-800 m-0"></p>
+                        </div>
+                        <div>
+                            <p class="font-black text-slate-400 uppercase text-[8px] mb-1">Current Status</p>
+                            <p id="revStatus" class="font-bold text-slate-800 m-0"></p>
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 p-3 border border-slate-100 rounded-sm">
+                        <p class="font-black text-slate-500 uppercase text-[8px] mb-1">Evaluation Note</p>
+                        <p class="italic text-slate-400 m-0">Awaiting internal review from the regional human resource officer.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+                <button onclick="closeReviewModal()" class="gov-btn border border-slate-300 bg-white text-slate-700">Close</button>
+                <button class="gov-btn bg-gov-blue text-white hover:bg-blue-800">Print Profile</button>
+            </div>
         </div>
     </div>
 
@@ -275,21 +325,23 @@
 
         function renderTable(data) {
             const tbody = document.getElementById('appTable');
-            tbody.innerHTML = data.length ? data.map(a => `
-                <tr class="hover:bg-slate-50 transition-colors">
-                    <td class="px-4 py-2 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight">${a.name}</td>
-                    <td class="px-4 py-2 text-center border-r border-slate-100"><span class="status-badge bg-indigo-50 text-indigo-700 border-indigo-200">${a.type}</span></td>
-                    <td class="px-4 py-2 text-slate-700 font-bold uppercase tracking-widest text-center border-r border-slate-100">${a.region}</td>
-                    <td class="px-4 py-2 text-center border-r border-slate-100">
-                        <span class="status-badge ${getStatusColor(a.status)}">
-                            ${statusMap[a.status]}
-                        </span>
-                    </td>
-                    <td class="px-4 py-2 text-center no-print">
-                        <button class="text-[9px] font-bold uppercase text-denr-green hover:underline tracking-widest cursor-pointer">Review</button>
-                    </td>
-                </tr>
-            `).join('') : '<tr><td colspan="5" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No results found.</td></tr>';
+            tbody.innerHTML = data.length ? data.map((a, index) => {
+                // Pinapasa natin ang INDEX ng original array para sa Review Modal
+                const originalIndex = applicantData.indexOf(a);
+                return `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-4 py-2 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight">${a.name}</td>
+                        <td class="px-4 py-2 text-center border-r border-slate-100"><span class="status-badge bg-indigo-50 text-indigo-700 border-indigo-200">${a.type}</span></td>
+                        <td class="px-4 py-2 text-slate-700 font-bold uppercase tracking-widest text-center border-r border-slate-100">${a.region}</td>
+                        <td class="px-4 py-2 text-center border-r border-slate-100">
+                            <span class="status-badge ${getStatusColor(a.status)}">${statusMap[a.status]}</span>
+                        </td>
+                        <td class="px-4 py-2 text-center no-print">
+                            <button onclick="prepareReviewModal(${originalIndex})" class="text-[9px] font-bold uppercase text-denr-green hover:underline tracking-widest cursor-pointer bg-transparent border-none">Review</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="5" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No results found.</td></tr>';
         }
 
         function getStatusColor(s) {
@@ -312,17 +364,33 @@
             filterApplicants();
         }
 
-        // 3. UI CONTROLS
+        // 3. UI CONTROLS (DRAWER & MODALS)
         function openAppDrawer() {
-            document.getElementById('drawerOverlay').classList.remove('hidden');
-            setTimeout(() => document.getElementById('drawerOverlay').classList.add('opacity-100'), 10);
+            const overlay = document.getElementById('drawerOverlay');
+            overlay.classList.remove('hidden');
+            setTimeout(() => overlay.classList.add('opacity-100'), 10);
             document.getElementById('appDrawer').classList.remove('translate-x-full');
         }
 
         function closeAppDrawer() {
             document.getElementById('appDrawer').classList.add('translate-x-full');
-            document.getElementById('drawerOverlay').classList.remove('opacity-100');
-            setTimeout(() => document.getElementById('drawerOverlay').classList.add('hidden'), 300);
+            const overlay = document.getElementById('drawerOverlay');
+            overlay.classList.remove('opacity-100');
+            setTimeout(() => overlay.classList.add('hidden'), 300);
+        }
+
+        function prepareReviewModal(index) {
+            const a = applicantData[index];
+            if(!a) return;
+            document.getElementById('revName').innerText = a.name;
+            document.getElementById('revType').innerText = a.type + " Candidate";
+            document.getElementById('revRegion').innerText = a.region;
+            document.getElementById('revStatus').innerText = statusMap[a.status];
+            document.getElementById('reviewModal').classList.add('active');
+        }
+
+        function closeReviewModal() {
+            document.getElementById('reviewModal').classList.remove('active');
         }
 
         document.getElementById('newAppForm').addEventListener('submit', (e) => {
@@ -346,7 +414,6 @@
         window.onload = () => {
             filterApplicants();
             const chartFont = { size: 9, weight: 'bold' };
-
             new Chart(document.getElementById('hiringChart').getContext('2d'), { type:'line', data:trendData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{display:false}, x:{grid:{display:false}, ticks:{font:chartFont}}}} });
             new Chart(document.getElementById('typeChart').getContext('2d'), { type:'doughnut', data:typeDist, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right', labels:{boxWidth:10, font:chartFont}}}, cutout:'75%'} });
         };
@@ -355,12 +422,10 @@
             const m = document.getElementById('chartModal');
             const b = document.getElementById('modalBody');
             m.classList.remove('hidden');
-            setTimeout(() => { m.classList.add('flex'); b.classList.replace('scale-95', 'scale-100'); }, 10);
-            
+            setTimeout(() => { m.classList.add('active'); b.classList.replace('scale-95', 'scale-100'); }, 10);
             if (modalChart) modalChart.destroy();
             const ctx = document.getElementById('modalCanvas').getContext('2d');
             const chartFont = { size: 10, weight: 'bold' };
-
             if(type === 'hiring') {
                 document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-chart-line text-denr-green mr-2"></i> Hiring Success Trend';
                 modalChart = new Chart(ctx, { type:'line', data:trendData, options:{responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{font:chartFont}}, y:{ticks:{font:chartFont}}}}});
@@ -373,7 +438,7 @@
         function closeChartModal() {
             const m = document.getElementById('chartModal');
             const b = document.getElementById('modalBody');
-            m.classList.remove('flex');
+            m.classList.remove('active');
             b.classList.replace('scale-100', 'scale-95');
             setTimeout(() => m.classList.add('hidden'), 300);
         }

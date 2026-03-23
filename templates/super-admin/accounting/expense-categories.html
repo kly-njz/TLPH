@@ -24,7 +24,7 @@
         /* Gov UI Utilities */
         .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; margin-bottom: 0; }
         .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; color: #1e293b; box-sizing: border-box; }
-        .gov-input:focus { border-color: #be123c; } /* Rose focus for expense */
+        .gov-input:focus { border-color: #be123c; } 
         .gov-input:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
         
         .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: none; }
@@ -85,14 +85,17 @@
                     <div class="flex flex-wrap gap-2 w-full sm:w-auto">
                         <div class="relative flex-1 sm:flex-none">
                             <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-                            <input type="text" id="searchCategory" placeholder="Search category..." class="gov-input w-full sm:w-48 pl-6 h-7">
+                            <input type="text" id="searchCategory" placeholder="Search category..." class="gov-input w-full sm:w-48 pl-6 h-7" oninput="applyLiveFilters()">
                         </div>
-                        <select class="gov-input w-full sm:w-auto cursor-pointer h-7">
-                            <option value="">All Tax Types</option>
-                            <option value="vat">VAT</option>
-                            <option value="withholding">Withholding Tax</option>
-                            <option value="none">No Tax</option>
+                        <select id="taxFilter" class="gov-input w-full sm:w-auto cursor-pointer h-7" onchange="applyLiveFilters()">
+                            <option value="ALL">All Tax Types</option>
+                            <option value="VAT">VAT</option>
+                            <option value="Withholding">Withholding Tax</option>
+                            <option value="No Tax">No Tax</option>
                         </select>
+                        <button onclick="resetFilters()" class="gov-btn bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 h-7 px-2">
+                            <span class="material-icons-round text-[14px]">filter_alt_off</span> Reset
+                        </button>
                     </div>
                 </div>
 
@@ -145,17 +148,23 @@
                                     </div>
                                 </td>
                             </tr>
+                            {% for category in categories %}
                             <tr class="hover:bg-blue-50 transition data-row">
-                                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 uppercase">Utilities - Electricity</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 uppercase">{{ category.name }}</td>
                                 <td class="px-3 py-1.5 border-r border-slate-100">
-                                    <span class="font-mono font-black text-slate-900">5301</span>
-                                    <span class="text-[9px] font-bold text-slate-500 uppercase ml-1">— Utilities</span>
+                                    <span class="font-mono font-black text-slate-900">{{ category.coa_code }}</span>
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase ml-1">— {{ category.coa_name }}</span>
                                 </td>
                                 <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                                    <span class="status-badge bg-blue-50 text-blue-800 border-blue-200">VAT</span>
+                                    <span class="status-badge 
+                                        {% if 'VAT' in category.tax_type %}bg-blue-50 text-blue-800 border-blue-200
+                                        {% elif 'Withholding' in category.tax_type %}bg-amber-50 text-amber-800 border-amber-200
+                                        {% else %}bg-slate-100 text-slate-600 border-slate-300{% endif %}">
+                                        {{ category.tax_type }}
+                                    </span>
                                 </td>
-                                <td class="px-3 py-1.5 text-right font-mono font-black text-slate-900 border-r border-slate-100">12.00%</td>
-                                <td class="px-3 py-1.5 font-mono font-bold text-slate-700 border-r border-slate-100">MOOE-003</td>
+                                <td class="px-3 py-1.5 text-right font-mono font-black text-slate-900 border-r border-slate-100">{{ category.tax_rate }}%</td>
+                                <td class="px-3 py-1.5 font-mono font-bold text-slate-700 border-r border-slate-100">{{ category.budget_code }}</td>
                                 <td class="px-3 py-1.5 text-center no-print">
                                     <div class="flex items-center justify-center gap-2">
                                         <button onclick="openEditCategory(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
@@ -163,69 +172,15 @@
                                     </div>
                                 </td>
                             </tr>
-                            <tr class="hover:bg-blue-50 transition data-row">
-                                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 uppercase">Travel - Local</td>
-                                <td class="px-3 py-1.5 border-r border-slate-100">
-                                    <span class="font-mono font-black text-slate-900">5401</span>
-                                    <span class="text-[9px] font-bold text-slate-500 uppercase ml-1">— Travel Expense</span>
-                                </td>
-                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                                    <span class="status-badge bg-slate-100 text-slate-600 border-slate-300">No Tax</span>
-                                </td>
-                                <td class="px-3 py-1.5 text-right font-mono font-bold text-slate-400 border-r border-slate-100">—</td>
-                                <td class="px-3 py-1.5 font-mono font-bold text-slate-700 border-r border-slate-100">MOOE-004</td>
-                                <td class="px-3 py-1.5 text-center no-print">
-                                    <div class="flex items-center justify-center gap-2">
-                                        <button onclick="openEditCategory(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
-                                        <button onclick="deleteCategory(this)" class="text-[9px] font-bold uppercase text-rose-700 hover:underline">Del</button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr class="hover:bg-blue-50 transition data-row">
-                                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 uppercase">Equipment Rental</td>
-                                <td class="px-3 py-1.5 border-r border-slate-100">
-                                    <span class="font-mono font-black text-slate-900">5501</span>
-                                    <span class="text-[9px] font-bold text-slate-500 uppercase ml-1">— Rental Expense</span>
-                                </td>
-                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                                    <span class="status-badge bg-blue-50 text-blue-800 border-blue-200">VAT</span>
-                                </td>
-                                <td class="px-3 py-1.5 text-right font-mono font-black text-slate-900 border-r border-slate-100">12.00%</td>
-                                <td class="px-3 py-1.5 font-mono font-bold text-slate-400 border-r border-slate-100">—</td>
-                                <td class="px-3 py-1.5 text-center no-print">
-                                    <div class="flex items-center justify-center gap-2">
-                                        <button onclick="openEditCategory(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
-                                        <button onclick="deleteCategory(this)" class="text-[9px] font-bold uppercase text-rose-700 hover:underline">Del</button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr class="hover:bg-blue-50 transition data-row">
-                                <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 uppercase">Repair and Maintenance</td>
-                                <td class="px-3 py-1.5 border-r border-slate-100">
-                                    <span class="font-mono font-black text-slate-900">5601</span>
-                                    <span class="text-[9px] font-bold text-slate-500 uppercase ml-1">— Maintenance Expense</span>
-                                </td>
-                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                                    <span class="status-badge bg-amber-50 text-amber-800 border-amber-200">Withholding</span>
-                                </td>
-                                <td class="px-3 py-1.5 text-right font-mono font-black text-slate-900 border-r border-slate-100">2.00%</td>
-                                <td class="px-3 py-1.5 font-mono font-bold text-slate-700 border-r border-slate-100">MOOE-005</td>
-                                <td class="px-3 py-1.5 text-center no-print">
-                                    <div class="flex items-center justify-center gap-2">
-                                        <button onclick="openEditCategory(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
-                                        <button onclick="deleteCategory(this)" class="text-[9px] font-bold uppercase text-rose-700 hover:underline">Del</button>
-                                    </div>
-                                </td>
-                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
 
                 <div class="px-3 py-1.5 bg-slate-50 border-t border-slate-200 shrink-0 text-right no-print">
-                    <span id="categoryTotal" class="text-[9px] font-bold uppercase tracking-widest text-slate-500 italic">Total 6 Categories Configured</span>
+                    <span id="categoryTotal" class="text-[9px] font-bold uppercase tracking-widest text-slate-500 italic">Total 2 Categories Configured</span>
                 </div>
             </section>
-
         </div>
     </main>
 
@@ -242,7 +197,6 @@
             
             <div class="p-4 bg-slate-50 flex-1">
                 <form id="categoryForm" class="space-y-3" onsubmit="event.preventDefault(); handleCategorySubmit();">
-                    
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Category Name *</label>
@@ -251,7 +205,7 @@
                         <div>
                             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">COA Account *</label>
                             <select id="coaAccount" required class="gov-input w-full h-8 cursor-pointer">
-                                <option value=""disabled selected hidden>Select COA Mapping...</option>
+                                <option value="" disabled selected hidden>Select COA Mapping...</option>
                                 <option value="5001">5001 — Salaries and Wages</option>
                                 <option value="5101">5101 — Office Expense</option>
                                 <option value="5201">5201 — Consulting Fees</option>
@@ -265,7 +219,7 @@
                         <div>
                             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Tax Configuration *</label>
                             <select id="taxType" required class="gov-input w-full h-8 cursor-pointer">
-                                <option value=""disabled selected hidden>Select...</option>
+                                <option value="" disabled selected hidden>Select...</option>
                                 <option value="vat">VAT Applied</option>
                                 <option value="withholding">Withholding Tax</option>
                                 <option value="none">No Tax Required</option>
@@ -297,6 +251,38 @@
     </div>
 
     <script>
+        // --- FILTERS LOGIC ---
+        function applyLiveFilters() {
+            const searchVal = document.getElementById('searchCategory').value.toLowerCase().trim();
+            const taxVal = document.getElementById('taxFilter').value.toLowerCase();
+            const rows = document.querySelectorAll('#categoryTableBody tr');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                const taxTypeCellText = row.children[2].innerText.toLowerCase();
+
+                const matchesSearch = text.includes(searchVal);
+                const matchesTax = (taxVal === 'all' || taxTypeCellText.includes(taxVal));
+
+                if (matchesSearch && matchesTax) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            document.getElementById('categoryTotal').textContent = `Total ${visibleCount} Categories Found`;
+        }
+
+        function resetFilters() {
+            document.getElementById('searchCategory').value = '';
+            document.getElementById('taxFilter').value = 'ALL';
+            applyLiveFilters();
+        }
+
+        // --- PRESERVED BACKEND & MODAL LOGIC ---
         let editingRow = null;
 
         function openAddCategory(type) {
@@ -314,32 +300,23 @@
             if (!row) return;
             editingRow = row;
 
-            const nameCell = row.children[0];
-            const coaCell = row.children[1];
-            const taxTypeCell = row.children[2];
-            const taxRateCell = row.children[3];
-            const budgetCell = row.children[4];
+            const name = row.children[0].textContent.trim();
+            const coa = row.children[1].querySelector('.font-mono').textContent.trim();
+            const tax = row.children[2].textContent.trim().toLowerCase();
+            const rate = row.children[3].textContent.trim();
+            const budget = row.children[4].textContent.trim();
 
-            const coaCode = coaCell.querySelector('span')?.textContent.trim() || '';
-            const taxLabel = taxTypeCell.textContent.trim().toLowerCase();
-            const rateText = taxRateCell.textContent.trim();
-            const budgetText = budgetCell.textContent.trim();
-
-            document.getElementById('categoryName').value = nameCell.textContent.trim();
-            document.getElementById('coaAccount').value = coaCode;
-            if (taxLabel.includes('vat')) {
-                document.getElementById('taxType').value = 'vat';
-            } else if (taxLabel.includes('withholding')) {
-                document.getElementById('taxType').value = 'withholding';
-            } else {
-                document.getElementById('taxType').value = 'none';
-            }
+            document.getElementById('categoryName').value = name;
+            document.getElementById('coaAccount').value = coa;
+            
+            if (tax.includes('vat')) document.getElementById('taxType').value = 'vat';
+            else if (tax.includes('withholding')) document.getElementById('taxType').value = 'withholding';
+            else document.getElementById('taxType').value = 'none';
 
             document.getElementById('taxType').dispatchEvent(new Event('change'));
-            document.getElementById('taxRate').value = rateText === 'â€”' ? '' : rateText.replace('%', '');
-            document.getElementById('budgetCode').value = budgetText === 'â€”' ? '' : budgetText;
-            document.getElementById('adminNotes').value = '';
-
+            document.getElementById('taxRate').value = (rate === '—' || rate === 'â€”') ? '' : rate.replace('%', '');
+            document.getElementById('budgetCode').value = (budget === '—' || budget === 'â€”') ? '' : budget;
+            
             document.getElementById('adminNotesField').style.display = 'none';
             document.getElementById('categoryModalTitle').innerHTML = '<i class="fa-solid fa-pen text-rose-400"></i> Edit Expense Category';
             document.getElementById('categorySubmitBtn').textContent = 'Update Changes';
@@ -347,11 +324,10 @@
         }
 
         function deleteCategory(button) {
-            const row = button.closest('tr');
-            if (!row) return;
-            if (!confirm('Delete this category?')) return;
-            row.remove();
-            updateCategoryTotal();
+            if (confirm('Delete this category? This cannot be undone.')) {
+                button.closest('tr').remove();
+                applyLiveFilters();
+            }
         }
 
         function closeCategoryModal() {
@@ -376,20 +352,14 @@
             const taxRate = document.getElementById('taxRate').value.trim();
             const budget = document.getElementById('budgetCode').value.trim();
 
-            if (!name || !coa || !taxType) return;
-
             const taxLabel = taxType === 'vat' ? 'VAT' : (taxType === 'withholding' ? 'Withholding' : 'No Tax');
-            const taxClass = taxType === 'vat'
-                ? 'bg-blue-50 text-blue-800 border-blue-200'
-                : (taxType === 'withholding'
-                    ? 'bg-amber-50 text-amber-800 border-amber-200'
-                    : 'bg-slate-100 text-slate-600 border-slate-300');
-            const rateDisplay = taxType === 'none' || taxRate === '' ? 'â€”' : `${parseFloat(taxRate).toFixed(2)}%`;
-            const budgetDisplay = budget === '' ? 'â€”' : budget.toUpperCase();
+            const taxClass = taxType === 'vat' ? 'bg-blue-50 text-blue-800 border-blue-200' : (taxType === 'withholding' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-300');
+            const rateDisplay = taxType === 'none' || taxRate === '' ? '—' : `${parseFloat(taxRate).toFixed(2)}%`;
+            const budgetDisplay = budget === '' ? '—' : budget.toUpperCase();
 
             if (editingRow) {
                 editingRow.children[0].textContent = name.toUpperCase();
-                editingRow.children[1].innerHTML = `<span class="font-mono font-black text-slate-900">${coa}</span><span class="text-[9px] font-bold text-slate-500 uppercase ml-1">â€”</span>`;
+                editingRow.children[1].innerHTML = `<span class="font-mono font-black text-slate-900">${coa}</span><span class="text-[9px] font-bold text-slate-500 uppercase ml-1">—</span>`;
                 editingRow.children[2].innerHTML = `<span class="status-badge ${taxClass}">${taxLabel}</span>`;
                 editingRow.children[3].textContent = rateDisplay;
                 editingRow.children[4].textContent = budgetDisplay;
@@ -399,13 +369,8 @@
                 row.className = 'hover:bg-blue-50 transition data-row';
                 row.innerHTML = `
                     <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 uppercase">${name}</td>
-                    <td class="px-3 py-1.5 border-r border-slate-100">
-                        <span class="font-mono font-black text-slate-900">${coa}</span>
-                        <span class="text-[9px] font-bold text-slate-500 uppercase ml-1">â€”</span>
-                    </td>
-                    <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                        <span class="status-badge ${taxClass}">${taxLabel}</span>
-                    </td>
+                    <td class="px-3 py-1.5 border-r border-slate-100"><span class="font-mono font-black text-slate-900">${coa}</span><span class="text-[9px] font-bold text-slate-500 uppercase ml-1">—</span></td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100"><span class="status-badge ${taxClass}">${taxLabel}</span></td>
                     <td class="px-3 py-1.5 text-right font-mono font-black text-slate-900 border-r border-slate-100">${rateDisplay}</td>
                     <td class="px-3 py-1.5 font-mono font-bold text-slate-700 border-r border-slate-100">${budgetDisplay}</td>
                     <td class="px-3 py-1.5 text-center no-print">
@@ -413,26 +378,19 @@
                             <button onclick="openEditCategory(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
                             <button onclick="deleteCategory(this)" class="text-[9px] font-bold uppercase text-rose-700 hover:underline">Del</button>
                         </div>
-                    </td>
-                `;
+                    </td>`;
                 tbody.appendChild(row);
-                updateCategoryTotal();
             }
-
+            applyLiveFilters();
             closeCategoryModal();
         }
 
-        function updateCategoryTotal() {
-            const total = document.querySelectorAll('#categoryTableBody .data-row').length;
-            const label = total === 1 ? 'Category' : 'Categories';
-            document.getElementById('categoryTotal').textContent = `Total ${total} ${label} Configured`;
-        }
-
-        // Close modal on outside click
         document.getElementById('categoryModal').addEventListener('click', function(e) {
             if(e.target === this) closeCategoryModal();
         });
-    </script>
 
+        // Init
+        window.onload = applyLiveFilters;
+    </script>
 </body>
 </html>
