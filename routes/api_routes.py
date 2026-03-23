@@ -1,3 +1,4 @@
+from google.cloud.firestore_v1.base_query import FieldFilter
 from flask import Blueprint, request, jsonify, session
 from flask_mail import Message, Mail
 from datetime import datetime
