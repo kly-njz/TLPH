@@ -472,14 +472,29 @@
             // Query all jobs in municipal_denr_applicant_jobs for this region
             const appsRef = window.firebaseCollection(window.firebaseDB, 'municipal_denr_applicant_jobs');
             const allAppsSnap = await window.firebaseGetDocs(appsRef);
-            // Filter by region or region_key
+            // Canonical region normalization (mimics backend _canonical_region)
+            function canonicalRegion(raw) {
+              raw = String(raw || '').trim().toUpperCase();
+              if (!raw) return '';
+              if (raw.includes('MIMAROPA') || raw.includes('IV-B') || raw.includes('REGION IV-B') || raw.includes('REGION-IV-B')) return 'REGION-IV-B';
+              if (raw.includes('CALABARZON') || raw.includes('IV-A') || raw.includes('REGION IV-A') || raw.includes('REGION-IV-A')) return 'REGION-IV-A';
+              if (raw.includes('BICOL') || raw.includes('REGION-V') || raw.includes('REGION V')) return 'REGION-V';
+              if (raw.includes('NCR')) return 'NCR';
+              if (raw.includes('CARAGA')) return 'REGION-XIII';
+              if (raw.includes('BANGSAMORO') || raw.includes('ARMM')) return 'REGION-BANGSAMORO';
+              return raw.replace(/ |\_|\./g, '');
+            }
+
+            const canonicalUserRegion = canonicalRegion(region);
+            this.debugRegion = canonicalUserRegion;
             const regionJobs = [];
             const jobRegions = [];
             allAppsSnap.forEach(a => {
               const data = a.data();
-              const jobRegion = (data.region || data.region_key || '').toLowerCase();
+              const jobRegionRaw = (data.region || data.region_key || '');
+              const jobRegion = canonicalRegion(jobRegionRaw);
               jobRegions.push(jobRegion);
-              if (jobRegion === region) {
+              if (jobRegion && jobRegion === canonicalUserRegion) {
                 regionJobs.push(a);
               }
             });
