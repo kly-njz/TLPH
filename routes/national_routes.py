@@ -731,8 +731,9 @@ def quotation():
         trend_values = [0]
     # Import province/municipality mapping for dropdowns
     from models.ph_locations import philippineLocations
-    # Regions = sorted province keys
-    region_list = sorted(philippineLocations.keys())
+    from models.region_province_map import region_province_map
+    # province_muni_map is just philippineLocations
+    province_muni_map = philippineLocations
     return render_template(
         'national/operations/quotation.html',
         quotations=quotations,
@@ -741,8 +742,8 @@ def quotation():
         pending_quotes=pending_quotes,
         rejected_quotes=rejected_quotes,
         total_value=total_value,
-        regions=region_list,
-        prov_muni_map=philippineLocations,
+        region_province_map=region_province_map,
+        province_muni_map=province_muni_map,
         trend_labels_json=json.dumps(trend_labels),
         trend_values_json=json.dumps(trend_values)
     )
