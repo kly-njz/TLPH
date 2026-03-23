@@ -1,3 +1,20 @@
+# Unified expense categories API for regional admin
+from expense_storage import get_all_expense_categories
+
+@bp.route('/api/expense-categories', methods=['GET'])
+@role_required('regional', 'regional_admin')
+def api_get_regional_expense_categories():
+    """Get all expense categories for the region (all municipalities in region)"""
+    try:
+        # Get region from session or query param
+        region = request.args.get('region') or session.get('region')
+        if not region:
+            return jsonify({'error': 'Region not specified'}), 400
+        categories = get_all_expense_categories(region=region)
+        return jsonify(categories), 200
+    except Exception as e:
+        print(f"[ERROR] Regional: Failed to get expense categories: {e}")
+        return jsonify({'error': str(e)}), 500
 from flask import Blueprint, render_template, jsonify, request, session
 from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required

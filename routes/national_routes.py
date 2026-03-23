@@ -1527,24 +1527,8 @@ def national_deposits_view():
 def api_get_national_expense_categories():
     """Get ALL expense categories from all municipalities (National view)"""
     try:
-        db = get_firestore_db()
-        categories = []
-        
-        # Fetch all expense categories without any filtering
-        query_result = db.collection('expense_categories').stream()
-        
-        for doc in query_result:
-            data = doc.to_dict() or {}
-            categories.append({
-                'id': doc.id,
-                'name': data.get('name', 'Unnamed'),
-                'coa_code': data.get('coa_code', 'N/A'),
-                'tax_type': data.get('tax_type', 'None'),
-                'default_rate': data.get('default_rate', 0),
-                'status': data.get('status', 'active'),
-                'municipality': data.get('municipality', 'National')
-            })
-        
+        from expense_storage import get_all_expense_categories
+        categories = get_all_expense_categories()
         print(f'[INFO] National: Retrieved {len(categories)} expense categories')
         return jsonify(categories), 200
         

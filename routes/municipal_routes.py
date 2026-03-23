@@ -1,3 +1,22 @@
+# Unified expense categories API for municipal admin
+from expense_storage import get_all_expense_categories
+
+@bp.route('/api/expense-categories', methods=['GET'])
+@role_required('municipal', 'municipal_admin')
+def api_get_municipal_expense_categories():
+    """Get all expense categories for this municipality only"""
+    try:
+        municipality = request.args.get('municipality')
+        if not municipality:
+            # Try to resolve from session
+            municipality = session.get('municipality') or session.get('user_municipality')
+        if not municipality:
+            return jsonify({'error': 'Municipality not specified'}), 400
+        categories = get_all_expense_categories(municipality=municipality)
+        return jsonify(categories), 200
+    except Exception as e:
+        print(f"[ERROR] Municipal: Failed to get expense categories: {e}")
+        return jsonify({'error': str(e)}), 500
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
