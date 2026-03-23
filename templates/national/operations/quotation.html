@@ -483,17 +483,44 @@
   });
 
   // Mocked API Actions (Remove shared logic for local testing)
-  function approveQuotation(btn) {
+
+  async function approveQuotation(btn) {
     const d = getRowData(btn);
-    if (d.statusEl) {
-      d.statusEl.textContent = 'Approved';
-      d.statusEl.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-blue-50 text-blue-700 border-blue-200';
+    if (!d.row || !d.row.dataset.id) return;
+    if (!confirm('Approve this quotation?')) return;
+    try {
+      const res = await fetch(`/national/api/quotations/${d.row.dataset.id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'APPROVED' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to approve quotation');
+      if (d.statusEl) {
+        d.statusEl.textContent = 'Approved';
+        d.statusEl.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-blue-50 text-blue-700 border-blue-200';
+      }
+      alert('Quotation approved.');
+    } catch (err) {
+      alert(err.message || 'Unable to approve quotation.');
     }
   }
 
-  function deleteQuotation(btn) {
-    if(confirm("Are you sure you want to delete this quotation?")) {
-      btn.closest('tr').remove();
+  async function deleteQuotation(btn) {
+    const d = getRowData(btn);
+    if (!d.row || !d.row.dataset.id) return;
+    if (!confirm('Are you sure you want to delete this quotation?')) return;
+    try {
+      const res = await fetch(`/national/api/quotations/${d.row.dataset.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete quotation');
+      d.row.remove();
+      alert('Quotation deleted.');
+    } catch (err) {
+      alert(err.message || 'Unable to delete quotation.');
     }
   }
 
