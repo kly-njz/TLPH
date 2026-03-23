@@ -307,6 +307,26 @@
     </div>
   </div>
 
+  <div id="confirmModal" class="gov-modal no-print hidden">
+    <div class="w-full max-w-md rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+      <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
+        <h3 id="confirmTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Confirmation
+        </h3>
+        <button id="btnCloseConfirm" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+          <span class="material-icons-round text-sm">close</span>
+        </button>
+      </div>
+      <div class="p-4 bg-slate-50 flex-1">
+        <p id="confirmMessage" class="text-[10px] font-bold text-slate-700 m-0"></p>
+        <div class="pt-3 border-t border-slate-200 mt-4 flex gap-2">
+          <button type="button" id="btnConfirmCancel" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
+          <button type="button" id="btnConfirmAction" class="gov-btn bg-amber-600 text-white hover:bg-amber-700 flex-1 py-2">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="chartModalWrapper" class="gov-modal no-print">
       <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
       <div id="chartModalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
@@ -329,6 +349,8 @@
     let page = 1; 
     const perPage = 10; 
     let chartRegion, chartStatus, modalChartInstance = null;
+    let pendingAction = null;
+    let pendingCompanyId = null;
 
     // --- PSGC API INTEGRATION ---
     let apiMuniCache = {};
@@ -581,6 +603,56 @@
       backdrop.classList.add("hidden");
     }
 
+    function openConfirm(action, company) {
+      pendingAction = action;
+      pendingCompanyId = company?.id || null;
+
+      const title = $("confirmTitle");
+      const message = $("confirmMessage");
+      const actionBtn = $("btnConfirmAction");
+
+      if (action === "toggle") {
+        const nextStatus = company.status === "active" ? "Inactive" : "Active";
+        title.innerHTML = '<i class="fa-solid fa-arrows-rotate text-amber-400"></i> Toggle Status';
+        message.textContent = `Set "${company.name}" to ${nextStatus}?`;
+        actionBtn.textContent = "Confirm Toggle";
+        actionBtn.className = "gov-btn bg-amber-600 text-white hover:bg-amber-700 flex-1 py-2";
+      } else if (action === "delete") {
+        title.innerHTML = '<i class="fa-solid fa-trash text-rose-400"></i> Delete Company';
+        message.textContent = `Delete "${company.name}"? This cannot be undone.`;
+        actionBtn.textContent = "Delete";
+        actionBtn.className = "gov-btn bg-rose-600 text-white hover:bg-rose-700 flex-1 py-2";
+      }
+
+      const modal = $("confirmModal");
+      modal.classList.add("flex");
+      modal.classList.remove("hidden");
+    }
+
+    function closeConfirm() {
+      const modal = $("confirmModal");
+      modal.classList.remove("flex");
+      modal.classList.add("hidden");
+      pendingAction = null;
+      pendingCompanyId = null;
+    }
+
+    function applyConfirmAction() {
+      if (!pendingAction || !pendingCompanyId) { closeConfirm(); return; }
+      const company = companies.find(x => x.id === pendingCompanyId);
+      if (!company) { closeConfirm(); return; }
+
+      if (pendingAction === "toggle") {
+        companies = companies.map(x => x.id === pendingCompanyId ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) } : x);
+      } else if (pendingAction === "delete") {
+        companies = companies.filter(x => x.id !== pendingCompanyId);
+        page = 1;
+      }
+
+      closeConfirm();
+      renderAll();
+    }
+
     function renderAll() {
       const filtered = applyFilters(companies);
       renderKPIs(filtered); renderCharts(filtered); renderTable(filtered);
@@ -609,6 +681,10 @@
 
       $("btnCloseModal").addEventListener("click", closeModal); $("btnCancel").addEventListener("click", closeModal);
       $("modalBackdrop").addEventListener("click", (e) => { if(e.target === $("modalBackdrop")) closeModal(); });
+      $("btnCloseConfirm").addEventListener("click", closeConfirm);
+      $("btnConfirmCancel").addEventListener("click", closeConfirm);
+      $("btnConfirmAction").addEventListener("click", applyConfirmAction);
+      $("confirmModal").addEventListener("click", (e) => { if (e.target === $("confirmModal")) closeConfirm(); });
 
       $("companyForm").addEventListener("submit", (e) => {
         e.preventDefault();
@@ -639,10 +715,9 @@
              $("formMunicipality").value = company.municipality;
           }
         } else if (action === "toggle") {
-          companies = companies.map(x => x.id === id ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) } : x);
-          renderAll();
-        } else if (action === "delete" && confirm(`Delete "${company.name}"?`)) {
-          companies = companies.filter(x => x.id !== id); page = 1; renderAll();
+          openConfirm("toggle", company);
+        } else if (action === "delete") {
+          openConfirm("delete", company);
         }
       });
       
