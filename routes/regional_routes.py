@@ -5,6 +5,7 @@ from firebase_auth_middleware import role_required
 
 from datetime import datetime
 from firebase_admin import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 import system_logs_storage
 
 bp = Blueprint('regional', __name__, url_prefix='/regional')
