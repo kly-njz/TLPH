@@ -17,10 +17,18 @@ def inventory_view():
         'protected_areas': 0,
         'low_stock': 0
     }
+    trend_labels = []
+    trend_data = []
+    category_labels = []
+    category_data = []
+    region_options = []
 
     try:
         db = get_firestore_db()
         docs = db.collection('inventory_registrations').stream()
+        monthly_totals = defaultdict(float)
+        category_totals = defaultdict(float)
+        regions_set = set()
 
         def to_number(value):
             try:
@@ -42,19 +50,41 @@ def inventory_view():
                 return 'EQUIPMENT'
             return 'UNCATEGORIZED'
 
+        def parse_dt(raw):
+            if not raw:
+                return None
+            if isinstance(raw, datetime):
+                return raw
+            if isinstance(raw, str):
+                try:
+                    return datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                except Exception:
+                    return None
+            if hasattr(raw, 'to_datetime'):
+                try:
+                    return raw.to_datetime()
+                except Exception:
+                    return None
+            if hasattr(raw, 'strftime'):
+                return raw
+            return None
+
         for doc in docs:
             data = doc.to_dict() or {}
             quantity = to_number(data.get('quantity') or data.get('volume') or data.get('availableStock') or 0)
             normalized_category = normalize_category(data.get('category') or data.get('classification') or data.get('itemType'))
+            created_at_raw = data.get('createdAt') or data.get('submittedAt')
+            created_at = parse_dt(created_at_raw)
+            region = (data.get('region') or 'N/A').strip()
 
             inventory_records.append({
                 'id': doc.id,
                 'category': normalized_category,
                 'description': (data.get('description') or data.get('itemName') or data.get('itemDescription') or 'N/A').strip(),
                 'quantity': quantity,
-                'region': (data.get('region') or 'N/A').strip(),
+                'region': region,
                 'municipality': (data.get('municipality') or 'N/A').strip(),
-                'created_at': data.get('createdAt') or data.get('submittedAt'),
+                'created_at': created_at,
                 'status': (data.get('status') or '').strip()
             })
 
@@ -70,14 +100,44 @@ def inventory_view():
             if 'low stock' in status_text or quantity <= 20:
                 summary['low_stock'] += 1
 
+            if created_at:
+                monthly_totals[created_at.strftime('%Y-%m')] += quantity
+            category_totals[normalized_category] += quantity
+            regions_set.add(region)
+
         inventory_records.sort(key=lambda x: str(x.get('created_at') or ''), reverse=True)
+
+        now = datetime.now()
+        for i in range(5, -1, -1):
+            month = now.month - i
+            year = now.year
+            while month <= 0:
+                month += 12
+                year -= 1
+            month_key = f'{year}-{month:02d}'
+            trend_labels.append(datetime(year, month, 1).strftime('%b'))
+            trend_data.append(round(monthly_totals.get(month_key, 0), 2))
+
+        category_priority = ['CHEMICAL RESOURCES', 'NATURAL ASSETS', 'PROTECTED AREAS', 'EQUIPMENT', 'UNCATEGORIZED']
+        category_labels = [c for c in category_priority if category_totals.get(c, 0) > 0]
+        category_data = [round(category_totals[c], 2) for c in category_labels]
+        if not category_labels:
+            category_labels = ['UNCATEGORIZED']
+            category_data = [0]
+
+        region_options = sorted([r for r in regions_set if r])
     except Exception as e:
         print(f'[ERROR] superadmin inventory_view: {e}')
 
     return render_template(
         'super-admin/inventory-superadmin/inventory-superadmin.html',
         inventory_records=inventory_records,
-        summary=summary
+        summary=summary,
+        trend_labels=trend_labels,
+        trend_data=trend_data,
+        category_labels=category_labels,
+        category_data=category_data,
+        region_options=region_options
     )
 
 @bp.route('/user-application')
