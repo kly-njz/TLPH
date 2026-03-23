@@ -1,7 +1,7 @@
-
 # --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
+from google.cloud.firestore_v1 import FieldFilter
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -521,6 +521,20 @@ def service_national_view():
 def inventory_national_view():
     try:
         db = get_firestore_db()
+        from models.region_province_map import region_province_map
+
+        def _clean(value):
+            return str(value or '').strip()
+
+        def _region_from_province(province_name):
+            prov = _clean(province_name).lower()
+            if not prov:
+                return ''
+            for region_label, provinces in (region_province_map or {}).items():
+                for p in provinces or []:
+                    if _clean(p).lower() == prov:
+                        return region_label
+            return ''
 
         inventory_ref = db.collection('inventory_registrations')
         docs = inventory_ref.stream()
@@ -543,7 +557,24 @@ def inventory_national_view():
                 or data.get('userEmail', 'N/A')
             )
             municipality = data.get('municipality') or user_data.get('municipality', 'N/A')
-            region = data.get('region') or user_data.get('regionName') or user_data.get('region', 'N/A')
+            province = (
+                data.get('province')
+                or user_data.get('province')
+                or data.get('province_name')
+                or user_data.get('province_name')
+                or ''
+            )
+
+            region = (
+                data.get('region')
+                or data.get('regionName')
+                or data.get('region_name')
+                or user_data.get('regionName')
+                or user_data.get('region')
+                or user_data.get('region_name')
+                or _region_from_province(province)
+                or 'N/A'
+            )
 
             sector = str(data.get('sector', '')).lower()
             category_map = {
@@ -555,16 +586,47 @@ def inventory_national_view():
                 'environment': 'Natural Resources'
             }
             category = category_map.get(sector, 'Chemical Inventory')
+            quantity = data.get('stockAvailable', data.get('quantity', 0))
+            try:
+                quantity = float(quantity or 0)
+            except Exception:
+                quantity = 0
 
-            category_count[category] += 1
+            # Use real fetched volume totals for dashboard charts
+            category_count[category] += quantity
 
             if region and region != 'N/A':
-                region_count[region] += 1
+                region_count[region] += quantity
 
             total_count += 1
 
-            quantity = data.get('stockAvailable', data.get('quantity', 0))
             description = data.get('resourceName') or data.get('notes') or 'General Inventory'
+
+            main_status = str(data.get('status', 'pending') or 'pending').strip().lower()
+            regional_status = str(data.get('regionalStatus', '') or '').strip().lower()
+            national_status = str(data.get('nationalStatus', '') or '').strip().lower()
+            approved_by_level = str(data.get('approvedByLevel', '') or '').strip().upper()
+            rejected_by_level = str(data.get('rejectedByLevel', '') or '').strip().upper()
+            forwarded_to_level = str(data.get('forwardedToLevel', '') or '').strip().upper()
+
+            if national_status == 'approved':
+                status_display = 'APPROVED BY NATIONAL'
+            elif national_status == 'rejected':
+                status_display = 'REJECTED BY NATIONAL'
+            elif rejected_by_level:
+                status_display = f'REJECTED BY {rejected_by_level}'
+            elif approved_by_level:
+                status_display = f'APPROVED BY {approved_by_level}'
+            elif main_status in {'forwarded-to-national', 'forwarded-national'} or forwarded_to_level == 'NATIONAL':
+                status_display = 'FORWARDED TO NATIONAL'
+            elif main_status in {'to-review', 'to_review'}:
+                status_display = 'FORWARDED TO REGIONAL'
+            elif regional_status == 'approved':
+                status_display = 'APPROVED BY REGIONAL'
+            elif regional_status == 'rejected':
+                status_display = 'REJECTED BY REGIONAL'
+            else:
+                status_display = 'PENDING'
 
             inventory_records.append({
                 'id': doc.id,
@@ -573,7 +635,17 @@ def inventory_national_view():
                 'quantity': quantity,
                 'region': region,
                 'municipality': municipality,
-                'applicant_name': full_name
+                'applicant_name': full_name,
+                'status': data.get('status', 'pending'),
+                'regionalStatus': data.get('regionalStatus', ''),
+                'nationalStatus': data.get('nationalStatus', ''),
+                'approvedByLevel': data.get('approvedByLevel', ''),
+                'rejectedByLevel': data.get('rejectedByLevel', ''),
+                'forwardedToLevel': data.get('forwardedToLevel', ''),
+                'registrationFee': data.get('registrationFee', 0),
+                'createdAt': data.get('createdAt'),
+                'unitOfMeasure': data.get('unitOfMeasure', 'pcs'),
+                'status_display': status_display
             })
 
         chemical_count = category_count.get('Chemical Inventory', 0)
@@ -625,6 +697,56 @@ def inventory_national_view():
             region_labels=['N/A'],
             region_data=[0]
         )
+
+
+@bp.route('/inventory-national/api/<inventory_id>/status', methods=['POST'])
+@role_required('national', 'national_admin')
+def update_inventory_national_status(inventory_id):
+    """National-level approve/reject endpoint for inventory registrations."""
+    try:
+        db = get_firestore_db()
+        payload = request.get_json(silent=True) or {}
+        requested_status = str(payload.get('status') or '').strip().lower()
+
+        if requested_status not in {'approved', 'rejected'}:
+            return jsonify({'status': 'error', 'message': 'Invalid action.'}), 400
+
+        inv_ref = db.collection('inventory_registrations').document(inventory_id)
+        inv_doc = inv_ref.get()
+        if not inv_doc.exists:
+            return jsonify({'status': 'error', 'message': 'Inventory record not found.'}), 404
+
+        inv_data = inv_doc.to_dict() or {}
+        current_national = str(inv_data.get('nationalStatus') or '').strip().lower()
+        if current_national in {'approved', 'rejected'}:
+            return jsonify({'status': 'error', 'message': 'National action already finalized for this record.'}), 409
+
+        update_data = {
+            'status': requested_status,
+            'nationalStatus': requested_status,
+            'updatedAt': datetime.utcnow(),
+        }
+
+        if requested_status == 'approved':
+            update_data.update({
+                'approvedByLevel': 'National',
+                'approvedAt': datetime.utcnow(),
+                'rejectedByLevel': '',
+                'rejectedByEmail': ''
+            })
+        else:
+            update_data.update({
+                'rejectedByLevel': 'National',
+                'rejectedAt': datetime.utcnow(),
+                'approvedByLevel': '',
+                'approvedByEmail': ''
+            })
+
+        inv_ref.update(update_data)
+        return jsonify({'status': 'success', 'message': f'Inventory {requested_status} successfully.'}), 200
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 # -----------------------------
@@ -696,7 +818,8 @@ def quotation():
     from quotation_storage import get_quotations
     import json
     from collections import Counter
-    quotations = get_quotations(scope='national')
+    from quotation_storage import get_all_quotations
+    quotations = get_all_quotations()
     def to_float(value):
         try:
             return float(value)
@@ -730,8 +853,15 @@ def quotation():
         trend_values = [0]
     # Import province/municipality mapping for dropdowns
     from models.ph_locations import philippineLocations
-    # Regions = sorted province keys
-    region_list = sorted(philippineLocations.keys())
+    from models.region_province_map import region_province_map
+    # province_muni_map is just philippineLocations
+    province_muni_map = philippineLocations
+    # Always provide status_data for chart (Approved, Pending, Rejected)
+    status_data = [
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'approved']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'pending']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'rejected'])
+    ]
     return render_template(
         'national/operations/quotation.html',
         quotations=quotations,
@@ -740,10 +870,11 @@ def quotation():
         pending_quotes=pending_quotes,
         rejected_quotes=rejected_quotes,
         total_value=total_value,
-        regions=region_list,
-        prov_muni_map=philippineLocations,
+        region_province_map=region_province_map,
+        province_muni_map=province_muni_map,
         trend_labels_json=json.dumps(trend_labels),
-        trend_values_json=json.dumps(trend_values)
+        trend_values_json=json.dumps(trend_values),
+        status_data=status_data
     )
 
 
@@ -1393,6 +1524,27 @@ def permissions_national_view():
 def service_requests_national_view():
     try:
         db = get_firestore_db()
+        import calendar
+        from collections import defaultdict
+
+        def _to_datetime(value):
+            if not value:
+                return None
+            if isinstance(value, datetime):
+                return value
+            if isinstance(value, str):
+                try:
+                    return datetime.fromisoformat(value.replace('Z', '+00:00'))
+                except Exception:
+                    return None
+            if hasattr(value, 'to_datetime'):
+                try:
+                    return value.to_datetime()
+                except Exception:
+                    pass
+            if hasattr(value, 'strftime'):
+                return value
+            return None
 
         # Pull forwarded-national (pending), AND approved/rejected that were handled at national level
         raw_docs = []
@@ -1428,22 +1580,24 @@ def service_requests_national_view():
                 pass
 
         service_requests = []
+        monthly_trend = defaultdict(int)
+        service_type_count = defaultdict(int)
+        status_breakdown = defaultdict(int)
+
         for doc in docs:
             data = doc.to_dict()
 
             # Date
             created_at = data.get('createdAt') or data.get('submittedAt')
+            created_dt = _to_datetime(created_at)
             date_filed = 'N/A'
-            if created_at:
+            if created_dt:
                 try:
-                    if isinstance(created_at, str):
-                        date_filed = datetime.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%b %d, %Y')
-                    elif hasattr(created_at, 'strftime'):
-                        date_filed = created_at.strftime('%b %d, %Y')
-                    else:
-                        date_filed = str(created_at)
+                    date_filed = created_dt.strftime('%b %d, %Y')
                 except Exception:
                     date_filed = str(created_at)
+            elif created_at:
+                date_filed = str(created_at)
 
             # Applicant name — from users collection via userId
             uid = data.get('userId', '')
@@ -1462,19 +1616,61 @@ def service_requests_national_view():
             doc_status = (data.get('status') or 'forwarded-national').lower()
             approved_by_level = data.get('approvedByLevel', '')
 
+            if created_dt:
+                month_key = created_dt.strftime('%Y-%m')
+                monthly_trend[month_key] += 1
+
+            service_type = data.get('serviceType', 'N/A') or 'N/A'
+            service_type_count[service_type] += 1
+
+            if doc_status == 'approved':
+                status_breakdown['approved'] += 1
+            elif doc_status == 'rejected':
+                status_breakdown['rejected'] += 1
+            else:
+                status_breakdown['pending'] += 1
+
             service_requests.append({
                 'id': doc.id,
                 'date_filed': date_filed,
+                'sort_dt': created_dt,
                 'reference_id': doc.id[:10].upper(),
                 'applicant_name': full_name.upper(),
-                'service_type': data.get('serviceType', 'N/A'),
+                'service_type': service_type,
                 'location': location,
                 'status': doc_status,
                 'approved_by_level': approved_by_level,
                 'forwarded_by': data.get('forwardedToNationalBy', 'N/A'),
             })
 
-        service_requests.sort(key=lambda x: x['date_filed'], reverse=True)
+        service_requests.sort(
+            key=lambda x: x.get('sort_dt') or datetime.min,
+            reverse=True
+        )
+
+        current_date = datetime.now()
+        trend_labels = []
+        trend_data = []
+        for i in range(5, -1, -1):
+            month = current_date.month - i
+            year = current_date.year
+            while month <= 0:
+                month += 12
+                year -= 1
+            month_key = f'{year}-{month:02d}'
+            trend_labels.append(calendar.month_abbr[month])
+            trend_data.append(monthly_trend.get(month_key, 0))
+
+        top_service_types = sorted(service_type_count.items(), key=lambda x: x[1], reverse=True)[:6]
+        service_labels = [item[0] for item in top_service_types] if top_service_types else ['N/A']
+        service_counts = [item[1] for item in top_service_types] if top_service_types else [0]
+
+        status_labels = ['Approved', 'Pending', 'Rejected']
+        status_data = [
+            status_breakdown.get('approved', 0),
+            status_breakdown.get('pending', 0),
+            status_breakdown.get('rejected', 0)
+        ]
 
         total_count    = len(service_requests)
         completed_count = sum(1 for r in service_requests if r['status'] == 'approved')
@@ -1485,13 +1681,25 @@ def service_requests_national_view():
         print(f'Error loading national service requests: {e}')
         service_requests = []
         total_count = completed_count = rejected_count = pending_count = 0
+        trend_labels = ['S', 'O', 'N', 'D', 'J', 'F']
+        trend_data = [0, 0, 0, 0, 0, 0]
+        service_labels = ['N/A']
+        service_counts = [0]
+        status_labels = ['Approved', 'Pending', 'Rejected']
+        status_data = [0, 0, 0]
 
     return render_template('national/operations/service-national.html',
                            service_requests=service_requests,
                            total_count=total_count,
                            completed_count=completed_count,
                            pending_count=pending_count,
-                           rejected_count=rejected_count)
+                           rejected_count=rejected_count,
+                           trend_labels=trend_labels,
+                           trend_data=trend_data,
+                           service_labels=service_labels,
+                           service_counts=service_counts,
+                           status_labels=status_labels,
+                           status_data=status_data)
 
 @bp.route('/user-inventory')
 @role_required('national', 'national_admin')
@@ -1517,24 +1725,8 @@ def national_deposits_view():
 def api_get_national_expense_categories():
     """Get ALL expense categories from all municipalities (National view)"""
     try:
-        db = get_firestore_db()
-        categories = []
-        
-        # Fetch all expense categories without any filtering
-        query_result = db.collection('expense_categories').stream()
-        
-        for doc in query_result:
-            data = doc.to_dict() or {}
-            categories.append({
-                'id': doc.id,
-                'name': data.get('name', 'Unnamed'),
-                'coa_code': data.get('coa_code', 'N/A'),
-                'tax_type': data.get('tax_type', 'None'),
-                'default_rate': data.get('default_rate', 0),
-                'status': data.get('status', 'active'),
-                'municipality': data.get('municipality', 'National')
-            })
-        
+        from expense_storage import get_all_expense_categories
+        categories = get_all_expense_categories()
         print(f'[INFO] National: Retrieved {len(categories)} expense categories')
         return jsonify(categories), 200
         
@@ -1955,3 +2147,107 @@ def quotations_national_delete(quotation_id):
     except Exception as e:
         print(f"[ERROR] quotations_national_delete failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to delete quotation'}), 500
+    
+
+# --- Create Quotation (National) ---
+@bp.route('/operations/quotation/api/create', methods=['POST'])
+@role_required('national', 'national_admin')
+def quotations_national_create():
+    from quotation_storage import add_quotation
+    data = request.get_json(silent=True) or {}
+    try:
+        # Validate required fields
+        required = ['number', 'client', 'amount', 'date', 'status', 'region', 'municipality', 'description', 'scope']
+        for field in required:
+            if not data.get(field):
+                return jsonify({'success': False, 'error': f'Missing required field: {field}'}), 400
+        quotation = add_quotation(data)
+        return jsonify({'success': True, 'quotation': quotation})
+    except Exception as e:
+        print(f"[ERROR] quotations_national_create failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
+    
+
+# Endpoint: Update permissions for a specific admin
+@bp.route('/api/admins-permissions/<user_id>', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_update_admin_permissions(user_id):
+    db = get_firestore_db()
+    data = request.get_json(force=True)
+    permissions = data.get('permissions', {})
+    user_ref = db.collection('users').document(user_id)
+    user_ref.update({'permissions': permissions})
+    return jsonify({'success': True, 'message': 'Permissions updated.'})
+
+@bp.route('/api/admins-permissions', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_admins_permissions():
+    db = get_firestore_db()
+    users_ref = db.collection('users')
+    users = []
+    count = 0
+    for user_doc in users_ref.stream():
+        user = user_doc.to_dict() or {}
+        role = user.get('role', '').lower()
+        if role in ['regional_admin', 'regional', 'municipal_admin', 'municipal']:
+            perms = user.get('permissions', {}) or {}
+            # Default: all access if missing or incomplete
+            perms = {
+                'hrm': perms.get('hrm', True),
+                'logistics': perms.get('logistics', True),
+                'accounting': perms.get('accounting', True),
+                'payments': perms.get('payments', True),
+                'other': perms.get('other', True)
+            }
+            users.append({
+                'id': user_doc.id,
+                'email': user.get('email', ''),
+                'name': f"{user.get('firstName', '')} {user.get('lastName', '')}".strip(),
+                'role': role,
+                'region': user.get('region', ''),
+                'municipality': user.get('municipality', ''),
+                'permissions': perms
+            })
+            count += 1
+    print(f"[DEBUG] /api/admins-permissions: Found {count} admin users: {[u['role'] for u in users]}")
+    return jsonify({'admins': users})
+
+
+@bp.route('/api/user-management/accounts', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_all_admin_accounts():
+    """Fetch all regional and municipal admin accounts for national user management."""
+    try:
+        db = get_firestore_db()
+        users_ref = db.collection('users')
+        users = []
+        for doc in users_ref.stream():
+            data = doc.to_dict() or {}
+            role = data.get('role', '').lower()
+            # Match any role containing 'regional' or 'municipal'
+            if 'regional' in role or 'municipal' in role:
+                data['id'] = doc.id
+                data['name'] = f"{data.get('firstName', '')} {data.get('lastName', '')}".strip()
+                data['status'] = data.get('status', 'Active')
+                users.append(data)
+        return jsonify({'success': True, 'users': users})
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch admin accounts: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/user-management/accounts/<user_id>/revoke', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_revoke_admin_account(user_id):
+    """Revoke (disable) a regional or municipal admin account."""
+    try:
+        db = get_firestore_db()
+        user_ref = db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user_ref.update({'status': 'Disabled'})
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] Failed to revoke admin account: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

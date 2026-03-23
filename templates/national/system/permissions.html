@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Permissions & Roles | National Admin</title>
+  <title>Admin Access Control | National Admin</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
@@ -30,7 +30,7 @@
   </style>
 </head>
 
-<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col" x-data="{ confirmModal: false }">
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col" x-data="permissionsPage()">
 
   <div class="flex-1 flex overflow-hidden">
     <aside class="sidebar-container hidden lg:block">
@@ -45,142 +45,59 @@
               <span class="material-icons-round text-[18px]">admin_panel_settings</span>
             </div>
             <div class="leading-tight">
-              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Permissions & Roles</h1>
-              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Role-Based Access Control Matrix</p>
+              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Admin Access Control</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Limit page/module access for regional & municipal admins</p>
             </div>
           </div>
           <div class="flex gap-2">
-            <button id="exportMatrixBtn" class="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
+            <button @click="exportPermissions" class="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
               <span class="material-icons-round text-[14px]">file_download</span> Export
-            </button>
-            <button onclick="openRoleModal()" class="bg-violet-700 hover:bg-violet-800 text-white px-3 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition flex items-center gap-1">
-              <span class="material-icons-round text-[14px]">add</span> Create Role
             </button>
           </div>
         </header>
 
-        <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
-          <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-violet-700">
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Roles</span>
-              <span class="material-icons-round text-violet-700 text-[14px]">shield</span>
-            </div>
-            <div id="activeRolesCount" class="text-lg font-black text-slate-800 mt-0.5 leading-none">5</div>
-          </div>
-
-          <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm border-l-4 border-l-blue-600">
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Permission Sets</span>
-              <span class="material-icons-round text-blue-600 text-[14px]">checklist</span>
-            </div>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">8</div>
-          </div>
-
-          <div class="bg-white border border-slate-300 rounded-[2px] p-2 px-3 shadow-sm bg-slate-800 text-white border-none">
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] font-black uppercase tracking-widest text-slate-400">Current Scope</span>
-              <span class="material-icons-round text-amber-400 text-[14px]">public</span>
-            </div>
-            <div class="text-lg font-black text-amber-400 mt-0.5 leading-none">National HQ</div>
-          </div>
-        </section>
-
-        <section class="grid grid-cols-1 lg:grid-cols-2 gap-2 shrink-0 h-[160px]">
-          <div class="bg-white border border-slate-300 rounded-[2px] p-2 shadow-sm flex flex-col h-full overflow-hidden">
-            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">Permission Coverage</h2>
-            <div class="chart-container"><canvas id="permissionBarChart"></canvas></div>
-          </div>
-          <div class="bg-white border border-slate-300 rounded-[2px] p-2 shadow-sm flex flex-col h-full overflow-hidden">
-            <h2 class="text-[9px] font-black uppercase tracking-widest text-slate-700 border-b border-slate-100 pb-1 mb-1 shrink-0">Role Scope Split</h2>
-            <div class="chart-container"><canvas id="roleScopePieChart"></canvas></div>
-          </div>
-        </section>
-
         <section class="flex-1 min-h-[250px] bg-white rounded-[2px] border border-slate-300 shadow-sm flex flex-col overflow-hidden">
-          
           <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 shrink-0">
             <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
-                <span class="material-icons-round text-[14px]">view_comfy</span> Permission Matrix
+                <span class="material-icons-round text-[14px]">view_comfy</span> Admin Access Matrix
             </h2>
-
             <div class="flex flex-wrap gap-1.5 items-center">
-              <div class="relative">
-                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-                <input id="searchRole" type="text" placeholder="Search role..." class="gov-input pl-6 w-40" oninput="filterRoles()" />
-              </div>
-
-              <select id="scopeFilter" class="gov-input cursor-pointer" onchange="filterRoles()">
-                <option value="">All Scopes</option>
-                <option value="National">National</option>
-                <option value="All Entities">All Entities</option>
-              </select>
-
-              <span class="border-l border-slate-300 h-4 mx-1"></span> 
-              <button onclick="toggleSelectAll(true)" class="px-2 py-0.5 border border-slate-300 hover:bg-slate-200 text-slate-700 font-bold uppercase text-[9px] rounded-[2px]">Select All Rows</button>
-              <button onclick="toggleSelectAll(false)" class="px-2 py-0.5 border border-slate-300 hover:bg-slate-200 text-slate-700 font-bold uppercase text-[9px] rounded-[2px]">Clear All Rows</button>
-              <button onclick="resetSelectedRowPermissions()" class="px-2 py-0.5 bg-rose-700 hover:bg-rose-800 text-white font-bold uppercase text-[9px] rounded-[2px]">Reset Selected</button>
+              <input x-model="searchQ" type="text" placeholder="Search admin..." class="gov-input pl-6 w-40" />
+              <button @click="resetAll()" class="px-2 py-0.5 border border-slate-300 hover:bg-slate-200 text-slate-700 font-bold uppercase text-[9px] rounded-[2px]">Reset All</button>
+              <button @click="saveAll()" class="px-2 py-0.5 bg-violet-700 hover:bg-violet-800 text-white font-bold uppercase text-[9px] rounded-[2px]">Save Changes</button>
             </div>
           </div>
-
           <div class="flex-1 overflow-auto custom-scrollbar">
             <table class="w-full text-left border-collapse">
               <thead class="bg-slate-100 border-b border-slate-300 sticky top-0 z-10">
                 <tr>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 sticky left-0 bg-slate-100 z-30 border-r border-slate-300">Role</th>
-                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">View</th>
-                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Create</th>
-                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Edit</th>
-                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Submit</th>
-                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Approve</th>
-                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Reverse</th>
-                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Export</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Scope</th>
-                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center">Sel</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 sticky left-0 bg-slate-100 z-30 border-r border-slate-300">Admin</th>
+                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Role</th>
+                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Region</th>
+                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Municipality</th>
+                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">HRM</th>
+                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Logistics</th>
+                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Accounting</th>
+                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center border-r border-slate-200">Payments</th>
+                  <th class="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center">Other</th>
                 </tr>
               </thead>
-              <tbody class="text-[10px]" id="matrixBody">
-                
-                <tr class="border-b border-slate-200 hover:bg-slate-50 transition role-row" data-role="National Accountant" data-scope="National">
-                  <td class="px-3 py-1.5 font-bold text-slate-900 sticky left-0 bg-white z-10 border-r border-slate-200">National Accountant</td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" checked></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" checked></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" checked></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" checked></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox"></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox"></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" checked></td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="inline-flex px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-violet-50 text-violet-700 border border-violet-200">National</span>
-                  </td>
-                  <td class="px-2 py-1.5 text-center bg-slate-50 border-l border-slate-200">
-                    <input type="radio" name="selectedRole" class="w-3 h-3 cursor-pointer role-selector" onclick="handleRoleClick(this)">
-                  </td>
-                </tr>
-
-                <tr class="border-b border-slate-200 hover:bg-slate-50 transition role-row" data-role="Auditor" data-scope="All Entities">
-                  <td class="px-3 py-1.5 font-bold text-slate-900 sticky left-0 bg-white z-10 border-r border-slate-200">Auditor</td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" checked></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox"></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox"></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox"></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox"></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox"></td>
-                  <td class="px-2 py-1.5 text-center border-r border-slate-100"><input class="perm w-3 h-3 cursor-pointer" type="checkbox" checked></td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="inline-flex px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-slate-100 text-slate-700 border border-slate-300">All Entities</span>
-                  </td>
-                  <td class="px-2 py-1.5 text-center bg-slate-50 border-l border-slate-200">
-                    <input type="radio" name="selectedRole" class="w-3 h-3 cursor-pointer role-selector" onclick="handleRoleClick(this)">
-                  </td>
-                </tr>
-
+              <tbody class="text-[10px]">
+                <template x-for="admin in filteredAdmins()" :key="admin.id">
+                  <tr class="border-b border-slate-200 hover:bg-slate-50 transition">
+                    <td class="px-3 py-1.5 font-bold text-slate-900 sticky left-0 bg-white z-10 border-r border-slate-200" x-text="admin.name || admin.email"></td>
+                    <td class="px-2 py-1.5 text-center border-r border-slate-100" x-text="admin.role"></td>
+                    <td class="px-2 py-1.5 text-center border-r border-slate-100" x-text="admin.region"></td>
+                    <td class="px-2 py-1.5 text-center border-r border-slate-100" x-text="admin.municipality"></td>
+                    <td class="px-2 py-1.5 text-center border-r border-slate-100"><input type="checkbox" x-model="admin.permissions.hrm" class="w-3 h-3 cursor-pointer"></td>
+                    <td class="px-2 py-1.5 text-center border-r border-slate-100"><input type="checkbox" x-model="admin.permissions.logistics" class="w-3 h-3 cursor-pointer"></td>
+                    <td class="px-2 py-1.5 text-center border-r border-slate-100"><input type="checkbox" x-model="admin.permissions.accounting" class="w-3 h-3 cursor-pointer"></td>
+                    <td class="px-2 py-1.5 text-center border-r border-slate-100"><input type="checkbox" x-model="admin.permissions.payments" class="w-3 h-3 cursor-pointer"></td>
+                    <td class="px-2 py-1.5 text-center"><input type="checkbox" x-model="admin.permissions.other" class="w-3 h-3 cursor-pointer"></td>
+                  </tr>
+                </template>
               </tbody>
             </table>
-          </div>
-
-          <div class="bg-slate-50 border-t border-slate-300 px-3 py-2 flex items-center justify-between shrink-0">
-            <span class="text-[9px] text-slate-500 italic">Toggle the radio button to select/deselect a role for editing.</span>
-            <button @click="confirmModal = true" class="px-4 py-1.5 rounded-[2px] bg-slate-800 text-white font-black uppercase text-[9px] hover:bg-slate-900 transition shadow-sm">Save Changes</button>
           </div>
         </section>
 
@@ -209,7 +126,6 @@
     </div>
   </div>
 
-  <!-- Create Role Modal -->
   <div id="roleModal" class="fixed inset-0 z-[110] hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-[2px]">
       <div class="bg-white w-full max-w-[480px] rounded-[2px] shadow-2xl border border-slate-300 overflow-hidden">
       <div class="flex items-center justify-between bg-violet-700 text-white px-4 py-2">
@@ -259,45 +175,78 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
   <script>
-    // ===== Chart Setup =====
-    Chart.defaults.font.family = "Verdana, Arial, sans-serif";
-    Chart.defaults.font.size = 9;
-    Chart.defaults.color = "#64748b";
-    
-    const chartConfig = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 } };
-
-    document.addEventListener('DOMContentLoaded', () => {
-      new Chart(document.getElementById('permissionBarChart'), {
-        type: 'bar',
-        data: {
-          labels: ['View', 'Create', 'Edit', 'Submit', 'Approve', 'Reverse', 'Export'],
-          datasets: [{ data: [5, 3, 3, 2, 1, 1, 4], backgroundColor: '#6d28d9', borderRadius: 2 }]
+    function permissionsPage() {
+      return {
+        admins: [],
+        searchQ: '',
+        loading: false,
+        confirmModal: false, // Added to initialize state to prevent errors
+        async init() {
+          this.loading = true;
+          try {
+            const res = await fetch('/national/api/admins-permissions');
+            const data = await res.json();
+            this.admins = (data.admins || []).map(a => ({
+              ...a,
+              permissions: {
+                hrm: a.permissions?.hrm ?? false,
+                logistics: a.permissions?.logistics ?? false,
+                accounting: a.permissions?.accounting ?? false,
+                payments: a.permissions?.payments ?? false,
+                other: a.permissions?.other ?? false
+              }
+            }));
+          } catch (e) {
+            console.warn('Failed to load admins (API might not be connected):', e);
+          }
+          this.loading = false;
         },
-        options: { ...chartConfig, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } }
-      });
-
-      new Chart(document.getElementById('roleScopePieChart'), {
-        type: 'doughnut',
-        data: {
-          labels: ['National', 'All Entities'],
-          datasets: [{ data: [3, 2], backgroundColor: ['#8b5cf6', '#cbd5e1'], borderWidth: 0 }]
+        filteredAdmins() {
+          const q = (this.searchQ || '').toLowerCase();
+          return this.admins.filter(a =>
+            (a.name || a.email || '').toLowerCase().includes(q)
+          );
         },
-        options: { ...chartConfig, cutout: '65%', plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: {size: 8} } } } }
-      });
+        async saveAll() {
+          this.loading = true;
+          try {
+            for (const admin of this.admins) {
+              await fetch(`/national/api/admins-permissions/${admin.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ permissions: admin.permissions })
+              });
+            }
+            alert('Permissions updated successfully.');
+          } catch (e) {
+            alert('Failed to save: ' + e);
+          }
+          this.loading = false;
+        },
+        resetAll() {
+          for (const admin of this.admins) {
+            admin.permissions = { hrm: false, logistics: false, accounting: false, payments: false, other: false };
+          }
+        },
+        exportPermissions() {
+          let csv = 'Admin,Role,Region,Municipality,HRM,Logistics,Accounting,Payments,Other\n';
+          for (const a of this.filteredAdmins()) {
+            csv += `"${a.name || a.email}","${a.role}","${a.region}","${a.municipality}",${a.permissions.hrm ? 'YES' : 'NO'},${a.permissions.logistics ? 'YES' : 'NO'},${a.permissions.accounting ? 'YES' : 'NO'},${a.permissions.payments ? 'YES' : 'NO'},${a.permissions.other ? 'YES' : 'NO'}\n`;
+          }
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'admin-permissions.csv';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+      }
+    }
 
-      const exportBtn = document.getElementById('exportMatrixBtn');
-      if (exportBtn) exportBtn.addEventListener('click', exportPermissionMatrix);
-
-      const form = document.getElementById('createRoleForm');
-      if (form) form.addEventListener('submit', handleCreateRole);
-
-      updateRoleCount();
-    });
-
-    // ===== Matrix Logic =====
     let selectedRow = null;
 
     /**
@@ -318,7 +267,9 @@
     function selectRole(radioEl) {
       document.querySelectorAll('.role-row').forEach(r => r.classList.remove('bg-violet-50/50'));
       selectedRow = radioEl.closest('tr');
-      selectedRow.classList.add('bg-violet-50/50');
+      if(selectedRow) {
+        selectedRow.classList.add('bg-violet-50/50');
+      }
     }
 
     function clearSelection() {
