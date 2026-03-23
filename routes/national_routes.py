@@ -566,6 +566,32 @@ def inventory_national_view():
             quantity = data.get('stockAvailable', data.get('quantity', 0))
             description = data.get('resourceName') or data.get('notes') or 'General Inventory'
 
+            main_status = str(data.get('status', 'pending') or 'pending').strip().lower()
+            regional_status = str(data.get('regionalStatus', '') or '').strip().lower()
+            national_status = str(data.get('nationalStatus', '') or '').strip().lower()
+            approved_by_level = str(data.get('approvedByLevel', '') or '').strip().upper()
+            rejected_by_level = str(data.get('rejectedByLevel', '') or '').strip().upper()
+            forwarded_to_level = str(data.get('forwardedToLevel', '') or '').strip().upper()
+
+            if national_status == 'approved':
+                status_display = 'APPROVED BY NATIONAL'
+            elif national_status == 'rejected':
+                status_display = 'REJECTED BY NATIONAL'
+            elif rejected_by_level:
+                status_display = f'REJECTED BY {rejected_by_level}'
+            elif approved_by_level:
+                status_display = f'APPROVED BY {approved_by_level}'
+            elif main_status in {'forwarded-to-national', 'forwarded-national'} or forwarded_to_level == 'NATIONAL':
+                status_display = 'FORWARDED TO NATIONAL'
+            elif main_status in {'to-review', 'to_review'}:
+                status_display = 'FORWARDED TO REGIONAL'
+            elif regional_status == 'approved':
+                status_display = 'APPROVED BY REGIONAL'
+            elif regional_status == 'rejected':
+                status_display = 'REJECTED BY REGIONAL'
+            else:
+                status_display = 'PENDING'
+
             inventory_records.append({
                 'id': doc.id,
                 'category': category,
@@ -582,7 +608,8 @@ def inventory_national_view():
                 'forwardedToLevel': data.get('forwardedToLevel', ''),
                 'registrationFee': data.get('registrationFee', 0),
                 'createdAt': data.get('createdAt'),
-                'unitOfMeasure': data.get('unitOfMeasure', 'pcs')
+                'unitOfMeasure': data.get('unitOfMeasure', 'pcs'),
+                'status_display': status_display
             })
 
         chemical_count = category_count.get('Chemical Inventory', 0)
