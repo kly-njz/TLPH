@@ -1,3 +1,20 @@
+# --- Create Quotation (National) ---
+@bp.route('/operations/quotation/api/create', methods=['POST'])
+@role_required('national', 'national_admin')
+def quotations_national_create():
+    from quotation_storage import add_quotation
+    data = request.get_json(silent=True) or {}
+    try:
+        # Validate required fields
+        required = ['number', 'client', 'amount', 'date', 'status', 'region', 'municipality', 'description', 'scope']
+        for field in required:
+            if not data.get(field):
+                return jsonify({'success': False, 'error': f'Missing required field: {field}'}), 400
+        quotation = add_quotation(data)
+        return jsonify({'success': True, 'quotation': quotation})
+    except Exception as e:
+        print(f"[ERROR] quotations_national_create failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
 
 # --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify

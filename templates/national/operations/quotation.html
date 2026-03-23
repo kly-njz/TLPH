@@ -340,30 +340,60 @@
     options: { ...chartOpt, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { callback: function(value) { return '₱' + value + 'k'; } } } } }
   });
 
-  // --- Add Row Logic ---
-  function submitQuotation(e) {
+  // --- Add Row Logic (Connect to backend) ---
+  async function submitQuotation(e) {
     e.preventDefault();
-    const qNum = document.getElementById('qNumber').value;
-    const client = document.getElementById('qClient').value;
-    const amount = parseFloat(document.getElementById('qAmount').value).toLocaleString('en-US', {minimumFractionDigits: 2});
+    const qNum = document.getElementById('qNumber').value.trim();
+    const client = document.getElementById('qClient').value.trim();
+    const amount = parseFloat(document.getElementById('qAmount').value);
     const date = document.getElementById('qDate').value;
     const status = document.getElementById('qStatus').value;
+    const region = document.getElementById('qRegion').value;
+    const municipality = document.getElementById('qMunicipality').value;
+    const description = document.getElementById('qDescription').value.trim();
 
-    let badgeClass = 'bg-slate-50 text-slate-700 border-slate-200';
-    if(status === 'Approved') badgeClass = 'bg-blue-50 text-blue-700 border-blue-200';
-    if(status === 'Pending') badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
-    if(status === 'Rejected') badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
+    if (!qNum || !client || !date || !region || !municipality || !description || isNaN(amount)) {
+      alert('Please complete all required fields.');
+      return;
+    }
 
-    const row = document.createElement('tr');
-    row.className = 'hover:bg-blue-50 transition quote-row';
-    row.dataset.id = Date.now(); // fake ID
-    row.innerHTML = `
-        <td class="font-black text-slate-900 border-r border-slate-100">${qNum}</td>
-        <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">${client}</td>
-        <td class="font-mono font-bold text-blue-800 border-r border-slate-100 uppercase text-[11px]">₱${amount}</td>
-        <td class="font-mono text-slate-500 border-r border-slate-100 text-center uppercase">${date}</td>
+    const payload = {
+      number: qNum,
+      client: client,
+      amount: amount,
+      date: date,
+      status: status,
+      region: region,
+      municipality: municipality,
+      description: description,
+      scope: 'national'
+    };
+
+    try {
+      const res = await fetch('/national/operations/quotation/api/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to create quotation');
+      const q = data.quotation || payload;
+
+      let badgeClass = 'bg-slate-50 text-slate-700 border-slate-200';
+      if(q.status === 'Approved') badgeClass = 'bg-blue-50 text-blue-700 border-blue-200';
+      if(q.status === 'Pending') badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+      if(q.status === 'Rejected') badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
+
+      const row = document.createElement('tr');
+      row.className = 'hover:bg-blue-50 transition quote-row';
+      row.dataset.id = q.id || Date.now();
+      row.innerHTML = `
+        <td class="font-black text-slate-900 border-r border-slate-100">${q.number}</td>
+        <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">${q.client}</td>
+        <td class="font-mono font-bold text-blue-800 border-r border-slate-100 uppercase text-[11px]">₱${parseFloat(q.amount).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+        <td class="font-mono text-slate-500 border-r border-slate-100 text-center uppercase">${q.date}</td>
         <td class="text-center border-r border-slate-100">
-          <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${badgeClass}">${status}</span>
+          <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${badgeClass}">${q.status}</span>
         </td>
         <td class="text-center">
           <div class="flex justify-center gap-2">
@@ -372,9 +402,11 @@
             <button onclick="deleteQuotation(this)" class="text-rose-700 font-bold hover:underline uppercase text-[9px]">Delete</button>
           </div>
         </td>`;
-        
-    document.getElementById('quoteTable').prepend(row);
-    closeCreateModal();
+      document.getElementById('quoteTable').prepend(row);
+      closeCreateModal();
+    } catch (error) {
+      alert(error.message || 'Unable to save quotation.');
+    }
   }
 
   // --- Search & Filter Logic ---
