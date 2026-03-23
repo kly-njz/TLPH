@@ -1,9 +1,12 @@
+
 from flask import Blueprint, render_template, jsonify, request, session
 from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required
 
 from datetime import datetime
+import pytz
 from firebase_admin import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 import system_logs_storage
 
 bp = Blueprint('regional', __name__, url_prefix='/regional')
@@ -3087,7 +3090,9 @@ def accounting_dashboard_view():
 
     # Normalize finance documents into known department buckets so template cards
     # don't show N/A when document IDs/structures vary.
-    department_keys = ['treasury', 'accounting', 'budget', 'engineering']
+
+    # Only include departments that should be shown on the dashboard
+    department_keys = ['treasury', 'accounting', 'budget']
     department_finance = {k: {} for k in department_keys}
 
     for doc_id, payload in finance_data.items():
@@ -3151,7 +3156,10 @@ def accounting_dashboard_view():
     net_movement = total_deposits - total_expenses
 
     # Growth rate: compare recent 30 days vs previous 30 days using fund movement data.
-    now = datetime.utcnow()
+
+    import pytz
+    utc = pytz.UTC
+    now = datetime.utcnow().replace(tzinfo=utc)
     current_cutoff = now - timedelta(days=30)
     previous_cutoff = now - timedelta(days=60)
     current_period_total = 0.0
@@ -3162,6 +3170,11 @@ def accounting_dashboard_view():
         amount = _to_float(row.get('amount'))
         if not ts:
             continue
+        # Ensure ts is timezone-aware (UTC)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=utc)
+        else:
+            ts = ts.astimezone(utc)
         if ts >= current_cutoff:
             current_period_total += amount
         elif ts >= previous_cutoff:
@@ -4267,11 +4280,7 @@ def quotation_regional():
     for q in all_quotations:
         print(f"region: {q.get('region')}, municipality: {q.get('municipality')}, id: {q.get('id', 'N/A')}")
 
-    # Filter to only regional quotations for further filtering
-    regional_quotations = [q for q in all_quotations if str(q.get('scope', '')).lower() == 'regional']
-
-    # Always provide full list of municipalities for the user's region
-    # Always provide full list of municipalities for the user's region
+    # Show all quotations for the user's region, regardless of scope
     from models.ph_locations import philippineLocations
     region_name = user_region
     municipalities = []
@@ -4296,11 +4305,11 @@ def quotation_regional():
             municipalities.extend(muni_list)
         municipalities = sorted(set(municipalities))
 
-    # Filter quotations to only those in the region's municipalities
+    # Filter quotations to only those in the region's municipalities and region
     muni_set = set(m.upper() for m in municipalities)
     region_upper = region_name.upper() if region_name else ''
     quotations = [
-        q for q in regional_quotations
+        q for q in all_quotations
         if str(q.get('municipality', '')).strip().upper() in muni_set
         and str(q.get('region', '')).strip().upper() == region_upper
     ]
@@ -4843,3 +4852,23 @@ def api_get_expense_categories_wrapped():
     except Exception as e:
         print(f"[ERROR] Getting expense categories: {e}")
         return jsonify([]), 200
+
+
+
+# Unified expense categories API for regional admin
+from expense_storage import get_all_expense_categories
+
+@bp.route('/api/expense-categories', methods=['GET'])
+@role_required('regional', 'regional_admin')
+def api_get_regional_expense_categories():
+    """Get all expense categories for the region (all municipalities in region)"""
+    try:
+        # Get region from session or query param
+        region = request.args.get('region') or session.get('region')
+        if not region:
+            return jsonify({'error': 'Region not specified'}), 400
+        categories = get_all_expense_categories(region=region)
+        return jsonify(categories), 200
+    except Exception as e:
+        print(f"[ERROR] Regional: Failed to get expense categories: {e}")
+        return jsonify({'error': str(e)}), 500

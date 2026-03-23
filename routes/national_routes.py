@@ -1,7 +1,7 @@
-
 # --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
+from google.cloud.firestore_v1 import FieldFilter
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -696,7 +696,8 @@ def quotation():
     from quotation_storage import get_quotations
     import json
     from collections import Counter
-    quotations = get_quotations(scope='national')
+    from quotation_storage import get_all_quotations
+    quotations = get_all_quotations()
     def to_float(value):
         try:
             return float(value)
@@ -730,8 +731,15 @@ def quotation():
         trend_values = [0]
     # Import province/municipality mapping for dropdowns
     from models.ph_locations import philippineLocations
-    # Regions = sorted province keys
-    region_list = sorted(philippineLocations.keys())
+    from models.region_province_map import region_province_map
+    # province_muni_map is just philippineLocations
+    province_muni_map = philippineLocations
+    # Always provide status_data for chart (Approved, Pending, Rejected)
+    status_data = [
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'approved']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'pending']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'rejected'])
+    ]
     return render_template(
         'national/operations/quotation.html',
         quotations=quotations,
@@ -740,10 +748,11 @@ def quotation():
         pending_quotes=pending_quotes,
         rejected_quotes=rejected_quotes,
         total_value=total_value,
-        regions=region_list,
-        prov_muni_map=philippineLocations,
+        region_province_map=region_province_map,
+        province_muni_map=province_muni_map,
         trend_labels_json=json.dumps(trend_labels),
-        trend_values_json=json.dumps(trend_values)
+        trend_values_json=json.dumps(trend_values),
+        status_data=status_data
     )
 
 
@@ -1517,24 +1526,8 @@ def national_deposits_view():
 def api_get_national_expense_categories():
     """Get ALL expense categories from all municipalities (National view)"""
     try:
-        db = get_firestore_db()
-        categories = []
-        
-        # Fetch all expense categories without any filtering
-        query_result = db.collection('expense_categories').stream()
-        
-        for doc in query_result:
-            data = doc.to_dict() or {}
-            categories.append({
-                'id': doc.id,
-                'name': data.get('name', 'Unnamed'),
-                'coa_code': data.get('coa_code', 'N/A'),
-                'tax_type': data.get('tax_type', 'None'),
-                'default_rate': data.get('default_rate', 0),
-                'status': data.get('status', 'active'),
-                'municipality': data.get('municipality', 'National')
-            })
-        
+        from expense_storage import get_all_expense_categories
+        categories = get_all_expense_categories()
         print(f'[INFO] National: Retrieved {len(categories)} expense categories')
         return jsonify(categories), 200
         
@@ -1955,3 +1948,107 @@ def quotations_national_delete(quotation_id):
     except Exception as e:
         print(f"[ERROR] quotations_national_delete failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to delete quotation'}), 500
+    
+
+# --- Create Quotation (National) ---
+@bp.route('/operations/quotation/api/create', methods=['POST'])
+@role_required('national', 'national_admin')
+def quotations_national_create():
+    from quotation_storage import add_quotation
+    data = request.get_json(silent=True) or {}
+    try:
+        # Validate required fields
+        required = ['number', 'client', 'amount', 'date', 'status', 'region', 'municipality', 'description', 'scope']
+        for field in required:
+            if not data.get(field):
+                return jsonify({'success': False, 'error': f'Missing required field: {field}'}), 400
+        quotation = add_quotation(data)
+        return jsonify({'success': True, 'quotation': quotation})
+    except Exception as e:
+        print(f"[ERROR] quotations_national_create failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
+    
+
+# Endpoint: Update permissions for a specific admin
+@bp.route('/api/admins-permissions/<user_id>', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_update_admin_permissions(user_id):
+    db = get_firestore_db()
+    data = request.get_json(force=True)
+    permissions = data.get('permissions', {})
+    user_ref = db.collection('users').document(user_id)
+    user_ref.update({'permissions': permissions})
+    return jsonify({'success': True, 'message': 'Permissions updated.'})
+
+@bp.route('/api/admins-permissions', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_admins_permissions():
+    db = get_firestore_db()
+    users_ref = db.collection('users')
+    users = []
+    count = 0
+    for user_doc in users_ref.stream():
+        user = user_doc.to_dict() or {}
+        role = user.get('role', '').lower()
+        if role in ['regional_admin', 'regional', 'municipal_admin', 'municipal']:
+            perms = user.get('permissions', {}) or {}
+            # Default: all access if missing or incomplete
+            perms = {
+                'hrm': perms.get('hrm', True),
+                'logistics': perms.get('logistics', True),
+                'accounting': perms.get('accounting', True),
+                'payments': perms.get('payments', True),
+                'other': perms.get('other', True)
+            }
+            users.append({
+                'id': user_doc.id,
+                'email': user.get('email', ''),
+                'name': f"{user.get('firstName', '')} {user.get('lastName', '')}".strip(),
+                'role': role,
+                'region': user.get('region', ''),
+                'municipality': user.get('municipality', ''),
+                'permissions': perms
+            })
+            count += 1
+    print(f"[DEBUG] /api/admins-permissions: Found {count} admin users: {[u['role'] for u in users]}")
+    return jsonify({'admins': users})
+
+
+@bp.route('/api/user-management/accounts', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_all_admin_accounts():
+    """Fetch all regional and municipal admin accounts for national user management."""
+    try:
+        db = get_firestore_db()
+        users_ref = db.collection('users')
+        users = []
+        for doc in users_ref.stream():
+            data = doc.to_dict() or {}
+            role = data.get('role', '').lower()
+            # Match any role containing 'regional' or 'municipal'
+            if 'regional' in role or 'municipal' in role:
+                data['id'] = doc.id
+                data['name'] = f"{data.get('firstName', '')} {data.get('lastName', '')}".strip()
+                data['status'] = data.get('status', 'Active')
+                users.append(data)
+        return jsonify({'success': True, 'users': users})
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch admin accounts: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/user-management/accounts/<user_id>/revoke', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_revoke_admin_account(user_id):
+    """Revoke (disable) a regional or municipal admin account."""
+    try:
+        db = get_firestore_db()
+        user_ref = db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user_ref.update({'status': 'Disabled'})
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] Failed to revoke admin account: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

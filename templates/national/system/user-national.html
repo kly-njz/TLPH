@@ -278,7 +278,84 @@
       URL.revokeObjectURL(url);
     }
 
-    updateAnalytics();
+    // --- National User Management Dynamic Loading ---
+    async function fetchNationalAccounts() {
+      try {
+        const res = await fetch('/national/api/user-management/accounts');
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to fetch accounts');
+        return data.users || [];
+      } catch (e) {
+        alert('Failed to load accounts: ' + e.message);
+        return [];
+      }
+    }
+
+    async function revokeNationalAccount(userId, userName) {
+      if (!confirm(`Revoke access for ${userName}?`)) return;
+      try {
+        const res = await fetch(`/national/api/user-management/accounts/${userId}/revoke`, { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to revoke account');
+        await loadNationalAccounts();
+      } catch (e) {
+        alert('Failed to revoke account: ' + e.message);
+      }
+    }
+
+    async function loadNationalAccounts() {
+      const users = await fetchNationalAccounts();
+      const tbody = document.getElementById('usersTbody');
+      tbody.innerHTML = users.length === 0 ? `<tr><td colspan="7" class="text-center text-slate-400 py-6">No regional or municipal accounts found.</td></tr>` : users.map(u => `
+        <tr class="hover:bg-blue-50 transition-colors">
+          <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100 uppercase">${u.name || '—'}</td>
+          <td class="px-3 py-1.5 text-slate-500 font-mono border-r border-slate-100">${u.email || '—'}</td>
+          <td class="px-3 py-1.5 text-center border-r border-slate-100 font-bold">${u.role === 'regional_admin' ? 'Regional' : 'Municipal'}</td>
+          <td class="px-3 py-1.5 border-r border-slate-100 font-bold text-blue-700">${u.region || '—'}</td>
+          <td class="px-3 py-1.5 text-center border-r border-slate-100">
+            <span class="px-1.5 py-0.5 rounded-[1px] font-black ${u.status === 'Active' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-300'} uppercase text-[8px]">${u.status}</span>
+          </td>
+          <td class="px-3 py-1.5 text-center space-x-1">
+            <button onclick="viewNationalUser(this)" class="text-blue-700 font-bold uppercase hover:underline">View</button>
+            <button onclick="revokeNationalAccount('${u.id}', '${u.name || u.email || ''}')" class="text-rose-700 font-bold uppercase hover:underline" ${u.status === 'Disabled' ? 'disabled style=\'opacity:0.5;pointer-events:none;\'' : ''}>Revoke</button>
+          </td>
+          <td class="hidden">${u.municipality || ''}</td>
+        </tr>
+      `).join('');
+      updateAnalytics();
+    }
+
+    // Patch viewUser to work for dynamic rows
+    function viewNationalUser(btn) {
+      const tr = btn.closest('tr');
+      const cells = tr.cells;
+      document.getElementById('viewContent').innerHTML = `
+        <div class="space-y-3">
+          <div class="p-2 border rounded-[2px] bg-white">
+            <span class="block text-[8px] font-bold text-slate-400 uppercase">Legal Full Name</span>
+            <span class="font-black text-slate-800 uppercase">${cells[0].innerText}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="p-2 border rounded-[2px] bg-white">
+                <span class="block text-[8px] font-bold text-slate-400 uppercase">Access Level</span>
+                <span class="font-bold text-blue-700">${cells[2].innerText}</span>
+            </div>
+            <div class="p-2 border rounded-[2px] bg-white">
+                <span class="block text-[8px] font-bold text-slate-400 uppercase">Status</span>
+                <span class="font-bold">${cells[4].innerText}</span>
+            </div>
+          </div>
+          <div class="p-2 border rounded-[2px] bg-blue-50 border-blue-100">
+            <span class="block text-[8px] font-bold text-blue-400 uppercase">Registered Email</span>
+            <span class="font-mono text-blue-900">${cells[1].innerText}</span>
+          </div>
+        </div>`;
+      document.getElementById('viewModal').classList.remove('hidden');
+      document.getElementById('viewModal').classList.add('flex');
+    }
+
+    // On page load, fetch and render accounts
+    window.addEventListener('DOMContentLoaded', loadNationalAccounts);
   </script>
 </body>
 </html>
