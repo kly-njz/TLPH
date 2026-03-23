@@ -735,6 +735,12 @@ def quotation():
     from models.region_province_map import region_province_map
     # province_muni_map is just philippineLocations
     province_muni_map = philippineLocations
+    # Always provide status_data for chart (Approved, Pending, Rejected)
+    status_data = [
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'approved']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'pending']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'rejected'])
+    ]
     return render_template(
         'national/operations/quotation.html',
         quotations=quotations,
@@ -746,7 +752,8 @@ def quotation():
         region_province_map=region_province_map,
         province_muni_map=province_muni_map,
         trend_labels_json=json.dumps(trend_labels),
-        trend_values_json=json.dumps(trend_values)
+        trend_values_json=json.dumps(trend_values),
+        status_data=status_data
     )
 
 
