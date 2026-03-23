@@ -573,7 +573,16 @@ def inventory_national_view():
                 'quantity': quantity,
                 'region': region,
                 'municipality': municipality,
-                'applicant_name': full_name
+                'applicant_name': full_name,
+                'status': data.get('status', 'pending'),
+                'regionalStatus': data.get('regionalStatus', ''),
+                'nationalStatus': data.get('nationalStatus', ''),
+                'approvedByLevel': data.get('approvedByLevel', ''),
+                'rejectedByLevel': data.get('rejectedByLevel', ''),
+                'forwardedToLevel': data.get('forwardedToLevel', ''),
+                'registrationFee': data.get('registrationFee', 0),
+                'createdAt': data.get('createdAt'),
+                'unitOfMeasure': data.get('unitOfMeasure', 'pcs')
             })
 
         chemical_count = category_count.get('Chemical Inventory', 0)
@@ -625,6 +634,56 @@ def inventory_national_view():
             region_labels=['N/A'],
             region_data=[0]
         )
+
+
+@bp.route('/inventory-national/api/<inventory_id>/status', methods=['POST'])
+@role_required('national', 'national_admin')
+def update_inventory_national_status(inventory_id):
+    """National-level approve/reject endpoint for inventory registrations."""
+    try:
+        db = get_firestore_db()
+        payload = request.get_json(silent=True) or {}
+        requested_status = str(payload.get('status') or '').strip().lower()
+
+        if requested_status not in {'approved', 'rejected'}:
+            return jsonify({'status': 'error', 'message': 'Invalid action.'}), 400
+
+        inv_ref = db.collection('inventory_registrations').document(inventory_id)
+        inv_doc = inv_ref.get()
+        if not inv_doc.exists:
+            return jsonify({'status': 'error', 'message': 'Inventory record not found.'}), 404
+
+        inv_data = inv_doc.to_dict() or {}
+        current_national = str(inv_data.get('nationalStatus') or '').strip().lower()
+        if current_national in {'approved', 'rejected'}:
+            return jsonify({'status': 'error', 'message': 'National action already finalized for this record.'}), 409
+
+        update_data = {
+            'status': requested_status,
+            'nationalStatus': requested_status,
+            'updatedAt': datetime.utcnow(),
+        }
+
+        if requested_status == 'approved':
+            update_data.update({
+                'approvedByLevel': 'National',
+                'approvedAt': datetime.utcnow(),
+                'rejectedByLevel': '',
+                'rejectedByEmail': ''
+            })
+        else:
+            update_data.update({
+                'rejectedByLevel': 'National',
+                'rejectedAt': datetime.utcnow(),
+                'approvedByLevel': '',
+                'approvedByEmail': ''
+            })
+
+        inv_ref.update(update_data)
+        return jsonify({'status': 'success', 'message': f'Inventory {requested_status} successfully.'}), 200
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 # -----------------------------
