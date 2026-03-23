@@ -271,17 +271,74 @@
         </div>
     </div>
 
+    <div id="configureGroupModalWrapper" class="gov-modal no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeConfigureGroupModal()"></div>
+        <div id="configureGroupModalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-gear text-slate-400"></i> Configure Group
+                </h3>
+                <button onclick="closeConfigureGroupModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <form id="configureGroupForm" class="p-4 bg-slate-50 flex-1">
+                <input id="configureGroupId" type="hidden">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="flex flex-col gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-slate-600">Group Name</span>
+                        <input id="configureGroupName" type="text" class="gov-input h-7 uppercase" required>
+                    </label>
+                    <label class="flex flex-col gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-slate-600">Clearance Level</span>
+                        <select id="configureGroupClearance" class="gov-input h-7 uppercase" required>
+                            <option value="Level 5">Level 5</option>
+                            <option value="Level 4">Level 4</option>
+                            <option value="Level 3">Level 3</option>
+                            <option value="Level 2">Level 2</option>
+                            <option value="Level 1">Level 1</option>
+                        </select>
+                    </label>
+                    <label class="flex flex-col gap-1 sm:col-span-2">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-slate-600">Role Description</span>
+                        <input id="configureGroupDesc" type="text" class="gov-input h-7" required>
+                    </label>
+                    <label class="flex flex-col gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-slate-600">Total Members</span>
+                        <input id="configureGroupMembers" type="number" min="0" class="gov-input h-7 font-mono" required>
+                    </label>
+                    <label class="flex flex-col gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-slate-600">Status</span>
+                        <select id="configureGroupStatus" class="gov-input h-7 uppercase" required>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="flex items-center justify-end gap-2 mt-4">
+                    <button type="button" onclick="closeConfigureGroupModal()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button type="submit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // ----------------------------------------------------
         // TABLE & FILTER LOGIC
         // ----------------------------------------------------
         const groups = [
-            {name:'Super Admin', desc:'Unrestricted system privileges', members:5, color:'red', clearance:'Level 5', status:'active'},
-            {name:'Regional Director', desc:'Full region-level administrative control', members:16, color:'orange', clearance:'Level 4', status:'active'},
-            {name:'Secretary', desc:'Manage official records & communications', members:32, color:'blue', clearance:'Level 3', status:'active'},
-            {name:'Treasurer', desc:'Handle payments & financial audits', members:14, color:'green', clearance:'Level 3', status:'inactive'},
-            {name:'Data Encoder', desc:'Standard data entry and file uploads', members:89, color:'slate', clearance:'Level 2', status:'active'}
+            {id: 1, name:'Super Admin', desc:'Unrestricted system privileges', members:5, color:'red', clearance:'Level 5', status:'active'},
+            {id: 2, name:'Regional Director', desc:'Full region-level administrative control', members:16, color:'orange', clearance:'Level 4', status:'active'},
+            {id: 3, name:'Secretary', desc:'Manage official records & communications', members:32, color:'blue', clearance:'Level 3', status:'active'},
+            {id: 4, name:'Treasurer', desc:'Handle payments & financial audits', members:14, color:'green', clearance:'Level 3', status:'inactive'},
+            {id: 5, name:'Data Encoder', desc:'Standard data entry and file uploads', members:89, color:'slate', clearance:'Level 2', status:'active'}
         ];
+        let nextGroupId = 6;
 
         function getBadgeStyle(color) {
             const styles = {
@@ -324,7 +381,9 @@
                     </td>
                     <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${renderStatusBadge(g.status)}</td>
                     <td class="px-3 py-1.5 align-middle text-center no-print">
-                        <button class="btn-action btn-edit w-full" title="Configure"><span class="material-icons-round text-[12px]">settings</span></button>
+                        <button class="btn-action btn-edit w-full" title="Configure" data-group-id="${g.id}">
+                            <span class="material-icons-round text-[12px]">settings</span>
+                        </button>
                     </td>
                 </tr>
             `).join('') : '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No groups found.</td></tr>';
@@ -466,6 +525,7 @@
             if (!name || !desc || !clearance || Number.isNaN(members)) return;
 
             groups.push({
+                id: nextGroupId++,
                 name: name.toUpperCase(),
                 desc,
                 members: members < 0 ? 0 : members,
@@ -475,6 +535,69 @@
             });
 
             closeAddGroupModal();
+            filterGroups();
+        });
+
+        // ----------------------------------------------------
+        // CONFIGURE GROUP MODAL LOGIC
+        // ----------------------------------------------------
+        const configureGroupWrapper = document.getElementById('configureGroupModalWrapper');
+        const configureGroupBody = document.getElementById('configureGroupModalBody');
+        const configureGroupForm = document.getElementById('configureGroupForm');
+
+        function openConfigureGroupModal(groupId) {
+            const group = groups.find(g => g.id === groupId);
+            if (!group) return;
+
+            document.getElementById('configureGroupId').value = String(group.id);
+            document.getElementById('configureGroupName').value = group.name;
+            document.getElementById('configureGroupDesc').value = group.desc;
+            document.getElementById('configureGroupClearance').value = group.clearance;
+            document.getElementById('configureGroupMembers').value = String(group.members);
+            document.getElementById('configureGroupStatus').value = group.status;
+
+            configureGroupWrapper.classList.remove('hidden');
+            setTimeout(() => { configureGroupWrapper.classList.add('flex'); configureGroupBody.classList.remove('scale-95'); configureGroupBody.classList.add('scale-100'); }, 10);
+            document.getElementById('configureGroupName').focus();
+        }
+
+        function closeConfigureGroupModal() {
+            configureGroupWrapper.classList.remove('flex');
+            configureGroupBody.classList.remove('scale-100');
+            configureGroupBody.classList.add('scale-95');
+            setTimeout(() => { configureGroupWrapper.classList.add('hidden'); configureGroupForm.reset(); }, 300);
+        }
+
+        document.getElementById('groupTable').addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-group-id]');
+            if (!button) return;
+            const id = parseInt(button.getAttribute('data-group-id'), 10);
+            if (Number.isNaN(id)) return;
+            openConfigureGroupModal(id);
+        });
+
+        configureGroupForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = parseInt(document.getElementById('configureGroupId').value, 10);
+            const name = document.getElementById('configureGroupName').value.trim();
+            const desc = document.getElementById('configureGroupDesc').value.trim();
+            const clearance = document.getElementById('configureGroupClearance').value.trim();
+            const members = parseInt(document.getElementById('configureGroupMembers').value, 10);
+            const status = document.getElementById('configureGroupStatus').value;
+
+            if (Number.isNaN(id) || !name || !desc || !clearance || Number.isNaN(members)) return;
+
+            const group = groups.find(g => g.id === id);
+            if (!group) return;
+
+            group.name = name.toUpperCase();
+            group.desc = desc;
+            group.clearance = clearance;
+            group.members = members < 0 ? 0 : members;
+            group.status = status;
+            group.color = status === 'active' ? 'green' : 'slate';
+
+            closeConfigureGroupModal();
             filterGroups();
         });
     </script>
