@@ -1,10 +1,7 @@
-
-
-
-
 # --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
+from google.cloud.firestore_v1 import FieldFilter
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
