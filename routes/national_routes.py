@@ -1,30 +1,4 @@
-@bp.route('/operations/quotation/api/<quotation_id>/status', methods=['POST'])
-@role_required('national', 'national_admin')
-def quotations_national_update_status(quotation_id):
-    from quotation_storage import update_quotation
-    data = request.get_json(silent=True) or {}
-    status = str(data.get('status') or '').strip().upper()
-    if status not in {'PENDING', 'APPROVED', 'REJECTED'}:
-        return jsonify({'success': False, 'error': 'Invalid status'}), 400
-    try:
-        updated = update_quotation(quotation_id, {'status': status})
-        if not updated:
-            return jsonify({'success': False, 'error': 'Quotation not found'}), 404
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"[ERROR] quotations_national_update_status failed: {e}")
-        return jsonify({'success': False, 'error': 'Failed to update quotation status'}), 500
 
-@bp.route('/operations/quotation/api/<quotation_id>', methods=['DELETE'])
-@role_required('national', 'national_admin')
-def quotations_national_delete(quotation_id):
-    from quotation_storage import delete_quotation
-    try:
-        delete_quotation(quotation_id)
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"[ERROR] quotations_national_delete failed: {e}")
-        return jsonify({'success': False, 'error': 'Failed to delete quotation'}), 500
 # --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
@@ -1952,3 +1926,32 @@ def api_get_all_national_transactions():
     except Exception as e:
         print(f'[ERROR] National: Failed to get transactions: {e}')
         return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/operations/quotation/api/<quotation_id>/status', methods=['POST'])
+@role_required('national', 'national_admin')
+def quotations_national_update_status(quotation_id):
+    from quotation_storage import update_quotation
+    data = request.get_json(silent=True) or {}
+    status = str(data.get('status') or '').strip().upper()
+    if status not in {'PENDING', 'APPROVED', 'REJECTED'}:
+        return jsonify({'success': False, 'error': 'Invalid status'}), 400
+    try:
+        updated = update_quotation(quotation_id, {'status': status})
+        if not updated:
+            return jsonify({'success': False, 'error': 'Quotation not found'}), 404
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] quotations_national_update_status failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update quotation status'}), 500
+
+@bp.route('/operations/quotation/api/<quotation_id>', methods=['DELETE'])
+@role_required('national', 'national_admin')
+def quotations_national_delete(quotation_id):
+    from quotation_storage import delete_quotation
+    try:
+        delete_quotation(quotation_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] quotations_national_delete failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to delete quotation'}), 500
