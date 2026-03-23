@@ -1524,6 +1524,27 @@ def permissions_national_view():
 def service_requests_national_view():
     try:
         db = get_firestore_db()
+        import calendar
+        from collections import defaultdict
+
+        def _to_datetime(value):
+            if not value:
+                return None
+            if isinstance(value, datetime):
+                return value
+            if isinstance(value, str):
+                try:
+                    return datetime.fromisoformat(value.replace('Z', '+00:00'))
+                except Exception:
+                    return None
+            if hasattr(value, 'to_datetime'):
+                try:
+                    return value.to_datetime()
+                except Exception:
+                    pass
+            if hasattr(value, 'strftime'):
+                return value
+            return None
 
         # Pull forwarded-national (pending), AND approved/rejected that were handled at national level
         raw_docs = []
@@ -1559,22 +1580,24 @@ def service_requests_national_view():
                 pass
 
         service_requests = []
+        monthly_trend = defaultdict(int)
+        service_type_count = defaultdict(int)
+        status_breakdown = defaultdict(int)
+
         for doc in docs:
             data = doc.to_dict()
 
             # Date
             created_at = data.get('createdAt') or data.get('submittedAt')
+            created_dt = _to_datetime(created_at)
             date_filed = 'N/A'
-            if created_at:
+            if created_dt:
                 try:
-                    if isinstance(created_at, str):
-                        date_filed = datetime.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%b %d, %Y')
-                    elif hasattr(created_at, 'strftime'):
-                        date_filed = created_at.strftime('%b %d, %Y')
-                    else:
-                        date_filed = str(created_at)
+                    date_filed = created_dt.strftime('%b %d, %Y')
                 except Exception:
                     date_filed = str(created_at)
+            elif created_at:
+                date_filed = str(created_at)
 
             # Applicant name — from users collection via userId
             uid = data.get('userId', '')
@@ -1593,19 +1616,61 @@ def service_requests_national_view():
             doc_status = (data.get('status') or 'forwarded-national').lower()
             approved_by_level = data.get('approvedByLevel', '')
 
+            if created_dt:
+                month_key = created_dt.strftime('%Y-%m')
+                monthly_trend[month_key] += 1
+
+            service_type = data.get('serviceType', 'N/A') or 'N/A'
+            service_type_count[service_type] += 1
+
+            if doc_status == 'approved':
+                status_breakdown['approved'] += 1
+            elif doc_status == 'rejected':
+                status_breakdown['rejected'] += 1
+            else:
+                status_breakdown['pending'] += 1
+
             service_requests.append({
                 'id': doc.id,
                 'date_filed': date_filed,
+                'sort_dt': created_dt,
                 'reference_id': doc.id[:10].upper(),
                 'applicant_name': full_name.upper(),
-                'service_type': data.get('serviceType', 'N/A'),
+                'service_type': service_type,
                 'location': location,
                 'status': doc_status,
                 'approved_by_level': approved_by_level,
                 'forwarded_by': data.get('forwardedToNationalBy', 'N/A'),
             })
 
-        service_requests.sort(key=lambda x: x['date_filed'], reverse=True)
+        service_requests.sort(
+            key=lambda x: x.get('sort_dt') or datetime.min,
+            reverse=True
+        )
+
+        current_date = datetime.now()
+        trend_labels = []
+        trend_data = []
+        for i in range(5, -1, -1):
+            month = current_date.month - i
+            year = current_date.year
+            while month <= 0:
+                month += 12
+                year -= 1
+            month_key = f'{year}-{month:02d}'
+            trend_labels.append(calendar.month_abbr[month])
+            trend_data.append(monthly_trend.get(month_key, 0))
+
+        top_service_types = sorted(service_type_count.items(), key=lambda x: x[1], reverse=True)[:6]
+        service_labels = [item[0] for item in top_service_types] if top_service_types else ['N/A']
+        service_counts = [item[1] for item in top_service_types] if top_service_types else [0]
+
+        status_labels = ['Approved', 'Pending', 'Rejected']
+        status_data = [
+            status_breakdown.get('approved', 0),
+            status_breakdown.get('pending', 0),
+            status_breakdown.get('rejected', 0)
+        ]
 
         total_count    = len(service_requests)
         completed_count = sum(1 for r in service_requests if r['status'] == 'approved')
@@ -1616,13 +1681,25 @@ def service_requests_national_view():
         print(f'Error loading national service requests: {e}')
         service_requests = []
         total_count = completed_count = rejected_count = pending_count = 0
+        trend_labels = ['S', 'O', 'N', 'D', 'J', 'F']
+        trend_data = [0, 0, 0, 0, 0, 0]
+        service_labels = ['N/A']
+        service_counts = [0]
+        status_labels = ['Approved', 'Pending', 'Rejected']
+        status_data = [0, 0, 0]
 
     return render_template('national/operations/service-national.html',
                            service_requests=service_requests,
                            total_count=total_count,
                            completed_count=completed_count,
                            pending_count=pending_count,
-                           rejected_count=rejected_count)
+                           rejected_count=rejected_count,
+                           trend_labels=trend_labels,
+                           trend_data=trend_data,
+                           service_labels=service_labels,
+                           service_counts=service_counts,
+                           status_labels=status_labels,
+                           status_data=status_data)
 
 @bp.route('/user-inventory')
 @role_required('national', 'national_admin')
