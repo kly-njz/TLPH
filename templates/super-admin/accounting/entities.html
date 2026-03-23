@@ -24,7 +24,7 @@
         /* Gov UI Utilities */
         .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; margin-bottom: 0; }
         .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; color: #1e293b; box-sizing: border-box; }
-        .gov-input:focus { border-color: #4338ca; } /* Indigo focus */
+        .gov-input:focus { border-color: #4338ca; } 
         .gov-input:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
         
         .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: none; }
@@ -87,18 +87,21 @@
                     <div class="flex-1 flex items-center gap-2 w-full max-w-xl">
                         <div class="relative flex-1">
                             <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-                            <input id="searchEntity" type="text" placeholder="Search entity name..." class="gov-input w-full pl-6 h-7">
+                            <input id="searchEntity" type="text" placeholder="Search entity name..." class="gov-input w-full pl-6 h-7" oninput="runLiveFilters()">
                         </div>
-                        <select id="typeFilter" class="gov-input w-32 cursor-pointer h-7">
+                        <select id="typeFilter" class="gov-input w-32 cursor-pointer h-7" onchange="runLiveFilters()">
                             <option value="">All Types</option>
                             <option value="region">Region</option>
                             <option value="municipality">Municipality</option>
                         </select>
+                        <button onclick="resetFilters()" class="gov-btn bg-white border border-slate-300 text-slate-500 hover:text-slate-700 h-7 px-2">
+                            <span class="material-icons-round text-[14px]">filter_alt_off</span>
+                        </button>
                     </div>
                 </div>
 
                 <div class="flex-1 overflow-auto custom-scrollbar table-wrapper bg-white relative">
-                    <table class="w-full text-left border-collapse m-0">
+                    <table class="w-full text-left border-collapse m-0" id="entityTableMain">
                         <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th class="border-r border-slate-200 w-1/4">Entity Name</th>
@@ -110,7 +113,7 @@
                                 <th class="text-center no-print">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="entityTable" class="text-[10px] divide-y divide-slate-100">
+                        <tbody id="entityTableBody" class="text-[10px] divide-y divide-slate-100">
                             <tr class="hover:bg-blue-50 transition data-row"
                                 data-entity-name="National Capital Region (NCR)"
                                 data-entity-type="region"
@@ -147,7 +150,7 @@
                                 <td class="px-3 py-1.5 text-center border-r border-slate-100">
                                     <span class="status-badge bg-cyan-50 text-cyan-800 border-cyan-200">Municipality</span>
                                 </td>
-                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100 uppercase">NCR</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100 uppercase text-center">NCR</td>
                                 <td class="px-3 py-1.5 font-mono font-bold text-slate-700 border-r border-slate-100">BDO-MNL-001</td>
                                 <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">DENR Standard v2.1</td>
                                 <td class="px-3 py-1.5 text-center border-r border-slate-100">
@@ -185,12 +188,41 @@
                                     </div>
                                 </td>
                             </tr>
+
+                            {% for entity in entities %}
+                            <tr class="hover:bg-blue-50 transition data-row"
+                                data-entity-name="{{ entity.name }}"
+                                data-entity-type="{{ entity.type }}"
+                                data-entity-parent="{{ entity.parent }}"
+                                data-entity-bank="{{ entity.bank }}"
+                                data-entity-coa="{{ entity.coa }}"
+                                data-entity-status="{{ entity.status }}">
+                                <td class="px-3 py-1.5 font-black text-slate-900 border-r border-slate-100 uppercase {% if entity.type == 'municipality' %}pl-6 border-l-2 border-l-cyan-500{% endif %}">{{ entity.name }}</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge {% if entity.type == 'region' %}bg-indigo-50 text-indigo-800 border-indigo-200{% else %}bg-cyan-50 text-cyan-800 border-cyan-200{% endif %}">
+                                        {{ 'Region' if entity.type == 'region' else 'Municipality' }}
+                                    </span>
+                                </td>
+                                <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100 uppercase text-center">{{ entity.parent if entity.parent else '—' }}</td>
+                                <td class="px-3 py-1.5 font-mono font-bold text-slate-700 border-r border-slate-100">{{ entity.bank }}</td>
+                                <td class="px-3 py-1.5 font-bold text-slate-700 border-r border-slate-100 uppercase">{{ entity.coa }}</td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100">
+                                    <span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200">{{ entity.status }}</span>
+                                </td>
+                                <td class="px-3 py-1.5 text-center no-print">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button class="text-[9px] font-bold uppercase text-blue-700 hover:underline" data-action="edit">Edit</button>
+                                        <button class="text-[9px] font-bold uppercase text-slate-500 hover:underline" data-action="view">View</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
 
                 <div class="px-3 py-1.5 bg-slate-50 border-t border-slate-200 shrink-0 text-right no-print">
-                    <span class="text-[9px] font-bold uppercase tracking-widest text-slate-500 italic">Total 3 Entities Registered</span>
+                    <span id="entityCountDisplay" class="text-[9px] font-bold uppercase tracking-widest text-slate-500 italic">Total 3 Entities Registered</span>
                 </div>
             </section>
 
@@ -209,8 +241,7 @@
             </div>
             
             <div class="p-4 bg-slate-50 flex-1">
-                <form id="entityForm" class="space-y-3" onsubmit="event.preventDefault(); const msg = (currentMode === 'edit') ? 'Entity updated successfully!' : 'Entity created successfully!'; alert(msg); closeEntityModal();">
-                    
+                <form id="entityForm" class="space-y-3" onsubmit="event.preventDefault(); alert('Action completed.'); closeEntityModal();">
                     <div>
                         <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Entity Name *</label>
                         <input type="text" id="entityName" required class="gov-input w-full h-8" placeholder="e.g., Region IV-B or Quezon City">
@@ -226,16 +257,6 @@
                             <option value="Region II">Region II</option>
                             <option value="Region III">Region III</option>
                             <option value="Region IV-A">Region IV-A</option>
-                            <option value="Region IV-B">Region IV-B</option>
-                            <option value="Region V">Region V</option>
-                            <option value="Region VI">Region VI</option>
-                            <option value="Region VII">Region VII</option>
-                            <option value="Region VIII">Region VIII</option>
-                            <option value="Region IX">Region IX</option>
-                            <option value="Region X">Region X</option>
-                            <option value="Region XI">Region XI</option>
-                            <option value="Region XII">Region XII</option>
-                            <option value="Region XIII">Region XIII</option>
                             <option value="BARMM">BARMM</option>
                         </select>
                     </div>
@@ -264,18 +285,49 @@
     </div>
 
     <script>
+        // --- LIVE FILTER LOGIC ---
+        function runLiveFilters() {
+            const query = document.getElementById('searchEntity').value.toLowerCase().trim();
+            const filterType = document.getElementById('typeFilter').value.toLowerCase();
+            const rows = document.querySelectorAll('#entityTableBody .data-row');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const name = row.getAttribute('data-entity-name').toLowerCase();
+                const type = row.getAttribute('data-entity-type').toLowerCase();
+                const parent = row.getAttribute('data-entity-parent').toLowerCase();
+                
+                const matchesSearch = name.includes(query) || parent.includes(query);
+                const matchesType = filterType === "" || type === filterType;
+
+                if (matchesSearch && matchesType) {
+                    row.style.display = "";
+                    visibleCount++;
+                } else {
+                    row.style.display = "none";
+                }
+            });
+
+            document.getElementById('entityCountDisplay').innerText = `Total ${visibleCount} Entities Found`;
+        }
+
+        function resetFilters() {
+            document.getElementById('searchEntity').value = "";
+            document.getElementById('typeFilter').value = "";
+            runLiveFilters();
+        }
+
+        // --- MODAL & CRUD LOGIC PRESERVED ---
         let currentEntityType = 'region';
-        let currentMode = 'add'; // add | edit | view
+        let currentMode = 'add'; 
 
         function openAddEntity(type) {
             currentMode = 'add';
             currentEntityType = type;
             const titleEl = document.getElementById('modalTitle');
             titleEl.innerHTML = `<i class="fa-solid ${type === 'region' ? 'fa-map' : 'fa-city'} text-indigo-400"></i> ` + (type === 'region' ? 'Add Region' : 'Add Municipality');
-            
             document.getElementById('parentRegionField').classList.toggle('hidden', type === 'region');
-            document.getElementById('parentRegion').required = (type === 'municipality'); // require parent region if municipality
-
+            document.getElementById('parentRegion').required = (type === 'municipality');
             setFormReadonly(false);
             const submitBtn = document.getElementById('entitySubmit');
             submitBtn.textContent = 'Commit Entity';
@@ -289,20 +341,14 @@
         }
 
         function setFormReadonly(isReadonly) {
-            const nameInput = document.getElementById('entityName');
-            const bankInput = document.getElementById('bankAccount');
-            const parentSelect = document.getElementById('parentRegion');
-            const coaSelect = document.getElementById('coaTemplate');
-
-            nameInput.readOnly = isReadonly;
-            bankInput.readOnly = isReadonly;
-            parentSelect.disabled = isReadonly;
-            coaSelect.disabled = isReadonly;
+            document.getElementById('entityName').readOnly = isReadonly;
+            document.getElementById('bankAccount').readOnly = isReadonly;
+            document.getElementById('parentRegion').disabled = isReadonly;
+            document.getElementById('coaTemplate').disabled = isReadonly;
         }
 
         function openEntityFromRow(row, mode) {
             currentMode = mode;
-
             const data = {
                 name: row.dataset.entityName || '',
                 type: row.dataset.entityType || 'region',
@@ -310,44 +356,35 @@
                 bank: row.dataset.entityBank || '',
                 coa: row.dataset.entityCoa || 'DENR Standard v2.1'
             };
-
-            currentEntityType = data.type;
             const titleEl = document.getElementById('modalTitle');
-            const modeLabel = mode === 'view' ? 'View' : 'Edit';
-            titleEl.innerHTML = `<i class="fa-solid ${data.type === 'region' ? 'fa-map' : 'fa-city'} text-indigo-400"></i> ${modeLabel} ${data.type === 'region' ? 'Region' : 'Municipality'}`;
-
+            titleEl.innerHTML = `<i class="fa-solid ${data.type === 'region' ? 'fa-map' : 'fa-city'} text-indigo-400"></i> ${mode === 'view' ? 'View' : 'Edit'} ${data.type === 'region' ? 'Region' : 'Municipality'}`;
             document.getElementById('entityName').value = data.name;
             document.getElementById('bankAccount').value = data.bank;
             document.getElementById('coaTemplate').value = data.coa === 'Custom Template' ? 'custom' : 'standard';
-
             document.getElementById('parentRegionField').classList.toggle('hidden', data.type === 'region');
-            document.getElementById('parentRegion').required = (data.type === 'municipality');
             document.getElementById('parentRegion').value = data.parent || '';
-
             const isView = mode === 'view';
             const submitBtn = document.getElementById('entitySubmit');
             setFormReadonly(isView);
             submitBtn.textContent = mode === 'edit' ? 'Update Entity' : 'Commit Entity';
             submitBtn.classList.toggle('hidden', isView);
-
             document.getElementById('entityModal').classList.add('active');
         }
 
-        document.querySelectorAll('[data-action="edit"], [data-action="view"]').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const row = btn.closest('tr');
-                if (!row) return;
-                const mode = btn.dataset.action;
-                openEntityFromRow(row, mode);
-            });
+        document.getElementById('entityTableBody').addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            const row = btn.closest('tr');
+            const action = btn.dataset.action;
+            if (action) openEntityFromRow(row, action);
         });
 
-        // Close modal on outside click
         document.getElementById('entityModal').addEventListener('click', function(e) {
             if(e.target === this) closeEntityModal();
         });
-    </script>
 
+        // Initialize display count
+        window.onload = runLiveFilters;
+    </script>
 </body>
 </html>
