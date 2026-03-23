@@ -1993,6 +1993,15 @@ def api_get_admins_permissions():
         user = user_doc.to_dict() or {}
         role = user.get('role', '').lower()
         if role in ['regional_admin', 'regional', 'municipal_admin', 'municipal']:
+            perms = user.get('permissions', {}) or {}
+            # Default: all access if missing or incomplete
+            perms = {
+                'hrm': perms.get('hrm', True),
+                'logistics': perms.get('logistics', True),
+                'accounting': perms.get('accounting', True),
+                'payments': perms.get('payments', True),
+                'other': perms.get('other', True)
+            }
             users.append({
                 'id': user_doc.id,
                 'email': user.get('email', ''),
@@ -2000,7 +2009,7 @@ def api_get_admins_permissions():
                 'role': role,
                 'region': user.get('region', ''),
                 'municipality': user.get('municipality', ''),
-                'permissions': user.get('permissions', {})
+                'permissions': perms
             })
             count += 1
     print(f"[DEBUG] /api/admins-permissions: Found {count} admin users: {[u['role'] for u in users]}")
