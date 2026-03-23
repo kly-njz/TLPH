@@ -3090,7 +3090,9 @@ def accounting_dashboard_view():
 
     # Normalize finance documents into known department buckets so template cards
     # don't show N/A when document IDs/structures vary.
-    department_keys = ['treasury', 'accounting', 'budget', 'engineering']
+
+    # Only include departments that should be shown on the dashboard
+    department_keys = ['treasury', 'accounting', 'budget']
     department_finance = {k: {} for k in department_keys}
 
     for doc_id, payload in finance_data.items():
