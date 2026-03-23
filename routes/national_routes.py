@@ -521,6 +521,20 @@ def service_national_view():
 def inventory_national_view():
     try:
         db = get_firestore_db()
+        from models.region_province_map import region_province_map
+
+        def _clean(value):
+            return str(value or '').strip()
+
+        def _region_from_province(province_name):
+            prov = _clean(province_name).lower()
+            if not prov:
+                return ''
+            for region_label, provinces in (region_province_map or {}).items():
+                for p in provinces or []:
+                    if _clean(p).lower() == prov:
+                        return region_label
+            return ''
 
         inventory_ref = db.collection('inventory_registrations')
         docs = inventory_ref.stream()
@@ -543,7 +557,24 @@ def inventory_national_view():
                 or data.get('userEmail', 'N/A')
             )
             municipality = data.get('municipality') or user_data.get('municipality', 'N/A')
-            region = data.get('region') or user_data.get('regionName') or user_data.get('region', 'N/A')
+            province = (
+                data.get('province')
+                or user_data.get('province')
+                or data.get('province_name')
+                or user_data.get('province_name')
+                or ''
+            )
+
+            region = (
+                data.get('region')
+                or data.get('regionName')
+                or data.get('region_name')
+                or user_data.get('regionName')
+                or user_data.get('region')
+                or user_data.get('region_name')
+                or _region_from_province(province)
+                or 'N/A'
+            )
 
             sector = str(data.get('sector', '')).lower()
             category_map = {
