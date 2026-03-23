@@ -3153,7 +3153,10 @@ def accounting_dashboard_view():
     net_movement = total_deposits - total_expenses
 
     # Growth rate: compare recent 30 days vs previous 30 days using fund movement data.
-    now = datetime.utcnow()
+
+    import pytz
+    utc = pytz.UTC
+    now = datetime.utcnow().replace(tzinfo=utc)
     current_cutoff = now - timedelta(days=30)
     previous_cutoff = now - timedelta(days=60)
     current_period_total = 0.0
@@ -3164,6 +3167,11 @@ def accounting_dashboard_view():
         amount = _to_float(row.get('amount'))
         if not ts:
             continue
+        # Ensure ts is timezone-aware (UTC)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=utc)
+        else:
+            ts = ts.astimezone(utc)
         if ts >= current_cutoff:
             current_period_total += amount
         elif ts >= previous_cutoff:
