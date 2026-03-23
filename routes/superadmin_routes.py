@@ -10,21 +10,65 @@ bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
 @role_required('super-admin','superadmin')
 def inventory_view():
     inventory_records = []
+    summary = {
+        'total_assets': 0,
+        'chemicals': 0,
+        'natural_assets': 0,
+        'protected_areas': 0,
+        'low_stock': 0
+    }
+
     try:
         db = get_firestore_db()
         docs = db.collection('inventory_registrations').stream()
 
+        def to_number(value):
+            try:
+                if value is None or value == '':
+                    return 0.0
+                return float(value)
+            except Exception:
+                return 0.0
+
+        def normalize_category(raw):
+            text = str(raw or '').strip().lower()
+            if any(k in text for k in ['chemical', 'fertilizer', 'pesticide']):
+                return 'CHEMICAL RESOURCES'
+            if any(k in text for k in ['protected', 'sanctuary', 'park', 'conservation']):
+                return 'PROTECTED AREAS'
+            if any(k in text for k in ['natural', 'forest', 'mangrove', 'biodiversity', 'wildlife']):
+                return 'NATURAL ASSETS'
+            if any(k in text for k in ['equipment', 'tool', 'device', 'machinery']):
+                return 'EQUIPMENT'
+            return 'UNCATEGORIZED'
+
         for doc in docs:
             data = doc.to_dict() or {}
+            quantity = to_number(data.get('quantity') or data.get('volume') or data.get('availableStock') or 0)
+            normalized_category = normalize_category(data.get('category') or data.get('classification') or data.get('itemType'))
+
             inventory_records.append({
                 'id': doc.id,
-                'category': (data.get('category') or '').strip(),
+                'category': normalized_category,
                 'description': (data.get('description') or data.get('itemName') or data.get('itemDescription') or 'N/A').strip(),
-                'quantity': data.get('quantity') or data.get('volume') or data.get('availableStock') or 0,
+                'quantity': quantity,
                 'region': (data.get('region') or 'N/A').strip(),
                 'municipality': (data.get('municipality') or 'N/A').strip(),
-                'created_at': data.get('createdAt') or data.get('submittedAt')
+                'created_at': data.get('createdAt') or data.get('submittedAt'),
+                'status': (data.get('status') or '').strip()
             })
+
+            summary['total_assets'] += quantity
+            if normalized_category == 'CHEMICAL RESOURCES':
+                summary['chemicals'] += quantity
+            elif normalized_category == 'NATURAL ASSETS':
+                summary['natural_assets'] += quantity
+            elif normalized_category == 'PROTECTED AREAS':
+                summary['protected_areas'] += quantity
+
+            status_text = str(data.get('status') or '').lower()
+            if 'low stock' in status_text or quantity <= 20:
+                summary['low_stock'] += 1
 
         inventory_records.sort(key=lambda x: str(x.get('created_at') or ''), reverse=True)
     except Exception as e:
@@ -32,7 +76,8 @@ def inventory_view():
 
     return render_template(
         'super-admin/inventory-superadmin/inventory-superadmin.html',
-        inventory_records=inventory_records
+        inventory_records=inventory_records,
+        summary=summary
     )
 
 @bp.route('/user-application')
