@@ -22,6 +22,91 @@
     }
 
     // Cashflow Trend Chart (deposits/expenses by month)
+        // Revenue Mix Chart (by type/category)
+        async function loadRevenueMixChart(municipality) {
+          const txRef = collection(db, 'transactions');
+          const q = query(txRef, where('municipality', '==', municipality));
+          const snap = await getDocs(q);
+          const mix = {};
+          snap.forEach(doc => {
+            const d = doc.data();
+            const cat = (d.category || 'Other').toString();
+            mix[cat] = (mix[cat] || 0) + (parseFloat(d.amount) || 0);
+          });
+          const labels = Object.keys(mix);
+          const data = labels.map(l => mix[l]);
+          if (window.chartCategory) {
+            window.chartCategory.data.labels = labels.length ? labels : ['No Data'];
+            window.chartCategory.data.datasets[0].data = data.length ? data : [1];
+            window.chartCategory.update();
+          }
+        }
+
+        // Alerts Table
+        async function loadAlertsTable(municipality) {
+          const alertsRef = collection(db, 'alerts');
+          const q = query(alertsRef, where('municipality', '==', municipality));
+          const snap = await getDocs(q);
+          const tbody = document.getElementById('alertsTableBody');
+          tbody.innerHTML = '';
+          let found = false;
+          snap.forEach(doc => {
+            found = true;
+            const d = doc.data();
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50 transition alert-row';
+            tr.innerHTML = `
+              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">${d.type || ''}</td>
+              <td class="px-3 py-1.5 text-slate-700 uppercase tracking-widest text-[9px] border-r border-slate-100">${d.office || ''}</td>
+              <td class="px-3 py-1.5 text-slate-600 border-r border-slate-100">${d.description || ''}</td>
+              <td class="px-3 py-1.5 text-center border-r border-slate-100"><span class="px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase border bg-amber-50 text-amber-700 border-amber-200">${d.severity || ''}</span></td>
+              <td class="px-3 py-1.5 text-center text-slate-500 font-mono text-[9px]">${d.date || ''}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+          if (!found) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="5" class="text-center text-slate-500 py-4 text-[9px]">No alerts found</td>`;
+            tbody.appendChild(tr);
+          }
+        }
+
+        // Transactions Table
+        async function loadTransactionsTable(municipality) {
+          const txRef = collection(db, 'transactions');
+          const q = query(txRef, where('municipality', '==', municipality), orderBy('timestamp', 'desc'));
+          const snap = await getDocs(q);
+          const tbody = document.getElementById('txnTableBody');
+          tbody.innerHTML = '';
+          let found = false;
+          snap.forEach(doc => {
+            found = true;
+            const d = doc.data();
+            const date = d.timestamp && d.timestamp.seconds ? new Date(d.timestamp.seconds * 1000) : new Date(d.timestamp);
+            const dateStr = date.toLocaleDateString('en-CA');
+            const amt = parseFloat(d.amount) || 0;
+            const type = (d.type || '').toUpperCase();
+            const isDeposit = type === 'DEPOSIT';
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-slate-50 transition-colors txn-row';
+            row.setAttribute('data-date', dateStr);
+            row.setAttribute('data-type', type);
+            row.setAttribute('data-amount', amt);
+            row.innerHTML = `
+              <td class="px-3 py-1.5 border-r border-slate-100 font-mono font-bold text-slate-800">${d.transaction_id || ''}</td>
+              <td class="px-3 py-1.5 border-r border-slate-100 text-slate-700">${d.details || ''}</td>
+              <td class="px-3 py-1.5 border-r border-slate-100 text-slate-600 uppercase tracking-widest text-[9px]"><span class="${isDeposit ? 'text-emerald-600' : 'text-rose-600'} font-bold">${isDeposit ? 'Deposit' : 'Expense'}</span></td>
+              <td class="px-3 py-1.5 border-r border-slate-100 text-right font-mono font-bold ${isDeposit ? 'text-emerald-700' : 'text-rose-700'}">${amt.toLocaleString()}</td>
+              <td class="px-3 py-1.5 text-center text-slate-500 font-mono text-[9px]">${dateStr}</td>
+            `;
+            tbody.appendChild(row);
+          });
+          if (!found) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="5" class="text-center text-slate-500 py-4 text-[9px]">No transactions found</td>`;
+            tbody.appendChild(tr);
+          }
+        }
     async function loadCashflowChart(municipality) {
       const txRef = collection(db, 'transactions');
       // Only get transactions for this municipality
@@ -69,7 +154,12 @@
       if (!municipality) return;
       // Cashflow chart
       await loadCashflowChart(municipality);
-      // TODO: Revenue mix, alerts, transactions table, etc.
+      // Revenue mix chart
+      await loadRevenueMixChart(municipality);
+      // Alerts table
+      await loadAlertsTable(municipality);
+      // Transactions table
+      await loadTransactionsTable(municipality);
     })();
   </script>
 <!DOCTYPE html>
