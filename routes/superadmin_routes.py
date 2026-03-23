@@ -107,6 +107,24 @@ def inventory_view():
 
         inventory_records.sort(key=lambda x: str(x.get('created_at') or ''), reverse=True)
 
+        inventory_rows = []
+        for rec in inventory_records:
+            qty = rec.get('quantity', 0)
+            try:
+                qty = float(qty)
+                if qty.is_integer():
+                    qty = int(qty)
+            except Exception:
+                qty = 0
+
+            inventory_rows.append({
+                'cat': rec.get('category', 'UNCATEGORIZED'),
+                'desc': rec.get('description', 'N/A'),
+                'qty': qty,
+                'reg': rec.get('region', 'N/A'),
+                'mun': rec.get('municipality', 'N/A')
+            })
+
         now = datetime.now()
         for i in range(5, -1, -1):
             month = now.month - i
@@ -128,6 +146,7 @@ def inventory_view():
         region_options = sorted([r for r in regions_set if r])
     except Exception as e:
         print(f'[ERROR] superadmin inventory_view: {e}')
+        inventory_rows = []
 
     return render_template(
         'super-admin/inventory-superadmin/inventory-superadmin.html',
@@ -137,7 +156,8 @@ def inventory_view():
         trend_data=trend_data,
         category_labels=category_labels,
         category_data=category_data,
-        region_options=region_options
+        region_options=region_options,
+        inventory_rows=inventory_rows
     )
 
 @bp.route('/user-application')
