@@ -322,10 +322,31 @@
     </div>
   </div>
 
+  <div id="deleteBackdrop" class="gov-modal no-print">
+    <div class="w-full max-w-md rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+      <div class="bg-rose-700 px-4 py-3 flex justify-between items-center text-white shrink-0">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+          <span class="material-icons-round text-[14px]">warning</span> Confirm Delete
+        </h3>
+        <button id="btnCloseDelete" class="text-rose-100 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+          <span class="material-icons-round text-sm">close</span>
+        </button>
+      </div>
+      <div class="p-4 bg-white">
+        <p id="deleteMessage" class="text-[10px] font-bold text-slate-700">Remove employee?</p>
+      </div>
+      <div class="px-4 pb-4 pt-2 border-t border-slate-200 flex gap-2">
+        <button id="btnConfirmDelete" class="gov-btn bg-rose-700 text-white hover:bg-rose-800 flex-1 py-2">Delete</button>
+        <button id="btnCancelDelete" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const el = (id) => document.getElementById(id);
     const tbody = el("empTbody");
     let apiMuniCache = {};
+    let pendingDeleteId = null;
 
     async function initLocationAPI() {
         try {
@@ -540,6 +561,19 @@
 
     function closeModal(){ el("modalBackdrop").classList.remove("flex"); }
 
+    function openDeleteModal(emp){
+      pendingDeleteId = emp?.id || null;
+      el("deleteMessage").textContent = emp
+        ? `Remove employee "${emp.last}, ${emp.first}" (${emp.empNo})?`
+        : "Remove employee?";
+      el("deleteBackdrop").classList.add("flex");
+    }
+
+    function closeDeleteModal(){
+      el("deleteBackdrop").classList.remove("flex");
+      pendingDeleteId = null;
+    }
+
     function getSelectedIds(){ return Array.from(document.querySelectorAll(".rowChk:checked")).map(x => x.getAttribute("data-id")); }
 
     function setStatusForSelected(newStatus){
@@ -594,10 +628,9 @@
         const editBtn = e.target.closest(".btnEdit"); const delBtn = e.target.closest(".btnDelete");
         if(editBtn) openModal("edit", editBtn.getAttribute("data-id"));
         if(delBtn){
-          const id = delBtn.getAttribute("data-id"); const emp = employees.find(x => x.id === id); if(!emp) return;
-          if(confirm(`Remove employee "${emp.last}, ${emp.first}" (${emp.empNo})?`)){
-            employees = employees.filter(x => x.id !== id); render(); showToast("Removed", "Employee deleted.");
-          }
+          const id = delBtn.getAttribute("data-id");
+          const emp = employees.find(x => x.id === id); if(!emp) return;
+          openDeleteModal(emp);
         }
       });
 
@@ -626,6 +659,15 @@
       });
 
       el("btnExport").addEventListener("click", exportCSV);
+      el("btnCloseDelete").addEventListener("click", closeDeleteModal);
+      el("btnCancelDelete").addEventListener("click", closeDeleteModal);
+      el("deleteBackdrop").addEventListener("click", closeDeleteModal);
+      el("btnConfirmDelete").addEventListener("click", () => {
+        if(!pendingDeleteId) { closeDeleteModal(); return; }
+        employees = employees.filter(x => x.id !== pendingDeleteId);
+        render(); showToast("Removed", "Employee deleted.");
+        closeDeleteModal();
+      });
 
       render();
     });
