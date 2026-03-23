@@ -92,23 +92,23 @@
             <div class="grid grid-cols-2 md:grid-cols-5 gap-2 shrink-0">
                 <div class="gov-card border-t-2 border-t-slate-800 p-2 transition-colors hover:bg-slate-50">
                     <p class="text-[8px] font-black text-slate-500 uppercase m-0">Total Assets</p>
-                    <h3 class="text-[14px] font-black text-slate-900 m-0 mt-1">4,210</h3>
+                    <h3 class="text-[14px] font-black text-slate-900 m-0 mt-1">{{ "{:,.0f}".format(summary.get('total_assets', 0)) }}</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-orange-500 p-2 transition-colors hover:bg-orange-50">
                     <p class="text-[8px] font-black text-orange-700 uppercase m-0">Chemicals</p>
-                    <h3 class="text-[14px] font-black text-orange-700 m-0 mt-1">842</h3>
+                    <h3 class="text-[14px] font-black text-orange-700 m-0 mt-1">{{ "{:,.0f}".format(summary.get('chemicals', 0)) }}</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-denr-green p-2 transition-colors hover:bg-green-50">
                     <p class="text-[8px] font-black text-slate-500 uppercase m-0">Natural Assets</p>
-                    <h3 class="text-[14px] font-black text-denr-green m-0 mt-1">2,105</h3>
+                    <h3 class="text-[14px] font-black text-denr-green m-0 mt-1">{{ "{:,.0f}".format(summary.get('natural_assets', 0)) }}</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-indigo-600 p-2 transition-colors hover:bg-indigo-50">
                     <p class="text-[8px] font-black text-slate-500 uppercase m-0">Protected Areas</p>
-                    <h3 class="text-[14px] font-black text-indigo-700 m-0 mt-1">128</h3>
+                    <h3 class="text-[14px] font-black text-indigo-700 m-0 mt-1">{{ "{:,.0f}".format(summary.get('protected_areas', 0)) }}</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-gov-red p-2 bg-red-50/30 animate-pulse transition-colors hover:bg-red-50">
                     <p class="text-[8px] font-black text-gov-red uppercase m-0">Low Stock</p>
-                    <h3 class="text-[14px] font-black text-gov-red m-0 mt-1">12</h3>
+                    <h3 class="text-[14px] font-black text-gov-red m-0 mt-1">{{ "{:,.0f}".format(summary.get('low_stock', 0)) }}</h3>
                 </div>
             </div>
 
@@ -145,9 +145,9 @@
                         </select>
                         <select id="regFilter" onchange="renderTable()" class="gov-input h-7 cursor-pointer uppercase">
                             <option value="all">-- ALL REGIONS --</option>
-                            <option value="NCR">NCR</option>
-                            <option value="IV-B">Region IV-B</option>
-                            <option value="III">Region III</option>
+                            {% for region in region_options|default([]) %}
+                            <option value="{{ region }}">{{ region }}</option>
+                            {% endfor %}
                         </select>
                         <button onclick="clearFilters()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 h-7 shadow-sm">
                             <i class="fa-solid fa-eraser"></i> Clear
@@ -233,13 +233,12 @@
     </div>
 
     <script>
-        const DATA = [
-            { cat: "CHEMICAL RESOURCES", desc: "NPK Fertilizer Grade-A", qty: 540, reg: "IV-B", mun: "Naujan" },
-            { cat: "NATURAL ASSETS", desc: "Mahogany Propagules", qty: 1250, reg: "IV-B", mun: "Calapan" },
-            { cat: "PROTECTED AREAS", desc: "Naujan Lake Eco-Zone", qty: 1, reg: "IV-B", mun: "Victoria" },
-            { cat: "EQUIPMENT", desc: "Handheld GPS Unit V2", qty: 42, reg: "NCR", mun: "Quezon City" },
-            { cat: "CHEMICAL RESOURCES", desc: "Liquid Nitrogen Solution", qty: 15, reg: "III", mun: "San Fernando" }
-        ];
+        const TREND_LABELS = {{ trend_labels|default([])|tojson }};
+        const TREND_DATA = {{ trend_data|default([])|tojson }};
+        const CATEGORY_LABELS = {{ category_labels|default([])|tojson }};
+        const CATEGORY_DATA = {{ category_data|default([])|tojson }};
+
+        const DATA = {{ inventory_rows|default([])|tojson }};
 
         let myTrendChart, myCategoryChart, modalChartInstance = null;
 
@@ -300,13 +299,13 @@
 
             myTrendChart = new Chart(document.getElementById('inventoryTrendChart'), {
                 type: 'line',
-                data: { labels: ['Sep','Oct','Nov','Dec','Jan','Feb'], datasets: [{ data: [3100, 3400, 3200, 3800, 4000, 4210], borderColor: '#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.05)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }] },
+                data: { labels: TREND_LABELS, datasets: [{ data: TREND_DATA, borderColor: '#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.05)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }] },
                 options: opt
             });
             
             myCategoryChart = new Chart(document.getElementById('inventoryCatChart'), {
                 type: 'doughnut',
-                data: { labels: ['Chem', 'Nat', 'Prot', 'Equip'], datasets: [{ data: [842, 2105, 128, 1135], backgroundColor: ['#f97316', '#10b981', '#4f46e5', '#334155'], borderWidth: 0 }] },
+                data: { labels: CATEGORY_LABELS, datasets: [{ data: CATEGORY_DATA, backgroundColor: ['#f97316', '#10b981', '#4f46e5', '#334155', '#94a3b8'], borderWidth: 0 }] },
                 options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'right', labels: { font: chartFont, boxWidth: 8, color: '#475569' } } } }
             });
         }
