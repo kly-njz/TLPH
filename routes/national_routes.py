@@ -1,42 +1,4 @@
-@bp.route('/api/user-management/accounts', methods=['GET'])
-@role_required('national', 'national_admin')
-def api_get_all_admin_accounts():
-    """Fetch all regional and municipal admin accounts for national user management."""
-    try:
-        db = get_firestore_db()
-        users_ref = db.collection('users')
-        # Only fetch regional and municipal accounts
-        q = users_ref.where('role', 'in', ['regional_admin', 'municipal_admin'])
-        docs = q.stream()
-        users = []
-        for doc in docs:
-            data = doc.to_dict()
-            data['id'] = doc.id
-            # Compose display name for UI
-            data['name'] = f"{data.get('firstName', '')} {data.get('lastName', '')}".strip()
-            data['status'] = data.get('status', 'Active')
-            users.append(data)
-        return jsonify({'success': True, 'users': users})
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch admin accounts: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-
-@bp.route('/api/user-management/accounts/<user_id>/revoke', methods=['POST'])
-@role_required('national', 'national_admin')
-def api_revoke_admin_account(user_id):
-    """Revoke (disable) a regional or municipal admin account."""
-    try:
-        db = get_firestore_db()
-        user_ref = db.collection('users').document(user_id)
-        user_doc = user_ref.get()
-        if not user_doc.exists:
-            return jsonify({'success': False, 'error': 'User not found'}), 404
-        user_ref.update({'status': 'Disabled'})
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"[ERROR] Failed to revoke admin account: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 
@@ -2053,3 +2015,44 @@ def api_get_admins_permissions():
             count += 1
     print(f"[DEBUG] /api/admins-permissions: Found {count} admin users: {[u['role'] for u in users]}")
     return jsonify({'admins': users})
+
+
+@bp.route('/api/user-management/accounts', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_all_admin_accounts():
+    """Fetch all regional and municipal admin accounts for national user management."""
+    try:
+        db = get_firestore_db()
+        users_ref = db.collection('users')
+        # Only fetch regional and municipal accounts
+        q = users_ref.where('role', 'in', ['regional_admin', 'municipal_admin'])
+        docs = q.stream()
+        users = []
+        for doc in docs:
+            data = doc.to_dict()
+            data['id'] = doc.id
+            # Compose display name for UI
+            data['name'] = f"{data.get('firstName', '')} {data.get('lastName', '')}".strip()
+            data['status'] = data.get('status', 'Active')
+            users.append(data)
+        return jsonify({'success': True, 'users': users})
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch admin accounts: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/user-management/accounts/<user_id>/revoke', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_revoke_admin_account(user_id):
+    """Revoke (disable) a regional or municipal admin account."""
+    try:
+        db = get_firestore_db()
+        user_ref = db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user_ref.update({'status': 'Disabled'})
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] Failed to revoke admin account: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
