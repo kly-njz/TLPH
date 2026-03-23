@@ -1,3 +1,77 @@
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { collection, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    // Utility: Get current admin's municipality
+    async function getCurrentMunicipality() {
+      return new Promise((resolve) => {
+        onAuthStateChanged(auth, async (user) => {
+          if (!user) return resolve(null);
+          const usersRef = collection(db, 'users');
+          const q = query(usersRef, where('uid', '==', user.uid));
+          const snap = await getDocs(q);
+          let muni = '';
+          snap.forEach(doc => {
+            const data = doc.data();
+            muni = data.municipality || '';
+          });
+          resolve(muni);
+        });
+      });
+    }
+
+    // Cashflow Trend Chart (deposits/expenses by month)
+    async function loadCashflowChart(municipality) {
+      const txRef = collection(db, 'transactions');
+      // Only get transactions for this municipality
+      const q = query(txRef, where('municipality', '==', municipality));
+      const snap = await getDocs(q);
+      // Aggregate by month
+      const deposits = {};
+      const expenses = {};
+      snap.forEach(doc => {
+        const d = doc.data();
+        if (!d.timestamp || !d.type) return;
+        const date = new Date(d.timestamp.seconds ? d.timestamp.seconds * 1000 : d.timestamp);
+        const month = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+        if (d.type === 'DEPOSIT') {
+          deposits[month] = (deposits[month] || 0) + (parseFloat(d.amount) || 0);
+        } else if (d.type === 'EXPENSE') {
+          expenses[month] = (expenses[month] || 0) + (parseFloat(d.amount) || 0);
+        }
+      });
+      // Get last 8 months
+      const now = new Date();
+      const months = [];
+      for (let i = 7; i >= 0; i--) {
+        const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+        months.push(key);
+      }
+      const depositData = months.map(m => deposits[m] || 0);
+      const expenseData = months.map(m => expenses[m] || 0);
+      // Update chart
+      if (window.chartCashflow) {
+        window.chartCashflow.data.labels = months.map(m => {
+          const [y, mo] = m.split('-');
+          return new Date(y, mo - 1).toLocaleString('en-US', { month: 'short' });
+        });
+        window.chartCashflow.data.datasets[0].data = depositData;
+        window.chartCashflow.data.datasets[1].data = expenseData;
+        window.chartCashflow.update();
+      }
+    }
+
+    // Main loader
+    (async function() {
+      const municipality = await getCurrentMunicipality();
+      if (!municipality) return;
+      // Cashflow chart
+      await loadCashflowChart(municipality);
+      // TODO: Revenue mix, alerts, transactions table, etc.
+    })();
+  </script>
 <!DOCTYPE html>
 <html lang="en">
 <head>
