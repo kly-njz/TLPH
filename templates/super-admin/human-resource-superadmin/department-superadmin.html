@@ -309,6 +309,26 @@
         </div>
     </div>
 
+    <div id="confirmModal" class="gov-modal no-print">
+        <div class="w-full max-w-md rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+            <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
+                <h3 id="confirmTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-question text-white"></i> Confirm Action
+                </h3>
+                <button id="btnCloseConfirm" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-4 bg-slate-50">
+                <p id="confirmMessage" class="text-[10px] font-bold text-slate-700 m-0"></p>
+                <div class="pt-3 border-t border-slate-200 mt-3 flex gap-2">
+                    <button type="button" id="btnConfirmAction" class="gov-btn bg-gov-navy text-white hover:bg-blue-900 flex-1 py-2 text-[10px]">Confirm</button>
+                    <button type="button" id="btnCancelConfirm" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2 text-[10px]">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const regionMap = {
             "All Regions": ["All Municipalities"],
@@ -349,6 +369,8 @@
         ];
 
         const $ = (id) => document.getElementById(id);
+        let pendingAction = null;
+        let pendingId = null;
 
         function setOptions(selectEl, options, selectedValue) {
             selectEl.innerHTML = "";
@@ -558,6 +580,29 @@
 
         function closeModal() { $("modalBackdrop").classList.remove("show"); }
 
+        function openConfirmModal(action, dept) {
+            pendingAction = action;
+            pendingId = dept?.id || null;
+            const isToggle = action === "toggle";
+            const isDelete = action === "delete";
+            const nextStatus = dept?.status === "active" ? "inactive" : "active";
+
+            $("confirmTitle").innerHTML = isDelete
+                ? '<i class="fa-solid fa-trash text-white"></i> Delete Department'
+                : '<i class="fa-solid fa-arrows-rotate text-white"></i> Toggle Status';
+            $("confirmMessage").textContent = isDelete
+                ? `Delete "${dept?.name}"? This action cannot be undone.`
+                : `Change status of "${dept?.name}" to ${nextStatus.toUpperCase()}?`;
+            $("btnConfirmAction").textContent = isDelete ? "Delete" : "Update Status";
+            $("confirmModal").classList.add("show");
+        }
+
+        function closeConfirmModal() {
+            $("confirmModal").classList.remove("show");
+            pendingAction = null;
+            pendingId = null;
+        }
+
         function exportCSV(filtered) {
             const headers = ["Name","Code","Company","Region","Municipality","Head","Status","UpdatedAt","Description"];
             const rows = filtered.map(x => [x.name, x.code, x.company, x.region, x.municipality, x.head || "", x.status, x.updatedAt, x.desc || ""]);
@@ -609,6 +654,25 @@
             $("btnExport").addEventListener("click", () => exportCSV(applyFilters(departments)));
             $("btnCloseModal").addEventListener("click", closeModal); $("btnCancel").addEventListener("click", closeModal);
             $("modalBackdrop").addEventListener("click", (e) => { if(e.target === $("modalBackdrop")) closeModal(); });
+            $("btnCloseConfirm").addEventListener("click", closeConfirmModal);
+            $("btnCancelConfirm").addEventListener("click", closeConfirmModal);
+            $("confirmModal").addEventListener("click", (e) => { if (e.target === $("confirmModal")) closeConfirmModal(); });
+            $("btnConfirmAction").addEventListener("click", () => {
+                if (!pendingAction || !pendingId) return closeConfirmModal();
+                const dept = departments.find(x => x.id === pendingId);
+                if (!dept) return closeConfirmModal();
+                if (pendingAction === "toggle") {
+                    departments = departments.map(x => x.id === pendingId
+                        ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) }
+                        : x
+                    );
+                    renderAll();
+                } else if (pendingAction === "delete") {
+                    departments = departments.filter(x => x.id !== pendingId);
+                    page = 1; renderAll();
+                }
+                closeConfirmModal();
+            });
 
             $("deptForm").addEventListener("submit", (e) => {
                 e.preventDefault();
@@ -635,10 +699,9 @@
                     $("formRegion").value = dept.region; $("formRegion").dispatchEvent(new Event("change"));
                     $("formMunicipality").value = dept.municipality;
                 } else if (action === "toggle") {
-                    departments = departments.map(x => x.id === id ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) } : x);
-                    renderAll();
-                } else if (action === "delete" && confirm(`Delete "${dept.name}"?`)) {
-                    departments = departments.filter(x => x.id !== id); page = 1; renderAll();
+                    openConfirmModal("toggle", dept);
+                } else if (action === "delete") {
+                    openConfirmModal("delete", dept);
                 }
             });
             renderAll();
