@@ -1,34 +1,4 @@
-# Endpoint: Update permissions for a specific admin
-@bp.route('/api/admins-permissions/<user_id>', methods=['POST'])
-@role_required('national', 'national_admin')
-def api_update_admin_permissions(user_id):
-    db = get_firestore_db()
-    data = request.get_json(force=True)
-    permissions = data.get('permissions', {})
-    user_ref = db.collection('users').document(user_id)
-    user_ref.update({'permissions': permissions})
-    return jsonify({'success': True, 'message': 'Permissions updated.'})
-# Endpoint: Get all regional and municipal admins with permissions
-@bp.route('/api/admins-permissions', methods=['GET'])
-@role_required('national', 'national_admin')
-def api_get_admins_permissions():
-    db = get_firestore_db()
-    users_ref = db.collection('users')
-    users = []
-    for user_doc in users_ref.stream():
-        user = user_doc.to_dict() or {}
-        role = user.get('role', '').lower()
-        if role in ['regional_admin', 'regional', 'municipal_admin', 'municipal']:
-            users.append({
-                'id': user_doc.id,
-                'email': user.get('email', ''),
-                'name': f"{user.get('firstName', '')} {user.get('lastName', '')}".strip(),
-                'role': role,
-                'region': user.get('region', ''),
-                'municipality': user.get('municipality', ''),
-                'permissions': user.get('permissions', {})
-            })
-    return jsonify({'admins': users})
+
 
 
 # --- DELETE PROJECT ENDPOINT ---
@@ -1999,3 +1969,36 @@ def quotations_national_create():
     except Exception as e:
         print(f"[ERROR] quotations_national_create failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
+    
+
+# Endpoint: Update permissions for a specific admin
+@bp.route('/api/admins-permissions/<user_id>', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_update_admin_permissions(user_id):
+    db = get_firestore_db()
+    data = request.get_json(force=True)
+    permissions = data.get('permissions', {})
+    user_ref = db.collection('users').document(user_id)
+    user_ref.update({'permissions': permissions})
+    return jsonify({'success': True, 'message': 'Permissions updated.'})
+# Endpoint: Get all regional and municipal admins with permissions
+@bp.route('/api/admins-permissions', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_admins_permissions():
+    db = get_firestore_db()
+    users_ref = db.collection('users')
+    users = []
+    for user_doc in users_ref.stream():
+        user = user_doc.to_dict() or {}
+        role = user.get('role', '').lower()
+        if role in ['regional_admin', 'regional', 'municipal_admin', 'municipal']:
+            users.append({
+                'id': user_doc.id,
+                'email': user.get('email', ''),
+                'name': f"{user.get('firstName', '')} {user.get('lastName', '')}".strip(),
+                'role': role,
+                'region': user.get('region', ''),
+                'municipality': user.get('municipality', ''),
+                'permissions': user.get('permissions', {})
+            })
+    return jsonify({'admins': users})
