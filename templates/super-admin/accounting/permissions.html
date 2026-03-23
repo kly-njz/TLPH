@@ -72,7 +72,7 @@
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-1.5 mt-2 sm:mt-0">
-                    <button class="gov-btn bg-violet-700 text-white hover:bg-violet-800 shadow-sm">
+                    <button class="gov-btn bg-violet-700 text-white hover:bg-violet-800 shadow-sm" onclick="openCustomRoleModal()">
                         <i class="fa-solid fa-plus"></i> Create Custom Role
                     </button>
                 </div>
@@ -224,6 +224,66 @@
         </div>
     </main>
 
+    <div id="customRoleModal" class="gov-modal">
+        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-lg flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-user-shield text-violet-400"></i> Create Custom Role
+                </h3>
+                <button onclick="closeCustomRoleModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <form id="customRoleForm" class="p-4 bg-slate-50 flex-1 flex flex-col gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="flex flex-col gap-1 sm:col-span-2">
+                        <span class="text-[8px] font-black uppercase tracking-widest text-slate-600">Role Name</span>
+                        <input id="customRoleName" type="text" class="gov-input h-8 uppercase" placeholder="e.g. Audit Reviewer" required>
+                    </label>
+                    <label class="flex flex-col gap-1">
+                        <span class="text-[8px] font-black uppercase tracking-widest text-slate-600">Role Level</span>
+                        <select id="customRoleLevel" class="gov-input h-8 cursor-pointer uppercase" required>
+                            <option value="" disabled selected>Select Level</option>
+                            <option value="municipal">Municipal</option>
+                            <option value="regional">Regional</option>
+                            <option value="national">National</option>
+                        </select>
+                    </label>
+                    <label class="flex flex-col gap-1">
+                        <span class="text-[8px] font-black uppercase tracking-widest text-slate-600">Access Status</span>
+                        <select id="customRoleStatus" class="gov-input h-8 cursor-pointer uppercase">
+                            <option value="active" selected>Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </label>
+                    <label class="flex flex-col gap-1 sm:col-span-2">
+                        <span class="text-[8px] font-black uppercase tracking-widest text-slate-600">Role Description</span>
+                        <input id="customRoleDesc" type="text" class="gov-input h-8" placeholder="Short purpose or responsibility" required>
+                    </label>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-[2px] p-3">
+                    <p class="text-[8px] font-black uppercase tracking-widest text-slate-600 m-0">Default Permission Set</p>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 text-[9px] font-bold uppercase text-slate-700">
+                        <label class="flex items-center gap-2"><input id="permView" type="checkbox" class="w-3.5 h-3.5 accent-emerald-600" checked> View</label>
+                        <label class="flex items-center gap-2"><input id="permCreate" type="checkbox" class="w-3.5 h-3.5 accent-emerald-600" checked> Create</label>
+                        <label class="flex items-center gap-2"><input id="permEdit" type="checkbox" class="w-3.5 h-3.5 accent-emerald-600"> Edit</label>
+                        <label class="flex items-center gap-2"><input id="permSubmit" type="checkbox" class="w-3.5 h-3.5 accent-emerald-600"> Submit</label>
+                        <label class="flex items-center gap-2"><input id="permApprove" type="checkbox" class="w-3.5 h-3.5 accent-emerald-600"> Approve</label>
+                        <label class="flex items-center gap-2"><input id="permExport" type="checkbox" class="w-3.5 h-3.5 accent-emerald-600"> Export</label>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2">
+                    <button type="button" onclick="closeCustomRoleModal()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-100">
+                        Cancel
+                    </button>
+                    <button type="submit" class="gov-btn bg-violet-700 text-white hover:bg-violet-800">
+                        Create Role
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="scopeModal" class="gov-modal">
         <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
@@ -270,13 +330,13 @@
         // --- LIVE SEARCH AND FILTER ---
         const searchInput = document.getElementById('searchInput');
         const levelFilter = document.getElementById('levelFilter');
-        const tableRows = document.querySelectorAll('#permissionsTableBody tr');
+        const permissionsTableBody = document.getElementById('permissionsTableBody');
 
         function filterTable() {
             const searchTerm = searchInput.value.toLowerCase();
             const filterLevel = levelFilter.value.toLowerCase();
 
-            tableRows.forEach(row => {
+            document.querySelectorAll('#permissionsTableBody tr').forEach(row => {
                 const nameText = row.querySelector('.user-name').textContent.toLowerCase();
                 const roleText = row.querySelector('.user-role').textContent.toLowerCase();
                 const levelText = row.querySelector('.user-level').textContent.toLowerCase().trim();
@@ -307,8 +367,9 @@
             saveBtn.classList.remove('bg-emerald-700', 'hover:bg-emerald-800', 'cursor-pointer');
         }
 
-        document.querySelectorAll('#permissionsTableBody input[type="checkbox"]').forEach(cb => {
-            cb.addEventListener('change', enableSaveButton);
+        permissionsTableBody.addEventListener('change', (event) => {
+            const target = event.target;
+            if (target && target.matches('input[type="checkbox"]')) enableSaveButton();
         });
 
         window.handleSaveChanges = function() {
@@ -425,14 +486,25 @@
         }
 
         // Triggered when clicking "Extend" on the table
-        function openScopeModal(userName, containerId, userLevel, parentCode, parentName) {
+        function openScopeModal(userName, containerId, userLevel, parentCode, parentName, forcedNationalLevel = null) {
             document.getElementById('modalUserName').textContent = userName;
             currentTargetContainerId = containerId;
             
             const selectElement = document.getElementById('newOfficeSelect');
             const nationalWrapper = document.getElementById('nationalLevelWrapper');
             
-            if (userLevel.toLowerCase() === 'national') {
+            if (forcedNationalLevel) {
+                const levelLabelMap = {
+                    regional: "Regions",
+                    provincial: "Provinces",
+                    municipal: "Cities/Municipalities"
+                };
+                const label = levelLabelMap[forcedNationalLevel] || "Jurisdictions";
+
+                nationalWrapper.classList.add('hidden');
+                loadScopeOptions(forcedNationalLevel, 'all', 'Nationwide', selectElement, true);
+                document.getElementById('modalScopeHelper').innerHTML = `Limit: All ${label} (Nationwide)`;
+            } else if (userLevel.toLowerCase() === 'national') {
                 // Show level selector for National users
                 nationalWrapper.classList.remove('hidden');
                 document.getElementById('nationalLevelSelect').value = ""; // Reset dropdown
@@ -517,8 +589,94 @@
         }
 
         // Close modal on outside click
+        document.getElementById('customRoleModal').addEventListener('click', function(e) {
+            if (e.target === this) closeCustomRoleModal();
+        });
+
         document.getElementById('scopeModal').addEventListener('click', function(e) {
             if(e.target === this) closeScopeModal();
+        });
+
+        // --- CUSTOM ROLE MODAL LOGIC ---
+        const customRoleModal = document.getElementById('customRoleModal');
+        const customRoleForm = document.getElementById('customRoleForm');
+        let customRoleCount = 1;
+
+        function openCustomRoleModal() {
+            customRoleModal.classList.remove('hidden');
+            customRoleModal.classList.add('show');
+            document.getElementById('customRoleName').focus();
+        }
+
+        function closeCustomRoleModal() {
+            customRoleModal.classList.add('hidden');
+            customRoleModal.classList.remove('show');
+            customRoleForm.reset();
+        }
+
+        customRoleForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('customRoleName').value.trim();
+            const level = document.getElementById('customRoleLevel').value.trim();
+            const status = document.getElementById('customRoleStatus').value;
+            const desc = document.getElementById('customRoleDesc').value.trim();
+
+            if (!name || !level || !desc) return;
+
+            const roleLabel = `Custom Role: ${name.toUpperCase()}`;
+            const levelDisplay = level.charAt(0).toUpperCase() + level.slice(1);
+            const rowId = `custom-role-${customRoleCount++}`;
+            const containerId = `scope-container-${rowId}`;
+
+            const permView = document.getElementById('permView').checked;
+            const permCreate = document.getElementById('permCreate').checked;
+            const permEdit = document.getElementById('permEdit').checked;
+            const permSubmit = document.getElementById('permSubmit').checked;
+            const permApprove = document.getElementById('permApprove').checked;
+            const permExport = document.getElementById('permExport').checked;
+
+            const badgeClass = status === 'active'
+                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                : "bg-slate-100 text-slate-600 border-slate-300";
+
+            const scopeBadge = level === 'national'
+                ? "Nationwide Access"
+                : "Unassigned Scope";
+
+            const extendArgs = level === 'national'
+                ? `'${roleLabel}', '${containerId}', 'National', 'all', 'Nationwide'`
+                : `'${roleLabel}', '${containerId}', 'National', 'all', 'Nationwide', '${level}'`;
+
+            const row = document.createElement('tr');
+            row.className = "hover:bg-blue-50 transition-colors";
+            row.innerHTML = `
+                <td class="px-3 py-1.5 sticky left-0 bg-white group-hover:bg-blue-50 border-r border-slate-200 shadow-[1px_0_0_#f1f5f9] z-10">
+                    <div class="font-black text-slate-900 uppercase user-name leading-tight">${name}</div>
+                    <div class="text-[8px] text-slate-500 uppercase font-bold tracking-widest user-role">Custom Role • ${desc}</div>
+                </td>
+                <td class="px-3 py-1.5 text-center font-bold text-slate-700 uppercase user-level border-r border-slate-100">${levelDisplay}</td>
+                <td class="px-3 py-1.5 text-center border-r border-slate-100"><input type="checkbox" class="w-3.5 h-3.5 accent-emerald-600 cursor-pointer" ${permView ? "checked" : ""}></td>
+                <td class="px-3 py-1.5 text-center border-r border-slate-100"><input type="checkbox" class="w-3.5 h-3.5 accent-emerald-600 cursor-pointer" ${permCreate ? "checked" : ""}></td>
+                <td class="px-3 py-1.5 text-center border-r border-slate-100"><input type="checkbox" class="w-3.5 h-3.5 accent-emerald-600 cursor-pointer" ${permEdit ? "checked" : ""}></td>
+                <td class="px-3 py-1.5 text-center border-r border-slate-100"><input type="checkbox" class="w-3.5 h-3.5 accent-emerald-600 cursor-pointer" ${permSubmit ? "checked" : ""}></td>
+                <td class="px-3 py-1.5 text-center border-r border-slate-100"><input type="checkbox" class="w-3.5 h-3.5 accent-emerald-600 cursor-pointer" ${permApprove ? "checked" : ""}></td>
+                <td class="px-3 py-1.5 text-center border-r border-slate-100"><input type="checkbox" class="w-3.5 h-3.5 accent-emerald-600 cursor-pointer" ${permExport ? "checked" : ""}></td>
+                <td class="px-3 py-1.5">
+                    <div class="flex flex-col items-start gap-1">
+                        <div class="flex flex-wrap items-center gap-1" id="${containerId}">
+                            <span class="px-1.5 py-0.5 border rounded-[2px] font-black text-[8px] uppercase leading-none ${badgeClass}">${scopeBadge}</span>
+                        </div>
+                        <button onclick="openScopeModal(${extendArgs})" class="text-[8px] font-black text-violet-700 hover:text-white hover:bg-violet-700 flex items-center gap-0.5 bg-violet-50 px-1.5 py-0.5 rounded-[2px] border border-violet-200 transition-colors cursor-pointer uppercase tracking-widest mt-0.5">
+                            <i class="fa-solid fa-plus text-[7px]"></i> Extend
+                        </button>
+                    </div>
+                </td>
+            `;
+
+            permissionsTableBody.prepend(row);
+            enableSaveButton();
+            closeCustomRoleModal();
+            filterTable();
         });
     </script>
 </body>
