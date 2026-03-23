@@ -15,6 +15,7 @@
                 extend: {
                     colors: {
                         'gov-blue': '#1e3a8a',
+                        'gov-red': '#be123c',
                     }
                 }
             }
@@ -296,6 +297,26 @@
         </div>
     </div>
 
+    <div id="md" class="gov-modal no-print">
+        <div class="w-full max-w-md rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+            <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Confirm Deletion
+                </h3>
+                <button id="dx" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-4 bg-slate-50">
+                <p id="dm" class="text-[10px] font-bold text-slate-700 uppercase tracking-widest m-0"></p>
+                <div class="pt-4 mt-4 border-t border-slate-200 flex gap-2">
+                    <button type="button" id="dd" class="gov-btn bg-rose-700 text-white hover:bg-rose-800 flex-1 py-2">Delete</button>
+                    <button type="button" id="dc" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const $ = id => document.getElementById(id), q = s => document.querySelectorAll(s);
         const toast = (a,b) => { tt.textContent=a; tm.textContent=b; toastEl.classList.remove("hidden"); clearTimeout(window.__t); window.__t=setTimeout(()=>toastEl.classList.add("hidden"), 2200); };
@@ -397,6 +418,8 @@
 
         const tb=$("tb"), cnt=$("cnt");
         const toastEl=$("toast"), tt=$("tt"), tm=$("tm");
+        const delModal=$("md"), delMsg=$("dm"), delBtn=$("dd");
+        let pendingDelete = { mode: null, ids: [] };
 
         const getF=()=>({c:$("fc").value,r:$("fr").value,m:$("fm").value,d:$("fd").value,s:$("fs").value.trim().toLowerCase(),t:$("ft").value});
         const filt=arr=>{
@@ -487,6 +510,15 @@
           }
         };
         const closeM=()=>$("mb").classList.remove("flex");
+        const openD=(mode, ids, label)=>{
+          pendingDelete = { mode, ids };
+          delMsg.textContent = label;
+          delModal.classList.add("flex");
+        };
+        const closeD=()=>{
+          delModal.classList.remove("flex");
+          pendingDelete = { mode: null, ids: [] };
+        };
 
         const upsert=(payload,id)=>{
           if(!id) logs.unshift({id:crypto.randomUUID(),...payload});
@@ -511,6 +543,8 @@
           $("btnOpenCreate").onclick=()=>openM("create");
           $("mx").onclick=$("mc").onclick=()=>closeM();
           $("mb").addEventListener("click", (e) => { if(e.target === $("mb")) closeM(); });
+          $("dx").onclick=$("dc").onclick=()=>closeD();
+          $("md").addEventListener("click", (e) => { if(e.target === $("md")) closeD(); });
           
           ["fc","ft","fd"].forEach(id=>$(id).addEventListener("change",render));
           ["fs"].forEach(id=>$(id).addEventListener("input",render));
@@ -528,8 +562,7 @@
           $("btnBulkDelete").onclick=()=>{
             const ids=selected();
             if(!ids.length) return toast("No selection","Select at least one log.");
-            if(!confirm(`Remove ${ids.length} selected log(s)?`)) return;
-            ids.forEach(del); render(); toast("Removed","Selected logs deleted.");
+            openD("bulk", ids, `Remove ${ids.length} selected log(s)?`);
           };
 
           document.addEventListener("click",(e)=>{
@@ -537,9 +570,18 @@
             if(ed) openM("edit",ed.dataset.id);
             if(rm){
               const id=rm.dataset.id; const x=logs.find(z=>z.id===id); if(!x) return;
-              if(confirm(`Remove log for ${x.name} on ${x.date}?`)){ del(id); render(); toast("Removed","Log deleted."); }
+              openD("single", [id], `Remove log for ${x.name} on ${x.date}?`);
             }
           });
+
+          delBtn.onclick=()=>{
+            const ids = pendingDelete.ids || [];
+            if(!ids.length) return closeD();
+            ids.forEach(del);
+            closeD();
+            render();
+            toast("Removed", ids.length > 1 ? "Selected logs deleted." : "Log deleted.");
+          };
 
           $("f").onsubmit=(e)=>{
             e.preventDefault();
