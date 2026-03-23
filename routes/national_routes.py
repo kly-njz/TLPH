@@ -1981,7 +1981,7 @@ def api_update_admin_permissions(user_id):
     user_ref = db.collection('users').document(user_id)
     user_ref.update({'permissions': permissions})
     return jsonify({'success': True, 'message': 'Permissions updated.'})
-# Endpoint: Get all regional and municipal admins with permissions
+
 @bp.route('/api/admins-permissions', methods=['GET'])
 @role_required('national', 'national_admin')
 def api_get_admins_permissions():
