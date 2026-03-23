@@ -131,9 +131,38 @@
             <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Active Users</p>
             <span class="material-icons-round text-gov-blue text-[14px]">group</span>
           </div>
-          <div class="mt-1 text-[16px] font-black text-slate-900 leading-none">18</div>
+          <div class="mt-1 text-[16px] font-black text-slate-900 leading-none" id="activeUsersCount">...</div>
           <p class="text-[8px] text-slate-400 mt-1 uppercase font-bold tracking-widest">Logged in this period</p>
         </div>
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    async function fetchActiveUsersCount() {
+      // Wait for auth state
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) return;
+        // Get current admin's user record
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('uid', '==', user.uid));
+        const snap = await getDocs(q);
+        let muni = '';
+        snap.forEach(doc => {
+          const data = doc.data();
+          muni = data.municipality || '';
+        });
+        if (!muni) return;
+        // Query all end users in this municipality
+        const endUsersQ = query(usersRef, where('municipality', '==', muni), where('role', '==', 'end_user'));
+        const endUsersSnap = await getDocs(endUsersQ);
+        let count = 0;
+        endUsersSnap.forEach(() => count++);
+        document.getElementById('activeUsersCount').textContent = count;
+      });
+    }
+    fetchActiveUsersCount();
+  </script>
 
         <div class="gov-card border-t-2 border-t-emerald-700 p-2 bg-emerald-50/30 transition-colors hover:bg-emerald-50">
           <div class="flex items-center justify-between">
