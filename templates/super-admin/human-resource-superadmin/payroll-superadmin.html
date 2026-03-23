@@ -414,6 +414,26 @@
     </div>
   </div>
 
+  <div id="cm" class="gov-modal no-print">
+    <div class="w-full max-w-md rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+      <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
+        <h3 id="ct" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+          <i class="fa-solid fa-circle-question text-gov-blue"></i> Confirm Action
+        </h3>
+        <button id="cx" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+          <span class="material-icons-round text-sm">close</span>
+        </button>
+      </div>
+      <div class="p-4 bg-slate-50">
+        <p id="cmg" class="text-[10px] font-bold text-slate-700 leading-relaxed m-0">Are you sure?</p>
+      </div>
+      <div class="px-4 pb-4 flex gap-2">
+        <button id="cc" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
+        <button id="co" class="gov-btn bg-slate-900 text-white hover:bg-slate-950 flex-1 py-2">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const $ = id => document.getElementById(id);
     const q = s => document.querySelectorAll(s);
@@ -443,6 +463,25 @@
       })[s] || ["—","border-gray-200 bg-gray-50 text-slate-700"];
       return `<span class="status-badge ${m[1]} w-16 text-center">${m[0]}</span>`;
     };
+
+    let confirmAction = null;
+    const openConfirm = (title, msg, variant = "default", onConfirm = null) => {
+      $("ct").innerHTML = title || '<i class="fa-solid fa-circle-question text-gov-blue"></i> Confirm Action';
+      $("cmg").textContent = msg || "Are you sure?";
+      confirmAction = onConfirm;
+      $("co").className = "gov-btn flex-1 py-2";
+      if (variant === "danger") {
+        $("co").classList.add("bg-rose-700","text-white","hover:bg-rose-800");
+      } else if (variant === "success") {
+        $("co").classList.add("bg-emerald-700","text-white","hover:bg-emerald-800");
+      } else if (variant === "info") {
+        $("co").classList.add("bg-sky-700","text-white","hover:bg-sky-800");
+      } else {
+        $("co").classList.add("bg-slate-900","text-white","hover:bg-slate-950");
+      }
+      $("cm").classList.add("flex");
+    };
+    const closeConfirm = () => { $("cm").classList.remove("flex"); confirmAction = null; };
 
     let apiMuniCache = {};
 
@@ -695,6 +734,8 @@
 
       $("btnOpenCreate").onclick=()=>openM("create");
       $("mx").onclick=$("mc").onclick=closeM; $("mb").onclick=e=>{if(e.target===$("mb")) closeM();};
+      $("cx").onclick=$("cc").onclick=closeConfirm; $("cm").onclick=e=>{if(e.target===$("cm")) closeConfirm();};
+      $("co").onclick=()=>{ if(confirmAction){ const fn=confirmAction; closeConfirm(); fn(); } };
       ["basic","allow","ot","ded"].forEach(id=>$(id).addEventListener("input",updateCalc));
 
       ["fc","fr","fs","fPeriod"].forEach(id=>$(id).addEventListener("change",render));
@@ -712,16 +753,37 @@
       };
 
       $("sa").onchange=(e)=>q(".rc").forEach(x=>x.checked=e.target.checked);
-      $("btnBulkPost").onclick=()=>{ const ids=selected(); if(!ids.length) return toast("No selection","Select at least one payroll."); ids.forEach(id=>setStatus(id,"POSTED")); render(); toast("Updated","Selected payroll posted."); };
-      $("btnBulkPaid").onclick=()=>{ const ids=selected(); if(!ids.length) return toast("No selection","Select at least one payroll."); ids.forEach(id=>setStatus(id,"PAID")); render(); toast("Updated","Selected payroll marked as paid."); };
-      $("btnBulkDelete").onclick=()=>{ const ids=selected(); if(!ids.length) return toast("No selection","Select at least one payroll."); if(!confirm(`Remove ${ids.length} selected payroll record(s)?`)) return; ids.forEach(del); render(); toast("Removed","Selected records deleted."); };
+      $("btnBulkPost").onclick=()=>{ 
+        const ids=selected(); 
+        if(!ids.length) return toast("No selection","Select at least one payroll.");
+        openConfirm('<i class="fa-solid fa-upload text-sky-300"></i> Post Selected', `Post ${ids.length} selected payroll record(s)?`, "info", () => { ids.forEach(id=>setStatus(id,"POSTED")); render(); toast("Updated","Selected payroll posted."); });
+      };
+      $("btnBulkPaid").onclick=()=>{ 
+        const ids=selected(); 
+        if(!ids.length) return toast("No selection","Select at least one payroll.");
+        openConfirm('<i class="fa-solid fa-check text-emerald-300"></i> Mark Selected Paid', `Mark ${ids.length} selected payroll record(s) as paid?`, "success", () => { ids.forEach(id=>setStatus(id,"PAID")); render(); toast("Updated","Selected payroll marked as paid."); });
+      };
+      $("btnBulkDelete").onclick=()=>{ 
+        const ids=selected(); 
+        if(!ids.length) return toast("No selection","Select at least one payroll.");
+        openConfirm('<i class="fa-solid fa-trash text-rose-300"></i> Delete Selected', `Remove ${ids.length} selected payroll record(s)? This cannot be undone.`, "danger", () => { ids.forEach(del); render(); toast("Removed","Selected records deleted."); });
+      };
 
       document.addEventListener("click",(e)=>{
         const ed=e.target.closest(".ed"), rm=e.target.closest(".rm"), post=e.target.closest(".post"), paid=e.target.closest(".paid");
         if(ed) return openM("edit",ed.dataset.id);
-        if(post){ setStatus(post.dataset.id,"POSTED"); render(); return toast("Posted","Payroll posted."); }
-        if(paid){ setStatus(paid.dataset.id,"PAID"); render(); return toast("Paid","Payroll marked as paid."); }
-        if(rm){ const id=rm.dataset.id; const x=rows.find(z=>z.id===id); if(!x) return; if(confirm(`Remove payroll ${x.payNo} for ${x.name}?`)){ del(id); render(); toast("Removed","Payroll deleted."); } }
+        if(post){ 
+          const id=post.dataset.id; const x=rows.find(z=>z.id===id); if(!x) return;
+          return openConfirm('<i class="fa-solid fa-upload text-sky-300"></i> Post Payroll', `Post payroll ${x.payNo} for ${x.name}?`, "info", () => { setStatus(id,"POSTED"); render(); toast("Posted","Payroll posted."); });
+        }
+        if(paid){ 
+          const id=paid.dataset.id; const x=rows.find(z=>z.id===id); if(!x) return;
+          return openConfirm('<i class="fa-solid fa-check text-emerald-300"></i> Mark Paid', `Mark payroll ${x.payNo} for ${x.name} as paid?`, "success", () => { setStatus(id,"PAID"); render(); toast("Paid","Payroll marked as paid."); });
+        }
+        if(rm){ 
+          const id=rm.dataset.id; const x=rows.find(z=>z.id===id); if(!x) return; 
+          return openConfirm('<i class="fa-solid fa-trash text-rose-300"></i> Delete Payroll', `Remove payroll ${x.payNo} for ${x.name}? This cannot be undone.`, "danger", () => { del(id); render(); toast("Removed","Payroll deleted."); });
+        }
       });
 
       $("f").onsubmit=(e)=>{
