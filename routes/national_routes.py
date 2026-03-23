@@ -697,7 +697,8 @@ def quotation():
     from quotation_storage import get_quotations
     import json
     from collections import Counter
-    quotations = get_quotations(scope='national')
+    from quotation_storage import get_all_quotations
+    quotations = get_all_quotations()
     def to_float(value):
         try:
             return float(value)

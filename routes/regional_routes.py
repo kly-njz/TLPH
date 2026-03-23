@@ -4267,11 +4267,7 @@ def quotation_regional():
     for q in all_quotations:
         print(f"region: {q.get('region')}, municipality: {q.get('municipality')}, id: {q.get('id', 'N/A')}")
 
-    # Filter to only regional quotations for further filtering
-    regional_quotations = [q for q in all_quotations if str(q.get('scope', '')).lower() == 'regional']
-
-    # Always provide full list of municipalities for the user's region
-    # Always provide full list of municipalities for the user's region
+    # Show all quotations for the user's region, regardless of scope
     from models.ph_locations import philippineLocations
     region_name = user_region
     municipalities = []
@@ -4296,11 +4292,11 @@ def quotation_regional():
             municipalities.extend(muni_list)
         municipalities = sorted(set(municipalities))
 
-    # Filter quotations to only those in the region's municipalities
+    # Filter quotations to only those in the region's municipalities and region
     muni_set = set(m.upper() for m in municipalities)
     region_upper = region_name.upper() if region_name else ''
     quotations = [
-        q for q in regional_quotations
+        q for q in all_quotations
         if str(q.get('municipality', '')).strip().upper() in muni_set
         and str(q.get('region', '')).strip().upper() == region_upper
     ]

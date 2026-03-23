@@ -648,7 +648,13 @@ def quotations_municipal():
     user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
     user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
 
-    quotations = get_quotations(scope='municipal', municipality=user_municipality)
+    from quotation_storage import get_all_quotations
+    all_quotations = get_all_quotations()
+    muni_upper = user_municipality.upper() if user_municipality else ''
+    quotations = [
+        q for q in all_quotations
+        if str(q.get('municipality', '')).strip().upper() == muni_upper
+    ]
     def to_float(value):
         try:
             return float(value)
