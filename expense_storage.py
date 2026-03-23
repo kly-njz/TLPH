@@ -25,7 +25,8 @@ def add_expense_category(name, coa_code, coa_name, expense_type, office,
     """Add a new expense category to Firestore"""
     try:
         expenses_ref = get_expenses_collection()
-        
+        # Ensure municipality is always uppercase if provided
+        muni_upper = municipality.upper() if municipality else None
         category = {
             'name': name,
             'coa_code': coa_code,
@@ -36,20 +37,17 @@ def add_expense_category(name, coa_code, coa_name, expense_type, office,
             'fund_type': fund_type or 'GENERAL',
             'status': status or 'ACTIVE',
             'description': description,
-            'municipality': municipality,
+            'municipality': muni_upper,
             'created_at': firestore.SERVER_TIMESTAMP,
             'updated_at': firestore.SERVER_TIMESTAMP,
         }
-        
         # Add document to Firestore
         doc_ref = expenses_ref.add(category)
         doc_id = doc_ref[1].id
-        
         # Get the created document with server timestamp
         created_doc = expenses_ref.document(doc_id).get()
         result = created_doc.to_dict()
         result['id'] = doc_id
-        
         return result
     except Exception as e:
         print(f"Error adding expense category: {e}")
