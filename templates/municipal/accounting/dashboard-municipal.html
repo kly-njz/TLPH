@@ -1,3 +1,167 @@
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { collection, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    // Utility: Get current admin's municipality
+    async function getCurrentMunicipality() {
+      return new Promise((resolve) => {
+        onAuthStateChanged(auth, async (user) => {
+          if (!user) return resolve(null);
+          const usersRef = collection(db, 'users');
+          const q = query(usersRef, where('uid', '==', user.uid));
+          const snap = await getDocs(q);
+          let muni = '';
+          snap.forEach(doc => {
+            const data = doc.data();
+            muni = data.municipality || '';
+          });
+          resolve(muni);
+        });
+      });
+    }
+
+    // Cashflow Trend Chart (deposits/expenses by month)
+        // Revenue Mix Chart (by type/category)
+        async function loadRevenueMixChart(municipality) {
+          const txRef = collection(db, 'transactions');
+          const q = query(txRef, where('municipality', '==', municipality));
+          const snap = await getDocs(q);
+          const mix = {};
+          snap.forEach(doc => {
+            const d = doc.data();
+            const cat = (d.category || 'Other').toString();
+            mix[cat] = (mix[cat] || 0) + (parseFloat(d.amount) || 0);
+          });
+          const labels = Object.keys(mix);
+          const data = labels.map(l => mix[l]);
+          if (window.chartCategory) {
+            window.chartCategory.data.labels = labels.length ? labels : ['No Data'];
+            window.chartCategory.data.datasets[0].data = data.length ? data : [1];
+            window.chartCategory.update();
+          }
+        }
+
+        // Alerts Table
+        async function loadAlertsTable(municipality) {
+          const alertsRef = collection(db, 'alerts');
+          const q = query(alertsRef, where('municipality', '==', municipality));
+          const snap = await getDocs(q);
+          const tbody = document.getElementById('alertsTableBody');
+          tbody.innerHTML = '';
+          let found = false;
+          snap.forEach(doc => {
+            found = true;
+            const d = doc.data();
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50 transition alert-row';
+            tr.innerHTML = `
+              <td class="px-3 py-1.5 font-bold text-slate-900 border-r border-slate-100">${d.type || ''}</td>
+              <td class="px-3 py-1.5 text-slate-700 uppercase tracking-widest text-[9px] border-r border-slate-100">${d.office || ''}</td>
+              <td class="px-3 py-1.5 text-slate-600 border-r border-slate-100">${d.description || ''}</td>
+              <td class="px-3 py-1.5 text-center border-r border-slate-100"><span class="px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase border bg-amber-50 text-amber-700 border-amber-200">${d.severity || ''}</span></td>
+              <td class="px-3 py-1.5 text-center text-slate-500 font-mono text-[9px]">${d.date || ''}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+          if (!found) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="5" class="text-center text-slate-500 py-4 text-[9px]">No alerts found</td>`;
+            tbody.appendChild(tr);
+          }
+        }
+
+        // Transactions Table
+        async function loadTransactionsTable(municipality) {
+          const txRef = collection(db, 'transactions');
+          const q = query(txRef, where('municipality', '==', municipality), orderBy('timestamp', 'desc'));
+          const snap = await getDocs(q);
+          const tbody = document.getElementById('txnTableBody');
+          tbody.innerHTML = '';
+          let found = false;
+          snap.forEach(doc => {
+            found = true;
+            const d = doc.data();
+            const date = d.timestamp && d.timestamp.seconds ? new Date(d.timestamp.seconds * 1000) : new Date(d.timestamp);
+            const dateStr = date.toLocaleDateString('en-CA');
+            const amt = parseFloat(d.amount) || 0;
+            const type = (d.type || '').toUpperCase();
+            const isDeposit = type === 'DEPOSIT';
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-slate-50 transition-colors txn-row';
+            row.setAttribute('data-date', dateStr);
+            row.setAttribute('data-type', type);
+            row.setAttribute('data-amount', amt);
+            row.innerHTML = `
+              <td class="px-3 py-1.5 border-r border-slate-100 font-mono font-bold text-slate-800">${d.transaction_id || ''}</td>
+              <td class="px-3 py-1.5 border-r border-slate-100 text-slate-700">${d.details || ''}</td>
+              <td class="px-3 py-1.5 border-r border-slate-100 text-slate-600 uppercase tracking-widest text-[9px]"><span class="${isDeposit ? 'text-emerald-600' : 'text-rose-600'} font-bold">${isDeposit ? 'Deposit' : 'Expense'}</span></td>
+              <td class="px-3 py-1.5 border-r border-slate-100 text-right font-mono font-bold ${isDeposit ? 'text-emerald-700' : 'text-rose-700'}">${amt.toLocaleString()}</td>
+              <td class="px-3 py-1.5 text-center text-slate-500 font-mono text-[9px]">${dateStr}</td>
+            `;
+            tbody.appendChild(row);
+          });
+          if (!found) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="5" class="text-center text-slate-500 py-4 text-[9px]">No transactions found</td>`;
+            tbody.appendChild(tr);
+          }
+        }
+    async function loadCashflowChart(municipality) {
+      const txRef = collection(db, 'transactions');
+      // Only get transactions for this municipality
+      const q = query(txRef, where('municipality', '==', municipality));
+      const snap = await getDocs(q);
+      // Aggregate by month
+      const deposits = {};
+      const expenses = {};
+      snap.forEach(doc => {
+        const d = doc.data();
+        if (!d.timestamp || !d.type) return;
+        const date = new Date(d.timestamp.seconds ? d.timestamp.seconds * 1000 : d.timestamp);
+        const month = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+        if (d.type === 'DEPOSIT') {
+          deposits[month] = (deposits[month] || 0) + (parseFloat(d.amount) || 0);
+        } else if (d.type === 'EXPENSE') {
+          expenses[month] = (expenses[month] || 0) + (parseFloat(d.amount) || 0);
+        }
+      });
+      // Get last 8 months
+      const now = new Date();
+      const months = [];
+      for (let i = 7; i >= 0; i--) {
+        const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+        months.push(key);
+      }
+      const depositData = months.map(m => deposits[m] || 0);
+      const expenseData = months.map(m => expenses[m] || 0);
+      // Update chart
+      if (window.chartCashflow) {
+        window.chartCashflow.data.labels = months.map(m => {
+          const [y, mo] = m.split('-');
+          return new Date(y, mo - 1).toLocaleString('en-US', { month: 'short' });
+        });
+        window.chartCashflow.data.datasets[0].data = depositData;
+        window.chartCashflow.data.datasets[1].data = expenseData;
+        window.chartCashflow.update();
+      }
+    }
+
+    // Main loader
+    (async function() {
+      const municipality = await getCurrentMunicipality();
+      if (!municipality) return;
+      // Cashflow chart
+      await loadCashflowChart(municipality);
+      // Revenue mix chart
+      await loadRevenueMixChart(municipality);
+      // Alerts table
+      await loadAlertsTable(municipality);
+      // Transactions table
+      await loadTransactionsTable(municipality);
+    })();
+  </script>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -131,9 +295,38 @@
             <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Active Users</p>
             <span class="material-icons-round text-gov-blue text-[14px]">group</span>
           </div>
-          <div class="mt-1 text-[16px] font-black text-slate-900 leading-none">18</div>
+          <div class="mt-1 text-[16px] font-black text-slate-900 leading-none" id="activeUsersCount">...</div>
           <p class="text-[8px] text-slate-400 mt-1 uppercase font-bold tracking-widest">Logged in this period</p>
         </div>
+  <script type="module">
+    import { auth, db } from '/static/js/firebase-config.js';
+    import { collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    async function fetchActiveUsersCount() {
+      // Wait for auth state
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) return;
+        // Get current admin's user record
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('uid', '==', user.uid));
+        const snap = await getDocs(q);
+        let muni = '';
+        snap.forEach(doc => {
+          const data = doc.data();
+          muni = data.municipality || '';
+        });
+        if (!muni) return;
+        // Query all end users in this municipality
+        const endUsersQ = query(usersRef, where('municipality', '==', muni), where('role', '==', 'end_user'));
+        const endUsersSnap = await getDocs(endUsersQ);
+        let count = 0;
+        endUsersSnap.forEach(() => count++);
+        document.getElementById('activeUsersCount').textContent = count;
+      });
+    }
+    fetchActiveUsersCount();
+  </script>
 
         <div class="gov-card border-t-2 border-t-emerald-700 p-2 bg-emerald-50/30 transition-colors hover:bg-emerald-50">
           <div class="flex items-center justify-between">
