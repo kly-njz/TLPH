@@ -393,13 +393,50 @@
       return String(value || '').toLowerCase().trim().replace(/\s+/g, '-');
     }
 
+    function getStatusBadgeHTML(labelText) {
+      const label = String(labelText || 'PENDING').toUpperCase();
+      if (label.includes('APPROVED')) {
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200 text-[8px] font-black uppercase">${label}</span>`;
+      }
+      if (label.includes('REJECTED')) {
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded border bg-rose-50 text-rose-700 border-rose-200 text-[8px] font-black uppercase">${label}</span>`;
+      }
+      if (label.includes('FORWARDED')) {
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 text-[8px] font-black uppercase">${label}</span>`;
+      }
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 text-[8px] font-black uppercase">PENDING</span>`;
+    }
+
     function getNationalStatusLabel(row) {
+      const precomputed = String(row.dataset.statusDisplay || '').trim();
+      if (precomputed) return precomputed.toUpperCase();
+
       const status = normalizeStatus(row.dataset.status);
       const nationalStatus = normalizeStatus(row.dataset.nationalStatus);
+      const approvedByLevel = String(row.dataset.approvedByLevel || '').trim().toUpperCase();
+      const rejectedByLevel = String(row.dataset.rejectedByLevel || '').trim().toUpperCase();
+      const forwardedToLevel = String(row.dataset.forwardedToLevel || '').trim().toUpperCase();
+
       if (nationalStatus === 'approved') return 'APPROVED BY NATIONAL';
       if (nationalStatus === 'rejected') return 'REJECTED BY NATIONAL';
+      if (approvedByLevel) return `APPROVED BY ${approvedByLevel}`;
+      if (rejectedByLevel) return `REJECTED BY ${rejectedByLevel}`;
+      if (forwardedToLevel) return `FORWARDED TO ${forwardedToLevel}`;
       if (status === 'forwarded-to-national' || status === 'forwarded-national') return 'FORWARDED TO NATIONAL';
       return 'PENDING NATIONAL REVIEW';
+    }
+
+    function hasLowerDivisionAction(row) {
+      const approvedBy = String(row.dataset.approvedByLevel || '').trim().toLowerCase();
+      const rejectedBy = String(row.dataset.rejectedByLevel || '').trim().toLowerCase();
+      const status = normalizeStatus(row.dataset.status);
+      const forwardedTo = String(row.dataset.forwardedToLevel || '').trim().toLowerCase();
+
+      if (approvedBy && approvedBy !== 'national') return true;
+      if (rejectedBy && rejectedBy !== 'national') return true;
+      if (status === 'to-review' || status === 'to_review' || status === 'forwarded-to-national' || status === 'forwarded-national') return true;
+      if (forwardedTo && forwardedTo !== 'national') return true;
+      return false;
     }
 
     function updateNationalButtonsState(isFinal) {
@@ -428,8 +465,9 @@
       document.getElementById('reviewMunicipality').textContent = row.dataset.municipality || 'N/A';
       document.getElementById('reviewStatus').textContent = getNationalStatusLabel(row);
 
-      const isFinal = ['approved', 'rejected'].includes(normalizeStatus(row.dataset.nationalStatus));
-      updateNationalButtonsState(isFinal);
+      const isNationalFinal = ['approved', 'rejected'].includes(normalizeStatus(row.dataset.nationalStatus));
+      const disabledByLowerAction = hasLowerDivisionAction(row);
+      updateNationalButtonsState(isNationalFinal || disabledByLowerAction);
 
       const modal = document.getElementById('inventoryReviewModal');
       modal.classList.remove('hidden');
@@ -464,11 +502,10 @@
         activeReviewRow.dataset.nationalStatus = newStatus;
         activeReviewRow.dataset.approvedByLevel = newStatus === 'approved' ? 'National' : '';
         activeReviewRow.dataset.rejectedByLevel = newStatus === 'rejected' ? 'National' : '';
+        activeReviewRow.dataset.statusDisplay = newStatus === 'approved' ? 'APPROVED BY NATIONAL' : 'REJECTED BY NATIONAL';
 
         const statusCell = activeReviewRow.cells[5];
-        statusCell.innerHTML = newStatus === 'approved'
-          ? '<span class="inline-flex items-center px-2 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200 text-[8px] font-black uppercase">Approved</span>'
-          : '<span class="inline-flex items-center px-2 py-0.5 rounded border bg-rose-50 text-rose-700 border-rose-200 text-[8px] font-black uppercase">Rejected</span>';
+        statusCell.innerHTML = getStatusBadgeHTML(activeReviewRow.dataset.statusDisplay);
 
         document.getElementById('reviewStatus').textContent = getNationalStatusLabel(activeReviewRow);
         updateNationalButtonsState(true);
