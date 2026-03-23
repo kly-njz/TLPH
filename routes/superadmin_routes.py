@@ -47,15 +47,15 @@ def inventory_view():
 
         def normalize_category(raw):
             text = str(raw or '').strip().lower()
-            if any(k in text for k in ['chemical', 'fertilizer', 'pesticide']):
+            if any(k in text for k in ['chemical', 'fertilizer', 'pesticide', 'ammonium', 'nitrogen']):
                 return 'CHEMICAL RESOURCES'
-            if any(k in text for k in ['protected', 'sanctuary', 'park', 'conservation']):
+            if any(k in text for k in ['protected', 'sanctuary', 'park', 'conservation', 'eco-zone', 'ecozone']):
                 return 'PROTECTED AREAS'
-            if any(k in text for k in ['natural', 'forest', 'mangrove', 'biodiversity', 'wildlife']):
+            if any(k in text for k in ['natural', 'forest', 'mangrove', 'biodiversity', 'wildlife', 'resource']):
                 return 'NATURAL ASSETS'
-            if any(k in text for k in ['equipment', 'tool', 'device', 'machinery']):
+            if any(k in text for k in ['equipment', 'tool', 'device', 'machinery', 'kit', 'gps']):
                 return 'EQUIPMENT'
-            return 'UNCATEGORIZED'
+            return ''
 
         def category_from_sector(raw_sector):
             sector = str(raw_sector or '').strip().lower()
@@ -67,7 +67,19 @@ def inventory_view():
                 return 'PROTECTED AREAS'
             if sector in {'livestock'}:
                 return 'NATURAL ASSETS'
-            return 'UNCATEGORIZED'
+            return ''
+
+        def category_from_app_type(raw_app_type):
+            app_type = str(raw_app_type or '').strip().lower()
+            if any(k in app_type for k in ['farm', 'crop', 'soil', 'pest', 'fertilizer', 'chemical']):
+                return 'CHEMICAL RESOURCES'
+            if any(k in app_type for k in ['forest', 'fish', 'fisher', 'marine', 'environment']):
+                return 'NATURAL ASSETS'
+            if any(k in app_type for k in ['wildlife', 'protected', 'sanctuary']):
+                return 'PROTECTED AREAS'
+            if any(k in app_type for k in ['equipment', 'device', 'tool']):
+                return 'EQUIPMENT'
+            return ''
 
         def region_from_province(province_name):
             p = str(province_name or '').strip().lower()
@@ -113,14 +125,12 @@ def inventory_view():
                 or 0
             )
 
-            normalized_category = normalize_category(
+            raw_category = (
                 data.get('category')
                 or data.get('classification')
                 or data.get('itemType')
                 or data.get('inventoryType')
             )
-            if normalized_category == 'UNCATEGORIZED':
-                normalized_category = category_from_sector(data.get('sector'))
 
             created_at_raw = data.get('createdAt') or data.get('submittedAt')
             created_at = parse_dt(created_at_raw)
@@ -159,6 +169,14 @@ def inventory_view():
                 or form_data.get('resourceName')
                 or form_data.get('description')
                 or 'N/A'
+            )
+
+            normalized_category = (
+                normalize_category(raw_category)
+                or category_from_sector(data.get('sector'))
+                or category_from_app_type(data.get('applicationType'))
+                or normalize_category(description)
+                or 'NATURAL ASSETS'
             )
 
             # Skip placeholder/empty records to avoid all-N/A rows.
