@@ -1988,6 +1988,7 @@ def api_get_admins_permissions():
     db = get_firestore_db()
     users_ref = db.collection('users')
     users = []
+    count = 0
     for user_doc in users_ref.stream():
         user = user_doc.to_dict() or {}
         role = user.get('role', '').lower()
@@ -2001,4 +2002,6 @@ def api_get_admins_permissions():
                 'municipality': user.get('municipality', ''),
                 'permissions': user.get('permissions', {})
             })
+            count += 1
+    print(f"[DEBUG] /api/admins-permissions: Found {count} admin users: {[u['role'] for u in users]}")
     return jsonify({'admins': users})
