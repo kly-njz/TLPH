@@ -9,7 +9,31 @@ bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
 @bp.route('/inventory')
 @role_required('super-admin','superadmin')
 def inventory_view():
-    return render_template('super-admin/inventory-superadmin/inventory-superadmin.html')
+    inventory_records = []
+    try:
+        db = get_firestore_db()
+        docs = db.collection('inventory_registrations').stream()
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+            inventory_records.append({
+                'id': doc.id,
+                'category': (data.get('category') or '').strip(),
+                'description': (data.get('description') or data.get('itemName') or data.get('itemDescription') or 'N/A').strip(),
+                'quantity': data.get('quantity') or data.get('volume') or data.get('availableStock') or 0,
+                'region': (data.get('region') or 'N/A').strip(),
+                'municipality': (data.get('municipality') or 'N/A').strip(),
+                'created_at': data.get('createdAt') or data.get('submittedAt')
+            })
+
+        inventory_records.sort(key=lambda x: str(x.get('created_at') or ''), reverse=True)
+    except Exception as e:
+        print(f'[ERROR] superadmin inventory_view: {e}')
+
+    return render_template(
+        'super-admin/inventory-superadmin/inventory-superadmin.html',
+        inventory_records=inventory_records
+    )
 
 @bp.route('/user-application')
 @role_required('super-admin','superadmin')
