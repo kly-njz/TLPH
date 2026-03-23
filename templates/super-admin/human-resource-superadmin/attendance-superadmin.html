@@ -15,6 +15,7 @@
                 extend: {
                     colors: {
                         'gov-blue': '#1e3a8a',
+                        'gov-red': '#be123c',
                     }
                 }
             }
@@ -260,7 +261,7 @@
                                 <input id="to" type="time" class="gov-input w-full h-8 font-mono" />
                             </div>
                         </div>
-                        <div class="col-span-12 sm:col-span-4">
+                        <div id="typeRow" class="col-span-12 sm:col-span-4">
                             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Type / Remarks *</label>
                             <select id="t" required class="gov-input w-full h-8 cursor-pointer">
                                 <option value="PRESENT">Present</option>
@@ -278,7 +279,7 @@
                     </div>
                     
                     <div class="pt-4 mt-2 border-t border-slate-200 flex gap-2">
-                        <button type="submit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 flex-1 py-2">Save Log</button>
+                        <button id="sb" type="submit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 flex-1 py-2">Save Log</button>
                         <button type="button" id="mc" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
                     </div>
                 </form>
@@ -292,6 +293,26 @@
             <div>
               <div id="tt" class="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">Saved</div>
               <div id="tm" class="text-[9px] text-slate-600 font-bold mt-1">Action completed successfully.</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="md" class="gov-modal no-print">
+        <div class="w-full max-w-md rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+            <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Confirm Deletion
+                </h3>
+                <button id="dx" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-4 bg-slate-50">
+                <p id="dm" class="text-[10px] font-bold text-slate-700 uppercase tracking-widest m-0"></p>
+                <div class="pt-4 mt-4 border-t border-slate-200 flex gap-2">
+                    <button type="button" id="dd" class="gov-btn bg-rose-700 text-white hover:bg-rose-800 flex-1 py-2">Delete</button>
+                    <button type="button" id="dc" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
+                </div>
             </div>
         </div>
     </div>
@@ -397,6 +418,8 @@
 
         const tb=$("tb"), cnt=$("cnt");
         const toastEl=$("toast"), tt=$("tt"), tm=$("tm");
+        const delModal=$("md"), delMsg=$("dm"), delBtn=$("dd");
+        let pendingDelete = { mode: null, ids: [] };
 
         const getF=()=>({c:$("fc").value,r:$("fr").value,m:$("fm").value,d:$("fd").value,s:$("fs").value.trim().toLowerCase(),t:$("ft").value});
         const filt=arr=>{
@@ -456,10 +479,20 @@
         };
 
         const openM= async (mode,id)=>{
-          $("mb").classList.replace("hidden", "flex");
+          $("mb").classList.add("flex");
           $("eid").value="";
           $("f").reset();
           $("mt").innerHTML=mode==="edit"?'<i class="fa-solid fa-pen-to-square text-gov-blue"></i> Edit Log':'<i class="fa-solid fa-clipboard-user text-gov-blue"></i> New Attendance Log';
+          $("sb").textContent = mode==="edit" ? "Update Log" : "Save Log";
+          
+          const typeRow = $("typeRow");
+          if (mode === "edit") {
+            typeRow.classList.remove("hidden");
+            $("t").setAttribute("required", "required");
+          } else {
+            typeRow.classList.add("hidden");
+            $("t").removeAttribute("required");
+          }
           
           $("m").innerHTML = '<option value="">Select Region First</option>';
           $("m").disabled = true;
@@ -477,7 +510,16 @@
             }
           }
         };
-        const closeM=()=>$("mb").classList.replace("flex", "hidden");
+        const closeM=()=>$("mb").classList.remove("flex");
+        const openD=(mode, ids, label)=>{
+          pendingDelete = { mode, ids };
+          delMsg.textContent = label;
+          delModal.classList.add("flex");
+        };
+        const closeD=()=>{
+          delModal.classList.remove("flex");
+          pendingDelete = { mode: null, ids: [] };
+        };
 
         const upsert=(payload,id)=>{
           if(!id) logs.unshift({id:crypto.randomUUID(),...payload});
@@ -502,6 +544,8 @@
           $("btnOpenCreate").onclick=()=>openM("create");
           $("mx").onclick=$("mc").onclick=()=>closeM();
           $("mb").addEventListener("click", (e) => { if(e.target === $("mb")) closeM(); });
+          $("dx").onclick=$("dc").onclick=()=>closeD();
+          $("md").addEventListener("click", (e) => { if(e.target === $("md")) closeD(); });
           
           ["fc","ft","fd"].forEach(id=>$(id).addEventListener("change",render));
           ["fs"].forEach(id=>$(id).addEventListener("input",render));
@@ -519,8 +563,7 @@
           $("btnBulkDelete").onclick=()=>{
             const ids=selected();
             if(!ids.length) return toast("No selection","Select at least one log.");
-            if(!confirm(`Remove ${ids.length} selected log(s)?`)) return;
-            ids.forEach(del); render(); toast("Removed","Selected logs deleted.");
+            openD("bulk", ids, `Remove ${ids.length} selected log(s)?`);
           };
 
           document.addEventListener("click",(e)=>{
@@ -528,9 +571,18 @@
             if(ed) openM("edit",ed.dataset.id);
             if(rm){
               const id=rm.dataset.id; const x=logs.find(z=>z.id===id); if(!x) return;
-              if(confirm(`Remove log for ${x.name} on ${x.date}?`)){ del(id); render(); toast("Removed","Log deleted."); }
+              openD("single", [id], `Remove log for ${x.name} on ${x.date}?`);
             }
           });
+
+          delBtn.onclick=()=>{
+            const ids = pendingDelete.ids || [];
+            if(!ids.length) return closeD();
+            ids.forEach(del);
+            closeD();
+            render();
+            toast("Removed", ids.length > 1 ? "Selected logs deleted." : "Log deleted.");
+          };
 
           $("f").onsubmit=(e)=>{
             e.preventDefault();

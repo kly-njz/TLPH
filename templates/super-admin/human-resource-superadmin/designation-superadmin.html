@@ -229,12 +229,12 @@
         </div>
     </main>
 
-    <div id="modalBackdrop" class="gov-modal no-print">
+    <div id="modalBackdrop" class="gov-modal no-print hidden">
         <div class="w-full max-w-lg rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
             
             <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
                 <h3 id="modalTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
-                    <i class="fa-solid fa-badge text-gov-blue"></i> Add Designation
+                    <i class="fa-solid fa-id-badge text-gov-blue"></i> Add Designation
                 </h3>
                 <button id="btnCloseModal" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
                     <span class="material-icons-round text-sm">close</span>
@@ -284,7 +284,7 @@
                                 <option value="SG-21">SG-21</option><option value="SG-22">SG-22</option><option value="SG-23">SG-23</option><option value="SG-24">SG-24</option>
                             </select>
                         </div>
-                        <div>
+                        <div id="formStatusWrap">
                             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
                             <select id="formStatus" required class="gov-input w-full h-8 cursor-pointer">
                                 <option value="active">Active</option>
@@ -299,7 +299,7 @@
                     </div>
 
                     <div class="pt-3 border-t border-slate-200 mt-2 flex gap-2">
-                        <button type="submit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 flex-1 py-2">Save Record</button>
+                        <button type="submit" id="btnSubmit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 flex-1 py-2">Save Record</button>
                         <button type="button" id="btnCancel" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
                     </div>
                 </form>
@@ -320,6 +320,27 @@
             </div>
             <div class="p-6 bg-slate-50 flex-1 h-[50vh] min-h-[350px] relative">
                 <canvas id="modalCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmModalBackdrop" class="gov-modal no-print hidden">
+        <div class="absolute inset-0 cursor-pointer" id="confirmModalOverlay"></div>
+        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-md overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 id="confirmModalTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Confirmation
+                </h3>
+                <button id="btnCloseConfirm" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-4 bg-slate-50 flex-1">
+                <p id="confirmModalText" class="text-[10px] font-bold text-slate-700 m-0"></p>
+            </div>
+            <div class="bg-white border-t border-slate-200 p-3 flex justify-end gap-2">
+                <button id="btnConfirmCancel" type="button" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm">Cancel</button>
+                <button id="btnConfirmProceed" type="button" class="gov-btn bg-gov-red text-white hover:bg-rose-800 shadow-sm">Confirm</button>
             </div>
         </div>
     </div>
@@ -507,6 +528,45 @@
             }, 300);
         }
 
+        // --- CONFIRM MODAL (TOGGLE/DELETE) ---
+        let pendingAction = null;
+        let pendingId = null;
+
+        function openConfirmModal(type, item) {
+            pendingAction = type;
+            pendingId = item.id;
+
+            const titleEl = $("confirmModalTitle");
+            const textEl = $("confirmModalText");
+            const btn = $("btnConfirmProceed");
+
+            if (type === "toggle") {
+                const nextStatus = item.status === "active" ? "inactive" : "active";
+                const label = nextStatus === "active" ? "Activate" : "Deactivate";
+                titleEl.innerHTML = '<i class="fa-solid fa-sync text-amber-400"></i> Toggle Status';
+                textEl.textContent = `Set "${item.title}" to ${nextStatus.toUpperCase()}?`;
+                btn.textContent = label;
+                btn.classList.remove("bg-gov-red", "hover:bg-rose-800");
+                btn.classList.add("bg-amber-600", "hover:bg-amber-700");
+            } else if (type === "delete") {
+                titleEl.innerHTML = '<i class="fa-solid fa-trash text-gov-red"></i> Delete Designation';
+                textEl.textContent = `Delete "${item.title}" permanently? This cannot be undone.`;
+                btn.textContent = "Delete";
+                btn.classList.remove("bg-amber-600", "hover:bg-amber-700");
+                btn.classList.add("bg-gov-red", "hover:bg-rose-800");
+            }
+
+            $("confirmModalBackdrop").classList.remove("hidden");
+            $("confirmModalBackdrop").classList.add("flex");
+        }
+
+        function closeConfirmModal() {
+            $("confirmModalBackdrop").classList.remove("flex");
+            $("confirmModalBackdrop").classList.add("hidden");
+            pendingAction = null;
+            pendingId = null;
+        }
+
         function badge(status) {
             if (status === "active") return `<span class="status-badge bg-emerald-50 text-emerald-800 border-emerald-200">Active</span>`;
             return `<span class="status-badge bg-rose-50 text-rose-800 border-rose-200">Inactive</span>`;
@@ -549,11 +609,25 @@
         }
 
         function openModal(mode, item) {
-            $("modalBackdrop").classList.replace("hidden", "flex");
-            $("modalTitle").innerHTML = mode === "edit" ? '<i class="fa-solid fa-pen-to-square text-gov-blue"></i> Edit Designation' : '<i class="fa-solid fa-badge text-gov-blue"></i> Add Designation';
+            $("modalBackdrop").classList.remove("hidden");
+            $("modalBackdrop").classList.add("flex");
+            $("modalTitle").innerHTML = mode === "edit" ? '<i class="fa-solid fa-pen-to-square text-gov-blue"></i> Edit Designation' : '<i class="fa-solid fa-id-badge text-gov-blue"></i> Add Designation';
             
             $("formId").value = item?.id || ""; $("formTitle").value = item?.title || ""; $("formCode").value = item?.code || "";
             $("formGrade").value = item?.grade || "SG-11"; $("formStatus").value = item?.status || "active"; $("formNotes").value = item?.notes || "";
+
+            if (mode === "add") {
+                $("btnSubmit").textContent = "Save Record";
+                $("formStatus").value = "active";
+                $("formStatus").required = false;
+                $("formStatus").disabled = true;
+                $("formStatusWrap").classList.add("hidden");
+            } else {
+                $("btnSubmit").textContent = "Update Record";
+                $("formStatus").required = true;
+                $("formStatus").disabled = false;
+                $("formStatusWrap").classList.remove("hidden");
+            }
             
             setOptions($("formCompany"), companiesMaster.filter(x => x !== "All Companies"), item?.company || companiesMaster[1]);
             setOptions($("formDepartment"), departmentsMaster.filter(x => x !== "All Departments"), item?.department || departmentsMaster[1]);
@@ -563,7 +637,10 @@
             setOptions($("formMunicipality"), muniList.length ? muniList : ["—"], item?.municipality || muniList[0]);
         }
 
-        function closeModal() { $("modalBackdrop").classList.replace("flex", "hidden"); }
+        function closeModal() {
+            $("modalBackdrop").classList.remove("flex");
+            $("modalBackdrop").classList.add("hidden");
+        }
 
         function initModalRegionLink() {
             $("formRegion").addEventListener("change", () => {
@@ -617,6 +694,23 @@
             $("btnExport").addEventListener("click", () => exportCSV(applyFilters(designations)));
             $("btnCloseModal").addEventListener("click", closeModal); $("btnCancel").addEventListener("click", closeModal);
             $("modalBackdrop").addEventListener("click", (e) => { if(e.target === $("modalBackdrop")) closeModal(); });
+            $("btnCloseConfirm").addEventListener("click", closeConfirmModal);
+            $("btnConfirmCancel").addEventListener("click", closeConfirmModal);
+            $("confirmModalOverlay").addEventListener("click", closeConfirmModal);
+            $("btnConfirmProceed").addEventListener("click", () => {
+                if (!pendingAction || !pendingId) return closeConfirmModal();
+                const item = designations.find(x => x.id === pendingId);
+                if (!item) return closeConfirmModal();
+
+                if (pendingAction === "toggle") {
+                    designations = designations.map(x => x.id === pendingId ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) } : x);
+                    renderAll();
+                } else if (pendingAction === "delete") {
+                    designations = designations.filter(x => x.id !== pendingId);
+                    page = 1; renderAll();
+                }
+                closeConfirmModal();
+            });
 
             $("desForm").addEventListener("submit", (e) => {
                 e.preventDefault();
@@ -642,10 +736,9 @@
                     $("formRegion").value = item.region; $("formRegion").dispatchEvent(new Event("change"));
                     $("formMunicipality").value = item.municipality;
                 } else if (action === "toggle") {
-                    designations = designations.map(x => x.id === id ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) } : x);
-                    renderAll();
-                } else if (action === "delete" && confirm(`Delete "${item.title}"?`)) {
-                    designations = designations.filter(x => x.id !== id); page = 1; renderAll();
+                    openConfirmModal("toggle", item);
+                } else if (action === "delete") {
+                    openConfirmModal("delete", item);
                 }
             });
 

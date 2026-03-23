@@ -252,7 +252,7 @@
                     <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Office / Unit <span class="text-slate-400 lowercase normal-case tracking-normal">(Optional)</span></label>
                     <input id="fOffice" type="text" class="gov-input w-full h-8" placeholder="e.g., PENRO / CENRO" />
                 </div>
-                <div class="col-span-12 sm:col-span-6">
+                <div id="statusField" class="col-span-12 sm:col-span-6">
                     <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
                     <select id="fStatus" required class="gov-input w-full h-8 cursor-pointer">
                         <option value="ACTIVE">Active</option>
@@ -323,10 +323,38 @@
     </div>
   </div>
 
+  <div id="deleteModalBackdrop" class="gov-modal no-print">
+    <div class="w-full max-w-md rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+      <div class="bg-rose-700 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-rose-800">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation"></i> Delete Shift
+        </h3>
+        <button id="btnCloseDeleteModal" class="text-rose-100 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+          <span class="material-icons-round text-sm">close</span>
+        </button>
+      </div>
+      <div class="p-4 bg-slate-50">
+        <p class="text-[10px] font-bold text-slate-700 leading-relaxed m-0">
+          Are you sure you want to delete this shift?
+        </p>
+        <div class="mt-3 p-2 bg-white border border-slate-200 rounded-[2px]">
+          <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Shift</div>
+          <div id="deleteShiftName" class="text-[11px] font-black text-slate-900 mt-1">—</div>
+        </div>
+        <p class="text-[9px] text-rose-700 font-bold mt-3 m-0">This action cannot be undone.</p>
+      </div>
+      <div class="px-4 py-3 border-t border-slate-200 bg-white flex gap-2">
+        <button id="btnConfirmDelete" class="gov-btn bg-rose-700 text-white hover:bg-rose-800 flex-1 py-2">Delete</button>
+        <button id="btnCancelDelete" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const el = (id) => document.getElementById(id);
     const tbody = el("shiftTbody");
     let apiMuniCache = {};
+    let pendingDeleteId = null;
 
     async function initLocationAPI() {
         try {
@@ -495,6 +523,8 @@
       if(mode === "create"){
         el("modalTitle").innerHTML = '<i class="fa-solid fa-clock text-gov-blue"></i> New Shift';
         el("editId").value = ""; el("shiftForm").reset();
+        el("statusField").classList.add("hidden");
+        el("fStatus").value = "ACTIVE";
         document.querySelectorAll(".dayChk").forEach(c => c.checked = ["Mon","Tue","Wed","Thu","Fri"].includes(c.value));
         
         el("fMunicipality").innerHTML = '<option value="">Select Region First</option>';
@@ -502,6 +532,7 @@
 
       } else {
         el("modalTitle").innerHTML = '<i class="fa-solid fa-clock-rotate-left text-gov-blue"></i> Edit Shift';
+        el("statusField").classList.remove("hidden");
         const s = shifts.find(x => x.id === id); if(!s) return;
         
         el("editId").value = s.id; el("fName").value = s.name; el("fCategory").value = s.category; el("fStatus").value = s.status;
@@ -521,6 +552,18 @@
     }
 
     function closeModal(){ el("modalBackdrop").classList.add("hidden"); el("modalBackdrop").classList.remove("flex"); }
+    function openDeleteModal(id){
+      const s = shifts.find(x => x.id === id); if(!s) return;
+      pendingDeleteId = id;
+      el("deleteShiftName").textContent = s.name || "—";
+      el("deleteModalBackdrop").classList.add("flex");
+      el("deleteModalBackdrop").classList.remove("hidden");
+    }
+    function closeDeleteModal(){
+      pendingDeleteId = null;
+      el("deleteModalBackdrop").classList.add("hidden");
+      el("deleteModalBackdrop").classList.remove("flex");
+    }
 
     function getSelectedIds(){ return Array.from(document.querySelectorAll(".rowChk:checked")).map(x => x.getAttribute("data-id")); }
 
@@ -581,10 +624,7 @@
         document.addEventListener("click", (e) => {
         const editBtn = e.target.closest(".btnEdit"); const delBtn = e.target.closest(".btnDelete");
         if(editBtn) openModal("edit", editBtn.getAttribute("data-id"));
-        if(delBtn){
-            const id = delBtn.getAttribute("data-id"); const s = shifts.find(x => x.id === id); if(!s) return;
-            if(confirm(`Remove shift "${s.name}"?`)){ shifts = shifts.filter(x => x.id !== id); render(); showToast("Removed", "Shift deleted."); }
-        }
+        if(delBtn) openDeleteModal(delBtn.getAttribute("data-id"));
         });
 
         el("selectAll").addEventListener("change", (e) => {
@@ -604,6 +644,18 @@
         });
 
         el("btnExport").addEventListener("click", exportCSV);
+
+        el("btnCloseDeleteModal").addEventListener("click", closeDeleteModal);
+        el("btnCancelDelete").addEventListener("click", closeDeleteModal);
+        el("deleteModalBackdrop").addEventListener("click", closeDeleteModal);
+        el("btnConfirmDelete").addEventListener("click", () => {
+          if(!pendingDeleteId) return;
+          const s = shifts.find(x => x.id === pendingDeleteId);
+          shifts = shifts.filter(x => x.id !== pendingDeleteId);
+          closeDeleteModal();
+          render();
+          showToast("Removed", s ? `Shift "${s.name}" deleted.` : "Shift deleted.");
+        });
 
         render();
     });

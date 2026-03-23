@@ -363,7 +363,7 @@
             </div>
 
             <div class="pt-4 mt-2 border-t border-slate-200 flex gap-2">
-                <button type="submit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 flex-1 py-2">Save Record</button>
+                <button id="ms" type="submit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 flex-1 py-2">Save Record</button>
                 <button type="button" id="mc" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
             </div>
         </form>
@@ -417,6 +417,27 @@
             <button id="btnImportApply" class="gov-btn bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Apply Import</button>
             <button id="btnImportCancel" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100">Cancel</button>
           </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dmb" class="gov-modal no-print">
+    <div class="w-full max-w-md rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+      <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation text-gov-red"></i> Confirm Delete
+        </h3>
+        <button id="dmx" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+          <span class="material-icons-round text-sm">close</span>
+        </button>
+      </div>
+      <div class="p-4 bg-slate-50">
+        <p class="text-[10px] font-bold text-slate-700 m-0">Are you sure you want to delete this holiday?</p>
+        <p id="dmDesc" class="text-[10px] font-black text-slate-900 mt-2 mb-0"></p>
+      </div>
+      <div class="px-4 py-3 border-t border-slate-200 bg-white flex gap-2">
+        <button id="dmConfirm" type="button" class="gov-btn bg-gov-red text-white hover:bg-rose-800 flex-1 py-2">Delete</button>
+        <button id="dmCancel" type="button" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
       </div>
     </div>
   </div>
@@ -775,9 +796,11 @@
     const del = (id) => holidays = holidays.filter(x => x.id !== id);
 
     async function openM(mode, id) {
-      $("mb").classList.replace("hidden", "flex");
+      $("mb").classList.remove("hidden");
+      $("mb").classList.add("flex");
       $("eid").value = ""; $("f").reset();
       $("mt").innerHTML = mode === "edit" ? '<i class="fa-solid fa-pen-to-square text-gov-blue"></i> Edit Holiday' : '<i class="fa-solid fa-calendar-plus text-gov-blue"></i> New Holiday';
+      $("ms").textContent = mode === "edit" ? "Update Record" : "Save Record";
       $("m").innerHTML = '<option value="">Select Region First</option>'; $("m").disabled = true;
 
       if(mode === "edit"){
@@ -793,9 +816,26 @@
         }
       }
     };
-    const closeM = () => $("mb").classList.replace("flex", "hidden");
+    const closeM = () => {
+      $("mb").classList.remove("flex");
+      $("mb").classList.add("hidden");
+    };
 
     const rerenderAll = () => { renderTable(); renderCalendar(); renderCharts(); };
+
+    let pendingDeleteId = null;
+    const openDeleteModal = (id) => {
+      const x = holidays.find(z=>z.id===id); if(!x) return;
+      pendingDeleteId = id;
+      $("dmDesc").textContent = `${x.name} • ${x.date}`;
+      $("dmb").classList.remove("hidden");
+      $("dmb").classList.add("flex");
+    };
+    const closeDeleteModal = () => {
+      $("dmb").classList.remove("flex");
+      $("dmb").classList.add("hidden");
+      pendingDeleteId = null;
+    };
 
     document.addEventListener("DOMContentLoaded", async () => {
       await initLocationAPI();
@@ -811,6 +851,12 @@
       $("btnOpenCreate").onclick = ()=> openM("create");
       $("mx").onclick = $("mc").onclick = closeM;
       $("mb").onclick = (e)=>{ if(e.target === $("mb")) closeM(); };
+      $("dmx").onclick = $("dmCancel").onclick = closeDeleteModal;
+      $("dmb").onclick = (e)=>{ if(e.target === $("dmb")) closeDeleteModal(); };
+      $("dmConfirm").onclick = () => {
+        if(!pendingDeleteId) return closeDeleteModal();
+        del(pendingDeleteId); rerenderAll(); closeDeleteModal(); toast("Removed", "Holiday deleted.");
+      };
 
       $("f").onsubmit = (e) => {
         e.preventDefault();
@@ -827,8 +873,7 @@
         const ed = e.target.closest(".ed"), rm = e.target.closest(".rm");
         if(ed) openM("edit", ed.dataset.id);
         if(rm){
-          const id = rm.dataset.id; const x = holidays.find(z=>z.id===id); if(!x) return;
-          if(confirm(`Remove "${x.name}" on ${x.date}?`)){ del(id); rerenderAll(); toast("Removed", "Holiday deleted."); }
+          openDeleteModal(rm.dataset.id);
         }
       });
 
@@ -879,9 +924,21 @@
       };
 
       let importRows = [];
-      $("btnImport").onclick = () => { $("imb").classList.replace("hidden", "flex"); $("importFile").value=""; $("impTb").innerHTML=""; $("impCount").textContent="(0 rows)"; importRows=[]; };
-      $("imx").onclick = $("btnImportCancel").onclick = () => $("imb").classList.replace("flex", "hidden");
-      $("imb").onclick = (e)=>{ if(e.target === $("imb")) $("imb").classList.replace("flex", "hidden"); };
+      $("btnImport").onclick = () => {
+        $("imb").classList.remove("hidden");
+        $("imb").classList.add("flex");
+        $("importFile").value=""; $("impTb").innerHTML=""; $("impCount").textContent="(0 rows)"; importRows=[];
+      };
+      $("imx").onclick = $("btnImportCancel").onclick = () => {
+        $("imb").classList.remove("flex");
+        $("imb").classList.add("hidden");
+      };
+      $("imb").onclick = (e)=>{
+        if(e.target === $("imb")){
+          $("imb").classList.remove("flex");
+          $("imb").classList.add("hidden");
+        }
+      };
       $("btnParse").onclick = async () => {
         const file = $("importFile").files?.[0]; if(!file) return toast("Error", "Choose file.");
         const json = XLSX.utils.sheet_to_json(XLSX.read(await file.arrayBuffer(), {type:"array"}).Sheets[XLSX.read(await file.arrayBuffer(), {type:"array"}).SheetNames[0]], {defval:""});

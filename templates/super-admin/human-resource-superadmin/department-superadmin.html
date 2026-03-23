@@ -16,6 +16,7 @@
                 extend: {
                     colors: {
                         'gov-navy': '#1e3a8a',
+                        'gov-blue': '#1d4ed8',
                         'gov-red': '#be123c',
                         'denr-green': '#15803d'
                     }
@@ -190,8 +191,8 @@
                             </select>
                         </div>
                         <div class="flex gap-1.5 h-7">
-                            <button id="btnReset" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm"><i class="fa-solid fa-eraser"></i> Clear</button>
-                            <button id="btnApply" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 shadow-sm"><i class="fa-solid fa-filter"></i> Apply</button>
+                            <button id="btnReset" type="button" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm"><i class="fa-solid fa-eraser"></i> Clear</button>
+                            <button id="btnApply" type="button" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 shadow-sm"><i class="fa-solid fa-filter"></i> Apply</button>
                         </div>
                     </div>
 
@@ -227,17 +228,17 @@
     </main>
 
     <div id="modalBackdrop" class="gov-modal no-print">
-        <div class="w-full max-w-lg rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+        <div class="w-full max-w-lg max-h-[90vh] min-h-0 rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
             <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
                 <h3 id="modalTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
-                    <i class="fa-solid fa-account-tree text-gov-blue"></i> Add Department
+                    <i class="fa-solid fa-circle-plus text-white"></i> Add Department
                 </h3>
                 <button id="btnCloseModal" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
                     <span class="material-icons-round text-sm">close</span>
                 </button>
             </div>
 
-            <div class="p-4 bg-slate-50 flex-1">
+            <div class="p-4 bg-slate-50 flex-1 min-h-0 overflow-auto custom-scrollbar">
                 <form id="deptForm" class="space-y-3">
                     <input type="hidden" id="formId" />
                     <div class="grid grid-cols-2 gap-3">
@@ -268,7 +269,7 @@
                             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Head of Department</label>
                             <input id="formHead" class="gov-input w-full h-8" placeholder="e.g., Juan Dela Cruz" />
                         </div>
-                        <div>
+                        <div id="formStatusRow">
                             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
                             <select id="formStatus" required class="gov-input w-full h-8 cursor-pointer">
                                 <option value="active">Active</option>
@@ -282,9 +283,9 @@
                         </div>
                     </div>
 
-                    <div class="pt-3 border-t border-slate-200 mt-2 flex gap-2">
-                        <button type="submit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 flex-1 py-2">Save Record</button>
-                        <button type="button" id="btnCancel" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
+                    <div class="pt-3 border-t border-slate-200 mt-2 flex gap-2 sticky bottom-0 bg-slate-50/95 backdrop-blur-sm">
+                        <button type="submit" id="btnSaveRecord" class="gov-btn bg-gov-navy text-white hover:bg-blue-900 flex-1 py-2 text-[10px]">Save Record</button>
+                        <button type="button" id="btnCancel" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2 text-[10px]">Cancel</button>
                     </div>
                 </form>
             </div>
@@ -304,6 +305,26 @@
             </div>
             <div class="p-6 bg-slate-50 flex-1 h-[50vh] min-h-[350px] relative">
                 <canvas id="modalCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="gov-modal no-print">
+        <div class="w-full max-w-md rounded-[2px] border border-slate-400 bg-white shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+            <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
+                <h3 id="confirmTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-question text-white"></i> Confirm Action
+                </h3>
+                <button id="btnCloseConfirm" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-4 bg-slate-50">
+                <p id="confirmMessage" class="text-[10px] font-bold text-slate-700 m-0"></p>
+                <div class="pt-3 border-t border-slate-200 mt-3 flex gap-2">
+                    <button type="button" id="btnConfirmAction" class="gov-btn bg-gov-navy text-white hover:bg-blue-900 flex-1 py-2 text-[10px]">Confirm</button>
+                    <button type="button" id="btnCancelConfirm" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2 text-[10px]">Cancel</button>
+                </div>
             </div>
         </div>
     </div>
@@ -348,6 +369,8 @@
         ];
 
         const $ = (id) => document.getElementById(id);
+        let pendingAction = null;
+        let pendingId = null;
 
         function setOptions(selectEl, options, selectedValue) {
             selectEl.innerHTML = "";
@@ -536,10 +559,17 @@
         }
 
         function openModal(mode, dept) {
-            $("modalBackdrop").classList.replace("hidden", "flex");
-            $("modalTitle").innerHTML = mode === "edit" ? '<i class="fa-solid fa-pen-to-square text-gov-blue"></i> Edit Department' : '<i class="fa-solid fa-account-tree text-gov-blue"></i> Add Department';
+            $("modalBackdrop").classList.add("show");
+            $("modalTitle").innerHTML = mode === "edit" ? '<i class="fa-solid fa-pen-to-square text-white"></i> Edit Department' : '<i class="fa-solid fa-circle-plus text-white"></i> Add Department';
             $("formId").value = dept?.id || ""; $("formName").value = dept?.name || ""; $("formCode").value = dept?.code || "";
             $("formHead").value = dept?.head || ""; $("formStatus").value = dept?.status || "active"; $("formDesc").value = dept?.desc || "";
+            $("btnSaveRecord").textContent = mode === "edit" ? "Update Record" : "Save Record";
+            if (mode === "add") {
+                $("formStatusRow").classList.add("hidden");
+                $("formStatus").value = "active";
+            } else {
+                $("formStatusRow").classList.remove("hidden");
+            }
             
             setOptions($("formCompany"), companiesMaster.filter(x => x !== "All Companies"), dept?.company || companiesMaster[1]);
             const regions = Object.keys(regionMap).filter(r => r !== "All Regions");
@@ -548,7 +578,30 @@
             setOptions($("formMunicipality"), muniList.length ? muniList : ["—"], dept?.municipality || muniList[0]);
         }
 
-        function closeModal() { $("modalBackdrop").classList.replace("flex", "hidden"); }
+        function closeModal() { $("modalBackdrop").classList.remove("show"); }
+
+        function openConfirmModal(action, dept) {
+            pendingAction = action;
+            pendingId = dept?.id || null;
+            const isToggle = action === "toggle";
+            const isDelete = action === "delete";
+            const nextStatus = dept?.status === "active" ? "inactive" : "active";
+
+            $("confirmTitle").innerHTML = isDelete
+                ? '<i class="fa-solid fa-trash text-white"></i> Delete Department'
+                : '<i class="fa-solid fa-arrows-rotate text-white"></i> Toggle Status';
+            $("confirmMessage").textContent = isDelete
+                ? `Delete "${dept?.name}"? This action cannot be undone.`
+                : `Change status of "${dept?.name}" to ${nextStatus.toUpperCase()}?`;
+            $("btnConfirmAction").textContent = isDelete ? "Delete" : "Update Status";
+            $("confirmModal").classList.add("show");
+        }
+
+        function closeConfirmModal() {
+            $("confirmModal").classList.remove("show");
+            pendingAction = null;
+            pendingId = null;
+        }
 
         function exportCSV(filtered) {
             const headers = ["Name","Code","Company","Region","Municipality","Head","Status","UpdatedAt","Description"];
@@ -592,7 +645,8 @@
                 page = 1; renderAll();
             });
 
-            ["qSearch", "qStatus", "qCompany", "qMunicipality", "qRegion"].forEach(id => $(id).addEventListener("input", () => { page = 1; renderAll(); }));
+            $("qSearch").addEventListener("input", () => { page = 1; renderAll(); });
+            ["qStatus", "qCompany", "qMunicipality", "qRegion"].forEach(id => $(id).addEventListener("change", () => { page = 1; renderAll(); }));
             $("prevPage").addEventListener("click", () => { page = Math.max(1, page - 1); renderAll(); });
             $("nextPage").addEventListener("click", () => { page++; renderAll(); });
             
@@ -600,6 +654,25 @@
             $("btnExport").addEventListener("click", () => exportCSV(applyFilters(departments)));
             $("btnCloseModal").addEventListener("click", closeModal); $("btnCancel").addEventListener("click", closeModal);
             $("modalBackdrop").addEventListener("click", (e) => { if(e.target === $("modalBackdrop")) closeModal(); });
+            $("btnCloseConfirm").addEventListener("click", closeConfirmModal);
+            $("btnCancelConfirm").addEventListener("click", closeConfirmModal);
+            $("confirmModal").addEventListener("click", (e) => { if (e.target === $("confirmModal")) closeConfirmModal(); });
+            $("btnConfirmAction").addEventListener("click", () => {
+                if (!pendingAction || !pendingId) return closeConfirmModal();
+                const dept = departments.find(x => x.id === pendingId);
+                if (!dept) return closeConfirmModal();
+                if (pendingAction === "toggle") {
+                    departments = departments.map(x => x.id === pendingId
+                        ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) }
+                        : x
+                    );
+                    renderAll();
+                } else if (pendingAction === "delete") {
+                    departments = departments.filter(x => x.id !== pendingId);
+                    page = 1; renderAll();
+                }
+                closeConfirmModal();
+            });
 
             $("deptForm").addEventListener("submit", (e) => {
                 e.preventDefault();
@@ -626,10 +699,9 @@
                     $("formRegion").value = dept.region; $("formRegion").dispatchEvent(new Event("change"));
                     $("formMunicipality").value = dept.municipality;
                 } else if (action === "toggle") {
-                    departments = departments.map(x => x.id === id ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString().slice(0,10) } : x);
-                    renderAll();
-                } else if (action === "delete" && confirm(`Delete "${dept.name}"?`)) {
-                    departments = departments.filter(x => x.id !== id); page = 1; renderAll();
+                    openConfirmModal("toggle", dept);
+                } else if (action === "delete") {
+                    openConfirmModal("delete", dept);
                 }
             });
             renderAll();
