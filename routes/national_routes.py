@@ -586,15 +586,20 @@ def inventory_national_view():
                 'environment': 'Natural Resources'
             }
             category = category_map.get(sector, 'Chemical Inventory')
+            quantity = data.get('stockAvailable', data.get('quantity', 0))
+            try:
+                quantity = float(quantity or 0)
+            except Exception:
+                quantity = 0
 
-            category_count[category] += 1
+            # Use real fetched volume totals for dashboard charts
+            category_count[category] += quantity
 
             if region and region != 'N/A':
-                region_count[region] += 1
+                region_count[region] += quantity
 
             total_count += 1
 
-            quantity = data.get('stockAvailable', data.get('quantity', 0))
             description = data.get('resourceName') or data.get('notes') or 'General Inventory'
 
             main_status = str(data.get('status', 'pending') or 'pending').strip().lower()
