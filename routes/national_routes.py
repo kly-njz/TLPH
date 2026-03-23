@@ -2021,17 +2021,16 @@ def api_get_all_admin_accounts():
     try:
         db = get_firestore_db()
         users_ref = db.collection('users')
-        # Only fetch regional and municipal accounts
-        q = users_ref.where('role', 'in', ['regional_admin', 'municipal_admin'])
-        docs = q.stream()
         users = []
-        for doc in docs:
-            data = doc.to_dict()
-            data['id'] = doc.id
-            # Compose display name for UI
-            data['name'] = f"{data.get('firstName', '')} {data.get('lastName', '')}".strip()
-            data['status'] = data.get('status', 'Active')
-            users.append(data)
+        for doc in users_ref.stream():
+            data = doc.to_dict() or {}
+            role = data.get('role', '').lower()
+            # Match any role containing 'regional' or 'municipal'
+            if 'regional' in role or 'municipal' in role:
+                data['id'] = doc.id
+                data['name'] = f"{data.get('firstName', '')} {data.get('lastName', '')}".strip()
+                data['status'] = data.get('status', 'Active')
+                users.append(data)
         return jsonify({'success': True, 'users': users})
     except Exception as e:
         print(f"[ERROR] Failed to fetch admin accounts: {e}")
