@@ -454,6 +454,26 @@
     </div>
   </div>
 
+  <div id="dmb" class="gov-modal no-print hidden">
+    <div class="w-full max-w-md rounded-[2px] border border-slate-400 bg-white shadow-2xl overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+      <div class="bg-rose-800 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-rose-900">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation text-amber-200"></i> Confirm Delete
+        </h3>
+        <button id="dmx" class="text-rose-200 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+            <span class="material-icons-round text-sm">close</span>
+        </button>
+      </div>
+      <div class="p-4 bg-slate-50">
+        <p id="dmText" class="text-[10px] font-bold text-slate-700 m-0"></p>
+      </div>
+      <div class="px-4 py-3 bg-white border-t border-slate-200 flex gap-2">
+        <button id="dmConfirm" type="button" class="gov-btn bg-rose-700 text-white hover:bg-rose-800 flex-1 py-2">Delete</button>
+        <button id="dmCancel" type="button" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="chartModalWrapper" class="gov-modal no-print hidden">
       <div class="absolute inset-0 cursor-pointer" onclick="closeChartModal()"></div>
       <div id="chartModalBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-4xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
@@ -782,6 +802,17 @@
     };
     const closeView = () => $("vmb").classList.replace("flex", "hidden");
 
+    let pendingDeleteIds = [];
+    const openDeleteModal = (ids, message) => {
+      pendingDeleteIds = ids || [];
+      $("dmText").textContent = message || "Are you sure you want to delete the selected record(s)?";
+      $("dmb").classList.replace("hidden", "flex");
+    };
+    const closeDeleteModal = () => {
+      pendingDeleteIds = [];
+      $("dmb").classList.replace("flex", "hidden");
+    };
+
     const exportCSV = () => {
       const rows = filt(leaves);
       const csv = [["Date Filed","Reference","Employee","Employee ID","Department","Region","Leave Type","Start Date","End Date","Status","Reason","Remark"], ...rows.map(x => [x.filed,x.ref,x.employee,x.empId||"",x.dept,x.reg,x.type,x.start,x.end,x.status,x.reason||"",x.remark||""])].map(r => r.map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
@@ -850,6 +881,14 @@
       $("btnOpenCreate").onclick = ()=> openM("create");
       $("mx").onclick = $("mc").onclick = closeM; $("mb").onclick = (e)=>{ if(e.target === $("mb")) closeM(); };
       $("vx").onclick = closeView; $("vmb").onclick = (e)=>{ if(e.target === $("vmb")) closeView(); };
+      $("dmx").onclick = $("dmCancel").onclick = closeDeleteModal; $("dmb").onclick = (e)=>{ if(e.target === $("dmb")) closeDeleteModal(); };
+      $("dmConfirm").onclick = () => {
+        if(!pendingDeleteIds.length) return closeDeleteModal();
+        pendingDeleteIds.forEach(del);
+        closeDeleteModal();
+        rerenderAll();
+        toast("Removed", "Deleted.");
+      };
 
       $("f").onsubmit = (e) => {
         e.preventDefault();
@@ -867,11 +906,14 @@
         if(ap){ const res = setStatusForIds([ap.dataset.id], "APPROVED", norm($("bulkRemark").value) || "Approved"); rerenderAll(); if(res.blocked) toast("Blocked", "Overlap detected."); else toast("Approved", "Request approved."); }
         if(rj){ setStatusForIds([rj.dataset.id], "REJECTED", norm($("bulkRemark").value) || "Rejected"); rerenderAll(); toast("Rejected", "Request rejected."); }
         if(ed) openM("edit", ed.dataset.id);
-        if(rm){ const id = rm.dataset.id; const x = leaves.find(z=>z.id===id); if(!x) return; if(confirm(`Remove ${x.ref} (${x.employee})?`)){ del(id); rerenderAll(); toast("Removed", "Request deleted."); } }
+        if(rm){
+          const id = rm.dataset.id; const x = leaves.find(z=>z.id===id); if(!x) return;
+          openDeleteModal([id], `Remove ${x.ref} (${x.employee})?`);
+        }
       });
 
       $("sa").onchange = (e)=> q(".rc").forEach(x=>x.checked = e.target.checked);
-      $("btnBulkDelete").onclick = ()=>{ const ids = selectedIds(); if(!ids.length) return toast("No selection", "Select at least one."); if(!confirm(`Remove ${ids.length} selected?`)) return; ids.forEach(del); rerenderAll(); toast("Removed", "Deleted."); };
+      $("btnBulkDelete").onclick = ()=>{ const ids = selectedIds(); if(!ids.length) return toast("No selection", "Select at least one."); openDeleteModal(ids, `Remove ${ids.length} selected?`); };
       $("btnBulkApprove").onclick = ()=>{ const ids = selectedIds(); if(!ids.length) return toast("No selection", "Select at least one."); const res = setStatusForIds(ids, "APPROVED", norm($("bulkRemark").value) || "Approved"); rerenderAll(); if(res.blocked) toast("Warning", `Approved ${res.updated}. Blocked ${res.blocked}.`); else toast("Approved", `Approved ${res.updated}.`); };
       $("btnBulkReject").onclick = ()=>{ const ids = selectedIds(); if(!ids.length) return toast("No selection", "Select at least one."); const res = setStatusForIds(ids, "REJECTED", norm($("bulkRemark").value) || "Rejected"); rerenderAll(); toast("Rejected", `Rejected ${res.updated}.`); };
 
