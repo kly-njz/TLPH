@@ -2,6 +2,9 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+# Fix for FieldFilter NameError
+from google.cloud.firestore_v1 import FieldFilter
+
 import re
 from datetime import datetime, timedelta
 import random
