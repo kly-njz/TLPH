@@ -428,19 +428,85 @@
                     } else {
                         documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No files uploaded.</p>';
                     }
-                } else if (applicationData.documents && applicationData.documents.length > 0) {
-                    documentsContainer.innerHTML = applicationData.documents.map(doc => `
-                        <div class="doc-box">
-                            <i class="fa-solid fa-file text-blue-600 text-xl"></i>
-                            <div class="flex-grow">
-                                <p class="text-[9px] font-black uppercase m-0">${doc.name || 'Document'}</p>
-                                <p class="text-[10px] font-bold text-slate-700 m-0">${doc.fileName || 'file.pdf'}</p>
-                            </div>
-                            <button onclick="window.open('${doc.url}', '_blank')" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
-                        </div>
-                    `).join('');
                 } else {
-                    documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No documents uploaded.</p>';
+                    const appDocs = [];
+
+                    const labelMap = {
+                        brgy: 'Barangay Certificate',
+                        title: 'Title / Tax Declaration',
+                        tax: 'Tax Receipt',
+                        blueprint: 'Blueprint',
+                        land: 'Land Photo',
+                        crop: 'Crop Photo',
+                        plan: 'Business Plan',
+                        productPicture: 'Picture of Product'
+                    };
+
+                    // 1) New format: files object with direct URLs
+                    if (applicationData.files && typeof applicationData.files === 'object') {
+                        Object.entries(applicationData.files).forEach(([key, value]) => {
+                            if (typeof value === 'string' && value.trim()) {
+                                const filename = value.split('/').pop() || key;
+                                appDocs.push({
+                                    name: labelMap[key] || key,
+                                    fileName: filename,
+                                    url: value
+                                });
+                            }
+                        });
+                    }
+
+                    // 2) Legacy format: documents array
+                    if (Array.isArray(applicationData.documents)) {
+                        applicationData.documents.forEach((docItem) => {
+                            if (docItem && docItem.url) {
+                                appDocs.push({
+                                    name: docItem.name || 'Document',
+                                    fileName: docItem.fileName || (docItem.url.split('/').pop() || 'file'),
+                                    url: docItem.url
+                                });
+                            }
+                        });
+                    }
+
+                    // 3) Legacy format: uploadedFiles object with array/object values
+                    if (applicationData.uploadedFiles && typeof applicationData.uploadedFiles === 'object') {
+                        Object.entries(applicationData.uploadedFiles).forEach(([key, val]) => {
+                            const items = Array.isArray(val) ? val : [val];
+                            items.forEach((fileObj) => {
+                                if (fileObj && fileObj.downloadUrl) {
+                                    appDocs.push({
+                                        name: labelMap[key] || key,
+                                        fileName: fileObj.name || (fileObj.downloadUrl.split('/').pop() || key),
+                                        url: fileObj.downloadUrl
+                                    });
+                                }
+                            });
+                        });
+                    }
+
+                    // Remove duplicates by URL
+                    const seen = new Set();
+                    const uniqueDocs = appDocs.filter((d) => {
+                        if (!d.url || seen.has(d.url)) return false;
+                        seen.add(d.url);
+                        return true;
+                    });
+
+                    if (uniqueDocs.length > 0) {
+                        documentsContainer.innerHTML = uniqueDocs.map(doc => `
+                            <div class="doc-box">
+                                <i class="fa-solid fa-file text-blue-600 text-xl"></i>
+                                <div class="flex-grow min-w-0">
+                                    <p class="text-[9px] font-black uppercase m-0">${doc.name || 'Document'}</p>
+                                    <p class="text-[10px] font-bold text-slate-700 m-0 truncate">${doc.fileName || 'file'}</p>
+                                </div>
+                                <button onclick="window.open('${doc.url}', '_blank')" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
+                            </div>
+                        `).join('');
+                    } else {
+                        documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No documents uploaded.</p>';
+                    }
                 }
 
                 document.getElementById('loadingContainer').style.display = 'none';
