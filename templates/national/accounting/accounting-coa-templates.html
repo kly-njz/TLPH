@@ -171,7 +171,7 @@
                         </template>
                       </td>
                       <td class="text-center">
-                        <button @click="editAccount(account)" class="text-slate-400 hover:text-blue-700 transition"><span class="material-icons-round text-[16px]">edit</span></button>
+                        <button @click="openEditAccountModal(account)" class="text-slate-400 hover:text-blue-700 transition"><span class="material-icons-round text-[16px]">edit</span></button>
                       </td>
                     </tr>
                   </template>
@@ -219,11 +219,11 @@
     </div>
   </div>
 
-  <!-- Account Modal (Compact) -->
+  <!-- Add Account Modal (Compact) -->
   <div id="accountModal" class="hidden fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-[2px] shadow-xl w-full max-w-md border border-slate-300">
       <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
-        <h3 class="text-xs font-black uppercase text-slate-700" x-text="editingAccount ? 'Edit Account' : 'Add Account'">Add Account</h3>
+        <h3 class="text-xs font-black uppercase text-slate-700">Add Account</h3>
         <button @click="closeAccountModal()" class="text-slate-400 hover:text-rose-600"><span class="material-icons-round text-sm">close</span></button>
       </div>
       <div class="p-4 space-y-3">
@@ -247,7 +247,41 @@
         </div>
         <div class="flex justify-end gap-2 pt-2">
           <button @click="closeAccountModal()" class="gov-btn border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button @click="saveAccount()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900" x-text="editingAccount ? 'Update' : 'Save'">Save</button>
+          <button @click="saveAccount()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Account Modal (Compact) -->
+  <div id="editAccountModal" class="hidden fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-[2px] shadow-xl w-full max-w-md border border-slate-300">
+      <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
+        <h3 class="text-xs font-black uppercase text-slate-700">Edit Account</h3>
+        <button @click="closeEditAccountModal()" class="text-slate-400 hover:text-rose-600"><span class="material-icons-round text-sm">close</span></button>
+      </div>
+      <div class="p-4 space-y-3">
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-1">
+            <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Code</label>
+            <input type="text" x-model="editAccountData.code" class="gov-input w-full" placeholder="1001">
+          </div>
+          <div class="col-span-2">
+            <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Type</label>
+            <select x-model="editAccountData.type" title="Account type" class="gov-input w-full bg-white"><option value="Asset">Asset</option><option value="Liability">Liability</option><option value="Revenue">Revenue</option><option value="Expense">Expense</option></select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Account Name</label>
+          <input type="text" x-model="editAccountData.name" class="gov-input w-full" placeholder="Cash on Hand">
+        </div>
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="editLockCheck" x-model="editAccountData.locked" class="rounded border-slate-300">
+          <label for="editLockCheck" class="text-[10px] font-bold text-slate-600">Lock Account (Prevent Modification)</label>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button @click="closeEditAccountModal()" class="gov-btn border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button @click="updateAccount()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900">Update</button>
         </div>
       </div>
     </div>
@@ -261,7 +295,7 @@
         selectedTemplate: null,
         newTemplate: { name: '', description: '' },
         newAccount: { code: '', name: '', type: 'Asset', locked: false },
-        editingAccount: null,
+        editAccountData: { id: null, code: '', name: '', type: 'Asset', locked: false },
         searchTemplate: '',
         searchAccount: '',
         filterType: '',
@@ -406,7 +440,6 @@
 
         openAccountModal() {
           this.newAccount = { code: '', name: '', type: 'Asset', locked: false };
-          this.editingAccount = null;
           document.getElementById('accountModal').classList.remove('hidden');
         },
 
@@ -414,10 +447,13 @@
           document.getElementById('accountModal').classList.add('hidden');
         },
 
-        editAccount(account) {
-          this.editingAccount = account;
-          this.newAccount = { ...account };
-          this.openAccountModal();
+        openEditAccountModal(account) {
+          this.editAccountData = { ...account };
+          document.getElementById('editAccountModal').classList.remove('hidden');
+        },
+
+        closeEditAccountModal() {
+          document.getElementById('editAccountModal').classList.add('hidden');
         },
 
         async saveAccount() {
@@ -427,13 +463,8 @@
           }
           
           try {
-            const method = this.editingAccount ? 'PUT' : 'POST';
-            const url = this.editingAccount 
-              ? `/api/municipal/coa-accounts/${this.editingAccount.id}`
-              : '/api/municipal/coa-accounts';
-            
-            const res = await fetch(url, {
-              method: method,
+            const res = await fetch('/api/municipal/coa-accounts', {
+              method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(this.newAccount)
             });
@@ -441,11 +472,35 @@
             if (res.ok) {
               await this.loadAccounts();
               this.closeAccountModal();
-              alert(this.editingAccount ? 'Account updated' : 'Account created');
+              alert('Account created');
             }
           } catch (error) {
             console.error('Error saving account:', error);
             alert('Error saving account');
+          }
+        },
+
+        async updateAccount() {
+          if (!this.editAccountData.id || !this.editAccountData.code || !this.editAccountData.name) {
+            alert('Please fill in all fields');
+            return;
+          }
+
+          try {
+            const res = await fetch(`/api/municipal/coa-accounts/${this.editAccountData.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.editAccountData)
+            });
+
+            if (res.ok) {
+              await this.loadAccounts();
+              this.closeEditAccountModal();
+              alert('Account updated');
+            }
+          } catch (error) {
+            console.error('Error updating account:', error);
+            alert('Error updating account');
           }
         },
 
