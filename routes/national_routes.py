@@ -1538,24 +1538,41 @@ def system_logs():
             }
 
         db = get_firestore_db()
-        # Fetch and normalize all regional logs (no filter)
-        raw_regional_logs = system_logs_storage.list_regional_system_logs(limit=300, db_override=db)
-        regional_logs = [normalize_log(log, scope='Regional') for log in raw_regional_logs]
-        print(f"[DEBUG] National logs: {len(regional_logs)} regional logs fetched. Sample: {regional_logs[:1]}")
+        # --- DEBUG: Use regional logic to fetch logs ---
+        from routes.regional_routes import get_firestore_region_name
+        user_region = 'REGION-IV-B'  # Hardcoded for test; replace as needed
+        # Use the same function as regional: list_regional_system_logs_by_region
+        raw_regional_logs = system_logs_storage.list_regional_system_logs_by_region(user_region, limit=40)
+        # Use the same normalization as regional
+        def normalize_regional_log(entry):
+            ts_value = entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt')
+            actor_email = str(entry.get('actorEmail') or entry.get('user') or '').strip().lower()
+            return {
+                'id': entry.get('id') or '',
+                'ts': ts_value,
+                'user': entry.get('user') or actor_email or 'Municipal Admin',
+                'role': 'Municipal',
+                'module': entry.get('module') or 'AUDIT',
+                'action': entry.get('action') or '',
+                'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
+                'device_type': entry.get('device_type') or entry.get('device') or '',
+                'ip': entry.get('ip') or '',
+                'outcome': entry.get('outcome') or 'SUCCESS',
+                'message': entry.get('message') or '',
+                'municipality': entry.get('municipality') or '',
+                'region': entry.get('region') or '',
+                'scope': 'MUNICIPAL',
+            }
+        regional_logs = [normalize_regional_log(log) for log in raw_regional_logs]
+        print(f"[DEBUG] National logs (regional logic): {len(regional_logs)} logs fetched. Sample: {regional_logs[:1]}")
 
-        # Fetch and normalize all system logs (no filter)
-        all_system_logs = system_logs_storage.list_system_logs(limit=500, db_override=db)
-        print(f"[DEBUG] National logs: {len(all_system_logs)} system_logs fetched. Sample: {all_system_logs[:1]}")
-
-        # For national, show all system_logs in both tables (municipal_logs and user_logs)
-        municipal_logs = [normalize_log(log, scope='System') for log in all_system_logs]
-        user_logs = [normalize_log(log, scope='System') for log in all_system_logs]
-
+        # For now, show these logs in all tables for debug
         return render_template(
             'national/system/system-logs.html',
             regional_logs=regional_logs,
-            municipal_logs=municipal_logs,
-            user_logs=user_logs
+            municipal_logs=regional_logs,
+            user_logs=regional_logs
         )
     except Exception as e:
         print(f"[ERROR] Failed to fetch system logs: {e}")
