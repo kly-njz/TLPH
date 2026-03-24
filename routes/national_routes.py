@@ -1,3 +1,17 @@
+def record_national_audit_log(user, entity, action, details, ip=None, timestamp=None):
+    """Helper to record a new audit log entry in national_audit_logs."""
+    db = get_firestore_db()
+    from datetime import datetime
+    log = {
+        'timestamp': timestamp or datetime.utcnow().isoformat(),
+        'user': user,
+        'entity': entity,
+        'action': action,
+        'details': details,
+        'ip': ip or '',
+    }
+    db.collection('national_audit_logs').add(log)
+
 
 
 # --- DELETE PROJECT ENDPOINT ---
@@ -1515,6 +1529,11 @@ def payroll_national_view():
 @bp.route('/audit-logs')
 @role_required('national', 'national_admin')
 def audit_logs():
+    # Always refresh the audit logs from regional/transactions before displaying
+    try:
+        aggregate_regional_audit_logs_to_national()
+    except Exception as e:
+        print(f"[ERROR] Audit log aggregation failed: {e}")
     db = get_firestore_db()
     logs = []
     try:
