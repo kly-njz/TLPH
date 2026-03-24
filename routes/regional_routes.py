@@ -2472,11 +2472,17 @@ def employees_view():
 def get_regional_employees():
     db = get_firestore_db()
     employees = []
+    # Get current region and municipalities for this admin
+    user_region, municipality_set = _resolve_regional_scope(db)
 
     for doc in db.collection('employees').stream():
         item = doc.to_dict() or {}
+        emp_region = item.get('region') or item.get('regionName') or item.get('region_name')
+        emp_muni = (item.get('municipality') or '').strip().lower()
+        # Only include if region matches or municipality is in allowed set
+        if not _same_region(emp_region, user_region) and emp_muni not in municipality_set:
+            continue
         hire_date = item.get('hire_date')
-
         if isinstance(hire_date, str):
             item['hire_date'] = hire_date.split('T')[0]
         elif hasattr(hire_date, 'strftime'):
@@ -2487,7 +2493,6 @@ def get_regional_employees():
             item['hire_date'] = hire_date.to_datetime().strftime('%Y-%m-%d')
         else:
             item['hire_date'] = ''
-
         employees.append({
             'id': doc.id,
             'employee_id': item.get('employee_id', ''),
@@ -2506,7 +2511,6 @@ def get_regional_employees():
             'region': item.get('region') or item.get('regionName') or item.get('region_name') or '',
             'hire_date': item.get('hire_date', '')
         })
-
     employees.sort(key=lambda item: item.get('employee_id') or '')
     return jsonify({'success': True, 'employees': employees})
 
