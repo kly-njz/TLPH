@@ -2233,6 +2233,8 @@ def api_municipal_project_mark_completed(project_id):
         update_payload = {
             'status': 'completed',
             'status_code': 'DONE_BY_MUNICIPAL',
+            'municipal_completed': True,
+            'regional_completed': project.get('regional_completed', False),
             'updated_at': firestore.SERVER_TIMESTAMP,
             'updated_by': session.get('user_email', 'system'),
         }
