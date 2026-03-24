@@ -9,6 +9,36 @@
 
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script type="module">
+    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, query, getDocs, updateDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+      authDomain: "tlph-denr-system.firebaseapp.com",
+      projectId: "tlph-denr-system",
+      storageBucket: "tlph-denr-system.appspot.com",
+      messagingSenderId: "999028568640",
+      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
+      measurementId: "G-TXKQ1Z0J1X"
+    };
+
+    let db;
+    try {
+      const existingApps = getApps();
+      if (existingApps.length > 0) {
+        db = window.db || getFirestore(existingApps[0]);
+      } else {
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+      }
+      window.db = db;
+      console.log('✓ Firebase initialized');
+    } catch (error) {
+      console.error('Firebase initialization error:', error);
+      db = window.db;
+    }
+  </script>
 
   <style>
     /* Government Typography & Layout */
@@ -35,107 +65,127 @@
         {% include 'national/sidenav-national.html' %}
     </aside>
 
-    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 overflow-y-auto custom-scrollbar" x-data="{
-      reviewModalOpen: false,
-      viewModalOpen: false,
-      fileModalOpen: false,
-      reportModalOpen: false,
-      leaveStatus: 'Pending',
-      viewData: {
-        applicantName: '',
-        position: '',
-        office: '',
-        leaveType: '',
-        leaveWhere: '',
-        commutation: '',
-        workingDays: '',
-        inclusiveDates: '',
-        applicationNo: '',
-        remarks: ''
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 overflow-y-auto custom-scrollbar" x-data="leavePage()" x-init="loadData()">
+  <script>
+  // Alpine.js leavePage() logic adapted from municipal, with Firestore fetching and national-level approval
+  window.leavePage = function() {
+    return {
+      leaveRecords: [],
+      searchQuery: '',
+      filterLeaveType: '',
+      pendingCount: 0,
+      activeCount: 0,
+      showLedger: false,
+      ledgerSearch: '',
+      ledgerTypeFilter: '',
+      showCreateModal: false,
+      createSaving: false,
+      createError: '',
+      showReviewModal: false,
+      selectedRecord: null,
+      reviewRemarks: '',
+      reviewSaving: false,
+      createForm: {
+        applicant_name: '',
+        assignment: '',
+        leave_type: 'Vacation Leave',
+        from_date: '',
+        to_date: '',
+        days: '',
+        reason: '',
+        status: 'Pending',
+        scope: 'NATIONAL',
+        municipality: ''
       },
-      fileData: {
-        applicantName: '',
-        position: '',
-        office: '',
-        leaveType: '',
-        leaveWhere: '',
-        commutation: 'Not Requested',
-        workingDays: '',
-        inclusiveDates: ''
+
+      get filteredLeave() {
+        return this.leaveRecords.filter(record => {
+          const matchSearch = !this.searchQuery || 
+            (record.applicant_name && record.applicant_name.toLowerCase().includes(this.searchQuery.toLowerCase()));
+          const matchType = !this.filterLeaveType || record.leave_type === this.filterLeaveType;
+          return matchSearch && matchType;
+        });
       },
-      reportData: {
-        dateFrom: '',
-        dateTo: '',
-        status: 'All',
-        type: 'All',
-        format: 'CSV'
+
+      async loadData() {
+        try {
+          // Fetch leave requests from Firestore
+          const db = window.db;
+          const q = query(collection(db, 'leave-requests'));
+          const querySnapshot = await getDocs(q);
+          this.leaveRecords = [];
+          querySnapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            data.id = docSnap.id;
+            this.leaveRecords.push(data);
+          });
+          this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
+          this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
+        } catch (error) {
+          console.error('Error loading leave data:', error);
+          this.leaveRecords = [];
+        }
       },
-      openViewForm(event) {
-        const row = event.currentTarget.closest('tr');
-        if (!row) return;
-        const d = row.dataset;
-        this.viewData = {
-          applicantName: d.applicantName || '',
-          position: d.position || '',
-          office: d.office || '',
-          leaveType: d.leaveType || '',
-          leaveWhere: d.leaveWhere || '',
-          commutation: d.commutation || '',
-          workingDays: d.workingDays || '',
-          inclusiveDates: d.inclusiveDates || '',
-          applicationNo: d.applicationNo || '',
-          remarks: d.remarks || ''
-        };
-        this.leaveStatus = d.status || this.leaveStatus;
-        this.viewModalOpen = true;
+
+      openReview(record) {
+        this.selectedRecord = record;
+        this.reviewRemarks = '';
+        this.reviewError = '';
+        this.reviewSaving = false;
+        this.showReviewModal = true;
       },
-      openReviewForm(event) {
-        const row = event.currentTarget.closest('tr');
-        if (!row) return;
-        const d = row.dataset;
-        this.viewData = {
-          applicantName: d.applicantName || '',
-          position: d.position || '',
-          office: d.office || '',
-          leaveType: d.leaveType || '',
-          leaveWhere: d.leaveWhere || '',
-          commutation: d.commutation || '',
-          workingDays: d.workingDays || '',
-          inclusiveDates: d.inclusiveDates || '',
-          applicationNo: d.applicationNo || '',
-          remarks: d.remarks || ''
-        };
-        this.leaveStatus = d.status || this.leaveStatus;
-        this.reviewModalOpen = true;
+
+      async submitReview(decision) {
+        if (!this.selectedRecord) return;
+        this.reviewError = '';
+        this.reviewSaving = true;
+        try {
+          const db = window.db;
+          const docRef = doc(db, 'leave-requests', this.selectedRecord.id);
+          await updateDoc(docRef, { status: decision, remarks: this.reviewRemarks });
+          // Update local state
+          const idx = this.leaveRecords.findIndex(r => r.id === this.selectedRecord.id);
+          if (idx !== -1) {
+            this.leaveRecords[idx].status = decision;
+            if (this.reviewRemarks) this.leaveRecords[idx].remarks = this.reviewRemarks;
+          }
+          this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
+          this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
+          this.showReviewModal = false;
+        } catch (e) {
+          this.reviewError = 'Network error. Please try again.';
+        }
+        this.reviewSaving = false;
       },
-      openFileOnBehalfForm() {
-        this.fileData = {
-          applicantName: '',
-          position: '',
-          office: '',
-          leaveType: '',
-          leaveWhere: '',
-          commutation: 'Not Requested',
-          workingDays: '',
-          inclusiveDates: ''
-        };
-        this.fileModalOpen = true;
+
+      async submitLeave() {
+        this.createError = '';
+        if (!this.createForm.applicant_name || !this.createForm.leave_type || !this.createForm.from_date || !this.createForm.to_date) {
+          this.createError = 'Please fill in all required fields.';
+          return;
+        }
+        this.createSaving = true;
+        try {
+          const db = window.db;
+          const colRef = collection(db, 'leave-requests');
+          await colRef.add(this.createForm);
+          await this.loadData();
+          this.showCreateModal = false;
+          this.resetCreateForm();
+        } catch (e) {
+          this.createError = 'Network error. Please try again.';
+        }
+        this.createSaving = false;
       },
-      openReportModal() {
-        this.reportData = {
-          dateFrom: '',
-          dateTo: '',
-          status: 'All',
-          type: 'All',
-          format: 'CSV'
-        };
-        this.reportModalOpen = true;
-      },
-      generateReport() {
-        window.generateLeaveReport(this.reportData);
-        this.reportModalOpen = false;
+
+      resetCreateForm() {
+        this.createForm = { applicant_name: '', assignment: '', leave_type: 'Vacation Leave', from_date: '', to_date: '', days: '', reason: '', status: 'Pending', scope: 'NATIONAL', municipality: '' };
+        this.createError = '';
+        this.createSaving = false;
       }
-    }">
+    };
+  };
+  </script>
 
         <header class="gov-card p-3 flex justify-between items-center shrink-0">
           <div class="flex items-center gap-3">
