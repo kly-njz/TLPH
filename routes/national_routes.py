@@ -1516,10 +1516,44 @@ def payroll_national_view():
 def audit_logs():
     return render_template('national/system/audit.html')
 
+
+# --- SYSTEM LOGS (National) ---
 @bp.route('/system-logs')
 @role_required('national', 'national_admin')
 def system_logs():
-    return render_template('national/system/system-logs.html')
+    import system_logs_storage
+    try:
+        # Fetch all regional logs (region-wide events)
+        regional_logs = system_logs_storage.list_regional_system_logs(limit=300)
+
+        # Fetch all municipal admin logs (from system_logs, role=municipal_admin/municipal)
+        municipal_logs = []
+        all_muni_logs = system_logs_storage.list_system_logs(limit=500)
+        for log in all_muni_logs:
+            role = str(log.get('role') or '').lower()
+            if role in {'municipal_admin', 'municipal'}:
+                municipal_logs.append(log)
+
+        # Fetch all end user logs (from system_logs, role not admin)
+        user_logs = []
+        for log in all_muni_logs:
+            role = str(log.get('role') or '').lower()
+            if role not in {'national_admin', 'regional_admin', 'municipal_admin', 'municipal'}:
+                user_logs.append(log)
+
+        return render_template(
+            'national/system/system-logs.html',
+            regional_logs=regional_logs,
+            municipal_logs=municipal_logs,
+            user_logs=user_logs
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch system logs: {e}")
+        return render_template('national/system/system-logs.html',
+            regional_logs=[],
+            municipal_logs=[],
+            user_logs=[]
+        )
 
 @bp.route('/permissions')
 @role_required('national', 'national_admin')
