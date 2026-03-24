@@ -185,7 +185,7 @@
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="gov-label">Pay Month</label>
-                <select class="gov-input w-full cursor-pointer" x-model="payMonth">
+                <select class="gov-input w-full cursor-pointer" x-model="payMonth" @change="previewPayrollPeriod()">
                   <template x-for="month in payMonths" :key="month">
                     <option x-text="month"></option>
                   </template>
@@ -193,7 +193,7 @@
               </div>
               <div>
                 <label class="gov-label">Payroll Cycle</label>
-                <select class="gov-input w-full cursor-pointer" x-model="payCycle">
+                <select class="gov-input w-full cursor-pointer" x-model="payCycle" @change="previewPayrollPeriod()">
                   <option>1st Quincena (1-15)</option>
                   <option>2nd Quincena (16-30)</option>
                   <option>Full Month</option>
@@ -225,10 +225,60 @@
         </div>
       </div>
 
+      <div x-show="payrollSummaryOpen" style="display: none;" class="fixed inset-0 z-[110] bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div @click.away="payrollSummaryOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-lg overflow-hidden border border-emerald-300">
+          <div class="flex justify-between items-center border-b border-emerald-200 px-4 py-2 bg-emerald-600 text-white">
+            <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Payroll Processed</h3>
+            <button @click="payrollSummaryOpen = false" class="text-emerald-100 hover:text-white">
+              <span class="material-icons-round text-[16px]">close</span>
+            </button>
+          </div>
+          <div class="p-4 bg-white space-y-3">
+            <div class="grid grid-cols-2 gap-3 text-[10px]">
+              <div class="p-2 border border-slate-200 bg-slate-50 rounded-[2px]">
+                <p class="text-[9px] font-black uppercase text-slate-500">Reference</p>
+                <p class="text-[11px] font-black text-slate-900" x-text="payrollSummary.reference"></p>
+              </div>
+              <div class="p-2 border border-slate-200 bg-slate-50 rounded-[2px]">
+                <p class="text-[9px] font-black uppercase text-slate-500">Status</p>
+                <p class="text-[11px] font-black" :class="payrollSummary.status === 'Posted' ? 'text-emerald-700' : 'text-amber-700'" x-text="payrollSummary.status"></p>
+              </div>
+              <div class="p-2 border border-slate-200 bg-slate-50 rounded-[2px]">
+                <p class="text-[9px] font-black uppercase text-slate-500">Period</p>
+                <p class="text-[11px] font-black text-slate-900" x-text="payrollSummary.period"></p>
+              </div>
+              <div class="p-2 border border-slate-200 bg-slate-50 rounded-[2px]">
+                <p class="text-[9px] font-black uppercase text-slate-500">Employees</p>
+                <p class="text-[11px] font-black text-slate-900" x-text="payrollSummary.employees"></p>
+              </div>
+              <div class="p-2 border border-slate-200 bg-slate-50 rounded-[2px]">
+                <p class="text-[9px] font-black uppercase text-slate-500">Total Net</p>
+                <p class="text-[11px] font-black text-slate-900" x-text="payrollSummary.totalNet"></p>
+              </div>
+              <div class="p-2 border border-slate-200 bg-slate-50 rounded-[2px]">
+                <p class="text-[9px] font-black uppercase text-slate-500">Remaining Fund</p>
+                <p class="text-[11px] font-black text-slate-900" x-text="payrollSummary.remainingFund"></p>
+              </div>
+            </div>
+            <template x-if="payrollSummary.shortfall">
+              <div class="p-2 border border-amber-200 bg-amber-50 rounded-[2px] text-[10px] text-amber-800 font-bold">
+                Shortfall: <span x-text="payrollSummary.shortfall"></span>
+              </div>
+            </template>
+            <div class="pt-2 border-t border-slate-200 flex justify-end gap-2">
+              <button type="button" @click="downloadPayrollCsv()" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 shadow-sm">Download CSV</button>
+              <button type="button" @click="printPayrollSummary()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Print Summary</button>
+              <button type="button" @click="payrollSummaryOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 shadow-sm">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <script>
         function payrollRegistry() {
           return {
             payrollModalOpen: false,
+            payrollSummaryOpen: false,
             searchQuery: '',
             selectedScope: '',
             selectedOffice: '',
@@ -246,8 +296,60 @@
             totalNet: 0,
             payrollRecords: [],
             filteredPayroll: [],
+            payrollSummary: {
+              reference: '',
+              status: '',
+              period: '',
+              employees: 0,
+              totalNet: '',
+              remainingFund: '',
+              shortfall: ''
+            },
             formatCurrency(val) {
               return 'PHP ' + (val || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+            },
+            formatDateShort(date) {
+              return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+            },
+            formatDateLong(date) {
+              return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+            },
+            getPayrollPeriod() {
+              const [monthName, yearStr] = (this.payMonth || '').split(' ');
+              const year = Number(yearStr);
+              const monthIndex = [
+                'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'
+              ].indexOf(monthName);
+
+              if (!year || monthIndex < 0) {
+                const now = new Date();
+                return {
+                  start: new Date(now.getFullYear(), now.getMonth(), 1),
+                  end: new Date(now.getFullYear(), now.getMonth() + 1, 0)
+                };
+              }
+
+              let startDay = 1;
+              let endDay = 15;
+              if (this.payCycle.startsWith('2nd')) {
+                startDay = 16;
+                endDay = new Date(year, monthIndex + 1, 0).getDate();
+              } else if (this.payCycle.startsWith('Full')) {
+                startDay = 1;
+                endDay = new Date(year, monthIndex + 1, 0).getDate();
+              }
+
+              return {
+                start: new Date(year, monthIndex, startDay),
+                end: new Date(year, monthIndex, endDay)
+              };
+            },
+            previewPayrollPeriod() {
+              const { start, end } = this.getPayrollPeriod();
+              const periodShort = `${this.formatDateShort(start)}-${this.formatDateShort(end)}`;
+              this.payrollPeriodLabel = `Compensation Ledger (${periodShort})`;
+              this.nextPayDate = this.formatDateLong(end);
             },
             filterTable() {
               const q = this.searchQuery.toLowerCase().trim();
@@ -271,8 +373,150 @@
               alert('Batch payslip export not yet implemented.');
             },
             processPayroll() {
-              alert('Payroll processing not yet implemented.');
+              if (!this.payrollRecords.length) {
+                alert('No payroll records available to process.');
+                return;
+              }
+
+              const { start, end } = this.getPayrollPeriod();
+              const periodShort = `${this.formatDateShort(start)}-${this.formatDateShort(end)}`;
+              const periodLong = `${this.formatDateLong(start)} - ${this.formatDateLong(end)}`;
+              const payrollRef = 'PAYROLL-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+              this.payrollPeriodLabel = `Compensation Ledger (${periodShort})`;
+              this.nextPayDate = this.formatDateLong(end);
+
+              const isSufficient = this.availableFund >= this.totalNet;
+              const newStatus = isSufficient ? 'Posted' : 'Pending';
+
+              this.payrollRecords = this.payrollRecords.map(record => ({
+                ...record,
+                status: newStatus,
+                payroll_ref: payrollRef,
+                pay_period: periodShort,
+                pay_cycle: this.payCycle,
+                pay_month: this.payMonth
+              }));
+
+              this.filterTable();
               this.payrollModalOpen = false;
+
+              let remainingFund = this.availableFund;
+              let shortfall = '';
+
+              if (!isSufficient) {
+                shortfall = this.formatCurrency(this.totalNet - this.availableFund);
+              } else {
+                remainingFund = Math.max(0, this.availableFund - this.totalNet);
+                this.availableFund = remainingFund;
+              }
+
+              this.payrollSummary = {
+                reference: payrollRef,
+                status: newStatus,
+                period: periodLong,
+                employees: this.payrollRecords.length,
+                totalNet: this.formatCurrency(this.totalNet),
+                remainingFund: this.formatCurrency(remainingFund),
+                shortfall
+              };
+
+              this.payrollSummaryOpen = true;
+            },
+            printPayrollSummary() {
+              const lines = [
+                `Reference: ${this.payrollSummary.reference}`,
+                `Status: ${this.payrollSummary.status}`,
+                `Period: ${this.payrollSummary.period}`,
+                `Employees: ${this.payrollSummary.employees}`,
+                `Total Net: ${this.payrollSummary.totalNet}`,
+                `Remaining Fund: ${this.payrollSummary.remainingFund}`
+              ];
+
+              if (this.payrollSummary.shortfall) {
+                lines.push(`Shortfall: ${this.payrollSummary.shortfall}`);
+              }
+
+              const win = window.open('', '_blank', 'width=800,height=600');
+              if (!win) return;
+              win.document.write(`
+                <html>
+                <head>
+                  <title>Payroll Summary</title>
+                  <style>
+                    body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+                    h1 { font-size: 18px; margin-bottom: 12px; }
+                    .meta { font-size: 12px; color: #475569; margin-bottom: 20px; }
+                    ul { font-size: 13px; line-height: 1.6; padding-left: 18px; }
+                  </style>
+                </head>
+                <body>
+                  <h1>Payroll Processing Summary</h1>
+                  <div class="meta">Generated on ${new Date().toLocaleString('en-US')}</div>
+                  <ul>
+                    ${lines.map(line => `<li>${line}</li>`).join('')}
+                  </ul>
+                </body>
+                </html>
+              `);
+              win.document.close();
+              win.focus();
+              setTimeout(() => win.print(), 300);
+            },
+            downloadPayrollCsv() {
+              if (!this.payrollRecords.length) return;
+
+              const headers = [
+                'Reference',
+                'Period',
+                'Employee Name',
+                'Position',
+                'Office',
+                'Basic Pay',
+                'Allowances',
+                'Gross',
+                'GSIS/Tax',
+                'Loans',
+                'Net Pay',
+                'Scope',
+                'Status'
+              ];
+
+              const rows = this.payrollRecords.map(record => ([
+                this.payrollSummary.reference,
+                this.payrollSummary.period,
+                record.employee_name,
+                record.position,
+                record.office,
+                record.basic_pay,
+                record.allowances,
+                record.gross,
+                record.gsis_tax,
+                record.loans,
+                record.net_pay,
+                record.scope,
+                record.status
+              ]));
+
+              const escapeCsv = value => {
+                const str = value == null ? '' : String(value);
+                return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+              };
+
+              const csv = [
+                headers.join(','),
+                ...rows.map(row => row.map(escapeCsv).join(','))
+              ].join('\n');
+
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `${this.payrollSummary.reference || 'PAYROLL'}-${new Date().toISOString().slice(0,10)}.csv`;
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              URL.revokeObjectURL(url);
             },
             async init() {
               try {
