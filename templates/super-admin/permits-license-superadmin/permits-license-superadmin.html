@@ -104,27 +104,27 @@
             <div class="grid grid-cols-2 md:grid-cols-6 gap-2 shrink-0">
                 <div class="gov-card border-t-2 border-t-denr p-2 text-center transition-colors hover:bg-slate-50">
                     <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Active Permits</p>
-                    <h3 class="text-[14px] font-black text-slate-900 m-0 mt-0.5">1,842</h3>
+                    <h3 id="kpiTotal" class="text-[14px] font-black text-slate-900 m-0 mt-0.5">0</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-amber-500 p-2 text-center bg-amber-50/30 transition-colors hover:bg-amber-50">
                     <p class="text-[8px] font-black text-amber-600 uppercase tracking-widest m-0">Expiring (30d)</p>
-                    <h3 class="text-[14px] font-black text-amber-700 m-0 mt-0.5">45</h3>
+                    <h3 id="kpiPending" class="text-[14px] font-black text-amber-700 m-0 mt-0.5">0</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-gov-red p-2 text-center bg-red-50/30 transition-colors hover:bg-red-50 animate-pulse">
                     <p class="text-[8px] font-black text-gov-red uppercase tracking-widest m-0">Expired/Invalid</p>
-                    <h3 class="text-[14px] font-black text-gov-red m-0 mt-0.5">12</h3>
+                    <h3 id="kpiRejected" class="text-[14px] font-black text-gov-red m-0 mt-0.5">0</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-gov-blue p-2 text-center transition-colors hover:bg-slate-50">
                     <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Renewals Pending</p>
-                    <h3 class="text-[14px] font-black text-gov-blue m-0 mt-0.5">89</h3>
+                    <h3 id="kpiReview" class="text-[14px] font-black text-gov-blue m-0 mt-0.5">0</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-emerald-600 p-2 text-center transition-colors hover:bg-slate-50">
                     <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">New MTD</p>
-                    <h3 class="text-[14px] font-black text-emerald-700 m-0 mt-0.5">156</h3>
+                    <h3 id="kpiApproved" class="text-[14px] font-black text-emerald-700 m-0 mt-0.5">0</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-slate-800 p-2 text-center transition-colors hover:bg-slate-50">
                     <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0">Revoked</p>
-                    <h3 class="text-[14px] font-black text-slate-800 m-0 mt-0.5">8</h3>
+                    <h3 id="kpiCancelled" class="text-[14px] font-black text-slate-800 m-0 mt-0.5">0</h3>
                 </div>
             </div>
 
@@ -361,6 +361,10 @@
         let PERMIT_DATA = [];
         let FILTERED_DATA = [];
         let myIssuanceChart, myPermitTypeChart, modalChartInstance = null;
+        const CHART_STATE = {
+            issuance: { labels: [], data: [] },
+            categories: { labels: [], data: [] }
+        };
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -496,8 +500,8 @@
             myIssuanceChart = new Chart(document.getElementById('issuanceChart'), { 
                 type: 'line', 
                 data: { 
-                    labels: ['S','O','N','D','J','F'], 
-                    datasets: [{ data: [140, 160, 130, 210, 180, 240], borderColor: '#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.05)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }] 
+                    labels: CHART_STATE.issuance.labels, 
+                    datasets: [{ data: CHART_STATE.issuance.data, borderColor: '#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.05)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }] 
                 }, 
                 options: opt 
             });
@@ -505,8 +509,8 @@
             myPermitTypeChart = new Chart(document.getElementById('permitTypeChart'), { 
                 type: 'doughnut', 
                 data: { 
-                    labels: ['For', 'WLT', 'ECC', 'Min'], 
-                    datasets: [{ data: [45, 25, 20, 10], backgroundColor: ['#15803d','#d97706','#1e3a8a','#be123c'], borderWidth: 0 }] 
+                    labels: CHART_STATE.categories.labels, 
+                    datasets: [{ data: CHART_STATE.categories.data, backgroundColor: ['#15803d','#d97706','#1e3a8a','#be123c','#0ea5e9','#6366f1'], borderWidth: 0 }] 
                 }, 
                 options: { 
                     responsive: true, 
@@ -515,6 +519,51 @@
                     plugins: { legend: { position: 'right', labels: { font: chartFont, boxWidth: 10, color: '#475569' } } }
                 } 
             });
+        }
+
+        async function loadPermitStats() {
+            try {
+                const res = await fetch('/api/superadmin/permits/stats');
+                const payload = await res.json();
+                if (!payload.success) return;
+
+                const stats = payload.stats || {};
+                document.getElementById('kpiTotal').textContent = Number(stats.total || 0).toLocaleString();
+                document.getElementById('kpiPending').textContent = Number(stats.pending || 0).toLocaleString();
+                document.getElementById('kpiRejected').textContent = Number(stats.rejected || 0).toLocaleString();
+                document.getElementById('kpiReview').textContent = Number((stats.for_review || 0) + (stats.forwarded || 0)).toLocaleString();
+                document.getElementById('kpiApproved').textContent = Number(stats.approved || 0).toLocaleString();
+                document.getElementById('kpiCancelled').textContent = Number(stats.cancelled || 0).toLocaleString();
+            } catch (err) {
+                console.error('Permit stats fetch error:', err);
+            }
+        }
+
+        async function loadPermitCharts() {
+            try {
+                const res = await fetch('/api/superadmin/permits/charts');
+                const payload = await res.json();
+                if (!payload.success) return;
+
+                CHART_STATE.issuance.labels = Array.isArray(payload.issuance?.labels) ? payload.issuance.labels : [];
+                CHART_STATE.issuance.data = Array.isArray(payload.issuance?.data) ? payload.issuance.data : [];
+                CHART_STATE.categories.labels = Array.isArray(payload.categories?.labels) ? payload.categories.labels : [];
+                CHART_STATE.categories.data = Array.isArray(payload.categories?.data) ? payload.categories.data : [];
+
+                if (myIssuanceChart) {
+                    myIssuanceChart.data.labels = CHART_STATE.issuance.labels;
+                    myIssuanceChart.data.datasets[0].data = CHART_STATE.issuance.data;
+                    myIssuanceChart.update();
+                }
+
+                if (myPermitTypeChart) {
+                    myPermitTypeChart.data.labels = CHART_STATE.categories.labels;
+                    myPermitTypeChart.data.datasets[0].data = CHART_STATE.categories.data;
+                    myPermitTypeChart.update();
+                }
+            } catch (err) {
+                console.error('Permit charts fetch error:', err);
+            }
         }
 
         // --- MODAL LOGIC ---
@@ -682,9 +731,13 @@
             setTimeout(() => { modal.classList.add('hidden'); }, 200);
         }
 
-        window.onload = () => { 
-            initCharts(); 
-            renderTable(); 
+        window.onload = async () => {
+            initCharts();
+            await Promise.all([
+                loadPermitsData(),
+                loadPermitStats(),
+                loadPermitCharts()
+            ]);
         };
     </script>
 </body>
