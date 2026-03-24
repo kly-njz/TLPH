@@ -322,7 +322,18 @@
 
   let allTransactions = [];
   let inventoryStats = { count: 0, totalQty: 0 };
+  let inventoryTypeCounts = new Map();
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
+
+  const inventorySectorLabels = {
+    farming: 'Farming',
+    livestock: 'Livestock',
+    fisheries: 'Fisheries',
+    aquaculture: 'Aquaculture',
+    forestry: 'Forestry',
+    wildlife: 'Wildlife',
+    environment: 'Environment'
+  };
 
   function normalizeStatus(status) {
     const normalized = (status || '').toString().toLowerCase().trim();
@@ -505,27 +516,61 @@
 
   async function fetchInventoryStats(userId) {
     try {
-      // Fetch all user applications and count approved using effective status
-      // (handles nationalStatus = 'approved' even when main status is still 'forwarded-to-national')
       const q = query(
-        collection(db, 'applications'),
+        collection(db, 'inventory_registrations'),
         where('userId', '==', userId)
       );
       const querySnapshot = await getDocs(q);
 
+      const typeMap = new Map();
       let count = 0;
+      let totalQty = 0;
 
       querySnapshot.forEach((doc) => {
-        const item = doc.data();
-        if (getEffectiveAppStatus(item) === 'approved') count += 1;
+        const item = doc.data() || {};
+        const sectorRaw = (
+          item.sector ||
+          item.formData?.sector ||
+          item.categoryType ||
+          item.category ||
+          item.productCategory ||
+          item.type ||
+          item.applicationType ||
+          item.formData?.categoryType ||
+          item.formData?.category ||
+          'Uncategorized'
+        ).toString().trim().toLowerCase();
+
+        const sectorKey = sectorRaw.replace(/\s+/g, '_');
+        const sectorLabel = inventorySectorLabels[sectorKey] || sectorRaw.replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Uncategorized';
+
+        const qtyRaw =
+          item.quantity ??
+          item.qty ??
+          item.totalQty ??
+          item.stock ??
+          item.currentStock ??
+          1;
+
+        const qty = Number(qtyRaw);
+        const safeQty = Number.isFinite(qty) && qty > 0 ? qty : 1;
+
+        count += 1;
+        totalQty += safeQty;
+        // Inventory: Types chart shows Add Stock dropdown sector/category.
+        typeMap.set(sectorLabel, (typeMap.get(sectorLabel) || 0) + 1);
       });
 
-      inventoryStats = { count, totalQty: count };
+      inventoryTypeCounts = typeMap;
+      inventoryStats = { count, totalQty };
       computeCards();
+      initCharts();
     } catch (error) {
       console.error('Error loading inventory stats:', error);
       inventoryStats = { count: 0, totalQty: 0 };
+      inventoryTypeCounts = new Map();
       computeCards();
+      initCharts();
     }
   }
 
@@ -730,9 +775,21 @@
     if (ctx2.chart) ctx2.chart.destroy();
     if (ctx3.chart) ctx3.chart.destroy();
 
+    const invLabels = Array.from(inventoryTypeCounts.keys());
+    const invData = Array.from(inventoryTypeCounts.values());
+    const invHasData = invLabels.length > 0;
+
     ctx1.chart = new Chart(ctx1, {
       type: "doughnut",
-      data: { labels: ["Pending Data"], datasets: [{ data: [1], backgroundColor: ['#d1d5db'] }] },
+      data: {
+        labels: invHasData ? invLabels : ["No Inventory Data"],
+        datasets: [{
+          data: invHasData ? invData : [1],
+          backgroundColor: invHasData
+            ? ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#f97316']
+            : ['#d1d5db']
+        }]
+      },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
     });
 

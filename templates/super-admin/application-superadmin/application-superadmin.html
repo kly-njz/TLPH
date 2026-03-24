@@ -95,7 +95,7 @@
             
             <header class="gov-card p-2 flex flex-col sm:flex-row sm:items-center justify-between shrink-0 border-b-4 border-b-denr-dark no-print">
                 <div class="flex items-center gap-3">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/f/f3/Seal_of_the_Department_of_Environment_and_Natural_Resources.png" class="h-8 w-8 object-contain" alt="DENR">
+                    <img src="{{ url_for('static', filename='images/denr-logo.png') }}" class="h-8 w-8 object-contain" alt="DENR">
                     <div class="border-l border-slate-300 pl-3 leading-tight">
                         <h1 class="text-[12px] font-black text-slate-900 uppercase tracking-tight m-0">Application Master Registry</h1>
                         <p class="text-[9px] font-bold text-denr-green uppercase tracking-widest m-0 mt-0.5">Super Admin National Compliance Oversight Console</p>
@@ -213,6 +213,8 @@
                             <option value="approved">Approved</option>
                             <option value="rejected">Rejected</option>
                             <option value="to review">For Review</option>
+                            <option value="forwarded">Forwarded</option>
+                            <option value="cancelled">Cancelled</option>
                         </select>
                         <div class="flex items-center gap-1">
                             <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">From</span>
@@ -269,6 +271,21 @@
             <div class="p-6 bg-slate-50 flex-1 h-[50vh] min-h-[350px] relative">
                 <canvas id="modalCanvas"></canvas>
             </div>
+        </div>
+    </div>
+
+    <div id="applicationViewModal" class="gov-modal no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeApplicationView()"></div>
+        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-5xl overflow-hidden relative z-10 flex flex-col max-h-[88vh]">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-id-card text-slate-400"></i> Application Full Profile
+                </h3>
+                <button onclick="closeApplicationView()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div id="applicationViewBody" class="p-4 bg-slate-50 overflow-auto custom-scrollbar text-[10px]"></div>
         </div>
     </div>
 
@@ -341,7 +358,12 @@
                 const matchSearch = Object.values(item).join(' ').toLowerCase().includes(search);
                 const matchCat = category === 'all' || item.sector === category;
                 const matchReg = region === 'all' || item.region === region;
-                const matchStatus = statusV === 'all' || item.status === statusV;
+                const itemStatus = (item.status || '').toLowerCase();
+                const itemDisplay = (item.status_display || '').toLowerCase();
+                const selectedStatus = statusV.toLowerCase();
+                const matchStatus = statusV === 'all'
+                    || itemStatus === selectedStatus
+                    || itemDisplay.includes(selectedStatus);
                 const matchFrom = !dateFrom || item.date >= dateFrom;
                 const matchTo = !dateTo || item.date <= dateTo;
                 return matchSearch && matchCat && matchReg && matchStatus && matchFrom && matchTo;
@@ -365,9 +387,22 @@
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                     : s === 'rejected'
                     ? 'bg-rose-50 text-rose-800 border-rose-200'
+                    : s === 'cancelled'
+                    ? 'bg-slate-200 text-slate-700 border-slate-300'
+                    : s === 'forwarded'
+                    ? 'bg-violet-50 text-violet-800 border-violet-200'
                     : s === 'to review' || s === 'review'
                     ? 'bg-blue-50 text-blue-800 border-blue-200'
                     : 'bg-amber-50 text-amber-800 border-amber-200';
+
+                const origin = row.status_origin || {};
+                const statusMeta = [];
+                if (s === 'forwarded' || s === 'to review') {
+                    statusMeta.push(`Forwarded ${origin.resolvedForwardedByLevel || 'Municipal'} → ${origin.resolvedForwardedToLevel || 'Regional'}`);
+                } else if (s === 'pending') {
+                    if (origin.nationalStatus) statusMeta.push(`National: ${origin.nationalStatus}`);
+                    else if (origin.regionalStatus) statusMeta.push(`Regional: ${origin.regionalStatus}`);
+                }
 
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-slate-50 transition-colors data-row';
@@ -380,11 +415,11 @@
                     <td class="px-3 py-1.5 font-bold uppercase text-slate-700 border-r border-slate-100 tracking-widest text-[9px]">${row.sector || 'N/A'}</td>
                     <td class="px-3 py-1.5 font-black text-slate-800 border-r border-slate-100 whitespace-nowrap uppercase tracking-widest text-[9px]">${row.region || 'N/A'}${row.municipality && row.municipality !== 'N/A' ? '<br><span class="text-[8px] text-slate-400 font-bold">' + row.municipality + '</span>' : ''}</td>
                     <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                        <span class="status-badge ${statusColor}">${s.toUpperCase()}</span>
-                        ${row.regional_status && row.regional_status !== s ? '<br><span class="text-[7px] text-slate-400 font-bold uppercase mt-0.5 block">Regional: ' + row.regional_status + '</span>' : ''}
+                        <span class="status-badge ${statusColor}">${(row.status_display || s || 'pending').toUpperCase()}</span>
+                        ${statusMeta.length ? '<br><span class="text-[7px] text-slate-400 font-bold uppercase mt-0.5 block">' + statusMeta.join(' • ') + '</span>' : ''}
                     </td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <a href="/superadmin/user-application/view/${row.id}" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">View</a>
+                        <button onclick="openApplicationView('${row.id}')" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">View</button>
                     </td>`;
                 body.appendChild(tr);
             });
@@ -507,6 +542,79 @@
             a.click();
             URL.revokeObjectURL(url);
             showToast(`Exported ${filtered.length} records`, 'success');
+        }
+
+        function closeApplicationView() {
+            const modal = document.getElementById('applicationViewModal');
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }
+
+        function _safeHtml(v) {
+            return String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\'': '&#39;', '"': '&quot;' }[c]));
+        }
+
+        function _renderPairs(obj) {
+            return Object.entries(obj || {})
+                .filter(([k, v]) => v !== null && v !== undefined && String(v).trim() !== '')
+                .map(([k, v]) => `<div class="border-b border-slate-200 py-1"><span class="font-black text-slate-500 uppercase">${_safeHtml(k)}</span>: <span class="text-slate-800 break-all">${_safeHtml(typeof v === 'object' ? JSON.stringify(v) : v)}</span></div>`)
+                .join('');
+        }
+
+        async function openApplicationView(appId) {
+            const modal = document.getElementById('applicationViewModal');
+            const body = document.getElementById('applicationViewBody');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            body.innerHTML = '<div class="py-10 text-center text-slate-400 font-black uppercase tracking-widest"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Loading complete application details...</div>';
+
+            try {
+                const res = await fetch(`/api/superadmin/applications/${appId}`);
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message || 'Failed to load application details');
+
+                const d = json.data || {};
+                const statusOrigin = d.status_origin || {};
+                const formData = d.form_data || {};
+                const raw = d.raw || {};
+
+                body.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="bg-white border border-slate-200 p-3">
+                            <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Application Summary</div>
+                            ${_renderPairs({
+                                'Reference': d.ref,
+                                'Date Filed': d.date,
+                                'Applicant': d.name,
+                                'Email': d.email,
+                                'Contact': d.contact,
+                                'Sector': d.sector,
+                                'Application Type': d.application_type,
+                                'Status': d.status,
+                                'Status Display': d.status_display,
+                                'Region': d.region,
+                                'Province': d.province,
+                                'Municipality': d.municipality,
+                                'Description': d.description
+                            })}
+                        </div>
+                        <div class="bg-white border border-slate-200 p-3">
+                            <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Approval / Forwarding Trail</div>
+                            ${_renderPairs(statusOrigin)}
+                        </div>
+                    </div>
+                    <div class="mt-3 bg-white border border-slate-200 p-3">
+                        <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Form Data (Submitted Fields)</div>
+                        <div class="max-h-44 overflow-auto custom-scrollbar">${_renderPairs(formData) || '<span class="text-slate-400">No form data available.</span>'}</div>
+                    </div>
+                    <div class="mt-3 bg-white border border-slate-200 p-3">
+                        <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Raw Document Snapshot</div>
+                        <pre class="m-0 text-[9px] text-slate-700 bg-slate-50 p-2 border border-slate-200 overflow-auto custom-scrollbar max-h-56">${_safeHtml(JSON.stringify(raw, null, 2))}</pre>
+                    </div>
+                `;
+            } catch (e) {
+                body.innerHTML = `<div class="py-10 text-center text-rose-500 font-black uppercase tracking-widest"><i class="fa-solid fa-triangle-exclamation mr-1"></i> ${_safeHtml(e.message)}</div>`;
+            }
         }
 
         function closeChartModal() {

@@ -292,7 +292,11 @@ def national_dashboard():
 @bp.route('/national/system-logs')
 @role_required('national', 'national_admin')
 def national_system_logs_fallback():
-    return render_template('national/system/system-logs.html')
+    return render_template('national/system/system-logs.html',
+        regional_logs=[],
+        municipal_logs=[],
+        user_logs=[]
+    )
 
 # Add budget endpoint (must be top-level)
 @bp.route('/national/accounting/add-budget', methods=['POST'])

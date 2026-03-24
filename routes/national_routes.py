@@ -1,9 +1,13 @@
 
 
+
+
+
 # --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
 from google.cloud.firestore_v1.base_query import FieldFilter
+from firebase_admin import firestore
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -218,20 +222,33 @@ def permit_national_view():
             data = doc.to_dict()
 
             status = (data.get('status', 'pending') or 'pending').lower()
+            national_status = (data.get('nationalStatus', 'pending') or 'pending').lower()
+            regional_status = (data.get('regionalStatus', '') or '').lower()
+            forwarded_to_level = str(data.get('forwardedToLevel') or '').strip().lower()
 
-            if status in ['approved', 'to review', 'review']:
+            is_forwarded_to_national = (
+                forwarded_to_level == 'national'
+                or status.startswith('forwarded')
+                or status in {'forwarded-to-national', 'to-review', 'to review', 'review'}
+                or national_status in {'pending', 'approved', 'rejected', 'cancelled', 'canceled'}
+            )
+
+            if is_forwarded_to_national:
                 total_count += 1
 
-                national_status = (data.get('nationalStatus', 'pending') or 'pending').lower()
                 if national_status == 'approved':
                     approved_count += 1
                 elif national_status == 'rejected':
+                    rejected_count += 1
+                elif national_status in ['cancelled', 'canceled']:
                     rejected_count += 1
                 else:
                     pending_count += 1
 
                 if national_status in ['approved', 'rejected']:
                     status_breakdown[national_status] += 1
+                elif national_status in ['cancelled', 'canceled']:
+                    status_breakdown['rejected'] += 1
                 else:
                     status_breakdown['pending'] += 1
 
@@ -280,6 +297,21 @@ def permit_national_view():
                 issue_date = data.get('issueDate', '—')
                 expiry_date = data.get('expiryDate', '—')
 
+                if national_status == 'approved':
+                    status_display = 'Approved by National'
+                elif national_status == 'rejected':
+                    status_display = 'Rejected by National'
+                elif national_status in ['cancelled', 'canceled']:
+                    status_display = 'Cancelled'
+                elif is_forwarded_to_national:
+                    status_display = 'Forwarded to National'
+                elif regional_status == 'approved':
+                    status_display = 'Approved by Regional'
+                elif regional_status == 'rejected':
+                    status_display = 'Rejected by Regional'
+                else:
+                    status_display = 'Pending National Review'
+
                 permits.append({
                     'id': doc.id,
                     'reference_id': doc.id[:12].upper(),
@@ -288,13 +320,15 @@ def permit_national_view():
                     'location': location,
                     'region': region,
                     'date_filed': date_filed,
-                    'status': national_status,
+                    'status': status_display,
+                    'status_raw': national_status,
                     'regional_status': status,
                     'issue_date': issue_date,
-                    'expiry_date': expiry_date
+                    'expiry_date': expiry_date,
+                    'date_sort': date_obj.timestamp() if date_obj else 0
                 })
 
-        permits.sort(key=lambda x: x['date_filed'], reverse=True)
+        permits.sort(key=lambda x: x.get('date_sort', 0), reverse=True)
 
         import calendar
         current_date = datetime.now()
@@ -358,6 +392,39 @@ def permit_national_view():
             status_labels=['Approved', 'Pending', 'Rejected'],
             status_data=[0, 0, 0]
         )
+
+
+@bp.route('/permit-national/action/<permit_id>', methods=['POST'])
+@role_required('national', 'national_admin')
+def permit_national_action(permit_id):
+    """Approve or reject a forwarded permit at national level."""
+    try:
+        db = get_firestore_db()
+        payload = request.get_json(silent=True) or {}
+        action = str(payload.get('action') or '').strip().lower()
+
+        if action not in {'approved', 'rejected'}:
+            return jsonify({'success': False, 'message': 'Invalid action'}), 400
+
+        doc_ref = db.collection('license_applications').document(permit_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'message': 'Permit not found'}), 404
+
+        update_fields = {
+            'nationalStatus': action,
+            'status': action,
+            'updatedAt': datetime.utcnow(),
+            'forwardedToLevel': 'National',
+            'approvedByLevel': 'National' if action == 'approved' else '',
+            'rejectedByLevel': 'National' if action == 'rejected' else '',
+        }
+        doc_ref.update(update_fields)
+
+        return jsonify({'success': True, 'message': f'Permit {action} successfully'})
+    except Exception as e:
+        print(f'Error updating permit national action: {e}')
+        return jsonify({'success': False, 'message': 'Failed to update permit status'}), 500
 
 
 # -----------------------------
@@ -1514,12 +1581,89 @@ def payroll_national_view():
 @bp.route('/audit-logs')
 @role_required('national', 'national_admin')
 def audit_logs():
-    return render_template('national/system/audit.html')
+    # Always refresh the audit logs from regional/transactions before displaying
+    try:
+        aggregate_regional_audit_logs_to_national()
+    except Exception as e:
+        print(f"[ERROR] Audit log aggregation failed: {e}")
+    db = get_firestore_db()
+    logs = []
+    try:
+        docs = db.collection('national_audit_logs').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(200).stream()
+        for doc in docs:
+            entry = doc.to_dict() or {}
+            logs.append({
+                'timestamp': entry.get('timestamp') or '',
+                'user': entry.get('user') or '',
+                'entity': entry.get('entity') or '',
+                'action': entry.get('action') or '',
+                'details': entry.get('details') or '',
+                'ip': entry.get('ip') or '',
+            })
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch national audit logs: {e}")
+    return render_template('national/system/audit.html', audit_logs=logs)
 
+
+# --- SYSTEM LOGS (National) ---
 @bp.route('/system-logs')
 @role_required('national', 'national_admin')
 def system_logs():
-    return render_template('national/system/system-logs.html')
+    import system_logs_storage
+    try:
+        # Helper to normalize log fields for the template
+        def normalize_log(log, scope=None):
+            return {
+                'timestamp': log.get('timestamp') or log.get('created_at') or log.get('createdAt') or '',
+                'user': log.get('user') or log.get('actorEmail') or log.get('actor') or '',
+                'region': log.get('region', ''),
+                'municipality': log.get('municipality', ''),
+                'role': log.get('role', ''),
+                'action': log.get('action', ''),
+                'details': log.get('details') or log.get('message') or '',
+                'ip': log.get('ip') or log.get('ipAddress') or '',
+                'scope': scope or log.get('scope', ''),
+            }
+
+        db = get_firestore_db()
+        # Fetch last 40 logs directly from system_logs, no filtering or normalization
+        logs = []
+        try:
+            query = db.collection('system_logs').order_by('created_at', direction=firestore.Query.DESCENDING).limit(40)
+            for doc in query.stream():
+                entry = doc.to_dict()
+                logs.append({
+                    'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
+                    'user': entry.get('user') or entry.get('actorEmail') or entry.get('actor') or '',
+                    'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
+                    'module': entry.get('module') or 'SYSTEM',
+                    'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                    'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
+                    'device_type': entry.get('device_type') or entry.get('device') or 'Unknown',
+                    'outcome': entry.get('outcome') or 'SUCCESS',
+                    'message': entry.get('message') or entry.get('details') or entry.get('description') or '',
+                    'municipality': entry.get('municipality') or entry.get('municipality_name') or '',
+                    'region': entry.get('region') or entry.get('region_name') or entry.get('regionName') or '',
+                    'role': entry.get('role') or '',
+                    'ip': entry.get('ip') or entry.get('ipAddress') or '',
+                })
+        except Exception as e:
+            print(f"[ERROR] Direct fetch from system_logs failed: {e}")
+        print(f"[DEBUG] Direct system_logs fetch: {len(logs)} logs. Sample: {logs[:1]}")
+        # Pass normalized logs to all tables for debug
+        return render_template(
+            'national/system/system-logs.html',
+            regional_logs=logs,
+            municipal_logs=logs,
+            user_logs=logs
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch system logs: {e}")
+        return render_template('national/system/system-logs.html',
+            regional_logs=[],
+            municipal_logs=[],
+            user_logs=[]
+        )
 
 @bp.route('/permissions')
 @role_required('national', 'national_admin')
@@ -2329,4 +2473,123 @@ def api_get_national_employees():
         return jsonify({'success': True, 'employees': employees, 'count': len(employees)})
     except Exception as e:
         print(f'[ERROR] Failed to fetch employees: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
+
+from google.cloud.firestore_v1.base_query import FieldFilter
+def aggregate_regional_audit_logs_to_national():
+    """Aggregate audit logs and transactions from all regions into national_audit_logs collection."""
+    db = get_firestore_db()
+    regions = [
+        'NCR', 'REGION-I', 'REGION-II', 'REGION-III', 'REGION-IV-A', 'REGION-IV-B', 'REGION-V',
+        'REGION-VI', 'REGION-VII', 'REGION-VIII', 'REGION-IX', 'REGION-X', 'REGION-XI',
+        'REGION-XII', 'REGION-XIII', 'CAR', 'REGION-BANGSAMORO'
+    ]
+    batch = db.batch()
+    count = 0
+    for region in regions:
+        # Fetch auditLogs for each region
+        audit_docs = db.collection('auditLogs').where(filter=FieldFilter('region', '==', region)).limit(1000).stream()
+        for doc in audit_docs:
+            entry = doc.to_dict() or {}
+            log = {
+                'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
+                'user': entry.get('actorName') or entry.get('actor') or entry.get('user') or entry.get('actorEmail') or '',
+                'entity': region,
+                'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
+                'details': entry.get('detail') or entry.get('description') or entry.get('message') or '',
+                'ip': entry.get('ip') or entry.get('ipAddress') or '',
+            }
+            ref = db.collection('national_audit_logs').document(f"{region}_{doc.id}")
+            batch.set(ref, log)
+            count += 1
+        # Fetch transactions for each region
+        tx_docs = db.collection('transactions').where(filter=FieldFilter('region', '==', region)).limit(1000).stream()
+        for doc in tx_docs:
+            tx = doc.to_dict() or {}
+            log = {
+                'timestamp': tx.get('updated_at') or tx.get('created_at') or tx.get('createdAt') or '',
+                'user': tx.get('updated_by') or tx.get('forwarded_by') or tx.get('user_email') or 'User',
+                'entity': region,
+                'action': tx.get('status') or '',
+                'details': tx.get('description') or '',
+                'ip': tx.get('ip') or tx.get('ipAddress') or '',
+            }
+            ref = db.collection('national_audit_logs').document(f"{region}_tx_{doc.id}")
+            batch.set(ref, log)
+            count += 1
+    batch.commit()
+    print(f"[INFO] Aggregated {count} audit logs to national_audit_logs.")
+
+@bp.route('/aggregate-audit-logs')
+@role_required('national', 'national_admin')
+def aggregate_audit_logs_route():
+    try:
+        aggregate_regional_audit_logs_to_national()
+        return jsonify({'success': True, 'message': 'Audit logs aggregated.'})
+    except Exception as e:
+        print(f"[ERROR] Failed to aggregate audit logs: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+
+@bp.route('/api/projects/<project_id>/fully-complete', methods=['POST'])
+@role_required('national', 'national_admin')
+def mark_project_fully_completed_national(project_id):
+    db = get_firestore_db()
+    try:
+        # Try to update in all possible project collections
+        collections = [
+            'municipal_projects',
+            'regional_projects',
+            'national_projects',
+            'projects'
+        ]
+        found = False
+        for col in collections:
+            doc_ref = db.collection(col).document(project_id)
+            doc = doc_ref.get()
+            if doc.exists:
+                doc_ref.update({
+                    'municipal_completed': True,
+                    'regional_completed': True,
+                    'status': 'fully_completed'
+                })
+                found = True
+                break
+        if not found:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+def record_national_audit_log(user, entity, action, details, ip=None, timestamp=None):
+    """Helper to record a new audit log entry in national_audit_logs."""
+    db = get_firestore_db()
+    from datetime import datetime
+    log = {
+        'timestamp': timestamp or datetime.utcnow().isoformat(),
+        'user': user,
+        'entity': entity,
+        'action': action,
+        'details': details,
+        'ip': ip or '',
+    }
+    db.collection('national_audit_logs').add(log)
+
+
+
+@bp.route('/api/user-management/accounts/<user_id>/enable', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_enable_admin_account(user_id):
+    """Enable (restore) a regional or municipal admin account."""
+    try:
+        db = get_firestore_db()
+        user_ref = db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user_ref.update({'status': 'Active'})
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] Failed to enable admin account: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500

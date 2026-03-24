@@ -190,12 +190,13 @@ def prune_expired_regional_system_logs(batch_size: int = REGIONAL_SYSTEM_LOGS_CL
     return deleted
 
 
-def list_regional_system_logs(limit: int = 500) -> List[Dict[str, Any]]:
+def list_regional_system_logs(limit: int = 500, db_override=None) -> List[Dict[str, Any]]:
     """List entries from the dedicated regional system logs collection."""
+    _db = db_override or db
     result: List[Dict[str, Any]] = []
 
     try:
-        query = db.collection(REGIONAL_SYSTEM_LOGS_COLLECTION)
+        query = _db.collection(REGIONAL_SYSTEM_LOGS_COLLECTION)
         query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
         query = query.limit(limit)
 
@@ -207,7 +208,7 @@ def list_regional_system_logs(limit: int = 500) -> List[Dict[str, Any]]:
     except Exception as e:
         print(f"[WARN] Indexed regional system logs query failed, falling back: {e}")
 
-    for doc in db.collection(REGIONAL_SYSTEM_LOGS_COLLECTION).stream():
+    for doc in _db.collection(REGIONAL_SYSTEM_LOGS_COLLECTION).stream():
         log_entry = doc.to_dict()
         if log_entry:
             result.append(log_entry)
@@ -260,13 +261,14 @@ def get_system_log(log_id: str) -> Optional[Dict[str, Any]]:
     return doc.to_dict() if doc.exists else None
 
 
-def list_system_logs(municipality: Optional[str] = None, limit: int = 500) -> List[Dict[str, Any]]:
+def list_system_logs(municipality: Optional[str] = None, limit: int = 500, db_override=None) -> List[Dict[str, Any]]:
     """List system logs, optionally filtered by municipality"""
+    _db = db_override or db
     result: List[Dict[str, Any]] = []
 
     # Preferred path: indexed query with server-side order/limit.
     try:
-        query = db.collection("system_logs")
+        query = _db.collection("system_logs")
         if municipality:
             query = _where(query, "municipality", "==", municipality)
 
@@ -282,7 +284,7 @@ def list_system_logs(municipality: Optional[str] = None, limit: int = 500) -> Li
         print(f"[WARN] Indexed system_logs query failed, falling back: {e}")
 
     # Fallback path: avoid order_by to prevent composite-index requirement.
-    query = db.collection("system_logs")
+    query = _db.collection("system_logs")
     if municipality:
         query = _where(query, "municipality", "==", municipality)
 
