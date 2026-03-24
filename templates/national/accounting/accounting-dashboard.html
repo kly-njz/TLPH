@@ -300,27 +300,70 @@
                     <div class="px-3 py-2 bg-blue-50 border-b border-blue-200 text-blue-900 text-[10px] font-bold flex items-center gap-2">
                       <span class="material-icons-round text-blue-900 text-sm">account_balance</span>
                       Current Budget for Distribution: ₱ {{ finance['national']['budget'] if finance['national'] else 'N/A' }}
-                      <button onclick="addBudget()" class="ml-4 bg-blue-900 hover:bg-blue-800 text-white px-2 py-1 rounded-sm text-[10px] font-black uppercase flex items-center gap-1 transition">
+                      <button onclick="openBudgetModal()" class="ml-4 bg-blue-900 hover:bg-blue-800 text-white px-2 py-1 rounded-sm text-[10px] font-black uppercase flex items-center gap-1 transition">
                         <span class="material-icons-round text-sm">add</span> Add Budget
                       </button>
                     </div>
+                    <!-- Add Budget Modal -->
+                    <div id="budgetModal" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 hidden">
+                      <div class="bg-white rounded shadow-lg p-6 w-[360px]">
+                        <h3 class="text-lg font-black mb-2">Add Budget for Distribution</h3>
+                        <form id="budgetForm">
+                          <label class="block text-xs font-bold mb-1">Amount</label>
+                          <input type="number" id="budgetAmount" class="w-full mb-2 p-2 border rounded text-xs font-bold" required min="0" step="0.01" title="Enter budget amount" placeholder="Enter amount">
+                          <div class="flex gap-2 mt-3">
+                            <button type="submit" class="bg-blue-900 text-white px-3 py-1 rounded text-xs font-black">Save</button>
+                            <button type="button" onclick="closeBudgetModal()" class="bg-slate-300 text-slate-700 px-3 py-1 rounded text-xs font-black">Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
                     <script>
-                    function addBudget() {
-                      const amount = prompt('Enter new budget amount to distribute:');
-                      if (!amount) return alert('Amount required.');
+                    function openBudgetModal() {
+                      const modal = document.getElementById('budgetModal');
+                      const input = document.getElementById('budgetAmount');
+                      if (modal) modal.classList.remove('hidden');
+                      if (input) input.focus();
+                    }
+
+                    function closeBudgetModal() {
+                      const modal = document.getElementById('budgetModal');
+                      const input = document.getElementById('budgetAmount');
+                      if (modal) modal.classList.add('hidden');
+                      if (input) input.value = '';
+                    }
+
+                    async function addBudget(amount) {
+                      if (amount === '' || amount == null) return alert('Amount required.');
+                      const normalized = parseFloat(amount);
+                      if (isNaN(normalized) || normalized < 0) return alert('Please enter a valid amount.');
                       fetch('/national/accounting/add-budget', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ amount })
+                        body: JSON.stringify({ amount: normalized })
                       }).then(r => r.json()).then(data => {
                         if (data.success) {
                           alert('Budget added!');
+                          closeBudgetModal();
                           location.reload();
                         } else {
                           alert('Failed to add budget.');
                         }
+                      }).catch(() => {
+                        alert('Failed to add budget.');
                       });
                     }
+
+                    // Wire form submit
+                    (function initBudgetModal() {
+                      const form = document.getElementById('budgetForm');
+                      if (!form) return;
+                      form.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        const amount = document.getElementById('budgetAmount')?.value;
+                        addBudget(amount);
+                      });
+                    })();
                     </script>
           <div class="bg-slate-50 border-b border-slate-300 px-3 py-2 flex flex-col md:flex-row md:items-center justify-between gap-2 shrink-0">
             <div class="flex items-center gap-2">
