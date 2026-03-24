@@ -888,6 +888,180 @@ def get_user_applications(user_id):
 
 # ==================== SUPERADMIN APPLICATION REGISTRY ====================
 
+def _sa_norm_text(value, fallback='N/A'):
+    text = str(value or '').strip()
+    return text if text else fallback
+
+
+def _sa_to_datetime(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except Exception:
+            return None
+    if hasattr(value, 'to_datetime'):
+        try:
+            return value.to_datetime()
+        except Exception:
+            return None
+    if hasattr(value, 'strftime'):
+        return value
+    return None
+
+
+def _sa_region_from_province(province_name):
+    prov = str(province_name or '').strip().lower()
+    if not prov:
+        return ''
+    try:
+        from models.region_province_map import region_province_map
+        for region, provinces in (region_province_map or {}).items():
+            for p in (provinces or []):
+                if str(p or '').strip().lower() == prov:
+                    return region
+    except Exception:
+        return ''
+    return ''
+
+
+def _sa_category_from_app_type(application_type):
+    app_type = str(application_type or '').strip().lower()
+    if any(k in app_type for k in ['farm', 'crop', 'soil', 'pest', 'fertilizer', 'chemical']):
+        return 'Farming'
+    if any(k in app_type for k in ['fish', 'fisher', 'marine', 'aqua']):
+        return 'Fisheries'
+    if any(k in app_type for k in ['livestock', 'animal', 'poultry']):
+        return 'Livestock'
+    if any(k in app_type for k in ['forest', 'timber', 'tree']):
+        return 'Forestry'
+    if any(k in app_type for k in ['wildlife', 'fauna', 'protected']):
+        return 'Wildlife'
+    if any(k in app_type for k in ['environment', 'compliance', 'impact', 'waste']):
+        return 'Environment'
+    return 'General'
+
+
+def _sa_status_payload(data):
+    status = str(data.get('status') or 'pending').strip().lower()
+    regional_status = str(data.get('regionalStatus') or '').strip().lower()
+    national_status = str(data.get('nationalStatus') or '').strip().lower()
+
+    approved_by_level = str(data.get('approvedByLevel') or '').strip()
+    rejected_by_level = str(data.get('rejectedByLevel') or '').strip()
+    forwarded_to_level = str(data.get('forwardedToLevel') or '').strip()
+    forwarded_by_level = str(data.get('forwardedByLevel') or '').strip()
+
+    if national_status in {'approved', 'rejected', 'cancelled', 'canceled'}:
+        effective_status = 'cancelled' if national_status in {'cancelled', 'canceled'} else national_status
+    elif status in {'approved', 'rejected', 'cancelled', 'canceled'}:
+        effective_status = 'cancelled' if status in {'cancelled', 'canceled'} else status
+    elif status in {'to review', 'to-review', 'review'} or regional_status in {'to review', 'to-review', 'review'}:
+        effective_status = 'to review'
+    elif status.startswith('forwarded') or forwarded_to_level:
+        effective_status = 'forwarded'
+    else:
+        effective_status = 'pending'
+
+    if effective_status == 'approved':
+        origin = approved_by_level or 'Unknown Level'
+        status_display = f'Approved by {origin}'
+    elif effective_status == 'rejected':
+        origin = rejected_by_level or 'Unknown Level'
+        status_display = f'Rejected by {origin}'
+    elif effective_status == 'cancelled':
+        origin = rejected_by_level or approved_by_level or 'Applicant/System'
+        status_display = f'Cancelled ({origin})'
+    elif effective_status == 'forwarded':
+        origin = forwarded_by_level or 'Unknown Level'
+        target = forwarded_to_level or 'Next Level'
+        status_display = f'Forwarded by {origin} to {target}'
+    elif effective_status == 'to review':
+        status_display = 'For Review'
+    else:
+        status_display = 'Pending'
+
+    return {
+        'status': effective_status,
+        'status_display': status_display,
+        'status_origin': {
+            'approvedByLevel': approved_by_level,
+            'rejectedByLevel': rejected_by_level,
+            'forwardedByLevel': forwarded_by_level,
+            'forwardedToLevel': forwarded_to_level,
+            'regionalStatus': regional_status,
+            'nationalStatus': national_status,
+            'rawStatus': status
+        }
+    }
+
+
+def _sa_extract_application(doc, users_map):
+    data = doc.to_dict() or {}
+    form_data = data.get('formData') or {}
+    user_data = users_map.get(data.get('userId', ''), {})
+
+    created_dt = _sa_to_datetime(data.get('createdAt') or data.get('dateFiled') or data.get('date_filed') or data.get('submittedAt'))
+    date_filed = created_dt.strftime('%Y-%m-%d') if created_dt else _sa_norm_text(data.get('dateFiled') or data.get('date_filed'), '')
+
+    province = data.get('province') or form_data.get('province') or user_data.get('province') or ''
+    region = (
+        data.get('region')
+        or data.get('regionName')
+        or form_data.get('region')
+        or user_data.get('region')
+        or user_data.get('regionName')
+        or _sa_region_from_province(province)
+        or 'N/A'
+    )
+
+    municipality = (
+        data.get('municipality')
+        or form_data.get('municipality')
+        or form_data.get('cityMunicipality')
+        or data.get('location')
+        or user_data.get('municipality')
+        or 'N/A'
+    )
+
+    application_type = _sa_norm_text(data.get('applicationType') or form_data.get('applicationType'), 'General')
+    sector = _sa_norm_text(data.get('category') or data.get('applicantCategory') or form_data.get('category') or _sa_category_from_app_type(application_type), 'General')
+
+    name = (
+        data.get('applicantName')
+        or data.get('fullName')
+        or data.get('name')
+        or f"{user_data.get('firstName', '')} {user_data.get('lastName', '')}".strip()
+        or user_data.get('displayName')
+        or 'N/A'
+    )
+
+    status_payload = _sa_status_payload(data)
+
+    return {
+        'id': doc.id,
+        'ref': doc.id[:12].upper(),
+        'date': date_filed,
+        'date_iso': date_filed,
+        'name': _sa_norm_text(name),
+        'sector': sector,
+        'application_type': application_type,
+        'region': _sa_norm_text(region),
+        'municipality': _sa_norm_text(municipality),
+        'province': _sa_norm_text(province),
+        'status': status_payload['status'],
+        'status_display': status_payload['status_display'],
+        'status_origin': status_payload['status_origin'],
+        'email': _sa_norm_text(data.get('email') or data.get('userEmail') or user_data.get('email')),
+        'contact': _sa_norm_text(data.get('contact') or data.get('contactNumber') or user_data.get('contactNumber')),
+        'description': _sa_norm_text(data.get('description') or data.get('notes') or form_data.get('description') or form_data.get('purpose')),
+        'form_data': form_data,
+        'raw': data
+    }
+
 @bp.route('/superadmin/applications', methods=['GET'])
 def superadmin_get_applications():
     """Return all applications for superadmin master registry"""
