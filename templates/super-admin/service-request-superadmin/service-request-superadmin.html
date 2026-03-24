@@ -496,12 +496,141 @@
             document.getElementById('chartModalWrapper').classList.remove('active');
         }
 
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/superadmin/service-requests/stats');
+                const payload = await res.json();
+                if (!payload.success) return;
+
+                const stats = payload.stats || {};
+                document.getElementById('kpiTotal').textContent = Number(stats.total || 0).toLocaleString();
+                document.getElementById('kpiPending').textContent = Number(stats.pending || 0).toLocaleString();
+                document.getElementById('kpiReview').textContent = Number(stats.for_review || 0).toLocaleString();
+                document.getElementById('kpiApproved').textContent = Number(stats.approved || 0).toLocaleString();
+                document.getElementById('kpiCancelled').textContent = Number(stats.cancelled || 0).toLocaleString();
+            } catch (e) {
+                console.warn('Failed to load service request stats:', e);
+            }
+        }
+
+        function refreshChartWidgets() {
+            if (myTrendChart) {
+                myTrendChart.data.labels = CHART_STATE.trend.labels;
+                myTrendChart.data.datasets[0].data = CHART_STATE.trend.data;
+                myTrendChart.update();
+            }
+            if (myServiceChart) {
+                myServiceChart.data.labels = CHART_STATE.categories.labels;
+                myServiceChart.data.datasets[0].data = CHART_STATE.categories.data;
+                myServiceChart.update();
+            }
+        }
+
+        async function loadCharts() {
+            try {
+                const res = await fetch('/api/superadmin/service-requests/charts');
+                const payload = await res.json();
+                if (!payload.success) return;
+
+                CHART_STATE.trend.labels = Array.isArray(payload.trend?.labels) ? payload.trend.labels : [];
+                CHART_STATE.trend.data = Array.isArray(payload.trend?.data) ? payload.trend.data : [];
+                CHART_STATE.categories.labels = Array.isArray(payload.categories?.labels) ? payload.categories.labels : [];
+                CHART_STATE.categories.data = Array.isArray(payload.categories?.data) ? payload.categories.data : [];
+                refreshChartWidgets();
+            } catch (e) {
+                console.warn('Failed to load service request charts:', e);
+            }
+        }
+
+        async function loadAuditTrail() {
+            const panel = document.getElementById('auditTrailList');
+            try {
+                const res = await fetch('/api/superadmin/service-requests/audit-trail');
+                const payload = await res.json();
+                if (!payload.success) {
+                    panel.innerHTML = '<p class="m-0 leading-tight border-l border-red-900 pl-2 text-red-400"><span class="text-red-500">[ERR]</span> Unable to load audit trail</p>';
+                    return;
+                }
+
+                const entries = Array.isArray(payload.entries) ? payload.entries : [];
+                if (!entries.length) {
+                    panel.innerHTML = '<p class="m-0 leading-tight border-l border-slate-700 pl-2"><span class="text-slate-500">[--:--]</span> No recent service request activities</p>';
+                    return;
+                }
+
+                panel.innerHTML = entries.map(entry => {
+                    const status = String(entry.status || '').toLowerCase();
+                    const borderClass = status === 'approved'
+                        ? 'border-emerald-900 text-emerald-400'
+                        : status === 'rejected'
+                            ? 'border-rose-900 text-rose-400'
+                            : status === 'cancelled'
+                                ? 'border-red-900 text-red-400'
+                                : 'border-slate-700 text-slate-300';
+
+                    return `<p class="m-0 leading-tight border-l pl-2 ${borderClass}"><span class="text-slate-500">[${escapeHtml(entry.time || '--:--')}]</span> ${escapeHtml(entry.ref || 'N/A')} • ${escapeHtml(entry.status_display || entry.status || 'Pending')} • ${escapeHtml(entry.name || 'N/A')}</p>`;
+                }).join('');
+            } catch (e) {
+                panel.innerHTML = '<p class="m-0 leading-tight border-l border-red-900 pl-2 text-red-400"><span class="text-red-500">[ERR]</span> Failed to load audit trail</p>';
+            }
+        }
+
+        function exportTableToCSV() {
+            const rows = FILTERED_DATA.length ? FILTERED_DATA : DATA;
+            if (!rows.length) {
+                alert('No service request records to export.');
+                return;
+            }
+
+            const headers = ['Date Filed', 'Registry Ref', 'Applicant', 'Category', 'Region', 'Municipality', 'Status'];
+            const lines = rows.map(r => [
+                r.date || '',
+                r.ref || '',
+                r.name || '',
+                r.category || '',
+                r.region || '',
+                r.municipality || '',
+                r.status_display || r.status || ''
+            ]);
+
+            const csv = [headers, ...lines]
+                .map(cols => cols.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+                .join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const today = new Date().toISOString().slice(0, 10);
+            link.href = url;
+            link.download = `service-request-registry-${today}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
         function clearFilters() {
             document.getElementById('tableSearch').value = '';
             document.getElementById('catFilter').value = 'all';
             document.getElementById('regFilter').value = 'all';
             renderTable();
         }
+
+        window.onload = async () => {
+            initCharts();
+
+            try {
+                await fetchRegistry();
+            } catch (e) {
+                console.error('Failed to load service request registry:', e);
+            }
+
+            await Promise.all([
+                loadStats(),
+                loadCharts(),
+                loadAuditTrail()
+            ]);
+        };
     </script>
 </body>
 </html>
