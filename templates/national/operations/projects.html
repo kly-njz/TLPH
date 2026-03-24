@@ -151,7 +151,7 @@
                         {% else %}
                           <button onclick="openEditModal(this)" class="text-blue-700 font-bold uppercase hover:underline text-[8px]">Edit</button>
                         {% endif %}
-                        <button onclick="deleteProject('{{ project.id }}')" class="text-rose-700 font-bold uppercase hover:underline text-[8px]">Delete</button>
+                        <button onclick="openDeleteModal(this, '{{ project.id }}')" class="text-rose-700 font-bold uppercase hover:underline text-[8px]">Delete</button>
                         {% if project.status == 'Done by Regional' or project.status == 'done_by_regional' %}
                           <button onclick="markProjectComplete('{{ project.id }}')" class="text-emerald-700 font-bold uppercase hover:underline text-[8px]">Complete</button>
                         {% endif %}
@@ -335,6 +335,33 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Delete Project Modal -->
+  <div id="deleteProjectModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/40">
+    <div class="bg-white border border-slate-300 rounded-[2px] shadow-xl w-full max-w-sm mx-4">
+      <div class="bg-rose-700 text-white px-4 py-2.5 flex items-center justify-between rounded-t-[2px]">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-round text-[16px]">delete_forever</span>
+          <span class="text-xs font-black uppercase tracking-widest">Delete Project</span>
+        </div>
+        <button onclick="closeDeleteModal()" class="hover:text-rose-100 transition">
+          <span class="material-icons-round text-[18px]">close</span>
+        </button>
+      </div>
+      <div class="p-4 flex flex-col gap-3">
+        <p class="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+          Are you sure you want to delete <span id="deleteProjectName" class="text-rose-700"></span>?
+        </p>
+        <p class="text-[9px] text-slate-500 uppercase font-bold tracking-widest">This action cannot be undone.</p>
+        <div class="flex justify-end gap-2 pt-1 border-t border-slate-100">
+          <button type="button" onclick="closeDeleteModal()" class="gov-btn bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200">Cancel</button>
+          <button type="button" onclick="confirmDeleteProject()" class="gov-btn bg-rose-700 hover:bg-rose-800 text-white flex items-center gap-1">
+            <span class="material-icons-round text-[12px]">delete</span> Delete
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -627,6 +654,34 @@
       document.getElementById('editProjectModal').classList.add('hidden');
       editingRow = null;
     }
+
+    // --- Delete Modal ---
+    let deleteTarget = { id: null, row: null };
+    function openDeleteModal(btn, projectId) {
+      const tr = btn.closest('tr');
+      const nameCell = tr?.querySelector('td');
+      const name = nameCell ? nameCell.textContent.trim() : 'this project';
+      deleteTarget = { id: projectId, row: tr };
+      document.getElementById('deleteProjectName').textContent = `"${name}"`;
+      document.getElementById('deleteProjectModal').classList.remove('hidden');
+    }
+    function closeDeleteModal() {
+      document.getElementById('deleteProjectModal').classList.add('hidden');
+      deleteTarget = { id: null, row: null };
+    }
+    function confirmDeleteProject() {
+      if (!deleteTarget.id) return;
+      if (deleteTarget.row) {
+        deleteTarget.row.remove();
+      }
+      closeDeleteModal();
+      alert('Project deleted successfully.');
+      // Backend integration note:
+      // fetch(`/api/projects/${deleteTarget.id}`, { method: 'DELETE' });
+    }
+    document.getElementById('deleteProjectModal').addEventListener('click', function(e) {
+      if (e.target === this) closeDeleteModal();
+    });
 
     // --- Project Approval/Rejection ---
     function approveProject(projectId) {
