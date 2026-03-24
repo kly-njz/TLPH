@@ -358,28 +358,97 @@
     </div>
 
     <script>
-        const MOCK_DATA = [
-            { date: "2026-01-15", ref: "PMT-WLT-092", name: "Green Agro-Exponents", reg: "IV-B", status: "Active", category: "Wildlife Trade" },
-            { date: "2026-02-01", ref: "ECC-2026-X11", name: "BuildCorp Phil Inc", reg: "NCR", status: "Active", category: "Environmental Compliance" },
-            { date: "2025-12-10", ref: "PMT-FOR-881", name: "Luzon Timber Corp", reg: "III", status: "Expired", category: "Forestry" },
-            { date: "2026-02-14", ref: "MIN-2026-005", name: "Surigao Mining Co", reg: "XIII", status: "Active", category: "Mining" }
-        ];
-
+        let PERMIT_DATA = [];
+        let FILTERED_DATA = [];
         let myIssuanceChart, myPermitTypeChart, modalChartInstance = null;
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function getStatusClass(status) {
+            const s = String(status || '').toLowerCase();
+            if (s.includes('approved')) return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+            if (s.includes('rejected')) return 'bg-rose-50 text-rose-800 border-rose-200';
+            if (s.includes('cancelled')) return 'bg-red-50 text-red-800 border-red-200';
+            if (s.includes('review') || s.includes('forwarded')) return 'bg-blue-50 text-blue-800 border-blue-200';
+            return 'bg-amber-50 text-amber-800 border-amber-200';
+        }
+
+        async function loadPermitsData() {
+            try {
+                const res = await fetch('/api/superadmin/permits');
+                const payload = await res.json();
+                if (!payload.success) throw new Error(payload.message || 'Failed to load permits');
+
+                PERMIT_DATA = (payload.permits || payload.data || []).map(row => ({
+                    id: row.id,
+                    date: row.date || '-',
+                    ref: row.ref || row.id || 'N/A',
+                    name: row.name || 'N/A',
+                    reg: row.region || 'N/A',
+                    municipality: row.municipality || 'N/A',
+                    category: row.category || 'General',
+                    status: row.status || 'pending',
+                    statusDisplay: row.status_display || row.status || 'Pending',
+                    statusActorLevel: row.status_actor_level || '',
+                    statusTargetLevel: row.status_target_level || '',
+                }));
+
+                populateCategoryFilter();
+                renderTable();
+            } catch (err) {
+                console.error('Permits fetch error:', err);
+                PERMIT_DATA = [];
+                FILTERED_DATA = [];
+                renderTable();
+            }
+        }
+
+        function populateCategoryFilter() {
+            const select = document.getElementById('catFilter');
+            const current = select.value || 'all';
+            const categories = [...new Set(PERMIT_DATA.map(r => r.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+            select.innerHTML = '<option value="all">-- ALL CATEGORIES --</option>';
+            categories.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                select.appendChild(opt);
+            });
+            select.value = categories.includes(current) ? current : 'all';
+        }
 
         function getFilteredData() {
             const body = document.getElementById('appTableBody');
             const search = document.getElementById('searchInput').value.toLowerCase();
-            const sector = document.getElementById('catFilter').value;
+            const category = document.getElementById('catFilter').value;
             const region = document.getElementById('regFilter').value;
 
-            const filtered = MOCK_DATA.filter(item => {
-                const matchSearch = Object.values(item).join(" ").toLowerCase().includes(search);
-                const matchSector = sector === 'all' || item.category === sector;
+            FILTERED_DATA = PERMIT_DATA.filter(item => {
+                const haystack = [
+                    item.date,
+                    item.ref,
+                    item.name,
+                    item.category,
+                    item.reg,
+                    item.municipality,
+                    item.statusDisplay,
+                    item.statusActorLevel,
+                    item.statusTargetLevel
+                ].join(' ').toLowerCase();
+                const matchSearch = haystack.includes(search);
+                const matchCategory = category === 'all' || item.category === category;
                 const matchRegion = region === 'all' || item.reg === region;
-                return matchSearch && matchSector && matchRegion;
+                return matchSearch && matchCategory && matchRegion;
             });
-            return { filtered, body };
+            return { filtered: FILTERED_DATA, body };
         }
 
         function renderTable() {
@@ -388,26 +457,24 @@
             body.innerHTML = '';
             document.getElementById('resCount').textContent = filtered.length;
 
-            filtered.forEach(row => {
-                const sCol = row.status === 'Active' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200';
-                const safeRef = row.ref.replace(/'/g, "\\'");
-                
+            filtered.forEach((row, index) => {
+                const sCol = getStatusClass(row.statusDisplay);
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-amber-50/50 transition-colors data-row";
-                
+                tr.className = 'hover:bg-amber-50/50 transition-colors data-row';
+
                 tr.innerHTML = `
-                    <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">${row.date}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap">${escapeHtml(row.date)}</td>
                     <td class="px-3 py-1.5 border-r border-slate-100">
-                        <div class="font-black text-amber-700 uppercase leading-tight">${row.ref}</div>
-                        <div class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">${row.name}</div>
+                        <div class="font-black text-amber-700 uppercase leading-tight">${escapeHtml(row.ref)}</div>
+                        <div class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">${escapeHtml(row.name)}</div>
                     </td>
-                    <td class="px-3 py-1.5 text-center font-bold uppercase text-[9px] text-slate-600 border-r border-slate-100">${row.category}</td>
-                    <td class="px-3 py-1.5 text-center font-black text-slate-800 border-r border-slate-100 whitespace-nowrap">Region ${row.reg}</td>
+                    <td class="px-3 py-1.5 text-center font-bold uppercase text-[9px] text-slate-600 border-r border-slate-100">${escapeHtml(row.category)}</td>
+                    <td class="px-3 py-1.5 text-center font-black text-slate-800 border-r border-slate-100 whitespace-nowrap">Region ${escapeHtml(row.reg)} <span class="text-slate-400 font-normal">| ${escapeHtml(row.municipality)}</span></td>
                     <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                        <span class="status-badge ${sCol}">${row.status}</span>
+                        <span class="status-badge ${sCol}">${escapeHtml(row.statusDisplay)}</span>
                     </td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <button onclick="openPermitViewModal('${safeRef}')" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest bg-transparent border-none cursor-pointer">Full View</button>
+                        <button onclick="openPermitViewModal(${index})" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest bg-transparent border-none cursor-pointer">Full View</button>
                     </td>
                 `;
                 body.appendChild(tr);
@@ -568,13 +635,26 @@
                 return;
             }
 
-            MOCK_DATA.unshift({ date, ref, name, reg, status, category });
+            PERMIT_DATA.unshift({
+                id: `manual-${Date.now()}`,
+                date,
+                ref,
+                name,
+                reg,
+                municipality: 'N/A',
+                category,
+                status,
+                statusDisplay: status,
+                statusActorLevel: '',
+                statusTargetLevel: ''
+            });
+            populateCategoryFilter();
             renderTable();
             closeIssuePermitModal();
         }
 
-        function openPermitViewModal(ref) {
-            const row = MOCK_DATA.find(item => item.ref === ref);
+        function openPermitViewModal(index) {
+            const row = FILTERED_DATA[index];
             if (!row) {
                 alert('Permit record not found.');
                 return;
@@ -583,9 +663,9 @@
             document.getElementById('viewRef').textContent = row.ref;
             document.getElementById('viewName').textContent = row.name;
             document.getElementById('viewDate').textContent = row.date;
-            document.getElementById('viewRegion').textContent = `Region ${row.reg}`;
+            document.getElementById('viewRegion').textContent = `Region ${row.reg} | ${row.municipality || 'N/A'}`;
             document.getElementById('viewCategory').textContent = row.category;
-            document.getElementById('viewStatus').textContent = row.status;
+            document.getElementById('viewStatus').textContent = row.statusDisplay;
 
             const modal = document.getElementById('permitViewModal');
             const body = document.getElementById('permitViewBody');
