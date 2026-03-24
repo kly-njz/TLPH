@@ -1890,6 +1890,56 @@ def superadmin_get_permits():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@bp.route('/superadmin/permits/stats', methods=['GET'])
+def superadmin_permits_stats():
+    """Return KPI stats for superadmin permits/license registry."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = list(db.collection('license_applications').limit(7000).stream())
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_permit_application(doc, users_map) for doc in docs]
+        stats = {
+            'total': len(rows),
+            'approved': 0,
+            'rejected': 0,
+            'pending': 0,
+            'for_review': 0,
+            'forwarded': 0,
+            'cancelled': 0,
+        }
+
+        for row in rows:
+            st = str(row.get('status') or 'pending').lower()
+            if st == 'approved':
+                stats['approved'] += 1
+            elif st == 'rejected':
+                stats['rejected'] += 1
+            elif st == 'cancelled':
+                stats['cancelled'] += 1
+            elif st == 'forwarded':
+                stats['forwarded'] += 1
+            elif st in {'to review', 'review'}:
+                stats['for_review'] += 1
+            else:
+                stats['pending'] += 1
+
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        print(f'[ERROR] superadmin_permits_stats: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ==================== PROJECT MANAGEMENT ====================
 
 @bp.route('/projects/create', methods=['POST'])
