@@ -290,6 +290,32 @@
   </div>
 </div>
 
+<div id="actionModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+  <div class="gov-card w-full max-w-sm shadow-2xl flex flex-col">
+    <div id="actionModalHeader" class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2">
+        <span id="actionModalIcon" class="material-icons-round text-[18px]">help</span>
+        <span id="actionModalTitle" class="font-black uppercase text-xs tracking-widest">Confirm Action</span>
+      </div>
+      <button type="button" onclick="closeActionModal()" class="text-slate-200 hover:text-white">
+        <span class="material-icons-round text-[20px]">close</span>
+      </button>
+    </div>
+    <div class="p-4 flex flex-col gap-2">
+      <p id="actionModalMessage" class="text-[10px] font-bold text-slate-700 uppercase tracking-widest"></p>
+      <div class="bg-slate-50 border border-slate-200 rounded-[2px] p-2">
+        <p id="actionModalMeta" class="text-[9px] font-bold text-slate-600"></p>
+      </div>
+    </div>
+    <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+      <button type="button" onclick="closeActionModal()" class="gov-btn bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300">Cancel</button>
+      <button id="actionModalConfirmBtn" type="button" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white flex items-center gap-1">
+        <span class="material-icons-round text-[12px]">check</span> Confirm
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
   // --- Modals ---
   function openCreateModal() {
@@ -482,12 +508,69 @@
     if (e.target === this) closeViewModal();
   });
 
+  // --- Action Modal (Approve/Delete) ---
+  let pendingAction = null;
+
+  function openActionModal(type, btn) {
+    const d = getRowData(btn);
+    if (!d.row) return;
+    pendingAction = { type, btn };
+
+    const header = document.getElementById('actionModalHeader');
+    const icon = document.getElementById('actionModalIcon');
+    const title = document.getElementById('actionModalTitle');
+    const message = document.getElementById('actionModalMessage');
+    const meta = document.getElementById('actionModalMeta');
+    const confirmBtn = document.getElementById('actionModalConfirmBtn');
+
+    if (type === 'approve') {
+      header.className = 'bg-emerald-700 text-white px-4 py-3 flex items-center justify-between shrink-0';
+      icon.textContent = 'check_circle';
+      title.textContent = 'Approve Quotation';
+      message.textContent = 'Confirm approval for this quotation?';
+      confirmBtn.className = 'gov-btn bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1';
+      confirmBtn.innerHTML = '<span class="material-icons-round text-[12px]">check</span> Approve';
+    } else {
+      header.className = 'bg-rose-700 text-white px-4 py-3 flex items-center justify-between shrink-0';
+      icon.textContent = 'delete_forever';
+      title.textContent = 'Delete Quotation';
+      message.textContent = 'This action will permanently remove the record.';
+      confirmBtn.className = 'gov-btn bg-rose-700 hover:bg-rose-800 text-white flex items-center gap-1';
+      confirmBtn.innerHTML = '<span class="material-icons-round text-[12px]">delete</span> Delete';
+    }
+
+    meta.textContent = `${d.number}  •  ${d.client}  •  ${d.amount}`;
+
+    document.getElementById('actionModal').classList.remove('hidden');
+    document.getElementById('actionModal').classList.add('flex');
+  }
+
+  function closeActionModal() {
+    document.getElementById('actionModal').classList.add('hidden');
+    document.getElementById('actionModal').classList.remove('flex');
+    pendingAction = null;
+  }
+
+  document.getElementById('actionModal').addEventListener('click', function(e) {
+    if (e.target === this) closeActionModal();
+  });
+
+  document.getElementById('actionModalConfirmBtn').addEventListener('click', async function() {
+    if (!pendingAction) return;
+    const { type, btn } = pendingAction;
+    closeActionModal();
+    if (type === 'approve') {
+      await performApprove(btn);
+    } else if (type === 'delete') {
+      await performDelete(btn);
+    }
+  });
+
   // Mocked API Actions (Remove shared logic for local testing)
 
-  async function approveQuotation(btn) {
+  async function performApprove(btn) {
     const d = getRowData(btn);
     if (!d.row || !d.row.dataset.id) return;
-    if (!confirm('Approve this quotation?')) return;
     try {
       const res = await fetch(`/national/api/quotations/${d.row.dataset.id}/status`, {
         method: 'POST',
@@ -506,10 +589,9 @@
     }
   }
 
-  async function deleteQuotation(btn) {
+  async function performDelete(btn) {
     const d = getRowData(btn);
     if (!d.row || !d.row.dataset.id) return;
-    if (!confirm('Are you sure you want to delete this quotation?')) return;
     try {
       const res = await fetch(`/national/api/quotations/${d.row.dataset.id}`, {
         method: 'DELETE',
@@ -522,6 +604,14 @@
     } catch (err) {
       alert(err.message || 'Unable to delete quotation.');
     }
+  }
+
+  function approveQuotation(btn) {
+    openActionModal('approve', btn);
+  }
+
+  function deleteQuotation(btn) {
+    openActionModal('delete', btn);
   }
 
   // --- Export CSV ---
