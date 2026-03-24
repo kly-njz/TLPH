@@ -1,336 +1,350 @@
-{% extends 'national/operations/leave-request-national.html' %}
-{% block title %}National Leave Request{% endblock %}
-{% block head %}
-<style>
-  .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-  .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
-  .gov-input:focus { border-color: #1d4ed8; }
-  .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
-  .gov-label { display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 2px; letter-spacing: 0.025em; }
-</style>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Leave Request | National Admin</title>
 
-{% block leave_content %}
-<div x-data="leavePage()" class="flex flex-col gap-2">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
-  <header class="gov-card p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-[2px] bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700">
-        <span class="material-icons-round text-[18px]">fact_check</span>
-      </div>
-      <div class="leading-tight">
-        <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Leave Requests</h1>
-        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">National Leave Registry & Review</p>
-      </div>
-    </div>
-    <div class="flex gap-2 no-print">
-      <button @click="openCreateModal()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
-        <span class="material-icons-round text-[14px]">add_task</span> New Request
-      </button>
-      <button @click="downloadCsv(['Name', 'Position', 'Office', 'Type', 'Status'], leaveRequests.map(r => [r.applicant_name, r.position, r.office, r.leave_type, r.status]), 'Leave_Requests.csv')" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
-        <span class="material-icons-round text-[14px]">assessment</span> Export CSV
-      </button>
-    </div>
-  </header>
-  <section class="grid grid-cols-2 md:grid-cols-4 gap-2">
-    <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 bg-amber-50/30">
-      <p class="text-[9px] font-black uppercase tracking-widest text-amber-800 m-0">Pending Review</p>
-      <div class="text-xl font-black text-amber-700 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'pending').length">0</div>
-    </div>
-    <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
-      <p class="text-[9px] font-black uppercase tracking-widest text-emerald-800 m-0">Approved</p>
-      <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'approved').length">0</div>
-    </div>
-    <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
-      <p class="text-[9px] font-black uppercase tracking-widest text-blue-800 m-0">Current Leaves</p>
-      <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'approved').length">0</div>
-    </div>
-    <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600">
-      <p class="text-[9px] font-black uppercase tracking-widest text-rose-800 m-0">Disapproved</p>
-      <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => ['disapproved','denied','rejected'].includes((r.status || '').toLowerCase())).length">0</div>
-    </div>
-  </section>
+  <style>
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
 
-  <section class="gov-card p-2 px-3 flex flex-wrap gap-2 items-center justify-between bg-slate-50 border-b border-slate-200 no-print">
-    <div class="flex flex-wrap gap-1.5 items-center">
-      <select class="gov-input cursor-pointer" x-model="filters.type" title="Filter by leave type">
-        <option value="">All Types</option>
-        <option value="Vacation">Vacation</option>
-        <option value="Sick">Sick</option>
-        <option value="Forced">Forced</option>
-      </select>
-      <select class="gov-input cursor-pointer" x-model="filters.status" title="Filter by status">
-        <option value="">All Status</option>
-        <option value="Pending">Pending</option>
-        <option value="Approved">Approved</option>
-        <option value="Disapproved">Disapproved</option>
-      </select>
-      <div class="relative min-w-[180px]">
-        <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-        <input type="text" placeholder="Search applicant..." class="gov-input pl-6 w-full" x-model="filters.search">
-      </div>
-      <button @click="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-800 font-bold uppercase text-[9px] rounded-[2px] transition hover:bg-slate-300 shadow-sm">Reset</button>
-    </div>
-  </section>
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #1d4ed8; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+    .gov-label { display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 2px; letter-spacing: 0.025em; }
+  </style>
+</head>
 
-  <section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white mt-1">
-    <div x-show="loading" class="flex-1 flex items-center justify-center p-8">
-      <span class="text-sm text-slate-500 flex items-center gap-2">
-        <span class="material-icons-round animate-spin">refresh</span> Loading requests...
-      </span>
-    </div>
-    
-    <div x-show="!loading" class="flex-1 overflow-auto custom-scrollbar bg-white" style="display: none;">
-      <table class="w-full text-left border-collapse">
-        <thead class="sticky top-0 z-10 shadow-sm bg-slate-100 border-b-2 border-slate-300">
-          <tr>
-            <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 w-48">Employee / ID</th>
-            <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Leave Type</th>
-            <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center w-44">Inclusive Dates</th>
-            <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center w-12">Days</th>
-            <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center w-20">Status</th>
-            <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center w-16 no-print">Action</th>
-          </tr>
-        </thead>
-        <tbody class="text-[10px] divide-y divide-slate-100">
-          
-          <template x-if="!loading && filteredRequests.length === 0">
-            <tr>
-              <td colspan="7" class="px-3 py-8 text-center text-slate-400 italic text-sm">No leave applications found.</td>
-            </tr>
-          </template>
-          
-          <template x-for="req in filteredRequests" :key="req.id">
-            <tr class="hover:bg-slate-50 transition">
-              <td class="px-3 py-2 border-r border-slate-100 leading-tight">
-                <span class="font-black text-slate-900 uppercase block text-[13px]" x-text="req.applicant_name || 'N/A'"></span>
-                <span class="text-[10px] text-slate-500 font-mono block" x-text="req.employee_id || req.id || ''"></span>
-              </td>
-              <td class="px-3 py-2 border-r border-slate-100">
-                <span class="font-bold text-blue-900 uppercase block" x-text="req.leave_type || 'N/A'"></span>
-                <span class="text-[10px] text-slate-400 block" x-text="req.purpose || '-' "></span>
-              </td>
-              <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100" x-text="formatInclusive(req.from_date, req.to_date)"></td>
-              <td class="px-3 py-2 text-center font-black border-r border-slate-100" x-text="req.days || 0"></td>
-              <td class="px-3 py-2 text-center border-r border-slate-100">
-                <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[10px] font-black uppercase border w-full"
-                      :class="statusClass(req.status)"
-                      x-text="req.status || 'Pending'"></span>
-              </td>
-              <td class="px-3 py-2 text-center no-print">
-                <button @click="openView(req)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Review</button>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
-    
-    <div class="bg-slate-50 border-t border-slate-200 px-3 py-1 text-[9px] text-slate-500 flex justify-between items-center shrink-0 italic uppercase tracking-wider">
-      <span>Official National Leave Registry - FY 2026</span>
-      <span>Visible Applications: <span class="font-black text-slate-800" x-text="filteredRequests.length">0</span></span>
-    </div>
-  </section>
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+  <div class="flex-1 flex overflow-hidden">
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'national/sidenav-national.html' %}
+    </aside>
 
-  <!-- Review Modal -->
-  <div x-show="viewModalOpen && selectedRequest" style="display:none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
-    <div @click.away="viewModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
-      <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
-        <h3 class="text-[10px] font-black uppercase tracking-widest m-0">Review Leave Application</h3>
-        <button @click="viewModalOpen = false" class="text-slate-400 hover:text-white transition-colors">
-          <span class="material-icons-round text-[16px]">close</span>
-        </button>
-      </div>
-      <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar flex-1">
-        <template x-if="selectedRequest">
-          <div>
-            <div class="grid grid-cols-2 gap-3 mb-4">
-              <div class="bg-white border border-slate-200 p-3 rounded-[2px]">
-                <h4 class="text-[8px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Applicant Information</h4>
-                <div class="space-y-1 uppercase font-bold text-slate-700 text-[9px]">
-                  <p><span class="text-slate-400">Name:</span> <span x-text="selectedRequest.applicant_name || 'N/A'"></span></p>
-                  <p><span class="text-slate-400">Employee ID:</span> <span x-text="selectedRequest.employee_id || selectedRequest.id || 'N/A'"></span></p>
-                </div>
-              </div>
-              <div class="bg-white border border-slate-200 p-3 rounded-[2px]">
-                <h4 class="text-[8px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Leave Details</h4>
-                <div class="grid grid-cols-2 gap-2 text-center">
-                  <div class="bg-slate-50 p-1 border border-slate-100"><span class="block text-[7px] text-slate-400 font-black">Type</span><span class="font-mono font-black text-slate-800" x-text="selectedRequest.leave_type || 'N/A'"></span></div>
-                  <div class="bg-slate-50 p-1 border border-slate-100"><span class="block text-[7px] text-slate-400 font-black">Days</span><span class="font-mono font-black text-slate-800" x-text="selectedRequest.days || 0"></span></div>
-                </div>
-              </div>
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 overflow-y-auto custom-scrollbar" x-data="leavePage()">
+      <div class="flex flex-col gap-2">
+
+        <header class="gov-card p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[2px] bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700">
+              <span class="material-icons-round text-[18px]">fact_check</span>
             </div>
-            <div class="bg-white border border-slate-300 p-4 rounded-[2px] space-y-4">
-              <h4 class="text-[9px] font-black uppercase text-slate-800 border-b border-slate-100 pb-1">Application Details</h4>
-              <div class="grid grid-cols-3 gap-3">
-                <div><label class="gov-label">Leave Type</label><span class="font-black text-blue-900 uppercase" x-text="selectedRequest.leave_type || 'N/A'"></span></div>
-                <div><label class="gov-label">Purpose</label><span class="font-black text-amber-700 uppercase" x-text="selectedRequest.purpose || '-' "></span></div>
-                <div><label class="gov-label">Days Applied</label><span class="font-black text-slate-800 font-mono text-sm" x-text="(selectedRequest.days || 0) + ' Days'"></span></div>
-              </div>
-              <div><label class="gov-label">Inclusive Dates</label><span class="font-black text-slate-800 uppercase font-mono tracking-tight" x-text="formatInclusive(selectedRequest.from_date, selectedRequest.to_date)"></span></div>
-            </div>
-            <div class="mt-4">
-              <label class="gov-label">Admin Remarks</label>
-              <textarea x-model="selectedRequest.remarks" class="gov-input w-full text-[10px]" rows="2" placeholder="Enter notes or recommendation..."></textarea>
+            <div class="leading-tight">
+              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Leave Requests</h1>
+              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Leave Registry & Review</p>
             </div>
           </div>
-        </template>
-      </div>
-      <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
-        <button @click="updateStatus(selectedRequest.id, 'Disapproved')" class="gov-btn border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100">Disapprove</button>
-        <button @click="updateStatus(selectedRequest.id, 'Approved')" class="gov-btn bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Approve Form</button>
-      </div>
-    </div>
-  </div>
+          <div class="flex gap-2 no-print">
+            <button @click="openCreateModal()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+              <span class="material-icons-round text-[14px]">add_task</span> New Request
+            </button>
+            <button @click="downloadCsv(['Name', 'Position', 'Office', 'Type', 'Status'], leaveRequests.map(r => [r.applicant_name, r.position, r.office, r.leave_type, r.status]), 'Leave_Requests.csv')" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+              <span class="material-icons-round text-[14px]">assessment</span> Export CSV
+            </button>
+          </div>
+        </header>
+        <section class="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 bg-amber-50/30">
+            <p class="text-[9px] font-black uppercase tracking-widest text-amber-800 m-0">Pending Review</p>
+            <div class="text-xl font-black text-amber-700 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'pending').length">0</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
+            <p class="text-[9px] font-black uppercase tracking-widest text-emerald-800 m-0">Approved</p>
+            <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'approved').length">0</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
+            <p class="text-[9px] font-black uppercase tracking-widest text-blue-800 m-0">Current Leaves</p>
+            <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'approved').length">0</div>
+          </div>
+          <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600">
+            <p class="text-[9px] font-black uppercase tracking-widest text-rose-800 m-0">Disapproved</p>
+            <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => ['disapproved','denied','rejected'].includes((r.status || '').toLowerCase())).length">0</div>
+          </div>
+        </section>
 
-  <script>
-    window.leavePage = function() {
-      return {
-        loading: true, 
-        viewModalOpen: false,
-        createModalOpen: false,
-        selectedRequest: null,
-        viewData: {},
-        leaveRequests: [],
-        filters: { search: '', type: '', status: '' },
+        <section class="gov-card p-2 px-3 flex flex-wrap gap-2 items-center justify-between bg-slate-50 border-b border-slate-200 no-print">
+          <div class="flex flex-wrap gap-1.5 items-center">
+            <select class="gov-input cursor-pointer" x-model="filters.type" title="Filter by leave type">
+              <option value="">All Types</option>
+              <option value="Vacation">Vacation</option>
+              <option value="Sick">Sick</option>
+              <option value="Forced">Forced</option>
+            </select>
+            <select class="gov-input cursor-pointer" x-model="filters.status" title="Filter by status">
+              <option value="">All Status</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Disapproved">Disapproved</option>
+            </select>
+            <div class="relative min-w-[180px]">
+              <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+              <input type="text" placeholder="Search applicant..." class="gov-input pl-6 w-full" x-model="filters.search">
+            </div>
+            <button @click="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-800 font-bold uppercase text-[9px] rounded-[2px] transition hover:bg-slate-300 shadow-sm">Reset</button>
+          </div>
+        </section>
 
-        init() {
-          // Listen for Firebase to be ready
-          window.addEventListener('firebase-ready', () => {
-            this.loadLeaveRequests();
-          });
-          if (window.LeaveServiceReady) {
-            this.loadLeaveRequests();
-          }
-        },
-
-        async loadLeaveRequests() {
-          this.loading = true;
-          try {
-            this.leaveRequests = await window.LeaveService.getAll();
-          } catch (error) {
-            console.error('[LEAVE] load failed:', error);
-            this.leaveRequests = [];
-          } finally {
-            this.loading = false;
-          }
-        },
-
-        get filteredRequests() {
-          const search = (this.filters.search || '').toLowerCase().trim();
-          const type = (this.filters.type || '').toLowerCase();
-          const status = (this.filters.status || '').toLowerCase();
+        <section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white mt-1">
+          <div x-show="loading" class="flex-1 flex items-center justify-center p-8">
+            <span class="text-sm text-slate-500 flex items-center gap-2">
+              <span class="material-icons-round animate-spin">refresh</span> Loading requests...
+            </span>
+          </div>
           
-          return this.leaveRequests.filter(req => {
-            const rApp = (req.applicant_name || '').toLowerCase();
-            const rType = (req.leave_type || '').toLowerCase();
-            const rStat = (req.status || 'pending').toLowerCase();
-            
-            const matchSearch = !search || rApp.includes(search);
-            const matchType = !type || rType.includes(type.toLowerCase());
-            const matchStatus = !status || rStat.includes(status.toLowerCase());
-            
-            return matchSearch && matchType && matchStatus;
-          });
-        },
+          <div x-show="!loading" class="flex-1 overflow-auto custom-scrollbar bg-white" style="display: none;">
+            <table class="w-full text-left border-collapse">
+              <thead class="sticky top-0 z-10 shadow-sm bg-slate-100 border-b-2 border-slate-300">
+                <tr>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 w-48">Employee / ID</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Leave Type</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center w-44">Inclusive Dates</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center w-12">Days</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center w-20">Status</th>
+                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center w-16 no-print">Action</th>
+                </tr>
+              </thead>
+              <tbody class="text-[10px] divide-y divide-slate-100">
+                
+                <template x-if="!loading && filteredRequests.length === 0">
+                  <tr>
+                    <td colspan="7" class="px-3 py-8 text-center text-slate-400 italic text-sm">No leave applications found.</td>
+                  </tr>
+                </template>
+                
+                <template x-for="req in filteredRequests" :key="req.id">
+                  <tr class="hover:bg-slate-50 transition">
+                    <td class="px-3 py-2 border-r border-slate-100 leading-tight">
+                      <span class="font-black text-slate-900 uppercase block text-[13px]" x-text="req.applicant_name || 'N/A'"></span>
+                      <span class="text-[10px] text-slate-500 font-mono block" x-text="req.employee_id || req.id || ''"></span>
+                    </td>
+                    <td class="px-3 py-2 border-r border-slate-100">
+                      <span class="font-bold text-blue-900 uppercase block" x-text="req.leave_type || 'N/A'"></span>
+                      <span class="text-[10px] text-slate-400 block" x-text="req.purpose || '-' "></span>
+                    </td>
+                    <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100" x-text="formatInclusive(req.from_date, req.to_date)"></td>
+                    <td class="px-3 py-2 text-center font-black border-r border-slate-100" x-text="req.days || 0"></td>
+                    <td class="px-3 py-2 text-center border-r border-slate-100">
+                      <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[10px] font-black uppercase border w-full"
+                            :class="statusClass(req.status)"
+                            x-text="req.status || 'Pending'"></span>
+                    </td>
+                    <td class="px-3 py-2 text-center no-print">
+                      <button @click="openView(req)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px]">Review</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          
+          <div class="bg-slate-50 border-t border-slate-200 px-3 py-1 text-[9px] text-slate-500 flex justify-between items-center shrink-0 italic uppercase tracking-wider">
+            <span>Official National Leave Registry - FY 2026</span>
+            <span>Visible Applications: <span class="font-black text-slate-800" x-text="filteredRequests.length">0</span></span>
+          </div>
+        </section>
 
-        resetFilters() {
-          this.filters = { search: '', type: '', status: '' };
-        },
+        <div x-show="viewModalOpen && selectedRequest" style="display:none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div @click.away="viewModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
+              <h3 class="text-[10px] font-black uppercase tracking-widest m-0">Review Leave Application</h3>
+              <button @click="viewModalOpen = false" class="text-slate-400 hover:text-white transition-colors">
+                <span class="material-icons-round text-[16px]">close</span>
+              </button>
+            </div>
+            <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar flex-1">
+              <template x-if="selectedRequest">
+                <div>
+                  <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div class="bg-white border border-slate-200 p-3 rounded-[2px]">
+                      <h4 class="text-[8px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Applicant Information</h4>
+                      <div class="space-y-1 uppercase font-bold text-slate-700 text-[9px]">
+                        <p><span class="text-slate-400">Name:</span> <span x-text="selectedRequest.applicant_name || 'N/A'"></span></p>
+                        <p><span class="text-slate-400">Employee ID:</span> <span x-text="selectedRequest.employee_id || selectedRequest.id || 'N/A'"></span></p>
+                      </div>
+                    </div>
+                    <div class="bg-white border border-slate-200 p-3 rounded-[2px]">
+                      <h4 class="text-[8px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Leave Details</h4>
+                      <div class="grid grid-cols-2 gap-2 text-center">
+                        <div class="bg-slate-50 p-1 border border-slate-100"><span class="block text-[7px] text-slate-400 font-black">Type</span><span class="font-mono font-black text-slate-800" x-text="selectedRequest.leave_type || 'N/A'"></span></div>
+                        <div class="bg-slate-50 p-1 border border-slate-100"><span class="block text-[7px] text-slate-400 font-black">Days</span><span class="font-mono font-black text-slate-800" x-text="selectedRequest.days || 0"></span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="bg-white border border-slate-300 p-4 rounded-[2px] space-y-4">
+                    <h4 class="text-[9px] font-black uppercase text-slate-800 border-b border-slate-100 pb-1">Application Details</h4>
+                    <div class="grid grid-cols-3 gap-3">
+                      <div><label class="gov-label">Leave Type</label><span class="font-black text-blue-900 uppercase" x-text="selectedRequest.leave_type || 'N/A'"></span></div>
+                      <div><label class="gov-label">Purpose</label><span class="font-black text-amber-700 uppercase" x-text="selectedRequest.purpose || '-' "></span></div>
+                      <div><label class="gov-label">Days Applied</label><span class="font-black text-slate-800 font-mono text-sm" x-text="(selectedRequest.days || 0) + ' Days'"></span></div>
+                    </div>
+                    <div><label class="gov-label">Inclusive Dates</label><span class="font-black text-slate-800 uppercase font-mono tracking-tight" x-text="formatInclusive(selectedRequest.from_date, selectedRequest.to_date)"></span></div>
+                  </div>
+                  <div class="mt-4">
+                    <label class="gov-label">Admin Remarks</label>
+                    <textarea x-model="selectedRequest.remarks" class="gov-input w-full text-[10px]" rows="2" placeholder="Enter notes or recommendation..."></textarea>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
+              <button @click="updateStatus(selectedRequest.id, 'Disapproved')" class="gov-btn border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100">Disapprove</button>
+              <button @click="updateStatus(selectedRequest.id, 'Approved')" class="gov-btn bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Approve Form</button>
+            </div>
+          </div>
+        </div>
 
-        openView(req) {
-          this.selectedRequest = req;
-          this.viewData = { ...req };
-          this.viewModalOpen = true;
-        },
+        <script>
+          window.leavePage = function() {
+            return {
+              loading: true, 
+              viewModalOpen: false,
+              createModalOpen: false,
+              selectedRequest: null,
+              viewData: {},
+              leaveRequests: [],
+              filters: { search: '', type: '', status: '' },
 
-        openCreateModal() { this.createModalOpen = true; },
+              init() {
+                window.addEventListener('firebase-ready', () => {
+                  this.loadLeaveRequests();
+                });
+                if (window.LeaveServiceReady) {
+                  this.loadLeaveRequests();
+                }
+              },
 
-        // HELPER: Format dates for the table
-        formatInclusive(from, to) {
-          if (!from && !to) return '-';
-          return `${from || '?'} to ${to || '?'}`;
-        },
+              async loadLeaveRequests() {
+                this.loading = true;
+                try {
+                  this.leaveRequests = await window.LeaveService.getAll();
+                } catch (error) {
+                  console.error('[LEAVE] load failed:', error);
+                  this.leaveRequests = [];
+                } finally {
+                  this.loading = false;
+                }
+              },
 
-        // HELPER: Dynamic status colors for the table
-        statusClass(status) {
-          const s = (status || '').toLowerCase();
-          if (s === 'approved') return 'border-emerald-500 text-emerald-700 bg-emerald-50';
-          if (['disapproved', 'denied', 'rejected'].includes(s)) return 'border-rose-500 text-rose-700 bg-rose-50';
-          return 'border-amber-500 text-amber-700 bg-amber-50'; // Default Pending
-        },
+              get filteredRequests() {
+                const search = (this.filters.search || '').toLowerCase().trim();
+                const type = (this.filters.type || '').toLowerCase();
+                const status = (this.filters.status || '').toLowerCase();
+                
+                return this.leaveRequests.filter(req => {
+                  const rApp = (req.applicant_name || '').toLowerCase();
+                  const rType = (req.leave_type || '').toLowerCase();
+                  const rStat = (req.status || 'pending').toLowerCase();
+                  
+                  const matchSearch = !search || rApp.includes(search);
+                  const matchType = !type || rType.includes(type.toLowerCase());
+                  const matchStatus = !status || rStat.includes(status.toLowerCase());
+                  
+                  return matchSearch && matchType && matchStatus;
+                });
+              },
 
-        async updateStatus(id, status) {
-          try {
-            await window.LeaveService.updateStatus(id, status, this.selectedRequest.remarks);
-            this.viewModalOpen = false;
-            this.selectedRequest = null;
-            await this.loadLeaveRequests();
-          } catch (error) {
-            alert('Failed to update status');
+              resetFilters() {
+                this.filters = { search: '', type: '', status: '' };
+              },
+
+              openView(req) {
+                this.selectedRequest = req;
+                this.viewData = { ...req };
+                this.viewModalOpen = true;
+              },
+
+              openCreateModal() { this.createModalOpen = true; },
+
+              formatInclusive(from, to) {
+                if (!from && !to) return '-';
+                return `${from || '?'} to ${to || '?'}`;
+              },
+
+              statusClass(status) {
+                const s = (status || '').toLowerCase();
+                if (s === 'approved') return 'border-emerald-500 text-emerald-700 bg-emerald-50';
+                if (['disapproved', 'denied', 'rejected'].includes(s)) return 'border-rose-500 text-rose-700 bg-rose-50';
+                return 'border-amber-500 text-amber-700 bg-amber-50';
+              },
+
+              async updateStatus(id, status) {
+                try {
+                  await window.LeaveService.updateStatus(id, status, this.selectedRequest.remarks);
+                  this.viewModalOpen = false;
+                  this.selectedRequest = null;
+                  await this.loadLeaveRequests();
+                } catch (error) {
+                  alert('Failed to update status');
+                }
+              }
+            };
+          };
+
+          function downloadCsv(headers, rows, filename) {
+            const escapeValue = (value) => {
+              const str = String(value ?? '');
+              if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+                return '"' + str.replace(/"/g, '""') + '"';
+              }
+              return str;
+            };
+            const lines = [headers, ...rows].map((row) => row.map(escapeValue).join(','));
+            const csv = lines.join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url; link.download = filename;
+            document.body.appendChild(link); link.click();
+            document.body.removeChild(link); URL.revokeObjectURL(url);
           }
-        }
-      };
-    };
+        </script>
 
-    // Global Export Utility
-    function downloadCsv(headers, rows, filename) {
-      const escapeValue = (value) => {
-        const str = String(value ?? '');
-        if (str.includes('"') || str.includes(',') || str.includes('\n')) {
-          return '"' + str.replace(/"/g, '""') + '"';
-        }
-        return str;
-      };
-      const lines = [headers, ...rows].map((row) => row.map(escapeValue).join(','));
-      const csv = lines.join('\r\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url; link.download = filename;
-      document.body.appendChild(link); link.click();
-      document.body.removeChild(link); URL.revokeObjectURL(url);
-    }
-  </script>
+        <script type="module">
+          import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+          import { getFirestore, collection, query, getDocs, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
-  <script type="module">
-    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getFirestore, collection, query, getDocs, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+          const firebaseConfig = {
+            apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+            authDomain: "tlph-denr-system.firebaseapp.com",
+            projectId: "tlph-denr-system",
+            storageBucket: "tlph-denr-system.appspot.com",
+            messagingSenderId: "999028568640",
+            appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb"
+          };
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
-      authDomain: "tlph-denr-system.firebaseapp.com",
-      projectId: "tlph-denr-system",
-      storageBucket: "tlph-denr-system.appspot.com",
-      messagingSenderId: "999028568640",
-      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb"
-    };
+          let db;
+          try {
+            const existingApps = getApps();
+            db = existingApps.length > 0 ? getFirestore(existingApps[0]) : getFirestore(initializeApp(firebaseConfig));
+          } catch (error) {
+            console.error('Firebase init error:', error);
+          }
 
-    let db;
-    try {
-      const existingApps = getApps();
-      db = existingApps.length > 0 ? getFirestore(existingApps[0]) : getFirestore(initializeApp(firebaseConfig));
-    } catch (error) {
-      console.error('Firebase init error:', error);
-    }
+          window.LeaveService = {
+            async getAll() {
+              const q = query(collection(db, 'leave_requests'));
+              const querySnapshot = await getDocs(q);
+              return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            },
+            async updateStatus(id, status, remarks) {
+              const docRef = doc(db, 'leave_requests', id);
+              await updateDoc(docRef, { status, remarks });
+            }
+          };
 
-    // Attach to global window object
-    window.LeaveService = {
-      async getAll() {
-        const q = query(collection(db, 'leave_requests'));
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      },
-      async updateStatus(id, status, remarks) {
-        const docRef = doc(db, 'leave_requests', id);
-        await updateDoc(docRef, { status, remarks });
-      }
-    };
-
-    // Tell Alpine the database is ready
-    window.LeaveServiceReady = true;
-    window.dispatchEvent(new CustomEvent('firebase-ready'));
-  </script>
-</div>
-{% endblock %}
-
+          window.LeaveServiceReady = true;
+          window.dispatchEvent(new CustomEvent('firebase-ready'));
+        </script>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
