@@ -269,51 +269,116 @@
     </div>
 
     <script>
-        const SERVICE_CATEGORIES = ["Site Inspection", "Audit", "Technical Training", "Subsidy Aid", "Certification"];
-        
-        // Mock data
-        const DATA = [
-            { date: "2026-02-13", ref: "SR-2026-HQ-001", name: "Oriental Mindoro Coop", cat: "Site Inspection", reg: "IV-B", mun: "Victoria", status: "To Review" },
-            { date: "2026-02-12", ref: "SR-2026-HQ-002", name: "Green Earth NGO", cat: "Technical Training", reg: "IV-B", mun: "Calapan", status: "Approved" },
-            { date: "2026-02-11", ref: "SR-2026-HQ-003", name: "Mindoro Agri Dev", cat: "Audit", reg: "IV-B", mun: "Baco", status: "Rejected" },
-            { date: "2026-02-10", ref: "SR-2026-NCR-004", name: "Metro Manila Dev", cat: "Certification", reg: "NCR", mun: "Quezon City", status: "Approved" }
-        ];
-
         let myTrendChart, myServiceChart, modalChartInstance = null;
+        let DATA = [];
+        let FILTERED_DATA = [];
+
+        const CHART_STATE = {
+            trend: { labels: [], data: [] },
+            categories: { labels: [], data: [] }
+        };
+
+        function getStatusClass(status) {
+            const s = String(status || '').toLowerCase();
+            if (s === 'approved') return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+            if (s === 'rejected') return 'bg-rose-50 text-rose-800 border-rose-200';
+            if (s === 'cancelled') return 'bg-red-50 text-red-800 border-red-200';
+            if (s === 'to review' || s === 'review' || s === 'forwarded') return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+            return 'bg-amber-50 text-amber-800 border-amber-200';
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        async function fetchRegistry() {
+            const res = await fetch('/api/superadmin/service-requests');
+            const payload = await res.json();
+            if (!payload.success) throw new Error(payload.message || 'Failed to load service requests');
+            DATA = Array.isArray(payload.requests) ? payload.requests : [];
+            populateFiltersFromData();
+            renderTable();
+        }
+
+        function populateFiltersFromData() {
+            const catFilter = document.getElementById('catFilter');
+            const regFilter = document.getElementById('regFilter');
+
+            const currentCat = catFilter.value || 'all';
+            const currentReg = regFilter.value || 'all';
+
+            const categories = [...new Set(DATA.map(r => r.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+            const regions = [...new Set(DATA.map(r => r.region).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+            catFilter.innerHTML = '<option value="all">-- ALL CATEGORIES --</option>';
+            categories.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = String(c).toUpperCase();
+                catFilter.appendChild(opt);
+            });
+
+            regFilter.innerHTML = '<option value="all">-- ALL REGIONS --</option>';
+            regions.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r;
+                opt.textContent = String(r).toUpperCase();
+                regFilter.appendChild(opt);
+            });
+
+            catFilter.value = categories.includes(currentCat) ? currentCat : 'all';
+            regFilter.value = regions.includes(currentReg) ? currentReg : 'all';
+        }
 
         function renderTable() {
             const body = document.getElementById('reqTableBody');
             const search = document.getElementById('tableSearch').value.toLowerCase();
             const category = document.getElementById('catFilter').value;
-            const region = document.getElementById('regFilter').value; 
-            
-            const filtered = DATA.filter(item => {
-                const matchSearch = Object.values(item).join(" ").toLowerCase().includes(search);
-                const matchCat = category === 'all' || item.cat === category;
-                const matchReg = region === 'all' || item.reg === region;
+            const region = document.getElementById('regFilter').value;
+
+            FILTERED_DATA = DATA.filter(item => {
+                const haystack = [
+                    item.date,
+                    item.ref,
+                    item.name,
+                    item.category,
+                    item.region,
+                    item.municipality,
+                    item.status,
+                    item.status_display,
+                    item.status_actor_level,
+                    item.status_target_level
+                ].join(' ').toLowerCase();
+                const matchSearch = haystack.includes(search);
+                const matchCat = category === 'all' || item.category === category;
+                const matchReg = region === 'all' || item.region === region;
                 return matchSearch && matchCat && matchReg;
             });
 
             body.innerHTML = '';
-            document.getElementById('resCount').textContent = filtered.length;
+            document.getElementById('resCount').textContent = FILTERED_DATA.length;
 
-            filtered.forEach((row, index) => {
-                const statusClass = row.status === 'Approved' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 
-                                   row.status === 'Rejected' ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200';
-                
+            FILTERED_DATA.forEach((row, index) => {
+                const statusClass = getStatusClass(row.status);
+                const statusLabel = row.status_display || row.status || 'Pending';
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition-colors data-row";
-                
+                tr.className = 'hover:bg-slate-50 transition-colors data-row';
+
                 tr.innerHTML = `
-                    <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap font-bold text-[9px]">${row.date}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100 whitespace-nowrap font-bold text-[9px]">${escapeHtml(row.date || '-')}</td>
                     <td class="px-3 py-1.5 border-r border-slate-100">
-                        <div class="font-black text-slate-900 uppercase leading-tight">${row.ref}</div>
-                        <div class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">${row.name}</div>
+                        <div class="font-black text-slate-900 uppercase leading-tight">${escapeHtml(row.ref || 'N/A')}</div>
+                        <div class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">${escapeHtml(row.name || 'N/A')}</div>
                     </td>
-                    <td class="px-3 py-1.5 font-bold uppercase text-[9px] text-slate-700 border-r border-slate-100 tracking-widest">${row.cat}</td>
-                    <td class="px-3 py-1.5 font-black text-slate-800 border-r border-slate-100 whitespace-nowrap uppercase tracking-widest text-[9px]">Reg ${row.reg} <span class="text-slate-400 font-normal">| ${row.mun}</span></td>
+                    <td class="px-3 py-1.5 font-bold uppercase text-[9px] text-slate-700 border-r border-slate-100 tracking-widest">${escapeHtml(row.category || 'General')}</td>
+                    <td class="px-3 py-1.5 font-black text-slate-800 border-r border-slate-100 whitespace-nowrap uppercase tracking-widest text-[9px]">Reg ${escapeHtml(row.region || 'N/A')} <span class="text-slate-400 font-normal">| ${escapeHtml(row.municipality || '-')}</span></td>
                     <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                        <span class="status-badge ${statusClass}">${row.status}</span>
+                        <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
                     </td>
                     <td class="px-3 py-1.5 text-center no-print">
                         <button onclick="openDetailsModal(${index})" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest bg-transparent border-none cursor-pointer">Full Details</button>
@@ -324,79 +389,119 @@
         }
 
         function openDetailsModal(index) {
-            const rowData = DATA[index];
-            if(!rowData) return;
+            const rowData = FILTERED_DATA[index];
+            if (!rowData) return;
 
-            document.getElementById('detRef').innerText = rowData.ref;
-            document.getElementById('detName').innerText = rowData.name;
-            document.getElementById('detDate').innerText = rowData.date;
-            document.getElementById('detCat').innerText = rowData.cat;
-            document.getElementById('detLoc').innerText = `Region ${rowData.reg} | ${rowData.mun}`;
-            
-            const statusClass = rowData.status === 'Approved' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 
-                               rowData.status === 'Rejected' ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200';
-            
-            document.getElementById('detBadgeContainer').innerHTML = `<span class="status-badge ${statusClass} text-[10px] py-1 px-3">${rowData.status}</span>`;
-            
+            document.getElementById('detRef').innerText = rowData.ref || 'N/A';
+            document.getElementById('detName').innerText = rowData.name || 'N/A';
+            document.getElementById('detDate').innerText = rowData.date || '-';
+            document.getElementById('detCat').innerText = rowData.category || 'General';
+            document.getElementById('detLoc').innerText = `Region ${rowData.region || 'N/A'} | ${rowData.municipality || '-'}`;
+
+            const statusClass = getStatusClass(rowData.status);
+            const statusLabel = rowData.status_display || rowData.status || 'Pending';
+            document.getElementById('detBadgeContainer').innerHTML = `<span class="status-badge ${statusClass} text-[10px] py-1 px-3">${escapeHtml(statusLabel)}</span>`;
+
             document.getElementById('detailsModal').classList.add('active');
         }
 
-        function closeDetailsModal() { document.getElementById('detailsModal').classList.remove('active'); }
+        function closeDetailsModal() {
+            document.getElementById('detailsModal').classList.remove('active');
+        }
 
         function initCharts() {
             const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
             myTrendChart = new Chart(document.getElementById('requestTrendChart'), {
                 type: 'line',
                 data: {
-                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    labels: CHART_STATE.trend.labels,
                     datasets: [{
-                        label: 'Requests', data: [120, 190, 150, 220, 300, 110, 95],
-                        borderColor: '#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.05)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2
+                        label: 'Requests',
+                        data: CHART_STATE.trend.data,
+                        borderColor: '#1e3a8a',
+                        backgroundColor: 'rgba(30, 58, 138, 0.05)',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 2
                     }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: chartFont }, grid: { display: false } }, y: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' } } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { font: chartFont }, grid: { display: false } },
+                        y: { ticks: { font: chartFont }, grid: { color: '#f1f5f9' } }
+                    }
+                }
             });
 
             myServiceChart = new Chart(document.getElementById('serviceChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: ['Inspection', 'Training', 'Audit', 'Other'],
-                    datasets: [{ data: [45, 25, 20, 10], backgroundColor: ['#1e3a8a', '#15803d', '#be123c', '#d97706'], borderWidth: 0 }]
+                    labels: CHART_STATE.categories.labels,
+                    datasets: [{
+                        data: CHART_STATE.categories.data,
+                        backgroundColor: ['#1e3a8a', '#15803d', '#be123c', '#d97706', '#6366f1', '#0ea5e9'],
+                        borderWidth: 0
+                    }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'right', labels: { font: chartFont, boxWidth: 8 } } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%',
+                    plugins: { legend: { position: 'right', labels: { font: chartFont, boxWidth: 8 } } }
+                }
             });
         }
 
         function openChartModal(type) {
             const modalWrapper = document.getElementById('chartModalWrapper');
-            const modalBody = document.getElementById('chartModalBody');
             const modalTitle = document.getElementById('modalChartTitle');
             modalWrapper.classList.add('active');
+
             if (modalChartInstance) modalChartInstance.destroy();
+
             const ctx = document.getElementById('modalCanvas').getContext('2d');
             const modalFont = { size: 10, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
             if (type === 'trend') {
                 modalTitle.innerHTML = '<i class="fa-solid fa-chart-line text-gov-blue mr-2"></i> Weekly Volume Trend (Detailed View)';
-                modalChartInstance = new Chart(ctx, { type: 'line', data: myTrendChart.data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: modalFont } }, y: { ticks: { font: modalFont } } } } });
+                modalChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: myTrendChart.data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { ticks: { font: modalFont } }, y: { ticks: { font: modalFont } } }
+                    }
+                });
             } else {
                 modalTitle.innerHTML = '<i class="fa-solid fa-chart-pie text-gov-red mr-2"></i> Classification Mix (Detailed View)';
-                modalChartInstance = new Chart(ctx, { type: 'doughnut', data: myServiceChart.data, options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { display: true, position: 'right', labels: { font: modalFont } } } } });
+                modalChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: myServiceChart.data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '60%',
+                        plugins: { legend: { display: true, position: 'right', labels: { font: modalFont } } }
+                    }
+                });
             }
         }
 
-        function closeChartModal() { document.getElementById('chartModalWrapper').classList.remove('active'); }
-        function exportTableToCSV() { alert("Generating Secure Official CSV Report..."); }
-        function clearFilters() { document.getElementById('tableSearch').value = ""; document.getElementById('catFilter').value = "all"; document.getElementById('regFilter').value = "all"; renderTable(); }
+        function closeChartModal() {
+            document.getElementById('chartModalWrapper').classList.remove('active');
+        }
 
-        window.onload = () => {
-            const catFilter = document.getElementById('catFilter');
-            catFilter.innerHTML = '<option value="all">-- ALL SERVICE TYPES --</option>';
-            SERVICE_CATEGORIES.forEach(c => {
-                const opt = document.createElement('option'); opt.value = c; opt.textContent = c.toUpperCase(); catFilter.appendChild(opt);
-            });
-            initCharts();
+        function clearFilters() {
+            document.getElementById('tableSearch').value = '';
+            document.getElementById('catFilter').value = 'all';
+            document.getElementById('regFilter').value = 'all';
             renderTable();
-        };
+        }
     </script>
 </body>
 </html>
