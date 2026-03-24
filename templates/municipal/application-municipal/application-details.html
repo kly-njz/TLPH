@@ -177,6 +177,8 @@
                                 </button>
                             </div>
 
+                            <p id="actionLockHint" class="text-[9px] text-slate-500 mt-3 text-center font-bold uppercase hidden"></p>
+
                             <p class="text-[9px] text-slate-400 mt-4 text-center italic uppercase font-bold">Decisions are final and logged in Audit Logs</p>
                         </div>
                     </div>
@@ -201,6 +203,7 @@
         let userData = null;
         let currentCollection = 'applications';
         let currentRecordType = 'application';
+        let actionLocked = false;
 
         const pathParts = window.location.pathname.split('/');
         currentApplicationId = pathParts[pathParts.length - 1];
@@ -270,6 +273,27 @@
             }
         }
 
+        function setActionButtonsLocked(locked, reasonText = '') {
+            actionLocked = !!locked;
+            const buttons = document.querySelectorAll('.btn-action');
+            buttons.forEach(btn => {
+                btn.disabled = !!locked;
+                btn.style.opacity = locked ? '0.55' : '1';
+                btn.style.cursor = locked ? 'not-allowed' : 'pointer';
+            });
+
+            const hintEl = document.getElementById('actionLockHint');
+            if (hintEl) {
+                if (locked) {
+                    hintEl.textContent = reasonText || 'Action already completed';
+                    hintEl.classList.remove('hidden');
+                } else {
+                    hintEl.textContent = '';
+                    hintEl.classList.add('hidden');
+                }
+            }
+        }
+
         function displayApplicationDetails() {
             console.log('Starting displayApplicationDetails');
             console.log('Application data:', applicationData);
@@ -316,31 +340,48 @@
                 const status = (applicationData.status || 'pending').toLowerCase();
                 const nationalStatus = (applicationData.nationalStatus || '').toLowerCase();
                 const regionalStatus = (applicationData.regionalStatus || '').toLowerCase();
+                const approvedByLevel = (applicationData.approvedByLevel || '').toLowerCase();
+                const rejectedByLevel = (applicationData.rejectedByLevel || '').toLowerCase();
+
+                const fmtLevel = (level) => {
+                    if (!level) return '';
+                    return level.charAt(0).toUpperCase() + level.slice(1).toLowerCase();
+                };
                 
                 if (nationalStatus === 'approved') {
                     statusBadge.className = 'bg-emerald-100 text-emerald-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-emerald-300';
                     statusBadge.textContent = '✓ Status: Approved by National';
+                    setActionButtonsLocked(true, 'Final decision reached: Approved by National');
                 } else if (nationalStatus === 'rejected') {
                     statusBadge.className = 'bg-red-100 text-red-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-red-200';
                     statusBadge.textContent = 'Status: Rejected by National';
+                    setActionButtonsLocked(true, 'Final decision reached: Rejected by National');
                 } else if (status === 'forwarded-to-national') {
                     statusBadge.className = 'bg-purple-100 text-purple-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-purple-200';
                     statusBadge.textContent = '→ Status: Forwarded to National';
-                } else if (regionalStatus === 'approved' || status === 'approved') {
+                    setActionButtonsLocked(true, 'Already forwarded to National');
+                } else if (status === 'approved' || regionalStatus === 'approved') {
+                    const levelText = fmtLevel(approvedByLevel) || (regionalStatus === 'approved' ? 'Regional' : 'Municipal');
                     statusBadge.className = 'bg-green-100 text-green-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-green-300';
-                    statusBadge.textContent = '✓ Status: Approved by Regional';
-                } else if (regionalStatus === 'rejected' || status === 'rejected') {
+                    statusBadge.textContent = `✓ Status: Approved by ${levelText}`;
+                    setActionButtonsLocked(true, 'Already approved');
+                } else if (status === 'rejected' || regionalStatus === 'rejected') {
+                    const levelText = fmtLevel(rejectedByLevel) || (regionalStatus === 'rejected' ? 'Regional' : 'Municipal');
                     statusBadge.className = 'bg-red-100 text-red-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-red-200';
-                    statusBadge.textContent = 'Status: Rejected';
+                    statusBadge.textContent = `Status: Rejected by ${levelText}`;
+                    setActionButtonsLocked(true, 'Already rejected');
                 } else if (status === 'to-review') {
                     statusBadge.className = 'bg-blue-100 text-blue-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-blue-200';
                     statusBadge.textContent = '→ Status: Forwarded to Regional';
+                    setActionButtonsLocked(true, 'Already forwarded to Regional');
                 } else if (status === 'under-review') {
                     statusBadge.className = 'bg-blue-50 text-blue-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-blue-200';
                     statusBadge.textContent = 'Status: Under Review';
+                    setActionButtonsLocked(false);
                 } else {
                     statusBadge.className = 'bg-amber-100 text-amber-800 px-4 py-2 font-black text-[11px] uppercase tracking-widest border border-amber-200';
                     statusBadge.textContent = 'Status: Pending Review';
+                    setActionButtonsLocked(false);
                 }
 
                 if (currentRecordType === 'inventory') {
@@ -519,6 +560,11 @@
         }
 
         window.updateApplicationStatus = async function(newStatus) {
+            if (actionLocked) {
+                alert('This request is already finalized/forwarded and can no longer be changed.');
+                return;
+            }
+
             const statusText = newStatus === 'approved' ? 'approve' : 
                              newStatus === 'rejected' ? 'reject' : 
                              newStatus === 'to-review' ? 'send to regional review' :
