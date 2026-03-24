@@ -2,8 +2,8 @@
 {% extends 'national/operations/leave-request-national.html' %}
 
 {% block leave_content %}
-<div x-data="leavePage()" x-init="loadLeaveRequests()" class="flex flex-col gap-2">
-  <!-- Summary Dashboard -->
+<div x-data="leavePage()" class="flex flex-col gap-2">
+  
   <section class="grid grid-cols-2 md:grid-cols-4 gap-2">
     <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 bg-amber-50/30">
       <p class="text-[8px] font-black uppercase tracking-widest text-amber-800 m-0">Pending Review</p>
@@ -23,7 +23,6 @@
     </div>
   </section>
 
-  <!-- Filters -->
   <section class="gov-card p-2 px-3 flex flex-wrap gap-2 items-center justify-between bg-slate-50 border-b border-slate-200 no-print">
     <div class="flex flex-wrap gap-1.5 items-center">
       <select class="gov-input cursor-pointer" x-model="filters.type" title="Filter by leave type">
@@ -54,37 +53,34 @@
     </div>
   </section>
 
-  <!-- Table -->
   <section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white mt-1">
     <div x-show="loading" class="flex-1 flex items-center justify-center p-8">
       <span class="text-sm text-slate-500 flex items-center gap-2">
         <span class="material-icons-round animate-spin">refresh</span> Loading requests...
       </span>
     </div>
+    
     <div x-show="!loading" class="flex-1 overflow-auto custom-scrollbar bg-white" style="display: none;">
       <table class="w-full text-left border-collapse">
         <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
           <tr>
-            <th class="border-r border-slate-200 w-24">Date Filed</th>
-            <th class="border-r border-slate-200">Applicant Details</th>
-            <th class="border-r border-slate-200">Leave Type / Purpose</th>
-            <th class="border-r border-slate-200 text-center w-36">Inclusive Dates</th>
-            <th class="border-r border-slate-200 text-center w-12">Days</th>
-            <th class="border-r border-slate-200 text-center w-20">Status</th>
-            <th class="text-center w-16 no-print">Actions</th>
+            <th class="border-r border-slate-200 w-24 p-2">Date Filed</th>
+            <th class="border-r border-slate-200 p-2">Applicant Details</th>
+            <th class="border-r border-slate-200 p-2">Leave Type / Purpose</th>
+            <th class="border-r border-slate-200 text-center w-36 p-2">Inclusive Dates</th>
+            <th class="border-r border-slate-200 text-center w-12 p-2">Days</th>
+            <th class="border-r border-slate-200 text-center w-20 p-2">Status</th>
+            <th class="text-center w-16 no-print p-2">Actions</th>
           </tr>
         </thead>
         <tbody class="text-[10px] divide-y divide-slate-100">
-          <template x-if="loading">
-            <tr>
-              <td colspan="7" class="px-3 py-4 text-center text-slate-400 italic">Loading leave applications...</td>
-            </tr>
-          </template>
+          
           <template x-if="!loading && filteredRequests.length === 0">
             <tr>
-              <td colspan="7" class="px-3 py-4 text-center text-slate-400 italic">No leave applications found.</td>
+              <td colspan="7" class="px-3 py-8 text-center text-slate-400 italic text-sm">No leave applications found.</td>
             </tr>
           </template>
+          
           <template x-for="req in filteredRequests" :key="req.id">
             <tr class="hover:bg-blue-50 transition">
               <td class="px-3 py-2 font-mono text-slate-600 border-r border-slate-100 uppercase" x-text="req.date_filed || 'N/A'"></td>
@@ -104,20 +100,154 @@
                       x-text="req.status || 'Pending'"></span>
               </td>
               <td class="px-3 py-2 text-center no-print">
-                <button @click="openView(req)" class="text-blue-700 hover:scale-125 transition-transform"><span class="material-icons-round text-sm">rate_review</span></button>
+                <button @click="openView(req)" class="text-blue-700 hover:scale-125 transition-transform">
+                  <span class="material-icons-round text-sm">rate_review</span>
+                </button>
               </td>
             </tr>
           </template>
         </tbody>
       </table>
     </div>
+    
     <div class="bg-slate-50 border-t border-slate-200 px-3 py-1 text-[9px] text-slate-500 flex justify-between items-center shrink-0 italic uppercase tracking-wider">
       <span>Official National Leave Registry • FY 2026</span>
       <span>Visible Applications: <span class="font-black text-slate-800" x-text="filteredRequests.length">0</span></span>
     </div>
   </section>
 
-  <!-- Modals (View, Create) would go here, following regional pattern -->
-  <!-- ...existing code for modals and scripts... -->
+  <script>
+    window.leavePage = function() {
+      return {
+        loading: true, 
+        viewModalOpen: false,
+        createModalOpen: false,
+        selectedRequest: null,
+        viewData: {},
+        leaveRequests: [],
+        filters: { search: '', type: '', status: '' },
+
+        init() {
+          // Listen for Firebase to be ready
+          window.addEventListener('firebase-ready', () => {
+            this.loadLeaveRequests();
+          });
+          if (window.LeaveServiceReady) {
+            this.loadLeaveRequests();
+          }
+        },
+
+        async loadLeaveRequests() {
+          this.loading = true;
+          try {
+            this.leaveRequests = await window.LeaveService.getAll();
+          } catch (error) {
+            console.error('[LEAVE] load failed:', error);
+            this.leaveRequests = [];
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        get filteredRequests() {
+          const search = (this.filters.search || '').toLowerCase().trim();
+          const type = (this.filters.type || '').toLowerCase();
+          const status = (this.filters.status || '').toLowerCase();
+          
+          return this.leaveRequests.filter(req => {
+            const rApp = (req.applicant_name || '').toLowerCase();
+            const rType = (req.leave_type || '').toLowerCase();
+            const rStat = (req.status || 'pending').toLowerCase();
+            
+            const matchSearch = !search || rApp.includes(search);
+            const matchType = !type || rType.includes(type.toLowerCase());
+            const matchStatus = !status || rStat.includes(status.toLowerCase());
+            
+            return matchSearch && matchType && matchStatus;
+          });
+        },
+
+        resetFilters() {
+          this.filters = { search: '', type: '', status: '' };
+        },
+
+        openView(req) {
+          this.selectedRequest = req;
+          this.viewData = { ...req };
+          this.viewModalOpen = true;
+        },
+
+        openCreateModal() { this.createModalOpen = true; },
+
+        // HELPER: Format dates for the table
+        formatInclusive(from, to) {
+          if (!from && !to) return '-';
+          return `${from || '?'} to ${to || '?'}`;
+        },
+
+        // HELPER: Dynamic status colors for the table
+        statusClass(status) {
+          const s = (status || '').toLowerCase();
+          if (s === 'approved') return 'border-emerald-500 text-emerald-700 bg-emerald-50';
+          if (['disapproved', 'denied', 'rejected'].includes(s)) return 'border-rose-500 text-rose-700 bg-rose-50';
+          return 'border-amber-500 text-amber-700 bg-amber-50'; // Default Pending
+        }
+      };
+    };
+
+    // Global Export Utility
+    function downloadCsv(headers, rows, filename) {
+      const escapeValue = (value) => {
+        const str = String(value ?? '');
+        if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+          return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+      };
+      const lines = [headers, ...rows].map((row) => row.map(escapeValue).join(','));
+      const csv = lines.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = filename;
+      document.body.appendChild(link); link.click();
+      document.body.removeChild(link); URL.revokeObjectURL(url);
+    }
+  </script>
+
+  <script type="module">
+    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, query, getDocs } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+      authDomain: "tlph-denr-system.firebaseapp.com",
+      projectId: "tlph-denr-system",
+      storageBucket: "tlph-denr-system.appspot.com",
+      messagingSenderId: "999028568640",
+      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb"
+    };
+
+    let db;
+    try {
+      const existingApps = getApps();
+      db = existingApps.length > 0 ? getFirestore(existingApps[0]) : getFirestore(initializeApp(firebaseConfig));
+    } catch (error) {
+      console.error('Firebase init error:', error);
+    }
+
+    // Attach to global window object
+    window.LeaveService = {
+      async getAll() {
+        const q = query(collection(db, 'leave_requests'));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+    };
+
+    // Tell Alpine the database is ready
+    window.LeaveServiceReady = true;
+    window.dispatchEvent(new CustomEvent('firebase-ready'));
+  </script>
 </div>
 {% endblock %}
