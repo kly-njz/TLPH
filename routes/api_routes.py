@@ -1069,44 +1069,20 @@ def superadmin_get_applications():
         from firebase_config import get_firestore_db
         db = get_firestore_db()
 
-        docs = db.collection('applications').limit(5000).stream()
+        docs = list(db.collection('applications').limit(5000).stream())
 
-        apps = []
-        for doc in docs:
-            data = doc.to_dict() or {}
-            created_at = data.get('createdAt') or data.get('dateFiled') or data.get('date_filed') or ''
-            date_filed = ''
-            if created_at:
-                if isinstance(created_at, str):
-                    try:
-                        from datetime import datetime as dt
-                        date_filed = dt.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%Y-%m-%d')
-                    except Exception:
-                        date_filed = str(created_at)[:10]
-                elif hasattr(created_at, 'strftime'):
-                    date_filed = created_at.strftime('%Y-%m-%d')
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
 
-            status = (data.get('status') or 'pending').lower()
-            national_status = (data.get('nationalStatus') or '').lower()
-            display_status = national_status if national_status else status
-
-            category = (data.get('category') or data.get('applicantCategory') or 'General').strip()
-            region = (data.get('region') or data.get('regionName') or 'N/A').strip()
-            municipality = (data.get('municipality') or 'N/A').strip()
-
-            apps.append({
-                'id': doc.id,
-                'ref': doc.id[:12].upper(),
-                'date': date_filed,
-                'name': (data.get('applicantName') or data.get('fullName') or data.get('name') or 'N/A').strip(),
-                'sector': category,
-                'region': region,
-                'municipality': municipality,
-                'status': display_status,
-                'regional_status': status,
-            })
-
-        apps.sort(key=lambda x: x['date'], reverse=True)
+        apps = [_sa_extract_application(doc, users_map) for doc in docs]
+        apps.sort(key=lambda x: x.get('date_iso') or '', reverse=True)
 
         return jsonify({'success': True, 'data': apps, 'total': len(apps)})
 
