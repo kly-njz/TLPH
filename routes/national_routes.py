@@ -1499,6 +1499,11 @@ def holidays_national_view():
 @bp.route('/leave-requests')
 @role_required('national', 'national_admin')
 def leave_requests_national_view():
+    # Debug: Print session info for diagnosis
+    print("[DEBUG] /national/leave-requests accessed")
+    print("[DEBUG] session:", dict(session))
+    print("[DEBUG] user_role:", session.get('user_role'))
+    print("[DEBUG] user_email:", session.get('user_email'))
     return render_template('national/HRM/leave-request-national.html')
 
 @bp.route('/payroll')
