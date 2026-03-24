@@ -402,31 +402,84 @@
               </div>
               
               <script>
-              function openFundModal() {
-                document.getElementById('fundModal').style.display = 'flex';
-                // Debug logging
-                console.log('openFundModal called');
-                const phLocations = (typeof window !== 'undefined' && window.philippineLocations) ? window.philippineLocations : null;
-                console.log('philippineLocations:', typeof phLocations, phLocations);
+              function openFundModal(selectedRegion) {
+                const modal = document.getElementById('fundModal');
+                if (modal) {
+                  modal.classList.remove('hidden');
+                  modal.style.display = 'flex';
+                }
                 const dropdown = document.getElementById('regionDropdown');
-                console.log('regionDropdown element:', dropdown);
                 if (!dropdown) return;
                 dropdown.innerHTML = '';
                 // Use official administrative regions
                 const adminRegions = [
-                  'NCR', 'CAR', 'REGION I', 'REGION II', 'REGION III', 'REGION IV-A', 'REGION IV-B', 
+                  'NCR', 'CAR', 'REGION I', 'REGION II', 'REGION III', 'REGION IV-A', 'REGION IV-B',
                   'REGION V', 'REGION VI', 'REGION VII', 'REGION VIII', 'REGION IX', 'REGION X',
                   'REGION XI', 'REGION XII', 'REGION XIII', 'BARMM'
                 ];
+                const normalized = (selectedRegion || '').toString().trim().toUpperCase();
                 adminRegions.forEach(region => {
                   const option = document.createElement('option');
                   option.value = region;
                   option.textContent = region;
+                  if (normalized && region === normalized) option.selected = true;
                   dropdown.appendChild(option);
                 });
               }
               function closeFundModal() {
-                document.getElementById('fundModal').style.display = 'none';
+                const modal = document.getElementById('fundModal');
+                if (modal) {
+                  modal.classList.add('hidden');
+                  modal.style.display = 'none';
+                }
+                const amount = document.getElementById('fundAmount');
+                if (amount) amount.value = '';
+              }
+              function openRowFundModal(btn) {
+                const modal = document.getElementById('fundRowModal');
+                if (modal) {
+                  modal.classList.remove('hidden');
+                  modal.style.display = 'flex';
+                }
+                if (!btn) return;
+                const region = btn.getAttribute('data-region') || '—';
+                const category = btn.getAttribute('data-fund-type') || '—';
+                const ref = btn.getAttribute('data-transfer-id') || '—';
+                const amount = btn.getAttribute('data-amount') || '—';
+                const date = btn.getAttribute('data-date') || '—';
+                const status = btn.getAttribute('data-status') || '—';
+                const fmtAmount = amount === '—' ? amount : `₱ ${Number(amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const setText = (id, val) => {
+                  const el = document.getElementById(id);
+                  if (el) el.textContent = val;
+                };
+                setText('fundRowRegion', region);
+                setText('fundRowCategory', category);
+                setText('fundRowRef', ref);
+                setText('fundRowAmount', fmtAmount);
+                setText('fundRowDate', date);
+                setText('fundRowStatus', status);
+                const statusEl = document.getElementById('fundRowStatus');
+                if (statusEl) {
+                  statusEl.className = 'mt-1 inline-flex items-center px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase border';
+                  const normalizedStatus = status.toString().trim().toUpperCase();
+                  if (normalizedStatus === 'RELEASED') {
+                    statusEl.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+                  } else if (normalizedStatus === 'PENDING') {
+                    statusEl.classList.add('bg-amber-50', 'text-amber-700', 'border-amber-200');
+                  } else if (normalizedStatus === 'REJECTED' || normalizedStatus === 'FAILED') {
+                    statusEl.classList.add('bg-rose-50', 'text-rose-700', 'border-rose-200');
+                  } else {
+                    statusEl.classList.add('bg-slate-50', 'text-slate-700', 'border-slate-200');
+                  }
+                }
+              }
+              function closeRowFundModal() {
+                const modal = document.getElementById('fundRowModal');
+                if (modal) {
+                  modal.classList.add('hidden');
+                  modal.style.display = 'none';
+                }
               }
               document.getElementById('fundForm').onsubmit = function(e) {
                 e.preventDefault();
@@ -502,13 +555,70 @@
                   <td class="px-3 py-2 text-right font-bold text-slate-900">₱ {{ fund.amount|float|round(2) }}</td>
                   <td class="px-3 py-2 text-slate-500">{{ fund.date }}</td>
                   <td class="px-3 py-2"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-sm font-black uppercase text-[8px]">{{ fund.status }}</span></td>
-                  <td class="px-3 py-2 text-center"><button class="text-blue-900 hover:underline font-bold uppercase text-[9px]">Fund</button></td>
+                  <td class="px-3 py-2 text-center">
+                    <button class="text-blue-900 hover:underline font-bold uppercase text-[9px]"
+                            data-region="{{ fund.region }}"
+                            data-fund-type="{{ fund.fund_type }}"
+                            data-transfer-id="{{ fund.transfer_id }}"
+                            data-amount="{{ fund.amount|float|round(2) }}"
+                            data-date="{{ fund.date }}"
+                            data-status="{{ fund.status }}"
+                            onclick="openRowFundModal(this)">
+                      Fund
+                    </button>
+                  </td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         </section>
+
+        <!-- Fund Row Modal (View Details) -->
+        <div id="fundRowModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] flex items-center justify-center z-50 hidden">
+          <div class="bg-white border border-slate-200 rounded-md shadow-xl w-[420px] overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="material-icons-round text-blue-900 text-base">account_balance_wallet</span>
+                <h3 class="text-[12px] font-black uppercase tracking-widest text-slate-800">Fund Details</h3>
+              </div>
+              <button type="button" onclick="closeRowFundModal()" class="text-slate-500 hover:text-slate-700">
+                <span class="material-icons-round text-base">close</span>
+              </button>
+            </div>
+            <div class="p-4">
+              <div class="grid grid-cols-2 gap-3 text-[11px] font-bold text-slate-600">
+                <div class="bg-slate-50 border border-slate-200 rounded-sm p-2">
+                  <div class="text-[9px] uppercase tracking-widest text-slate-400">Region</div>
+                  <div id="fundRowRegion" class="text-slate-900 mt-0.5"></div>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-sm p-2">
+                  <div class="text-[9px] uppercase tracking-widest text-slate-400">Category</div>
+                  <div id="fundRowCategory" class="text-slate-900 mt-0.5"></div>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-sm p-2">
+                  <div class="text-[9px] uppercase tracking-widest text-slate-400">Reference</div>
+                  <div id="fundRowRef" class="text-slate-900 mt-0.5 font-mono text-[10px]"></div>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-sm p-2">
+                  <div class="text-[9px] uppercase tracking-widest text-slate-400">Amount</div>
+                  <div id="fundRowAmount" class="text-emerald-700 mt-0.5"></div>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-sm p-2">
+                  <div class="text-[9px] uppercase tracking-widest text-slate-400">Date</div>
+                  <div id="fundRowDate" class="text-slate-900 mt-0.5"></div>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-sm p-2">
+                  <div class="text-[9px] uppercase tracking-widest text-slate-400">Status</div>
+                  <div id="fundRowStatus" class="mt-1 inline-flex items-center px-1.5 py-0.5 rounded-sm text-[9px] font-black uppercase border"></div>
+                </div>
+              </div>
+              <div class="flex justify-end gap-2 mt-4">
+                <button type="button" onclick="closeRowFundModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded-sm text-[10px] font-black uppercase">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <section class="grid grid-cols-1 xl:grid-cols-3 gap-2 flex-1 min-h-0">
           <div class="xl:col-span-2 bg-white border border-slate-300 rounded-sm shadow-sm flex flex-col overflow-hidden min-h-0">
