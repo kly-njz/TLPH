@@ -1412,6 +1412,597 @@ def superadmin_get_application_detail(application_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ==================== SUPERADMIN SERVICE REQUEST REGISTRY ====================
+
+def _sa_sr_status_payload(data):
+    status = str(data.get('status') or 'pending').strip().lower()
+    regional_status = str(data.get('regionalStatus') or '').strip().lower()
+    national_status = str(data.get('nationalStatus') or '').strip().lower()
+
+    approved_by_level = str(data.get('approvedByLevel') or '').strip()
+    rejected_by_level = str(data.get('rejectedByLevel') or '').strip()
+    forwarded_by_level = str(data.get('forwardedByLevel') or data.get('forwardedToNationalByLevel') or '').strip()
+    forwarded_to_level = str(data.get('forwardedToLevel') or '').strip()
+
+    def _norm_level(v):
+        lv = str(v or '').strip().lower()
+        if lv == 'national':
+            return 'National'
+        if lv == 'regional':
+            return 'Regional'
+        if lv == 'municipal':
+            return 'Municipal'
+        return str(v or '').strip()
+
+    def _infer_forward_target():
+        raw = _norm_level(forwarded_to_level)
+        if raw:
+            return raw
+        if 'national' in status or national_status:
+            return 'National'
+        if 'regional' in status or regional_status or status in {'to review', 'to-review', 'review'}:
+            return 'Regional'
+        return 'Regional'
+
+    resolved_forward_target = _infer_forward_target()
+
+    if national_status in {'approved', 'rejected', 'cancelled', 'canceled'}:
+        effective_status = 'cancelled' if national_status in {'cancelled', 'canceled'} else national_status
+    elif status in {'approved', 'rejected', 'cancelled', 'canceled'}:
+        effective_status = 'cancelled' if status in {'cancelled', 'canceled'} else status
+    elif status in {'to review', 'to-review', 'review'} or regional_status in {'to review', 'to-review', 'review'}:
+        effective_status = 'to review'
+    elif status.startswith('forwarded') or forwarded_to_level:
+        effective_status = 'forwarded'
+    else:
+        effective_status = 'pending'
+
+    def _resolve_approved_level():
+        if _norm_level(approved_by_level):
+            return _norm_level(approved_by_level)
+        if national_status == 'approved':
+            return 'National'
+        if regional_status == 'approved':
+            return 'Regional'
+        if resolved_forward_target == 'National':
+            return 'National'
+        if resolved_forward_target == 'Regional':
+            return 'Regional'
+        return 'Municipal'
+
+    def _resolve_rejected_level():
+        if _norm_level(rejected_by_level):
+            return _norm_level(rejected_by_level)
+        if national_status == 'rejected':
+            return 'National'
+        if regional_status == 'rejected':
+            return 'Regional'
+        if resolved_forward_target == 'National':
+            return 'National'
+        if resolved_forward_target == 'Regional':
+            return 'Regional'
+        return 'Municipal'
+
+    resolved_forwarded_by = _norm_level(forwarded_by_level) or ('Regional' if resolved_forward_target == 'National' else 'Municipal')
+
+    pending_target = resolved_forward_target or ('National' if national_status else 'Regional')
+
+    if effective_status == 'approved':
+        status_display = f"Approved by {_resolve_approved_level()}"
+    elif effective_status == 'rejected':
+        status_display = f"Rejected by {_resolve_rejected_level()}"
+    elif effective_status == 'cancelled':
+        status_display = f"Cancelled ({rejected_by_level or approved_by_level or 'Applicant/System'})"
+    elif effective_status == 'forwarded':
+        status_display = f"Forwarded by {resolved_forwarded_by} to {resolved_forward_target}"
+    elif effective_status == 'to review':
+        status_display = f"For Review at {pending_target}"
+    else:
+        status_display = f"Pending at {pending_target}"
+
+    return {
+        'status': effective_status,
+        'status_display': status_display,
+        'status_origin': {
+            'approvedByLevel': approved_by_level,
+            'rejectedByLevel': rejected_by_level,
+            'forwardedByLevel': forwarded_by_level,
+            'forwardedToLevel': forwarded_to_level,
+            'resolvedApprovedByLevel': _resolve_approved_level(),
+            'resolvedRejectedByLevel': _resolve_rejected_level(),
+            'resolvedForwardedByLevel': resolved_forwarded_by,
+            'resolvedForwardedToLevel': resolved_forward_target,
+            'regionalStatus': regional_status,
+            'nationalStatus': national_status,
+            'rawStatus': status,
+        }
+    }
+
+
+def _sa_extract_service_request(doc, users_map):
+    data = doc.to_dict() or {}
+    form_data = data.get('formData') or {}
+    user_data = users_map.get(data.get('userId', ''), {})
+
+    created_dt = _sa_to_datetime(data.get('createdAt') or data.get('submittedAt') or data.get('dateFiled') or data.get('date_filed'))
+    date_filed = created_dt.strftime('%Y-%m-%d') if created_dt else _sa_norm_text(data.get('dateFiled') or data.get('date_filed'), '')
+
+    province = data.get('province') or form_data.get('province') or user_data.get('province') or ''
+    region = (
+        data.get('region')
+        or data.get('regionName')
+        or form_data.get('region')
+        or user_data.get('region')
+        or user_data.get('regionName')
+        or _sa_region_from_province(province)
+        or 'N/A'
+    )
+
+    municipality = (
+        data.get('municipality')
+        or form_data.get('municipality')
+        or form_data.get('cityMunicipality')
+        or data.get('location')
+        or user_data.get('municipality')
+        or 'N/A'
+    )
+
+    category = _sa_norm_text(
+        data.get('categoryType')
+        or data.get('category')
+        or data.get('serviceType')
+        or data.get('serviceCategory')
+        or data.get('requestType')
+        or form_data.get('categoryType')
+        or form_data.get('category')
+        or form_data.get('serviceType')
+        or form_data.get('serviceCategory')
+        or form_data.get('requestType'),
+        'General'
+    )
+
+    name = (
+        data.get('applicantName')
+        or data.get('fullName')
+        or data.get('name')
+        or data.get('userName')
+        or f"{user_data.get('firstName', '')} {user_data.get('lastName', '')}".strip()
+        or user_data.get('displayName')
+        or 'N/A'
+    )
+
+    status_payload = _sa_sr_status_payload(data)
+
+    return {
+        'id': doc.id,
+        'ref': doc.id[:12].upper(),
+        'date': date_filed,
+        'date_iso': date_filed,
+        'name': _sa_norm_text(name),
+        'category': category,
+        'region': _sa_norm_text(region),
+        'municipality': _sa_norm_text(municipality),
+        'province': _sa_norm_text(province),
+        'status': status_payload['status'],
+        'status_display': status_payload['status_display'],
+        'status_actor_level': (
+            status_payload['status_origin'].get('resolvedApprovedByLevel')
+            if status_payload['status'] == 'approved'
+            else status_payload['status_origin'].get('resolvedRejectedByLevel')
+            if status_payload['status'] == 'rejected'
+            else status_payload['status_origin'].get('resolvedForwardedByLevel')
+            if status_payload['status'] == 'forwarded'
+            else None
+        ),
+        'status_target_level': (
+            status_payload['status_origin'].get('resolvedForwardedToLevel')
+            if status_payload['status'] in {'pending', 'to review', 'forwarded'}
+            else None
+        ),
+        'status_origin': status_payload['status_origin'],
+        'email': _sa_norm_text(data.get('email') or data.get('userEmail') or user_data.get('email')),
+        'contact': _sa_norm_text(data.get('contact') or data.get('contactNumber') or user_data.get('contactNumber')),
+        'description': _sa_norm_text(data.get('description') or data.get('notes') or form_data.get('description') or form_data.get('purpose')),
+        'form_data': form_data,
+        'raw': data,
+    }
+
+
+@bp.route('/superadmin/service-requests', methods=['GET'])
+def superadmin_get_service_requests():
+    """Return all service requests for superadmin registry across all municipalities/regions."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = list(db.collection('service_requests').limit(5000).stream())
+
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_service_request(doc, users_map) for doc in docs]
+        rows.sort(key=lambda x: x.get('date_iso') or '', reverse=True)
+
+        return jsonify({'success': True, 'data': rows, 'requests': rows, 'total': len(rows)})
+    except Exception as e:
+        print(f'[ERROR] superadmin_get_service_requests: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/superadmin/service-requests/stats', methods=['GET'])
+def superadmin_service_request_stats():
+    """Return KPI counts for superadmin service request registry."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = list(db.collection('service_requests').limit(5000).stream())
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_service_request(doc, users_map) for doc in docs]
+
+        stats = {
+            'total': len(rows),
+            'pending': 0,
+            'for_review': 0,
+            'approved': 0,
+            'rejected': 0,
+            'cancelled': 0,
+        }
+
+        for row in rows:
+            st = str(row.get('status') or 'pending').lower()
+            if st == 'approved':
+                stats['approved'] += 1
+            elif st == 'rejected':
+                stats['rejected'] += 1
+            elif st == 'cancelled':
+                stats['cancelled'] += 1
+            elif st in {'to review', 'review', 'forwarded'}:
+                stats['for_review'] += 1
+            else:
+                stats['pending'] += 1
+
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        print(f'[ERROR] superadmin_service_request_stats: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/superadmin/service-requests/charts', methods=['GET'])
+def superadmin_service_request_charts():
+    """Return trend + category chart data for superadmin service request registry."""
+    try:
+        from firebase_config import get_firestore_db
+        from collections import defaultdict
+        import datetime as dt_module
+        db = get_firestore_db()
+
+        docs = list(db.collection('service_requests').limit(5000).stream())
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_service_request(doc, users_map) for doc in docs]
+
+        weekly_trend = defaultdict(int)
+        category_count = defaultdict(int)
+
+        for row in rows:
+            dt = _sa_to_datetime(row.get('date_iso'))
+            if dt:
+                iso = dt.isocalendar()
+                weekly_trend[f"{iso[0]}-W{iso[1]:02d}"] += 1
+            category_count[str(row.get('category') or 'General')] += 1
+
+        now = datetime.now()
+        week_labels = []
+        week_data = []
+        for i in range(7, -1, -1):
+            target = now - dt_module.timedelta(weeks=i)
+            iso = target.isocalendar()
+            key = f"{iso[0]}-W{iso[1]:02d}"
+            week_labels.append(f"W{iso[1]}")
+            week_data.append(weekly_trend.get(key, 0))
+
+        top_categories = sorted(category_count.items(), key=lambda x: x[1], reverse=True)[:6]
+
+        return jsonify({
+            'success': True,
+            'trend': {
+                'labels': week_labels,
+                'data': week_data,
+            },
+            'categories': {
+                'labels': [c[0] for c in top_categories],
+                'data': [c[1] for c in top_categories],
+            }
+        })
+    except Exception as e:
+        print(f'[ERROR] superadmin_service_request_charts: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/superadmin/service-requests/audit-trail', methods=['GET'])
+def superadmin_service_request_audit():
+    """Return latest service request actions for live audit panel."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = list(db.collection('service_requests').limit(20).stream())
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_service_request(doc, users_map) for doc in docs]
+        rows.sort(key=lambda x: x.get('date_iso') or '', reverse=True)
+
+        entries = []
+        for row in rows[:10]:
+            dt = _sa_to_datetime(row.get('date_iso'))
+            entries.append({
+                'time': dt.strftime('%H:%M') if dt else '--:--',
+                'ref': row.get('ref', 'N/A'),
+                'name': row.get('name', 'N/A'),
+                'status': row.get('status', 'pending'),
+                'status_display': row.get('status_display', 'Pending')
+            })
+
+        return jsonify({'success': True, 'entries': entries})
+    except Exception as e:
+        print(f'[ERROR] superadmin_service_request_audit: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ==================== SUPERADMIN LICENSE & PERMIT REGISTRY ====================
+
+def _sa_extract_permit_application(doc, users_map):
+    data = doc.to_dict() or {}
+    form_data = data.get('formData') or {}
+    user_data = users_map.get(data.get('userId', ''), {})
+
+    created_dt = _sa_to_datetime(data.get('createdAt') or data.get('dateFiled') or data.get('date_filed') or data.get('submittedAt'))
+    date_filed = created_dt.strftime('%Y-%m-%d') if created_dt else _sa_norm_text(data.get('dateFiled') or data.get('date_filed'), '')
+
+    province = data.get('province') or form_data.get('province') or user_data.get('province') or user_data.get('Province') or ''
+    region = (
+        data.get('region')
+        or data.get('regionName')
+        or form_data.get('region')
+        or user_data.get('region')
+        or user_data.get('regionName')
+        or _sa_region_from_province(province)
+        or 'N/A'
+    )
+
+    municipality = (
+        data.get('municipality')
+        or form_data.get('municipality')
+        or form_data.get('cityMunicipality')
+        or data.get('location')
+        or user_data.get('municipality')
+        or 'N/A'
+    )
+
+    application_type = _sa_norm_text(data.get('applicationType') or form_data.get('applicationType'), 'General')
+    category = _sa_norm_text(
+        data.get('categoryType')
+        or data.get('category')
+        or form_data.get('categoryType')
+        or form_data.get('category')
+        or application_type,
+        'General'
+    )
+
+    name = (
+        data.get('applicantName')
+        or data.get('fullName')
+        or data.get('name')
+        or f"{user_data.get('firstName', '')} {user_data.get('lastName', '')}".strip()
+        or user_data.get('displayName')
+        or 'N/A'
+    )
+
+    status_payload = _sa_status_payload(data)
+    status = status_payload['status']
+    status_origin = status_payload['status_origin']
+
+    status_actor_level = (
+        status_origin.get('resolvedApprovedByLevel') if status == 'approved'
+        else status_origin.get('resolvedRejectedByLevel') if status == 'rejected'
+        else status_origin.get('resolvedForwardedByLevel') if status == 'forwarded'
+        else None
+    )
+    status_target_level = status_origin.get('resolvedForwardedToLevel') if status in {'pending', 'to review', 'forwarded'} else None
+
+    return {
+        'id': doc.id,
+        'ref': doc.id[:12].upper(),
+        'date': date_filed,
+        'date_iso': date_filed,
+        'name': _sa_norm_text(name),
+        'category': category,
+        'application_type': application_type,
+        'region': _sa_norm_text(region),
+        'municipality': _sa_norm_text(municipality),
+        'province': _sa_norm_text(province),
+        'status': status,
+        'status_display': status_payload['status_display'],
+        'status_actor_level': status_actor_level,
+        'status_target_level': status_target_level,
+        'status_origin': status_origin,
+        'email': _sa_norm_text(data.get('email') or data.get('userEmail') or user_data.get('email')),
+        'contact': _sa_norm_text(data.get('contact') or data.get('contactNumber') or user_data.get('contactNumber')),
+        'description': _sa_norm_text(data.get('description') or data.get('notes') or form_data.get('description') or form_data.get('purpose')),
+        'form_data': form_data,
+        'raw': data,
+    }
+
+
+@bp.route('/superadmin/permits', methods=['GET'])
+def superadmin_get_permits():
+    """Return all license/permit applications across municipalities and regions for superadmin."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = list(db.collection('license_applications').limit(7000).stream())
+
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        permits = [_sa_extract_permit_application(doc, users_map) for doc in docs]
+        permits.sort(key=lambda x: x.get('date_iso') or '', reverse=True)
+
+        return jsonify({'success': True, 'data': permits, 'permits': permits, 'total': len(permits)})
+    except Exception as e:
+        print(f'[ERROR] superadmin_get_permits: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/superadmin/permits/stats', methods=['GET'])
+def superadmin_permits_stats():
+    """Return KPI stats for superadmin permits/license registry."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = list(db.collection('license_applications').limit(7000).stream())
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_permit_application(doc, users_map) for doc in docs]
+        stats = {
+            'total': len(rows),
+            'approved': 0,
+            'rejected': 0,
+            'pending': 0,
+            'for_review': 0,
+            'forwarded': 0,
+            'cancelled': 0,
+        }
+
+        for row in rows:
+            st = str(row.get('status') or 'pending').lower()
+            if st == 'approved':
+                stats['approved'] += 1
+            elif st == 'rejected':
+                stats['rejected'] += 1
+            elif st == 'cancelled':
+                stats['cancelled'] += 1
+            elif st == 'forwarded':
+                stats['forwarded'] += 1
+            elif st in {'to review', 'review'}:
+                stats['for_review'] += 1
+            else:
+                stats['pending'] += 1
+
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        print(f'[ERROR] superadmin_permits_stats: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/superadmin/permits/charts', methods=['GET'])
+def superadmin_permits_charts():
+    """Return chart data for superadmin permits/license dashboard."""
+    try:
+        from firebase_config import get_firestore_db
+        from collections import defaultdict
+        import datetime as dt_module
+        db = get_firestore_db()
+
+        docs = list(db.collection('license_applications').limit(7000).stream())
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_permit_application(doc, users_map) for doc in docs]
+
+        month_counts = defaultdict(int)
+        category_counts = defaultdict(int)
+
+        for row in rows:
+            dt = _sa_to_datetime(row.get('date_iso'))
+            if dt:
+                month_counts[dt.strftime('%Y-%m')] += 1
+            category_counts[str(row.get('category') or 'General')] += 1
+
+        now = datetime.now()
+        month_labels = []
+        month_data = []
+        for i in range(5, -1, -1):
+            target = now - dt_module.timedelta(days=30 * i)
+            key = target.strftime('%Y-%m')
+            month_labels.append(target.strftime('%b'))
+            month_data.append(month_counts.get(key, 0))
+
+        top_categories = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:6]
+
+        return jsonify({
+            'success': True,
+            'issuance': {
+                'labels': month_labels,
+                'data': month_data,
+            },
+            'categories': {
+                'labels': [c[0] for c in top_categories],
+                'data': [c[1] for c in top_categories],
+            }
+        })
+    except Exception as e:
+        print(f'[ERROR] superadmin_permits_charts: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ==================== PROJECT MANAGEMENT ====================
 
 @bp.route('/projects/create', methods=['POST'])
