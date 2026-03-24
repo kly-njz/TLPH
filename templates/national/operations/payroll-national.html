@@ -1,325 +1,337 @@
-{% extends 'base.html' %}
-{% block title %}Payroll Management | Unified Registry{% endblock %}
-{% block content %}
-<div class="flex-1 flex overflow-hidden">
-	<aside class="sidebar-container hidden lg:block">
-		{% if 'national' in request.path %}
-			{% include 'national/sidenav-national.html' %}
-		{% elif 'regional' in request.path %}
-			{% include 'regional/sidenav.html' %}
-		{% elif 'municipal' in request.path %}
-			{% include 'municipal/sidenav.html' %}
-		{% endif %}
-	</aside>
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Payroll Registry | National Admin</title>
 
-	<main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 overflow-y-auto custom-scrollbar" x-data="payrollRegistry()">
-		<header class="gov-card p-3 flex justify-between items-center shrink-0">
-			<div class="flex items-center gap-3">
-				<div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white">
-					<span class="material-icons-round text-[18px]">payments</span>
-				</div>
-				<div class="leading-tight">
-					<h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Payroll Registry</h1>
-					<p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Unified Compensation, Allowances & Deductions</p>
-				</div>
-			</div>
-			<div class="flex gap-2">
-				<button @click="openBatchPayslips()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
-					<span class="material-icons-round text-[14px]">picture_as_pdf</span> Payslip Batch
-				</button>
-				<button @click="payrollModalOpen = true" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
-					<span class="material-icons-round text-[14px]">account_balance</span> Generate Payroll
-				</button>
-			</div>
-		</header>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
-		<section class="grid grid-cols-1 md:grid-cols-5 gap-2 shrink-0">
-			<div class="gov-card p-2 px-3 border-l-4 border-l-blue-800">
-				<p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Gross Amount (Monthly)</p>
-				<div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="formatCurrency(totalGross)"></div>
-			</div>
-			<div class="gov-card p-2 px-3 border-l-4 border-l-rose-700">
-				<p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deductions</p>
-				<div class="text-lg font-black text-rose-700 mt-0.5 leading-none" x-text="formatCurrency(totalDeductions)"></div>
-			</div>
-			<div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
-				<p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Net Take-Home Pay</p>
-				<div class="text-lg font-black text-emerald-700 mt-0.5 leading-none" x-text="formatCurrency(totalNet)"></div>
-			</div>
-			<div class="gov-card p-2 px-3 bg-slate-800 text-white border-none">
-				<p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Next Pay Date</p>
-				<div class="text-lg font-black text-blue-300 mt-0.5 leading-none" x-text="nextPayDate"></div>
-			</div>
-			<div class="gov-card p-2 px-3 border-l-4 border-l-purple-800 bg-purple-50">
-				<p class="text-[9px] font-black uppercase tracking-widest text-purple-800">Available Fund Balance</p>
-				<div class="text-lg font-black text-purple-900 mt-0.5 leading-none" x-text="formatCurrency(availableFund)"></div>
-				<p class="text-[8px] font-bold text-slate-500 mt-1" x-text="availableFund >= totalNet ? '✓ Sufficient' : '⚠️ Insufficient'"></p>
-			</div>
-		</section>
+  <style>
+    body { font-family: 'Verdana', 'Arial', sans-serif; background: #f1f5f9; font-size: 11px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
 
-		<section class="gov-card flex-1 min-h-[300px] flex flex-col overflow-hidden">
-			<div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-2 shrink-0">
-				<h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
-					<span class="material-icons-round text-[14px]">receipt_long</span>
-					<span id="payrollPeriodLabel" x-text="payrollPeriodLabel"></span>
-				</h2>
-				<div class="flex flex-wrap gap-1.5 items-center">
-					<template x-if="showScopeFilter">
-						<div class="relative">
-							<select class="gov-input cursor-pointer" x-model="selectedScope" @change="filterTable()">
-								<option value="">All Scopes</option>
-								<option value="REGIONWIDE">Regionwide</option>
-								<option value="REGIONAL">Regional</option>
-								<option value="MUNICIPAL">Municipal</option>
-							</select>
-						</div>
-					</template>
-					<div class="relative">
-						<select class="gov-input cursor-pointer" x-model="selectedOffice" @change="filterTable()">
-							<option value="">All Offices</option>
-							<template x-for="office in officeOptions" :key="office">
-								<option x-text="office"></option>
-							</template>
-						</select>
-					</div>
-					<div class="relative">
-						<select class="gov-input cursor-pointer" x-model="selectedStatus" @change="filterTable()">
-							<option value="">All Status</option>
-							<option value="Posted">Posted</option>
-							<option value="Pending">Pending</option>
-						</select>
-					</div>
-					<div class="relative">
-						<span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-						<input type="text" class="gov-input pl-6 w-48" placeholder="Search employee..." x-model="searchQuery" @input="filterTable()">
-					</div>
-					<button @click="resetFilters()" class="px-2 py-0.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] shadow-sm transition">Reset</button>
-				</div>
-			</div>
-			<div class="flex-1 overflow-auto custom-scrollbar bg-white">
-				<table class="w-full text-left border-collapse payroll-table">
-					<thead class="sticky top-0 z-10 uppercase tracking-widest">
-						<tr>
-							<th class="border-r border-slate-200">Personnel Name</th>
-							<th class="border-r border-slate-200">Office Assignment</th>
-							<th class="border-r border-slate-200 text-right">Basic Pay</th>
-							<th class="border-r border-slate-200 text-right">PERA/Allow.</th>
-							<th class="border-r border-slate-200 text-right">Gross</th>
-							<th class="border-r border-slate-200 text-right">GSIS/Tax</th>
-							<th class="border-r border-slate-200 text-right">Loans</th>
-							<th class="border-r border-slate-200 text-right">Net Pay</th>
-							<th class="border-r border-slate-200 text-center">Scope</th>
-							<th class="text-center w-20">Status</th>
-						</tr>
-					</thead>
-					<tbody id="payrollBody" class="text-[10px] divide-y divide-slate-100">
-						<template x-if="filteredPayroll.length === 0">
-							<tr>
-								<td colspan="10" class="p-8 text-center text-slate-400">
-									<span class="material-icons-round text-4xl">inbox</span>
-									<p class="mt-2">No payroll records found</p>
-								</td>
-							</tr>
-						</template>
-						<template x-for="record in filteredPayroll" :key="record.id">
-							<tr class="hover:bg-slate-50 transition payroll-row" :data-office="record.office" :data-scope="record.scope" :data-status="record.status">
-								<td class="border-r border-slate-100">
-									<span class="font-black text-slate-900 uppercase" x-text="record.employee_name"></span><br>
-									<span class="text-[8px] text-slate-400 uppercase" x-text="record.position"></span>
-								</td>
-								<td class="border-r border-slate-100 font-bold text-slate-700" x-text="record.office"></td>
-								<td class="text-right border-r border-slate-100 font-mono" x-text="formatCurrency(record.basic_pay)"></td>
-								<td class="text-right border-r border-slate-100 font-mono" x-text="formatCurrency(record.allowances)"></td>
-								<td class="text-right border-r border-slate-100 font-mono font-bold" x-text="formatCurrency(record.gross)"></td>
-								<td class="text-right border-r border-slate-100 font-mono val-negative" x-text="formatCurrency(record.gsis_tax)"></td>
-								<td class="text-right border-r border-slate-100 font-mono val-negative" x-text="formatCurrency(record.loans)"></td>
-								<td class="text-right border-r border-slate-100 font-mono val-positive" x-text="formatCurrency(record.net_pay)"></td>
-								<td class="text-center border-r border-slate-100">
-									<span class="text-blue-800 font-black text-[8px] uppercase" x-text="record.scope"></span>
-								</td>
-								<td class="text-center">
-									<span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase" :class="record.status === 'Posted' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-300 animate-pulse'" x-text="record.status"></span>
-								</td>
-							</tr>
-						</template>
-					</tbody>
-				</table>
-			</div>
-			<div class="bg-slate-50 border-t border-slate-200 px-3 py-1.5 text-[9px] text-slate-500 shrink-0 flex justify-between items-center">
-				<span>Note: Mandatory GSIS, PhilHealth, and Pag-IBIG contributions are auto-computed. Audit-Ready Ledger.</span>
-				<span>Total Record: <b class="text-slate-800" x-text="filteredPayroll.length"></b></span>
-			</div>
-		</section>
+    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
+    .gov-input:focus { border-color: #1d4ed8; }
+    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
+    .gov-label { display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 2px; letter-spacing: 0.025em; }
 
-		<!-- Payroll Modal -->
-		<div x-show="payrollModalOpen" style="display: none;" class="fixed inset-0 z-[100] bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
-			<div @click.away="payrollModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-400">
-				<div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white">
-					<h3 class="text-[11px] font-black uppercase tracking-widest m-0">Generate Payroll Period</h3>
-					<button @click="payrollModalOpen = false" class="text-slate-400 hover:text-white">
-						<span class="material-icons-round text-[16px]">close</span>
-					</button>
-				</div>
-				<form class="p-4 bg-slate-50 space-y-3">
-					<div class="grid grid-cols-2 gap-3">
-						<div>
-							<label class="gov-label">Pay Month</label>
-							<select class="gov-input w-full cursor-pointer" x-model="payMonth">
-								<template x-for="month in payMonths" :key="month">
-									<option x-text="month"></option>
-								</template>
-							</select>
-						</div>
-						<div>
-							<label class="gov-label">Payroll Cycle</label>
-							<select class="gov-input w-full cursor-pointer" x-model="payCycle">
-								<option>1st Quincena (1-15)</option>
-								<option>2nd Quincena (16-30)</option>
-								<option>Full Month</option>
-							</select>
-						</div>
-					</div>
-					<div class="p-3 bg-blue-50 border border-blue-200 rounded-[2px]">
-						<p class="text-[9px] font-bold text-blue-800 uppercase mb-2">Automated Checks</p>
-						<div class="space-y-1">
-							<label class="flex items-center gap-2">
-								<input type="checkbox" checked class="w-3 h-3">
-								<span class="text-[10px] text-slate-700">Apply DTR-based tardiness deductions</span>
-							</label>
-							<label class="flex items-center gap-2">
-								<input type="checkbox" checked class="w-3 h-3">
-								<span class="text-[10px] text-slate-700">Compute GSIS/PhilHealth/PagIBIG Share</span>
-							</label>
-							<label class="flex items-center gap-2">
-								<input type="checkbox" checked class="w-3 h-3">
-								<span class="text-[10px] text-slate-700">Apply approved loan amortizations</span>
-							</label>
-						</div>
-					</div>
-					<div class="pt-3 border-t border-slate-200 mt-2 flex justify-end gap-2">
-						<button type="button" @click="payrollModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 shadow-sm">Cancel</button>
-						<button type="button" @click="processPayroll()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Process Payroll</button>
-					</div>
-				</form>
-			</div>
-		</div>
-	</main>
-</div>
+    .payroll-table th { padding: 6px 8px; font-size: 9px; color: #475569; border-bottom: 2px solid #cbd5e1; background: #f8fafc; }
+    .payroll-table td { padding: 6px 8px; }
+    .val-negative { color: #b91c1c; }
+    .val-positive { color: #047857; }
+  </style>
+</head>
 
-<script>
-function payrollRegistry() {
-	       return {
-		       payrollModalOpen: false,
-		       searchQuery: '',
-		       selectedScope: '',
-		       selectedOffice: '',
-		       selectedStatus: '',
-		       showScopeFilter: true,
-		       officeOptions: [],
-		       payMonths: ['February 2026', 'March 2026'],
-		       payMonth: 'February 2026',
-		       payCycle: '1st Quincena (1-15)',
-		       payrollPeriodLabel: 'Compensation Ledger (Feb 01-15)',
-		       nextPayDate: 'Feb 28, 2026',
-		       availableFund: 10000000,
-		       totalGross: 0,
-		       totalDeductions: 0,
-		       totalNet: 0,
-		       payrollRecords: [],
-		       filteredPayroll: [],
-		       formatCurrency(val) {
-			       return '₱ ' + (val || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 });
-		       },
-		       filterTable() {
-			       const q = this.searchQuery.toLowerCase().trim();
-			       this.filteredPayroll = this.payrollRecords.filter(r => {
-				       const matchQ = r.employee_name.toLowerCase().includes(q) || r.position.toLowerCase().includes(q);
-				       const matchO = !this.selectedOffice || r.office === this.selectedOffice;
-				       const matchSt = !this.selectedStatus || r.status === this.selectedStatus;
-				       let matchS = true;
-				       if (this.showScopeFilter && this.selectedScope) matchS = r.scope === this.selectedScope;
-				       return matchQ && matchO && matchSt && matchS;
-			       });
-		       },
-		       resetFilters() {
-			       this.searchQuery = '';
-			       this.selectedScope = '';
-			       this.selectedOffice = '';
-			       this.selectedStatus = '';
-			       this.filterTable();
-		       },
-		       openBatchPayslips() {
-			       alert('Batch payslip export not yet implemented.');
-		       },
-		       processPayroll() {
-			       alert('Payroll processing not yet implemented.');
-			       this.payrollModalOpen = false;
-		       },
-		       async init() {
-			       // Fetch employees from backend API
-			       try {
-				       const resp = await fetch('/national/api/employees');
-				       const data = await resp.json();
-				       if (data.success) {
-					       // Transform employees to payrollRecords
-					       this.payrollRecords = data.employees.map(emp => {
-						       // Compose name
-						       const last = emp.lastName || emp.last_name || '';
-						       const first = emp.firstName || emp.first_name || '';
-						       const middle = emp.middleName || emp.middle_name || '';
-						       const employee_name = `${last}, ${first}${middle ? ' ' + middle[0] + '.' : ''}`.toUpperCase();
-						       // Compose position
-						       const position = (emp.position || emp.designation || emp.jobTitle || 'N/A') + (emp.salaryGrade ? ` • SG-${emp.salaryGrade}` : '');
-						       // Office assignment
-						       const office = emp.office || emp.officeAssignment || emp.municipality || emp.region || 'N/A';
-						       // Scope
-						       let scope = 'MUNICIPAL';
-						       if ((emp.region || '').toUpperCase().includes('REGION')) scope = 'REGIONAL';
-						       if ((emp.office || '').toUpperCase().includes('CENTRAL')) scope = 'REGIONWIDE';
-						       // Payroll fields
-						       const basic_pay = Number(emp.basicPay || emp.basic_pay || emp.salary || 0);
-						       const allowances = Number(emp.allowances || emp.allowance || emp.pera || 0);
-						       const gross = basic_pay + allowances;
-						       const gsis_tax = Number(emp.gsis || emp.tax || 0);
-						       const loans = Number(emp.loans || 0);
-						       const net_pay = gross - gsis_tax - loans;
-						       // Status (dummy: all posted for now)
-						       const status = 'Posted';
-						       return {
-							       id: emp.id,
-							       employee_name,
-							       position,
-							       office,
-							       basic_pay,
-							       allowances,
-							       gross,
-							       gsis_tax,
-							       loans,
-							       net_pay,
-							       scope,
-							       status
-						       };
-					       });
-					       // Set office options
-					       this.officeOptions = [...new Set(this.payrollRecords.map(r => r.office))].filter(Boolean);
-					       // Compute totals
-					       this.totalGross = this.payrollRecords.reduce((sum, r) => sum + (r.gross || 0), 0);
-					       this.totalDeductions = this.payrollRecords.reduce((sum, r) => sum + ((r.gsis_tax || 0) + (r.loans || 0)), 0);
-					       this.totalNet = this.payrollRecords.reduce((sum, r) => sum + (r.net_pay || 0), 0);
-					       this.filteredPayroll = this.payrollRecords;
-				       } else {
-					       this.payrollRecords = [];
-					       this.filteredPayroll = [];
-				       }
-			       } catch (e) {
-				       this.payrollRecords = [];
-				       this.filteredPayroll = [];
-			       }
-		       }
-	       };
-}
-document.addEventListener('alpine:init', () => {
-	Alpine.data('payrollRegistry', payrollRegistry);
-});
-</script>
-{% endblock %}
+<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+  <div class="flex-1 flex overflow-hidden">
+    <aside class="sidebar-container hidden lg:block">
+      {% include 'national/sidenav-national.html' %}
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 overflow-y-auto custom-scrollbar" x-data="payrollRegistry()">
+      <header class="gov-card p-3 flex justify-between items-center shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-[2px] bg-blue-900 flex items-center justify-center text-white">
+            <span class="material-icons-round text-[18px]">payments</span>
+          </div>
+          <div class="leading-tight">
+            <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Payroll Registry</h1>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">Unified Compensation, Allowances & Deductions</p>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button @click="openBatchPayslips()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">picture_as_pdf</span> Payslip Batch
+          </button>
+          <button @click="payrollModalOpen = true" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">account_balance</span> Generate Payroll
+          </button>
+        </div>
+      </header>
+
+      <section class="grid grid-cols-1 md:grid-cols-5 gap-2 shrink-0">
+        <div class="gov-card p-2 px-3 border-l-4 border-l-blue-800">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Gross Amount (Monthly)</p>
+          <div class="text-lg font-black text-slate-800 mt-0.5 leading-none" x-text="formatCurrency(totalGross)"></div>
+        </div>
+        <div class="gov-card p-2 px-3 border-l-4 border-l-rose-700">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Deductions</p>
+          <div class="text-lg font-black text-rose-700 mt-0.5 leading-none" x-text="formatCurrency(totalDeductions)"></div>
+        </div>
+        <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Net Take-Home Pay</p>
+          <div class="text-lg font-black text-emerald-700 mt-0.5 leading-none" x-text="formatCurrency(totalNet)"></div>
+        </div>
+        <div class="gov-card p-2 px-3 bg-slate-800 text-white border-none">
+          <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">Next Pay Date</p>
+          <div class="text-lg font-black text-blue-300 mt-0.5 leading-none" x-text="nextPayDate"></div>
+        </div>
+        <div class="gov-card p-2 px-3 border-l-4 border-l-purple-800 bg-purple-50">
+          <p class="text-[9px] font-black uppercase tracking-widest text-purple-800">Available Fund Balance</p>
+          <div class="text-lg font-black text-purple-900 mt-0.5 leading-none" x-text="formatCurrency(availableFund)"></div>
+          <p class="text-[8px] font-bold text-slate-500 mt-1" x-text="availableFund >= totalNet ? 'OK Sufficient' : 'WARN Insufficient'"></p>
+        </div>
+      </section>
+
+      <section class="gov-card flex-1 min-h-[300px] flex flex-col overflow-hidden">
+        <div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-2 shrink-0">
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
+            <span class="material-icons-round text-[14px]">receipt_long</span>
+            <span id="payrollPeriodLabel" x-text="payrollPeriodLabel"></span>
+          </h2>
+          <div class="flex flex-wrap gap-1.5 items-center">
+            <template x-if="showScopeFilter">
+              <div class="relative">
+                <select class="gov-input cursor-pointer" x-model="selectedScope" @change="filterTable()">
+                  <option value="">All Scopes</option>
+                  <option value="REGIONWIDE">Regionwide</option>
+                  <option value="REGIONAL">Regional</option>
+                  <option value="MUNICIPAL">Municipal</option>
+                </select>
+              </div>
+            </template>
+            <div class="relative">
+              <select class="gov-input cursor-pointer" x-model="selectedOffice" @change="filterTable()">
+                <option value="">All Offices</option>
+                <template x-for="office in officeOptions" :key="office">
+                  <option x-text="office"></option>
+                </template>
+              </select>
+            </div>
+            <div class="relative">
+              <select class="gov-input cursor-pointer" x-model="selectedStatus" @change="filterTable()">
+                <option value="">All Status</option>
+                <option value="Posted">Posted</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+            <div class="relative">
+              <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+              <input type="text" class="gov-input pl-6 w-48" placeholder="Search employee..." x-model="searchQuery" @input="filterTable()">
+            </div>
+            <button @click="resetFilters()" class="px-2 py-0.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] shadow-sm transition">Reset</button>
+          </div>
+        </div>
+        <div class="flex-1 overflow-auto custom-scrollbar bg-white">
+          <table class="w-full text-left border-collapse payroll-table">
+            <thead class="sticky top-0 z-10 uppercase tracking-widest">
+              <tr>
+                <th class="border-r border-slate-200">Personnel Name</th>
+                <th class="border-r border-slate-200">Office Assignment</th>
+                <th class="border-r border-slate-200 text-right">Basic Pay</th>
+                <th class="border-r border-slate-200 text-right">PERA/Allow.</th>
+                <th class="border-r border-slate-200 text-right">Gross</th>
+                <th class="border-r border-slate-200 text-right">GSIS/Tax</th>
+                <th class="border-r border-slate-200 text-right">Loans</th>
+                <th class="border-r border-slate-200 text-right">Net Pay</th>
+                <th class="border-r border-slate-200 text-center">Scope</th>
+                <th class="text-center w-20">Status</th>
+              </tr>
+            </thead>
+            <tbody id="payrollBody" class="text-[10px] divide-y divide-slate-100">
+              <template x-if="filteredPayroll.length === 0">
+                <tr>
+                  <td colspan="10" class="p-8 text-center text-slate-400">
+                    <span class="material-icons-round text-4xl">inbox</span>
+                    <p class="mt-2">No payroll records found</p>
+                  </td>
+                </tr>
+              </template>
+              <template x-for="record in filteredPayroll" :key="record.id">
+                <tr class="hover:bg-slate-50 transition payroll-row" :data-office="record.office" :data-scope="record.scope" :data-status="record.status">
+                  <td class="border-r border-slate-100">
+                    <span class="font-black text-slate-900 uppercase" x-text="record.employee_name"></span><br>
+                    <span class="text-[8px] text-slate-400 uppercase" x-text="record.position"></span>
+                  </td>
+                  <td class="border-r border-slate-100 font-bold text-slate-700" x-text="record.office"></td>
+                  <td class="text-right border-r border-slate-100 font-mono" x-text="formatCurrency(record.basic_pay)"></td>
+                  <td class="text-right border-r border-slate-100 font-mono" x-text="formatCurrency(record.allowances)"></td>
+                  <td class="text-right border-r border-slate-100 font-mono font-bold" x-text="formatCurrency(record.gross)"></td>
+                  <td class="text-right border-r border-slate-100 font-mono val-negative" x-text="formatCurrency(record.gsis_tax)"></td>
+                  <td class="text-right border-r border-slate-100 font-mono val-negative" x-text="formatCurrency(record.loans)"></td>
+                  <td class="text-right border-r border-slate-100 font-mono val-positive" x-text="formatCurrency(record.net_pay)"></td>
+                  <td class="text-center border-r border-slate-100">
+                    <span class="text-blue-800 font-black text-[8px] uppercase" x-text="record.scope"></span>
+                  </td>
+                  <td class="text-center">
+                    <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase" :class="record.status === 'Posted' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-300 animate-pulse'" x-text="record.status"></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div class="bg-slate-50 border-t border-slate-200 px-3 py-1.5 text-[9px] text-slate-500 shrink-0 flex justify-between items-center">
+          <span>Note: Mandatory GSIS, PhilHealth, and Pag-IBIG contributions are auto-computed. Audit-Ready Ledger.</span>
+          <span>Total Record: <b class="text-slate-800" x-text="filteredPayroll.length"></b></span>
+        </div>
+      </section>
+
+      <div x-show="payrollModalOpen" style="display: none;" class="fixed inset-0 z-[100] bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div @click.away="payrollModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-400">
+          <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white">
+            <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Generate Payroll Period</h3>
+            <button @click="payrollModalOpen = false" class="text-slate-400 hover:text-white">
+              <span class="material-icons-round text-[16px]">close</span>
+            </button>
+          </div>
+          <form class="p-4 bg-slate-50 space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="gov-label">Pay Month</label>
+                <select class="gov-input w-full cursor-pointer" x-model="payMonth">
+                  <template x-for="month in payMonths" :key="month">
+                    <option x-text="month"></option>
+                  </template>
+                </select>
+              </div>
+              <div>
+                <label class="gov-label">Payroll Cycle</label>
+                <select class="gov-input w-full cursor-pointer" x-model="payCycle">
+                  <option>1st Quincena (1-15)</option>
+                  <option>2nd Quincena (16-30)</option>
+                  <option>Full Month</option>
+                </select>
+              </div>
+            </div>
+            <div class="p-3 bg-blue-50 border border-blue-200 rounded-[2px]">
+              <p class="text-[9px] font-bold text-blue-800 uppercase mb-2">Automated Checks</p>
+              <div class="space-y-1">
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" checked class="w-3 h-3">
+                  <span class="text-[10px] text-slate-700">Apply DTR-based tardiness deductions</span>
+                </label>
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" checked class="w-3 h-3">
+                  <span class="text-[10px] text-slate-700">Compute GSIS/PhilHealth/PagIBIG Share</span>
+                </label>
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" checked class="w-3 h-3">
+                  <span class="text-[10px] text-slate-700">Apply approved loan amortizations</span>
+                </label>
+              </div>
+            </div>
+            <div class="pt-3 border-t border-slate-200 mt-2 flex justify-end gap-2">
+              <button type="button" @click="payrollModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 shadow-sm">Cancel</button>
+              <button type="button" @click="processPayroll()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Process Payroll</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <script>
+        function payrollRegistry() {
+          return {
+            payrollModalOpen: false,
+            searchQuery: '',
+            selectedScope: '',
+            selectedOffice: '',
+            selectedStatus: '',
+            showScopeFilter: true,
+            officeOptions: [],
+            payMonths: ['February 2026', 'March 2026'],
+            payMonth: 'February 2026',
+            payCycle: '1st Quincena (1-15)',
+            payrollPeriodLabel: 'Compensation Ledger (Feb 01-15)',
+            nextPayDate: 'Feb 28, 2026',
+            availableFund: 10000000,
+            totalGross: 0,
+            totalDeductions: 0,
+            totalNet: 0,
+            payrollRecords: [],
+            filteredPayroll: [],
+            formatCurrency(val) {
+              return 'PHP ' + (val || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+            },
+            filterTable() {
+              const q = this.searchQuery.toLowerCase().trim();
+              this.filteredPayroll = this.payrollRecords.filter(r => {
+                const matchQ = r.employee_name.toLowerCase().includes(q) || r.position.toLowerCase().includes(q);
+                const matchO = !this.selectedOffice || r.office === this.selectedOffice;
+                const matchSt = !this.selectedStatus || r.status === this.selectedStatus;
+                let matchS = true;
+                if (this.showScopeFilter && this.selectedScope) matchS = r.scope === this.selectedScope;
+                return matchQ && matchO && matchSt && matchS;
+              });
+            },
+            resetFilters() {
+              this.searchQuery = '';
+              this.selectedScope = '';
+              this.selectedOffice = '';
+              this.selectedStatus = '';
+              this.filterTable();
+            },
+            openBatchPayslips() {
+              alert('Batch payslip export not yet implemented.');
+            },
+            processPayroll() {
+              alert('Payroll processing not yet implemented.');
+              this.payrollModalOpen = false;
+            },
+            async init() {
+              try {
+                const resp = await fetch('/national/api/employees');
+                const data = await resp.json();
+                if (data.success) {
+                  this.payrollRecords = data.employees.map(emp => {
+                    const last = emp.lastName || emp.last_name || '';
+                    const first = emp.firstName || emp.first_name || '';
+                    const middle = emp.middleName || emp.middle_name || '';
+                    const employee_name = `${last}, ${first}${middle ? ' ' + middle[0] + '.' : ''}`.toUpperCase();
+                    const position = (emp.position || emp.designation || emp.jobTitle || 'N/A') + (emp.salaryGrade ? ` - SG-${emp.salaryGrade}` : '');
+                    const office = emp.office || emp.officeAssignment || emp.municipality || emp.region || 'N/A';
+                    let scope = 'MUNICIPAL';
+                    if ((emp.region || '').toUpperCase().includes('REGION')) scope = 'REGIONAL';
+                    if ((emp.office || '').toUpperCase().includes('CENTRAL')) scope = 'REGIONWIDE';
+                    const basic_pay = Number(emp.basicPay || emp.basic_pay || emp.salary || 0);
+                    const allowances = Number(emp.allowances || emp.allowance || emp.pera || 0);
+                    const gross = basic_pay + allowances;
+                    const gsis_tax = Number(emp.gsis || emp.tax || 0);
+                    const loans = Number(emp.loans || 0);
+                    const net_pay = gross - gsis_tax - loans;
+                    const status = 'Posted';
+                    return {
+                      id: emp.id,
+                      employee_name,
+                      position,
+                      office,
+                      basic_pay,
+                      allowances,
+                      gross,
+                      gsis_tax,
+                      loans,
+                      net_pay,
+                      scope,
+                      status
+                    };
+                  });
+                  this.officeOptions = [...new Set(this.payrollRecords.map(r => r.office))].filter(Boolean);
+                  this.totalGross = this.payrollRecords.reduce((sum, r) => sum + (r.gross || 0), 0);
+                  this.totalDeductions = this.payrollRecords.reduce((sum, r) => sum + ((r.gsis_tax || 0) + (r.loans || 0)), 0);
+                  this.totalNet = this.payrollRecords.reduce((sum, r) => sum + (r.net_pay || 0), 0);
+                  this.filteredPayroll = this.payrollRecords;
+                } else {
+                  this.payrollRecords = [];
+                  this.filteredPayroll = [];
+                }
+              } catch (e) {
+                this.payrollRecords = [];
+                this.filteredPayroll = [];
+              }
+            }
+          };
+        }
+        document.addEventListener('alpine:init', () => {
+          Alpine.data('payrollRegistry', payrollRegistry);
+        });
+      </script>
+    </main>
+  </div>
+</body>
+</html>
