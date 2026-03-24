@@ -63,6 +63,11 @@
 
     /* Fixed height containers for grid tables */
     .scrollable-table-container { flex: 1; overflow-y: auto; min-height: 200px; max-height: 250px; }
+
+    /* Modal */
+    .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 2050; backdrop-filter: blur(2px); padding: 16px; }
+    .gov-modal.active { display: flex !important; animation: fadeIn 0.15s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   </style>
 </head>
 <body class="h-screen overflow-hidden bg-slate-100">
@@ -239,10 +244,10 @@
                     <td class="font-mono text-slate-500 uppercase border-r border-slate-100 date-cell">{{ app.created_at if app.created_at else 'N/A' }}</td>
                     <td class="leading-tight border-r border-slate-100">
                         <span class="font-black text-blue-900 uppercase font-mono">APP-{{ app.reference_id }}</span><br>
-                        <span class="text-[9px] text-slate-500 font-bold uppercase truncate max-w-[120px] inline-block">{{ app.applicant_name }}</span>
+                        <span class="applicant-name text-[9px] text-slate-500 font-bold uppercase truncate max-w-[120px] inline-block">{{ app.applicant_name }}</span>
                     </td>
                     <td class="border-r border-slate-100">
-                      <span class="font-bold text-slate-700 uppercase text-[9px] block mb-1">{{ app.region }}</span>
+                      <span class="app-region font-bold text-slate-700 uppercase text-[9px] block mb-1">{{ app.region }}</span>
                       <span class="status-badge 
                         {% if app.status == 'approved' %} bg-emerald-50 text-emerald-800 border-emerald-200
                         {% elif app.status == 'rejected' %} bg-rose-50 text-rose-800 border-rose-200
@@ -250,7 +255,14 @@
                         {{ app.status[:3]|upper }}
                       </span>
                     </td>
-                    <td class="text-center"><button class="text-blue-700 hover:text-blue-900 font-black text-[9px] uppercase tracking-wider">Review</button></td>
+                    <td class="text-center">
+                      <button class="review-btn text-blue-700 hover:text-blue-900 font-black text-[9px] uppercase tracking-wider"
+                        data-ref="APP-{{ app.reference_id }}"
+                        data-name="{{ app.applicant_name }}"
+                        data-region="{{ app.region }}"
+                        data-status="{{ app.status }}"
+                        data-date="{{ app.created_at if app.created_at else 'N/A' }}">Review</button>
+                    </td>
                   </tr>
                   {% endfor %}
                 {% endif %}
@@ -285,7 +297,14 @@
                         {{ req.status[:3]|upper }}
                       </span>
                     </td>
-                    <td class="text-center"><button class="text-blue-700 hover:text-blue-900 font-black text-[9px] uppercase tracking-wider">Verify</button></td>
+                    <td class="text-center">
+                      <button class="view-btn text-blue-700 hover:text-blue-900 font-black text-[9px] uppercase tracking-wider"
+                        data-ref="SR-{{ req.reference_id }}"
+                        data-type="{{ req.service_type }}"
+                        data-region="{{ req.region }}"
+                        data-status="{{ req.status }}"
+                        data-date="{{ req.date_filed }}">View</button>
+                    </td>
                   </tr>
                   {% endfor %}
                 {% endif %}
@@ -356,6 +375,95 @@
       </footer>
 
     </main>
+  </div>
+
+  <!-- Review Modal -->
+  <div id="reviewModal" class="gov-modal no-print hidden">
+    <div class="absolute inset-0 cursor-pointer" onclick="closeReviewModal()"></div>
+    <div id="reviewBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-200 overflow-hidden relative z-10 flex flex-col">
+      <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+          <span class="material-icons-round text-[16px] text-emerald-400">assignment</span> Application Review
+        </h3>
+        <button onclick="closeReviewModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+          <span class="material-icons-round text-sm">close</span>
+        </button>
+      </div>
+      <div class="p-4 bg-slate-50 space-y-3 text-[10px]">
+        <div>
+          <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Reference</p>
+          <div id="reviewRef" class="font-mono font-black text-blue-900 mt-1">-</div>
+        </div>
+        <div>
+          <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Applicant</p>
+          <input id="reviewName" class="gov-input w-full h-8 mt-1" placeholder="Applicant name">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Region</p>
+            <input id="reviewRegion" class="gov-input w-full h-8 mt-1" placeholder="Region">
+          </div>
+          <div>
+            <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Status</p>
+            <select id="reviewStatus" class="gov-input w-full h-8 mt-1 cursor-pointer uppercase font-bold">
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Date</p>
+          <input id="reviewDate" class="gov-input w-full h-8 mt-1" placeholder="Date">
+        </div>
+        <div class="pt-2 border-t border-slate-200 flex gap-2 justify-end">
+          <button onclick="closeReviewModal()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Close</button>
+          <button onclick="saveReviewChanges()" class="gov-btn bg-emerald-700 text-white hover:bg-emerald-800">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Modal -->
+  <div id="viewModal" class="gov-modal no-print hidden">
+    <div class="absolute inset-0 cursor-pointer" onclick="closeViewModal()"></div>
+    <div id="viewBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-200 overflow-hidden relative z-10 flex flex-col">
+      <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+        <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+          <span class="material-icons-round text-[16px] text-blue-300">visibility</span> Service Request
+        </h3>
+        <button onclick="closeViewModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+          <span class="material-icons-round text-sm">close</span>
+        </button>
+      </div>
+      <div class="p-4 bg-slate-50 space-y-3 text-[10px]">
+        <div>
+          <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Reference</p>
+          <div id="viewRef" class="font-mono font-black text-blue-900 mt-1">-</div>
+        </div>
+        <div>
+          <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Type</p>
+          <div id="viewType" class="font-bold text-slate-700 mt-1">-</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Region</p>
+            <div id="viewRegion" class="font-bold text-slate-700 mt-1">-</div>
+          </div>
+          <div>
+            <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Status</p>
+          <span id="viewStatus" class="status-badge bg-slate-100 text-slate-700 border-slate-200 mt-1 inline-block">-</span>
+          </div>
+        </div>
+        <div>
+          <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Date</p>
+          <div id="viewDate" class="font-bold text-slate-700 mt-1">-</div>
+        </div>
+        <div class="pt-2 border-t border-slate-200 flex gap-2 justify-end">
+          <button onclick="closeViewModal()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -626,6 +734,113 @@
         document.getElementById('globalToDate').value = '';
         applyLiveFilter();
     }
+
+    // --- Modal Helpers ---
+    function openReviewModal(data) {
+        const modal = document.getElementById('reviewModal');
+        const body = document.getElementById('reviewBody');
+        document.getElementById('reviewRef').innerText = data.ref || '-';
+        document.getElementById('reviewName').value = data.name || '';
+        document.getElementById('reviewRegion').value = data.region || '';
+        document.getElementById('reviewStatus').value = (data.status || 'pending').toLowerCase();
+        document.getElementById('reviewDate').value = data.date || '';
+        modal.classList.remove('hidden');
+        setTimeout(() => { modal.classList.add('active'); body.classList.replace('scale-95', 'scale-100'); }, 10);
+    }
+
+    function closeReviewModal() {
+        const modal = document.getElementById('reviewModal');
+        const body = document.getElementById('reviewBody');
+        modal.classList.remove('active');
+        body.classList.replace('scale-100', 'scale-95');
+        setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    function saveReviewChanges() {
+        const row = window._reviewRow;
+        if (!row) return closeReviewModal();
+
+        const name = document.getElementById('reviewName').value.trim() || '-';
+        const region = document.getElementById('reviewRegion').value.trim() || '-';
+        const status = document.getElementById('reviewStatus').value || 'pending';
+        const date = document.getElementById('reviewDate').value.trim() || '-';
+
+        const nameEl = row.querySelector('.applicant-name');
+        if (nameEl) nameEl.innerText = name;
+        const regionEl = row.querySelector('.app-region');
+        if (regionEl) regionEl.innerText = region;
+        const statusEl = row.querySelector('.status-badge');
+        if (statusEl) {
+            statusEl.innerText = status.slice(0, 3).toUpperCase();
+            statusEl.className = `status-badge ${status === 'approved' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : status === 'rejected' ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`;
+        }
+        const dateEl = row.querySelector('.date-cell');
+        if (dateEl) dateEl.innerText = date;
+
+        const btn = row.querySelector('.review-btn');
+        if (btn) {
+            btn.dataset.name = name;
+            btn.dataset.region = region;
+            btn.dataset.status = status;
+            btn.dataset.date = date;
+        }
+
+        closeReviewModal();
+        if (typeof applyLiveFilter === 'function') applyLiveFilter();
+    }
+
+    function openViewModal(data) {
+        const modal = document.getElementById('viewModal');
+        const body = document.getElementById('viewBody');
+        document.getElementById('viewRef').innerText = data.ref || '-';
+        document.getElementById('viewType').innerText = data.type || '-';
+        document.getElementById('viewRegion').innerText = data.region || '-';
+        const statusText = (data.status || '-').toString().toLowerCase();
+        const statusEl = document.getElementById('viewStatus');
+        statusEl.innerText = statusText.toUpperCase();
+        const statusClass = statusText === 'approved'
+          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+          : statusText === 'rejected'
+            ? 'bg-rose-50 text-rose-800 border-rose-200'
+            : 'bg-amber-50 text-amber-800 border-amber-200';
+        statusEl.className = `status-badge ${statusClass} mt-1 inline-block`;
+        document.getElementById('viewDate').innerText = data.date || '-';
+        modal.classList.remove('hidden');
+        setTimeout(() => { modal.classList.add('active'); body.classList.replace('scale-95', 'scale-100'); }, 10);
+    }
+
+    function closeViewModal() {
+        const modal = document.getElementById('viewModal');
+        const body = document.getElementById('viewBody');
+        modal.classList.remove('active');
+        body.classList.replace('scale-100', 'scale-95');
+        setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    document.addEventListener('click', function(e) {
+        const reviewBtn = e.target.closest('.review-btn');
+        if (reviewBtn) {
+            window._reviewRow = reviewBtn.closest('tr');
+            openReviewModal({
+                ref: reviewBtn.dataset.ref,
+                name: reviewBtn.dataset.name,
+                region: reviewBtn.dataset.region,
+                status: reviewBtn.dataset.status,
+                date: reviewBtn.dataset.date
+            });
+            return;
+        }
+        const viewBtn = e.target.closest('.view-btn');
+        if (viewBtn) {
+            openViewModal({
+                ref: viewBtn.dataset.ref,
+                type: viewBtn.dataset.type,
+                region: viewBtn.dataset.region,
+                status: viewBtn.dataset.status,
+                date: viewBtn.dataset.date
+            });
+        }
+    });
   </script>
 
   <!-- Commit 4: update trend, status, category, regional charts from Firestore data -->
@@ -779,7 +994,14 @@
                 <span class="font-bold text-slate-700 uppercase text-[9px] block mb-1">${region}</span>
                 <span class="status-badge ${statusClass(status)}">${status.slice(0,3).toUpperCase()}</span>
               </td>
-              <td class="text-center"><button class="text-blue-700 hover:text-blue-900 font-black text-[9px] uppercase tracking-wider">View</button></td>`;
+              <td class="text-center">
+                <button class="view-btn text-blue-700 hover:text-blue-900 font-black text-[9px] uppercase tracking-wider"
+                  data-ref="SR-${refId}"
+                  data-type="${type}"
+                  data-region="${region}"
+                  data-status="${status}"
+                  data-date="${fmtDate(d.createdAt)}">View</button>
+              </td>`;
             if (emptyRow) tbody.insertBefore(row, emptyRow);
             else tbody.appendChild(row);
           });
