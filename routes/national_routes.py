@@ -1537,22 +1537,18 @@ def system_logs():
                 'scope': scope or log.get('scope', ''),
             }
 
-        # Fetch and normalize all regional logs
+        # Fetch and normalize all regional logs (no filter)
         raw_regional_logs = system_logs_storage.list_regional_system_logs(limit=300)
         regional_logs = [normalize_log(log, scope='Regional') for log in raw_regional_logs]
         print(f"[DEBUG] National logs: {len(regional_logs)} regional logs fetched. Sample: {regional_logs[:1]}")
 
-        # Fetch all system logs (municipal + user)
-        all_muni_logs = system_logs_storage.list_system_logs(limit=500)
-        print(f"[DEBUG] National logs: {len(all_muni_logs)} system_logs fetched. Sample: {all_muni_logs[:1]}")
+        # Fetch and normalize all system logs (no filter)
+        all_system_logs = system_logs_storage.list_system_logs(limit=500)
+        print(f"[DEBUG] National logs: {len(all_system_logs)} system_logs fetched. Sample: {all_system_logs[:1]}")
 
-        # Municipal admin logs
-        municipal_logs = [normalize_log(log, scope='Municipal') for log in all_muni_logs if str(log.get('role') or '').lower() in {'municipal_admin', 'municipal'}]
-        print(f"[DEBUG] National logs: {len(municipal_logs)} municipal logs after filter. Sample: {municipal_logs[:1]}")
-
-        # End user logs
-        user_logs = [normalize_log(log, scope='User') for log in all_muni_logs if str(log.get('role') or '').lower() not in {'national_admin', 'regional_admin', 'municipal_admin', 'municipal'}]
-        print(f"[DEBUG] National logs: {len(user_logs)} user logs after filter. Sample: {user_logs[:1]}")
+        # For national, show all system_logs in both tables (municipal_logs and user_logs)
+        municipal_logs = [normalize_log(log, scope='System') for log in all_system_logs]
+        user_logs = [normalize_log(log, scope='System') for log in all_system_logs]
 
         return render_template(
             'national/system/system-logs.html',
