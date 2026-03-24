@@ -269,46 +269,76 @@ def inventory_view():
 @bp.route('/user-application')
 @role_required('super-admin','superadmin')
 def user_application_view():
-    from firebase_config import get_firestore_db
-    from collections import defaultdict
-    from datetime import datetime
-
     stats = {
         'total': 0, 'pending': 0, 'approved': 0,
-        'rejected': 0, 'to_review': 0, 'approval_rate': 0,
+        'rejected': 0, 'to_review': 0, 'cancelled': 0, 'approval_rate': 0,
     }
     categories = []
     regions = []
 
     try:
         db = get_firestore_db()
-        docs = db.collection('applications').limit(5000).stream()
+        docs = list(db.collection('applications').limit(5000).stream())
+
+        def sector_label(value):
+            raw = str(value or '').strip()
+            key = raw.lower()
+            mapping = {
+                'farming': 'Crop & Plant',
+                'livestock': 'Fisheries & Agriculture',
+                'agribusiness': 'Agribusiness & Agro-Processing',
+                'trade': 'Agricultural Trade',
+                'infrastructure': 'Infrastructure',
+            }
+            return mapping.get(key, raw)
 
         cat_set = set()
         reg_count = defaultdict(int)
 
         for doc in docs:
             data = doc.to_dict() or {}
+            form_data = data.get('formData') or {}
             stats['total'] += 1
 
             national_status = (data.get('nationalStatus') or '').lower()
             status = (data.get('status') or 'pending').lower()
             effective = national_status if national_status else status
 
+            if effective in ['canceled']:
+                effective = 'cancelled'
+            if effective.startswith('forwarded'):
+                effective = 'to_review'
+
             if effective in ['approved']:
                 stats['approved'] += 1
             elif effective in ['rejected']:
                 stats['rejected'] += 1
+            elif effective in ['cancelled']:
+                stats['cancelled'] += 1
             elif effective in ['to review', 'review']:
                 stats['to_review'] += 1
             else:
                 stats['pending'] += 1
 
-            cat = (data.get('category') or data.get('applicantCategory') or '').strip()
+            cat = (
+                data.get('categoryType')
+                or data.get('category')
+                or data.get('applicantCategory')
+                or data.get('sector')
+                or form_data.get('categoryType')
+                or form_data.get('category')
+                or form_data.get('sector')
+                or ''
+            ).strip()
             if cat:
-                cat_set.add(cat)
+                cat_set.add(sector_label(cat))
 
-            reg = (data.get('region') or data.get('regionName') or '').strip()
+            reg = (
+                data.get('region')
+                or data.get('regionName')
+                or form_data.get('region')
+                or ''
+            ).strip()
             if reg:
                 reg_count[reg] += 1
 
