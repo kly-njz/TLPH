@@ -25,146 +25,136 @@
       db = getFirestore(app);
     }
     window.db = db;
-    // Expose Firestore functions for Alpine.js
-    window.collection = collection;
-    window.query = query;
-    window.getDocs = getDocs;
-    window.updateDoc = updateDoc;
-    window.doc = doc;
     console.log('✓ Firebase initialized');
   } catch (error) {
     console.error('Firebase initialization error:', error);
     db = window.db;
   }
-</script>
-<script>
-// Alpine.js leavePage() logic adapted from municipal, with Firestore fetching and national-level approval
-window.leavePage = function() {
-  return {
-    leaveRecords: [],
-    searchQuery: '',
-    filterLeaveType: '',
-    pendingCount: 0,
-    activeCount: 0,
-    showLedger: false,
-    ledgerSearch: '',
-    ledgerTypeFilter: '',
-    showCreateModal: false,
-    createSaving: false,
-    createError: '',
-    showReviewModal: false,
-    selectedRecord: null,
-    reviewRemarks: '',
-    reviewSaving: false,
-    createForm: {
-      applicant_name: '',
-      assignment: '',
-      leave_type: 'Vacation Leave',
-      from_date: '',
-      to_date: '',
-      days: '',
-      reason: '',
-      status: 'Pending',
-      scope: 'NATIONAL',
-      municipality: ''
-    },
 
-    get filteredLeave() {
-      return this.leaveRecords.filter(record => {
-        const matchSearch = !this.searchQuery || 
-          (record.applicant_name && record.applicant_name.toLowerCase().includes(this.searchQuery.toLowerCase()));
-        const matchType = !this.filterLeaveType || record.leave_type === this.filterLeaveType;
-        return matchSearch && matchType;
-      });
-    },
+  // Alpine.js leavePage() logic adapted from municipal, with Firestore fetching and national-level approval
+  window.leavePage = function() {
+    return {
+      leaveRecords: [],
+      searchQuery: '',
+      filterLeaveType: '',
+      pendingCount: 0,
+      activeCount: 0,
+      showLedger: false,
+      ledgerSearch: '',
+      ledgerTypeFilter: '',
+      showCreateModal: false,
+      createSaving: false,
+      createError: '',
+      showReviewModal: false,
+      selectedRecord: null,
+      reviewRemarks: '',
+      reviewSaving: false,
+      createForm: {
+        applicant_name: '',
+        assignment: '',
+        leave_type: 'Vacation Leave',
+        from_date: '',
+        to_date: '',
+        days: '',
+        reason: '',
+        status: 'Pending',
+        scope: 'NATIONAL',
+        municipality: ''
+      },
 
-    async loadData() {
-      try {
-        console.debug('[DEBUG] National Leave: Loading leave requests from Firestore...');
-        const db = window.db;
-        const q = query(collection(db, 'leave-requests'));
-        const querySnapshot = await getDocs(q);
-        this.leaveRecords = [];
-        querySnapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          data.id = docSnap.id;
-          this.leaveRecords.push(data);
+      get filteredLeave() {
+        return this.leaveRecords.filter(record => {
+          const matchSearch = !this.searchQuery || 
+            (record.applicant_name && record.applicant_name.toLowerCase().includes(this.searchQuery.toLowerCase()));
+          const matchType = !this.filterLeaveType || record.leave_type === this.filterLeaveType;
+          return matchSearch && matchType;
         });
-        this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
-        this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
-        console.debug(`[DEBUG] National Leave: Loaded ${this.leaveRecords.length} records. Pending: ${this.pendingCount}, Approved: ${this.activeCount}`);
-      } catch (error) {
-        console.error('[DEBUG] National Leave: Error loading leave data:', error);
-        this.leaveRecords = [];
-      }
-    },
+      },
 
-    openReview(record) {
-      console.debug('[DEBUG] National Leave: Open review for record', record);
-      this.selectedRecord = record;
-      this.reviewRemarks = '';
-      this.reviewError = '';
-      this.reviewSaving = false;
-      this.showReviewModal = true;
-    },
-
-    async submitReview(decision) {
-      if (!this.selectedRecord) return;
-      this.reviewError = '';
-      this.reviewSaving = true;
-      try {
-        console.debug(`[DEBUG] National Leave: Submitting review for record ${this.selectedRecord.id}, decision: ${decision}`);
-        const db = window.db;
-        const docRef = doc(db, 'leave-requests', this.selectedRecord.id);
-        await updateDoc(docRef, { status: decision, remarks: this.reviewRemarks });
-        // Update local state
-        const idx = this.leaveRecords.findIndex(r => r.id === this.selectedRecord.id);
-        if (idx !== -1) {
-          this.leaveRecords[idx].status = decision;
-          if (this.reviewRemarks) this.leaveRecords[idx].remarks = this.reviewRemarks;
+      async loadData() {
+        try {
+          console.debug('[DEBUG] National Leave: Loading leave requests from Firestore...');
+          const q = query(collection(db, 'leave-requests'));
+          const querySnapshot = await getDocs(q);
+          this.leaveRecords = [];
+          querySnapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            data.id = docSnap.id;
+            this.leaveRecords.push(data);
+          });
+          this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
+          this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
+          console.debug(`[DEBUG] National Leave: Loaded ${this.leaveRecords.length} records. Pending: ${this.pendingCount}, Approved: ${this.activeCount}`);
+        } catch (error) {
+          console.error('[DEBUG] National Leave: Error loading leave data:', error);
+          this.leaveRecords = [];
         }
-        this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
-        this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
-        this.showReviewModal = false;
-        console.debug(`[DEBUG] National Leave: Review submitted for record ${this.selectedRecord.id}`);
-      } catch (e) {
-        this.reviewError = 'Network error. Please try again.';
-        console.error('[DEBUG] National Leave: Error submitting review:', e);
-      }
-      this.reviewSaving = false;
-    },
+      },
 
-    async submitLeave() {
-      this.createError = '';
-      if (!this.createForm.applicant_name || !this.createForm.leave_type || !this.createForm.from_date || !this.createForm.to_date) {
-        this.createError = 'Please fill in all required fields.';
-        return;
-      }
-      this.createSaving = true;
-      try {
-        console.debug('[DEBUG] National Leave: Submitting new leave request', this.createForm);
-        const db = window.db;
-        const colRef = collection(db, 'leave-requests');
-        await colRef.add(this.createForm);
-        await this.loadData();
-        this.showCreateModal = false;
-        this.resetCreateForm();
-        console.debug('[DEBUG] National Leave: New leave request submitted');
-      } catch (e) {
-        this.createError = 'Network error. Please try again.';
-        console.error('[DEBUG] National Leave: Error submitting leave request:', e);
-      }
-      this.createSaving = false;
-    },
+      openReview(record) {
+        console.debug('[DEBUG] National Leave: Open review for record', record);
+        this.selectedRecord = record;
+        this.reviewRemarks = '';
+        this.reviewError = '';
+        this.reviewSaving = false;
+        this.showReviewModal = true;
+      },
 
-    resetCreateForm() {
-      this.createForm = { applicant_name: '', assignment: '', leave_type: 'Vacation Leave', from_date: '', to_date: '', days: '', reason: '', status: 'Pending', scope: 'NATIONAL', municipality: '' };
-      this.createError = '';
-      this.createSaving = false;
-      console.debug('[DEBUG] National Leave: Create form reset');
-    }
+      async submitReview(decision) {
+        if (!this.selectedRecord) return;
+        this.reviewError = '';
+        this.reviewSaving = true;
+        try {
+          console.debug(`[DEBUG] National Leave: Submitting review for record ${this.selectedRecord.id}, decision: ${decision}`);
+          const docRef = doc(db, 'leave-requests', this.selectedRecord.id);
+          await updateDoc(docRef, { status: decision, remarks: this.reviewRemarks });
+          // Update local state
+          const idx = this.leaveRecords.findIndex(r => r.id === this.selectedRecord.id);
+          if (idx !== -1) {
+            this.leaveRecords[idx].status = decision;
+            if (this.reviewRemarks) this.leaveRecords[idx].remarks = this.reviewRemarks;
+          }
+          this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
+          this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
+          this.showReviewModal = false;
+          console.debug(`[DEBUG] National Leave: Review submitted for record ${this.selectedRecord.id}`);
+        } catch (e) {
+          this.reviewError = 'Network error. Please try again.';
+          console.error('[DEBUG] National Leave: Error submitting review:', e);
+        }
+        this.reviewSaving = false;
+      },
+
+      async submitLeave() {
+        this.createError = '';
+        if (!this.createForm.applicant_name || !this.createForm.leave_type || !this.createForm.from_date || !this.createForm.to_date) {
+          this.createError = 'Please fill in all required fields.';
+          return;
+        }
+        this.createSaving = true;
+        try {
+          console.debug('[DEBUG] National Leave: Submitting new leave request', this.createForm);
+          const colRef = collection(db, 'leave-requests');
+          await colRef.add(this.createForm);
+          await this.loadData();
+          this.showCreateModal = false;
+          this.resetCreateForm();
+          console.debug('[DEBUG] National Leave: New leave request submitted');
+        } catch (e) {
+          this.createError = 'Network error. Please try again.';
+          console.error('[DEBUG] National Leave: Error submitting leave request:', e);
+        }
+        this.createSaving = false;
+      },
+
+      resetCreateForm() {
+        this.createForm = { applicant_name: '', assignment: '', leave_type: 'Vacation Leave', from_date: '', to_date: '', days: '', reason: '', status: 'Pending', scope: 'NATIONAL', municipality: '' };
+        this.createError = '';
+        this.createSaving = false;
+        console.debug('[DEBUG] National Leave: Create form reset');
+      }
+    };
   };
-};
 </script>
 
 <!-- The rest of the main content (header, sections, modals, etc.) goes here, unchanged from the previous file. -->
