@@ -1,9 +1,12 @@
 
 
+
+
 # --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
 from google.cloud.firestore_v1.base_query import FieldFilter
+from firebase_admin import firestore
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -1577,7 +1580,28 @@ def payroll_national_view():
 @bp.route('/audit-logs')
 @role_required('national', 'national_admin')
 def audit_logs():
-    return render_template('national/system/audit.html')
+    # Always refresh the audit logs from regional/transactions before displaying
+    try:
+        aggregate_regional_audit_logs_to_national()
+    except Exception as e:
+        print(f"[ERROR] Audit log aggregation failed: {e}")
+    db = get_firestore_db()
+    logs = []
+    try:
+        docs = db.collection('national_audit_logs').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(200).stream()
+        for doc in docs:
+            entry = doc.to_dict() or {}
+            logs.append({
+                'timestamp': entry.get('timestamp') or '',
+                'user': entry.get('user') or '',
+                'entity': entry.get('entity') or '',
+                'action': entry.get('action') or '',
+                'details': entry.get('details') or '',
+                'ip': entry.get('ip') or '',
+            })
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch national audit logs: {e}")
+    return render_template('national/system/audit.html', audit_logs=logs)
 
 
 # --- SYSTEM LOGS (National) ---
@@ -2449,3 +2473,104 @@ def api_get_national_employees():
     except Exception as e:
         print(f'[ERROR] Failed to fetch employees: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+
+from google.cloud.firestore_v1.base_query import FieldFilter
+def aggregate_regional_audit_logs_to_national():
+    """Aggregate audit logs and transactions from all regions into national_audit_logs collection."""
+    db = get_firestore_db()
+    regions = [
+        'NCR', 'REGION-I', 'REGION-II', 'REGION-III', 'REGION-IV-A', 'REGION-IV-B', 'REGION-V',
+        'REGION-VI', 'REGION-VII', 'REGION-VIII', 'REGION-IX', 'REGION-X', 'REGION-XI',
+        'REGION-XII', 'REGION-XIII', 'CAR', 'REGION-BANGSAMORO'
+    ]
+    batch = db.batch()
+    count = 0
+    for region in regions:
+        # Fetch auditLogs for each region
+        audit_docs = db.collection('auditLogs').where(filter=FieldFilter('region', '==', region)).limit(1000).stream()
+        for doc in audit_docs:
+            entry = doc.to_dict() or {}
+            log = {
+                'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
+                'user': entry.get('actorName') or entry.get('actor') or entry.get('user') or entry.get('actorEmail') or '',
+                'entity': region,
+                'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
+                'details': entry.get('detail') or entry.get('description') or entry.get('message') or '',
+                'ip': entry.get('ip') or entry.get('ipAddress') or '',
+            }
+            ref = db.collection('national_audit_logs').document(f"{region}_{doc.id}")
+            batch.set(ref, log)
+            count += 1
+        # Fetch transactions for each region
+        tx_docs = db.collection('transactions').where(filter=FieldFilter('region', '==', region)).limit(1000).stream()
+        for doc in tx_docs:
+            tx = doc.to_dict() or {}
+            log = {
+                'timestamp': tx.get('updated_at') or tx.get('created_at') or tx.get('createdAt') or '',
+                'user': tx.get('updated_by') or tx.get('forwarded_by') or tx.get('user_email') or 'User',
+                'entity': region,
+                'action': tx.get('status') or '',
+                'details': tx.get('description') or '',
+                'ip': tx.get('ip') or tx.get('ipAddress') or '',
+            }
+            ref = db.collection('national_audit_logs').document(f"{region}_tx_{doc.id}")
+            batch.set(ref, log)
+            count += 1
+    batch.commit()
+    print(f"[INFO] Aggregated {count} audit logs to national_audit_logs.")
+
+@bp.route('/aggregate-audit-logs')
+@role_required('national', 'national_admin')
+def aggregate_audit_logs_route():
+    try:
+        aggregate_regional_audit_logs_to_national()
+        return jsonify({'success': True, 'message': 'Audit logs aggregated.'})
+    except Exception as e:
+        print(f"[ERROR] Failed to aggregate audit logs: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+
+@bp.route('/api/projects/<project_id>/fully-complete', methods=['POST'])
+@role_required('national', 'national_admin')
+def mark_project_fully_completed_national(project_id):
+    db = get_firestore_db()
+    try:
+        # Try to update in all possible project collections
+        collections = [
+            'municipal_projects',
+            'regional_projects',
+            'national_projects',
+            'projects'
+        ]
+        found = False
+        for col in collections:
+            doc_ref = db.collection(col).document(project_id)
+            doc = doc_ref.get()
+            if doc.exists:
+                doc_ref.update({
+                    'municipal_completed': True,
+                    'regional_completed': True,
+                    'status': 'fully_completed'
+                })
+                found = True
+                break
+        if not found:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+def record_national_audit_log(user, entity, action, details, ip=None, timestamp=None):
+    """Helper to record a new audit log entry in national_audit_logs."""
+    db = get_firestore_db()
+    from datetime import datetime
+    log = {
+        'timestamp': timestamp or datetime.utcnow().isoformat(),
+        'user': user,
+        'entity': entity,
+        'action': action,
+        'details': details,
+        'ip': ip or '',
+    }
+    db.collection('national_audit_logs').add(log)
