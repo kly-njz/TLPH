@@ -204,80 +204,84 @@
   </div>
 
   <script>
-    function applyFilters() {
-      const q = (document.getElementById('q').value || '').toLowerCase();
-      const user = document.getElementById('user').value;
-      const entity = document.getElementById('entity').value.toUpperCase();
-      const action = document.getElementById('action').value;
-
-      const rows = document.querySelectorAll('#auditBody tr');
-      let visibleCount = 0;
-
-      rows.forEach(tr => {
-        const trUser = tr.getAttribute('data-user') || '';
-        const trEntity = (tr.getAttribute('data-entity') || '').toUpperCase();
-        const trAction = tr.getAttribute('data-action') || '';
-        const trText = (tr.getAttribute('data-text') || '').toLowerCase();
-
-        const matchQ = !q || trText.includes(q);
-        const matchUser = !user || trUser === user;
-        const matchEntity = !entity || trEntity.includes(entity);
-        const matchAction = !action || trAction === action;
-
-        if (matchQ && matchUser && matchEntity && matchAction) {
-          tr.style.display = '';
-          visibleCount++;
-        } else {
-          tr.style.display = 'none';
-        }
-      });
-
-      document.getElementById('visibleCount').textContent = visibleCount;
-      document.getElementById('statEntries').textContent = visibleCount;
-      document.getElementById('totalDataCount').textContent = rows.length;
-    }
-
-    function clearFilters() {
-      document.getElementById('q').value = '';
-      document.getElementById('user').value = '';
-      document.getElementById('entity').value = '';
-      document.getElementById('action').value = '';
-      applyFilters();
-    }
-
+    // Utility to escape CSV
     function csvEscape(value){
       const safe = (value ?? '').toString().replace(/\r?\n/g, ' ').trim();
       return /[",]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
     }
 
-    function exportLogs(){
-      const rows = Array.from(document.querySelectorAll('#auditBody tr'))
-        .filter(tr => tr.style.display !== 'none');
-
-      if (!rows.length){
-        alert('No data matches the current filters for export.');
+    // Export logs for all tables (regional, municipal, user)
+    function exportLogs() {
+      // Combine all rows from all tables
+      const allRows = [
+        ...document.querySelectorAll('section.gov-card:nth-of-type(3) tbody tr'), // Regional
+        ...document.querySelectorAll('section.gov-card:nth-of-type(4) tbody tr'), // Municipal
+        ...document.querySelectorAll('section.gov-card:nth-of-type(5) tbody tr')  // User
+      ];
+      if (!allRows.length) {
+        alert('No data to export.');
         return;
       }
-
-      const headers = ["Timestamp", "User Identity", "Target Entity", "Action Type", "System Details", "IP Origin"];
+      const headers = ["Timestamp", "User / Identity", "Scope", "Event", "System Details", "IP Origin"];
       const lines = [headers.join(',')];
-
-      rows.forEach(tr => {
+      allRows.forEach(tr => {
         const cells = Array.from(tr.querySelectorAll('td')).map(td => csvEscape(td.textContent));
+        // Add a scope column based on which table
+        let scope = '';
+        if (tr.closest('section').innerText.includes('Regional Account Logs')) scope = 'Regional';
+        else if (tr.closest('section').innerText.includes('Municipal Admin Account Logs')) scope = 'Municipal';
+        else if (tr.closest('section').innerText.includes('End User Logs')) scope = 'User';
+        // Insert scope as 3rd column
+        cells.splice(2, 0, scope);
         lines.push(cells.join(','));
       });
-
       const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
       const stamp = new Date().toISOString().slice(0,10);
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `Audit_Logs_Export_${stamp}.csv`;
+      link.download = `System_Logs_Export_${stamp}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     }
 
-    document.addEventListener('DOMContentLoaded', applyFilters);
+    // Update stats cards based on table data
+    function updateStats() {
+      // Count all log rows
+      const allRows = [
+        ...document.querySelectorAll('section.gov-card:nth-of-type(3) tbody tr'),
+        ...document.querySelectorAll('section.gov-card:nth-of-type(4) tbody tr'),
+        ...document.querySelectorAll('section.gov-card:nth-of-type(5) tbody tr')
+      ];
+      document.getElementById('statEntries').textContent = allRows.length;
+
+      // Today's activity (by date string)
+      const today = new Date().toISOString().slice(0, 10);
+      let todayCount = 0;
+      let topAction = '';
+      let topActionCount = 0;
+      let actionMap = {};
+      let userSet = new Set();
+      allRows.forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        // Timestamp is always first column
+        const ts = tds[0]?.innerText || '';
+        const user = tds[1]?.innerText || '';
+        const action = tds[3]?.innerText || '';
+        if (ts.startsWith(today)) todayCount++;
+        userSet.add(user);
+        actionMap[action] = (actionMap[action] || 0) + 1;
+        if (actionMap[action] > topActionCount) {
+          topAction = action;
+          topActionCount = actionMap[action];
+        }
+      });
+      document.getElementById('statToday').textContent = todayCount;
+      document.getElementById('statTopAction').textContent = topAction || '—';
+      document.getElementById('statUsers').textContent = userSet.size;
+    }
+
+    document.addEventListener('DOMContentLoaded', updateStats);
   </script>
 </body>
 </html>
