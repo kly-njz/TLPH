@@ -216,7 +216,7 @@
     </div>
 
     <div id="detailsModal" class="gov-modal no-print">
-        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col relative z-10">
+        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-[95vw] max-w-6xl max-h-[90vh] overflow-hidden flex flex-col relative z-10">
             <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-gov-navy text-white shrink-0">
                 <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
                     <span class="material-icons-round text-sm">info</span> Service Request Information
@@ -252,11 +252,10 @@
                         <p class="detail-label">Jurisdiction (Region | LGU)</p>
                         <p id="detLoc" class="detail-value"></p>
                     </div>
+
                     <div class="col-span-2 bg-slate-50 p-3 border border-slate-200 rounded-[1px]">
-                        <p class="detail-label mb-2">Administrative Brief</p>
-                        <p class="text-slate-600 m-0 leading-relaxed font-bold italic">
-                            System Note: This request is synchronized from field offices. Please verify attached documentation in the regional sub-portal before approval.
-                        </p>
+                        <p class="detail-label mb-2">Submitted Application Details</p>
+                        <div id="detDynamicFields" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-2"></div>
                     </div>
                 </div>
             </div>
@@ -404,7 +403,91 @@
             const statusLabel = rowData.status_display || rowData.status || 'Pending';
             document.getElementById('detBadgeContainer').innerHTML = `<span class="status-badge ${statusClass} text-[10px] py-1 px-3">${escapeHtml(statusLabel)}</span>`;
 
+            renderDynamicDetails(rowData);
+
             document.getElementById('detailsModal').classList.add('active');
+        }
+
+        function toReadableLabel(key) {
+            return String(key || '')
+                .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                .replace(/[_-]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function formatFieldValue(value) {
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'object') {
+                try {
+                    return JSON.stringify(value);
+                } catch (_) {
+                    return String(value);
+                }
+            }
+            return String(value).trim();
+        }
+
+        function renderDynamicDetails(rowData) {
+            const container = document.getElementById('detDynamicFields');
+            if (!container) return;
+
+            const formData = (rowData && typeof rowData.form_data === 'object' && rowData.form_data) ? rowData.form_data : {};
+            const rawData = (rowData && typeof rowData.raw === 'object' && rowData.raw) ? rowData.raw : {};
+
+            const skipKeys = new Set([
+                'status', 'regionalStatus', 'nationalStatus', 'approvedByLevel', 'rejectedByLevel',
+                'forwardedByLevel', 'forwardedToLevel', 'forwardedToNationalByLevel',
+                'createdAt', 'submittedAt', 'dateFiled', 'date_filed', 'userId', 'formData'
+            ]);
+
+            const corePairs = [
+                ['Reference', rowData.ref],
+                ['Applicant Name', rowData.name],
+                ['Email', rowData.email],
+                ['Contact', rowData.contact],
+                ['Category', rowData.category],
+                ['Region', rowData.region],
+                ['Municipality', rowData.municipality],
+                ['Province', rowData.province],
+                ['Filed Date', rowData.date],
+                ['Current Status', rowData.status_display || rowData.status],
+            ];
+
+            const detailMap = new Map();
+            corePairs.forEach(([k, v]) => {
+                const val = formatFieldValue(v);
+                if (val) detailMap.set(k, val);
+            });
+
+            Object.entries(rawData).forEach(([key, value]) => {
+                if (skipKeys.has(key) || (typeof value === 'object' && !Array.isArray(value))) return;
+                const val = formatFieldValue(value);
+                if (!val) return;
+                const label = toReadableLabel(key);
+                if (!detailMap.has(label)) detailMap.set(label, val);
+            });
+
+            Object.entries(formData).forEach(([key, value]) => {
+                const val = formatFieldValue(value);
+                if (!val) return;
+                const label = toReadableLabel(key);
+                detailMap.set(label, val);
+            });
+
+            const entries = [...detailMap.entries()];
+            if (!entries.length) {
+                container.innerHTML = '<p class="text-[10px] font-bold text-slate-500 m-0">No submitted field details available for this request.</p>';
+                return;
+            }
+
+            container.innerHTML = entries.map(([label, value]) => `
+                <div class="border-b border-slate-200 pb-1">
+                    <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0 mb-0.5">${escapeHtml(label)}</p>
+                    <p class="text-[10px] font-bold text-slate-800 m-0 break-words">${escapeHtml(value)}</p>
+                </div>
+            `).join('');
         }
 
         function closeDetailsModal() {

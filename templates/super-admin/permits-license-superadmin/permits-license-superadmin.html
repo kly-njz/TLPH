@@ -314,7 +314,7 @@
 
     <div id="permitViewModal" class="gov-modal no-print hidden">
         <div class="absolute inset-0 cursor-pointer" onclick="closePermitViewModal()"></div>
-        <div id="permitViewBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-2xl transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+        <div id="permitViewBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-[95vw] max-w-6xl max-h-[90vh] transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
             <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
                 <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
                     <i class="fa-solid fa-id-badge text-amber-400"></i> Permit Full View
@@ -323,7 +323,7 @@
                     <span class="material-icons-round text-sm">close</span>
                 </button>
             </div>
-            <div class="p-4 bg-slate-50">
+            <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px] font-bold text-slate-700 uppercase tracking-widest">
                     <div>
                         <div class="text-[8px] text-slate-400">License No</div>
@@ -349,6 +349,16 @@
                         <div class="text-[8px] text-slate-400">Status</div>
                         <div id="viewStatus" class="text-slate-800 text-[11px] font-black"></div>
                     </div>
+                </div>
+
+                <div class="mt-4 border-t border-slate-200 pt-3">
+                    <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Submitted Application Details</div>
+                    <div id="viewDynamicFields" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2"></div>
+                </div>
+
+                <div class="mt-4 border-t border-slate-200 pt-3">
+                    <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Uploaded Documents</div>
+                    <div id="viewUploadFields" class="space-y-1"></div>
                 </div>
             </div>
             <div class="px-4 py-3 bg-white border-t border-slate-200 flex justify-end gap-2">
@@ -402,6 +412,8 @@
                     statusDisplay: row.status_display || row.status || 'Pending',
                     statusActorLevel: row.status_actor_level || '',
                     statusTargetLevel: row.status_target_level || '',
+                    raw: row.raw || {},
+                    formData: row.form_data || {},
                 }));
 
                 populateCategoryFilter();
@@ -715,6 +727,7 @@
             document.getElementById('viewRegion').textContent = `Region ${row.reg} | ${row.municipality || 'N/A'}`;
             document.getElementById('viewCategory').textContent = row.category;
             document.getElementById('viewStatus').textContent = row.statusDisplay;
+            renderPermitFullDetails(row);
 
             const modal = document.getElementById('permitViewModal');
             const body = document.getElementById('permitViewBody');
@@ -729,6 +742,109 @@
             body.classList.remove('scale-100');
             body.classList.add('scale-95');
             setTimeout(() => { modal.classList.add('hidden'); }, 200);
+        }
+
+        function toReadableLabel(key) {
+            return String(key || '')
+                .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                .replace(/[_-]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function normalizeValue(value) {
+            if (value === null || value === undefined) return '';
+            if (Array.isArray(value)) return value.map(v => String(v)).join(', ');
+            if (typeof value === 'object') {
+                try { return JSON.stringify(value); } catch (_) { return String(value); }
+            }
+            return String(value).trim();
+        }
+
+        function isLinkLike(value) {
+            const v = String(value || '').trim();
+            return v.startsWith('http://') || v.startsWith('https://') || v.startsWith('gs://');
+        }
+
+        function renderPermitFullDetails(row) {
+            const detailWrap = document.getElementById('viewDynamicFields');
+            const uploadWrap = document.getElementById('viewUploadFields');
+            if (!detailWrap || !uploadWrap) return;
+
+            const formData = (row && typeof row.formData === 'object' && row.formData) ? row.formData : {};
+            const rawData = (row && typeof row.raw === 'object' && row.raw) ? row.raw : {};
+
+            const skipRaw = new Set([
+                'formData', 'status', 'regionalStatus', 'nationalStatus',
+                'approvedByLevel', 'rejectedByLevel', 'forwardedByLevel', 'forwardedToLevel',
+                'createdAt', 'submittedAt', 'updatedAt', 'userId'
+            ]);
+
+            const details = new Map();
+            const uploads = [];
+
+            Object.entries(rawData).forEach(([k, v]) => {
+                if (skipRaw.has(k)) return;
+                const label = toReadableLabel(k);
+                if (Array.isArray(v)) {
+                    if (v.some(isLinkLike)) {
+                        v.forEach((u, i) => uploads.push({ label: `${label} ${i + 1}`, url: String(u) }));
+                    } else {
+                        const txt = normalizeValue(v);
+                        if (txt) details.set(label, txt);
+                    }
+                    return;
+                }
+                if (typeof v === 'object' && v) {
+                    const nested = normalizeValue(v);
+                    if (nested) details.set(label, nested);
+                    return;
+                }
+                const txt = normalizeValue(v);
+                if (!txt) return;
+                if (isLinkLike(txt)) uploads.push({ label, url: txt });
+                else details.set(label, txt);
+            });
+
+            Object.entries(formData).forEach(([k, v]) => {
+                const label = toReadableLabel(k);
+                if (Array.isArray(v)) {
+                    if (v.some(isLinkLike)) {
+                        v.forEach((u, i) => uploads.push({ label: `${label} ${i + 1}`, url: String(u) }));
+                    } else {
+                        const txt = normalizeValue(v);
+                        if (txt) details.set(label, txt);
+                    }
+                    return;
+                }
+                const txt = normalizeValue(v);
+                if (!txt) return;
+                if (isLinkLike(txt)) uploads.push({ label, url: txt });
+                else details.set(label, txt);
+            });
+
+            const detailEntries = [...details.entries()];
+            detailWrap.innerHTML = detailEntries.length
+                ? detailEntries.map(([label, value]) => `
+                    <div class="bg-white border border-slate-200 p-2 rounded-[2px]">
+                        <div class="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1">${escapeHtml(label)}</div>
+                        <div class="text-[10px] font-bold text-slate-800 break-words">${escapeHtml(value)}</div>
+                    </div>
+                `).join('')
+                : '<div class="text-[10px] font-bold text-slate-500">No additional submitted field data found.</div>';
+
+            uploadWrap.innerHTML = uploads.length
+                ? uploads.map((item, idx) => `
+                    <div class="bg-white border border-slate-200 p-2 rounded-[2px] flex items-center justify-between gap-2">
+                        <div class="min-w-0">
+                            <div class="text-[8px] font-black uppercase tracking-widest text-slate-500">${escapeHtml(item.label)}</div>
+                            <div class="text-[9px] font-bold text-slate-700 truncate">${escapeHtml(item.url)}</div>
+                        </div>
+                        <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 shrink-0">Open</a>
+                    </div>
+                `).join('')
+                : '<div class="text-[10px] font-bold text-slate-500">No uploaded file links found in this application.</div>';
         }
 
         window.onload = async () => {
