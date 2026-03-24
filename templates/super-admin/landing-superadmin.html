@@ -118,7 +118,7 @@
                     <h3 class="text-[14px] font-black text-slate-900 m-0 mt-1 leading-none" id="kpi-reqs">0</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-amber-500 p-2 text-center transition-colors hover:bg-slate-50">
-                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 leading-none">Permits</p>
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 leading-none">License & Permit</p>
                     <h3 class="text-[14px] font-black text-slate-900 m-0 mt-1 leading-none" id="kpi-permits">0</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-emerald-600 p-2 text-center transition-colors hover:bg-slate-50">
@@ -207,7 +207,7 @@
                     <button class="nav-trigger active px-4 py-2 text-[9px] font-black uppercase whitespace-nowrap" data-tab="applications">Applications</button>
                     <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="requests">Service Requests</button>
                     <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="inventory">Inventory</button>
-                    <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="permits">Licensing</button>
+                    <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="permits">License & Permit</button>
                     <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="transactions">Revenue</button>
                     <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="users">Accounts</button>
                 </nav>
@@ -261,7 +261,7 @@
 
         const DATA = {
             applications: [],
-            requests: [{ date: "2026-02-13", ref: "SR-9910-B", entity: "Mindoro Cooperative", sector: "Inspection", region: "IV-B", lgu: "Victoria", status: "FOR REVIEW" }],
+            requests: [],
             inventory: [{ cat: "Seedlings", desc: "Narra Saplings", qty: 5000, region: "IV-B", lgu: "Baco" }],
             permits: [{ ref: "PMT-CITES-882", entity: "Nature Exporters", sector: "Wildlife Trade", region: "IV-B", lgu: "San Teodoro", status: "ACTIVE" }],
             transactions: [{ ref: "OR-10291-TX", entity: "MIMAROPA Corp", type: "Permit Fee", date: "2026-02-13", region: "IV-B", status: "PAID", amount: 15400 }],
@@ -302,11 +302,35 @@
             }
         }
 
+        async function loadServiceRequestsData() {
+            try {
+                const res = await fetch('/api/superadmin/service-requests');
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message || 'Failed to fetch service requests');
+
+                const rows = json.requests || json.data || [];
+                DATA.requests = rows.map(req => ({
+                    date: req.date || 'N/A',
+                    ref: req.ref || req.id || 'N/A',
+                    entity: req.name || 'N/A',
+                    sector: req.category || 'General',
+                    region: req.region || 'N/A',
+                    lgu: req.municipality || 'N/A',
+                    status: (req.status_display || req.status || 'PENDING').toUpperCase()
+                }));
+            } catch (err) {
+                console.error('Service requests fetch error:', err);
+                DATA.requests = [];
+            }
+        }
+
         function populateCategories() {
             const select = $("categorySelect");
             select.innerHTML = '<option value="all">-- ALL SECTORS --</option>';
             const categories = activeTab === 'applications'
                 ? [...new Set((DATA.applications || []).map(a => a.sector).filter(Boolean))]
+                : activeTab === 'requests'
+                ? [...new Set((DATA.requests || []).map(r => r.sector).filter(Boolean))]
                 : (CATEGORIES[activeTab] || []);
 
             categories.forEach(cat => {
@@ -470,6 +494,22 @@
             }
         }
 
+        async function loadServiceRequestKpis() {
+            try {
+                const res = await fetch('/api/superadmin/service-requests/stats');
+                const json = await res.json();
+                if (!json.success) return;
+
+                const stats = json.stats || {};
+                const reqsEl = $('kpi-reqs');
+                if (reqsEl) reqsEl.textContent = Number(stats.total || 0).toLocaleString();
+            } catch (err) {
+                console.error('Service request KPI fetch error:', err);
+                const reqsEl = $('kpi-reqs');
+                if (reqsEl) reqsEl.textContent = Number((DATA.requests || []).length).toLocaleString();
+            }
+        }
+
         document.querySelectorAll(".nav-trigger").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 document.querySelectorAll(".nav-trigger").forEach(b => {
@@ -488,13 +528,20 @@
         $("scopeSelect").addEventListener("change", renderTable);
 
         window.onload = async () => {
-            await Promise.all([loadApplicationsData(), loadApplicationKpis(), initCharts()]);
+            await Promise.all([
+                loadApplicationsData(),
+                loadServiceRequestsData(),
+                loadApplicationKpis(),
+                initCharts()
+            ]);
+
+            await loadServiceRequestKpis();
             populateCategories();
             renderTable();
             ["apps","reqs","permits","inv","uinv","txn","users"].forEach(k => {
                 const el = $( `kpi-${k}`);
                 if (el) {
-                    if (k !== 'apps') {
+                    if (k !== 'apps' && k !== 'reqs') {
                         el.textContent = DATA[k === "uinv" ? "applications" : k === "txn" ? "transactions" : k]?.length || 0;
                     }
                 }
