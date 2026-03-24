@@ -157,8 +157,8 @@
                                 <td class="text-center">
                                     <div class="flex justify-center gap-1">
                                         <button class="btn-action btn-view" title="View" onclick="openViewModal(this)"><span class="material-icons-round text-[14px]">visibility</span></button>
-                                        <button class="btn-action btn-approve" title="Approve" onclick="handleAction(this, 'APPROVE')"><span class="material-icons-round text-[14px]">check_circle</span></button>
-                                        <button class="btn-action btn-reject" title="Reject" onclick="handleAction(this, 'REJECT')"><span class="material-icons-round text-[14px]">cancel</span></button>
+                                        <button class="btn-action btn-approve" title="Approve" onclick="openActionModal(this, 'APPROVE')"><span class="material-icons-round text-[14px]">check_circle</span></button>
+                                        <button class="btn-action btn-reject" title="Reject" onclick="openActionModal(this, 'REJECT')"><span class="material-icons-round text-[14px]">cancel</span></button>
                                     </div>
                                 </td>
                             </tr>
@@ -188,8 +188,8 @@
                                     <td class="text-center">
                                         <div class="flex justify-center gap-1">
                                             <button class="btn-action btn-view" title="View" onclick="openViewModal(this)"><span class="material-icons-round text-[14px]">visibility</span></button>
-                                            <button class="btn-action btn-approve" title="Approve" onclick="handleAction(this, 'APPROVE')"><span class="material-icons-round text-[14px]">check_circle</span></button>
-                                            <button class="btn-action btn-reject" title="Reject" onclick="handleAction(this, 'REJECT')"><span class="material-icons-round text-[14px]">cancel</span></button>
+                                            <button class="btn-action btn-approve" title="Approve" onclick="openActionModal(this, 'APPROVE')"><span class="material-icons-round text-[14px]">check_circle</span></button>
+                                            <button class="btn-action btn-reject" title="Reject" onclick="openActionModal(this, 'REJECT')"><span class="material-icons-round text-[14px]">cancel</span></button>
                                         </div>
                                     </td>
                                 </tr>
@@ -254,6 +254,39 @@
       </div>
       <div class="px-4 py-3 bg-white border-t border-slate-200 flex justify-end shrink-0">
         <button onclick="closeViewModal()" class="gov-btn border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Close Window</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="actionModal" class="gov-modal no-print">
+    <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-md flex flex-col overflow-hidden m-4">
+      <div id="actionModalHeader" class="bg-slate-900 text-white px-4 py-3 flex justify-between items-center shrink-0 border-b border-slate-950">
+        <h3 id="actionModalTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+          <span class="material-icons-round text-sm">verified_user</span> Action Confirmation
+        </h3>
+        <button onclick="closeActionModal()" class="text-slate-300 hover:text-white transition-colors"><span class="material-icons-round text-sm">close</span></button>
+      </div>
+      <div class="p-5 bg-slate-50 flex-1 space-y-4">
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Application Details</div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[8px] font-black uppercase text-slate-500 tracking-widest mb-1">Reference ID</label>
+            <div id="maRef" class="text-[11px] font-black text-blue-800 uppercase font-mono"></div>
+          </div>
+          <div>
+            <label class="block text-[8px] font-black uppercase text-slate-500 tracking-widest mb-1">Applicant Name</label>
+            <div id="maName" class="text-[11px] font-black text-slate-900 uppercase"></div>
+          </div>
+        </div>
+        <div>
+          <label class="block text-[8px] font-black uppercase text-slate-500 tracking-widest mb-1">Selected Action</label>
+          <div id="maAction" class="text-[10px] font-black uppercase text-slate-700"></div>
+        </div>
+        <div class="text-[10px] text-slate-600" id="maMessage"></div>
+      </div>
+      <div class="px-4 py-3 bg-white border-t border-slate-200 flex justify-end gap-2 shrink-0">
+        <button onclick="closeActionModal()" class="gov-btn border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Cancel</button>
+        <button id="actionConfirmBtn" class="gov-btn bg-slate-900 text-white hover:bg-slate-800">Confirm</button>
       </div>
     </div>
   </div>
@@ -345,20 +378,49 @@
     document.getElementById('viewModal').classList.remove('active');
   }
 
-  // --- CONFIRMATION LOGIC ---
-  function handleAction(btn, action) {
+  // --- CONFIRMATION MODAL LOGIC ---
+  let pendingAction = { refId: "", action: "" };
+
+  function openActionModal(btn, action) {
     const row = btn.closest('tr');
     const refId = row.dataset.ref;
     const applicant = row.dataset.name;
-    
-    const msg = action === 'APPROVE' 
-        ? `Are you sure you want to APPROVE application ${refId} for ${applicant}?` 
-        : `Are you sure you want to REJECT application ${refId} for ${applicant}?`;
 
-    if (confirm(msg)) {
-        alert(`Request processed successfully for: ${refId}`);
-        // Backend integration point: call your API here
-    }
+    pendingAction = { refId, action };
+
+    const isApprove = action === "APPROVE";
+    document.getElementById('actionModalHeader').className = isApprove
+      ? "bg-emerald-700 text-white px-4 py-3 flex justify-between items-center shrink-0 border-b border-emerald-900"
+      : "bg-rose-700 text-white px-4 py-3 flex justify-between items-center shrink-0 border-b border-rose-900";
+
+    document.getElementById('actionModalTitle').innerHTML = isApprove
+      ? '<span class="material-icons-round text-sm">check_circle</span> Approve Application'
+      : '<span class="material-icons-round text-sm">cancel</span> Reject Application';
+
+    document.getElementById('maRef').innerText = refId;
+    document.getElementById('maName').innerText = applicant;
+    document.getElementById('maAction').innerText = isApprove ? "APPROVE" : "REJECT";
+    document.getElementById('maMessage').innerText = isApprove
+      ? `You are about to APPROVE application ${refId} for ${applicant}.`
+      : `You are about to REJECT application ${refId} for ${applicant}.`;
+
+    const confirmBtn = document.getElementById('actionConfirmBtn');
+    confirmBtn.className = isApprove
+      ? "gov-btn bg-emerald-700 text-white hover:bg-emerald-600"
+      : "gov-btn bg-rose-700 text-white hover:bg-rose-600";
+
+    confirmBtn.onclick = confirmAction;
+    document.getElementById('actionModal').classList.add('active');
+  }
+
+  function closeActionModal() {
+    document.getElementById('actionModal').classList.remove('active');
+  }
+
+  function confirmAction() {
+    closeActionModal();
+    alert(`Request processed successfully for: ${pendingAction.refId}`);
+    // Backend integration point: call your API here
   }
 
   // --- FILTER LOGIC ---
