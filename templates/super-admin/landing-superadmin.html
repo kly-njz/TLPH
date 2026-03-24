@@ -457,6 +457,19 @@
             a.href = url; a.download = `DENR_MASTER_REPORT_${activeTab.toUpperCase()}_2026.csv`; a.click();
         }
 
+        async function loadApplicationKpis() {
+            try {
+                const res = await fetch('/api/superadmin/applications/stats');
+                const json = await res.json();
+                if (!json.success) return;
+                const stats = json.stats || {};
+                const appsEl = $('kpi-apps');
+                if (appsEl) appsEl.textContent = Number(stats.total || 0).toLocaleString();
+            } catch (err) {
+                console.error('KPI fetch error:', err);
+            }
+        }
+
         document.querySelectorAll(".nav-trigger").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 document.querySelectorAll(".nav-trigger").forEach(b => {
@@ -474,12 +487,16 @@
         $("categorySelect").addEventListener("change", renderTable);
         $("scopeSelect").addEventListener("change", renderTable);
 
-        window.onload = () => { 
-            initCharts(); populateCategories(); renderTable(); 
+        window.onload = async () => {
+            await Promise.all([loadApplicationsData(), loadApplicationKpis(), initCharts()]);
+            populateCategories();
+            renderTable();
             ["apps","reqs","permits","inv","uinv","txn","users"].forEach(k => {
                 const el = $( `kpi-${k}`);
                 if (el) {
-                    el.textContent = DATA[k === "uinv" ? "applications" : k === "txn" ? "transactions" : k]?.length || 0;
+                    if (k !== 'apps') {
+                        el.textContent = DATA[k === "uinv" ? "applications" : k === "txn" ? "transactions" : k]?.length || 0;
+                    }
                 }
             });
         };
