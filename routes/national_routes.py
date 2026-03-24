@@ -1543,11 +1543,21 @@ def system_logs():
         try:
             query = db.collection('system_logs').order_by('created_at', direction=firestore.Query.DESCENDING).limit(40)
             for doc in query.stream():
-                logs.append(doc.to_dict())
+                entry = doc.to_dict()
+                logs.append({
+                    'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
+                    'user': entry.get('user') or entry.get('actorEmail') or entry.get('actor') or '',
+                    'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
+                    'details': entry.get('details') or entry.get('message') or entry.get('description') or '',
+                    'ip': entry.get('ip') or entry.get('ipAddress') or '',
+                    'municipality': entry.get('municipality') or entry.get('municipality_name') or '',
+                    'region': entry.get('region') or entry.get('region_name') or entry.get('regionName') or '',
+                    'role': entry.get('role') or '',
+                })
         except Exception as e:
             print(f"[ERROR] Direct fetch from system_logs failed: {e}")
         print(f"[DEBUG] Direct system_logs fetch: {len(logs)} logs. Sample: {logs[:1]}")
-        # Pass raw logs to all tables for debug
+        # Pass normalized logs to all tables for debug
         return render_template(
             'national/system/system-logs.html',
             regional_logs=logs,
