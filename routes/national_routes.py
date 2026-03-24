@@ -1523,23 +1523,36 @@ def audit_logs():
 def system_logs():
     import system_logs_storage
     try:
-        # Fetch all regional logs (region-wide events)
-        regional_logs = system_logs_storage.list_regional_system_logs(limit=300)
+        # Helper to normalize log fields for the template
+        def normalize_log(log, scope=None):
+            return {
+                'timestamp': log.get('timestamp') or log.get('created_at') or log.get('createdAt') or '',
+                'user': log.get('user') or log.get('actorEmail') or log.get('actor') or '',
+                'region': log.get('region', ''),
+                'municipality': log.get('municipality', ''),
+                'role': log.get('role', ''),
+                'action': log.get('action', ''),
+                'details': log.get('details') or log.get('message') or '',
+                'ip': log.get('ip') or log.get('ipAddress') or '',
+                'scope': scope or log.get('scope', ''),
+            }
 
-        # Fetch all municipal admin logs (from system_logs, role=municipal_admin/municipal)
-        municipal_logs = []
+        # Fetch and normalize all regional logs
+        raw_regional_logs = system_logs_storage.list_regional_system_logs(limit=300)
+        regional_logs = [normalize_log(log, scope='Regional') for log in raw_regional_logs]
+        print(f"[DEBUG] National logs: {len(regional_logs)} regional logs fetched. Sample: {regional_logs[:1]}")
+
+        # Fetch all system logs (municipal + user)
         all_muni_logs = system_logs_storage.list_system_logs(limit=500)
-        for log in all_muni_logs:
-            role = str(log.get('role') or '').lower()
-            if role in {'municipal_admin', 'municipal'}:
-                municipal_logs.append(log)
+        print(f"[DEBUG] National logs: {len(all_muni_logs)} system_logs fetched. Sample: {all_muni_logs[:1]}")
 
-        # Fetch all end user logs (from system_logs, role not admin)
-        user_logs = []
-        for log in all_muni_logs:
-            role = str(log.get('role') or '').lower()
-            if role not in {'national_admin', 'regional_admin', 'municipal_admin', 'municipal'}:
-                user_logs.append(log)
+        # Municipal admin logs
+        municipal_logs = [normalize_log(log, scope='Municipal') for log in all_muni_logs if str(log.get('role') or '').lower() in {'municipal_admin', 'municipal'}]
+        print(f"[DEBUG] National logs: {len(municipal_logs)} municipal logs after filter. Sample: {municipal_logs[:1]}")
+
+        # End user logs
+        user_logs = [normalize_log(log, scope='User') for log in all_muni_logs if str(log.get('role') or '').lower() not in {'national_admin', 'regional_admin', 'municipal_admin', 'municipal'}]
+        print(f"[DEBUG] National logs: {len(user_logs)} user logs after filter. Sample: {user_logs[:1]}")
 
         return render_template(
             'national/system/system-logs.html',
