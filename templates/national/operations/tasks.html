@@ -127,8 +127,8 @@
                                 <td class="text-center">
                                     <div class="flex justify-center gap-2">
                                         <button onclick="viewTask(this)" class="text-blue-700 font-bold hover:underline uppercase">View</button>
-                                        <button onclick="markDone(this)" class="text-green-700 font-bold hover:underline uppercase">Done</button>
-                                        <button onclick="revokeTask(this)" class="text-rose-700 font-bold hover:underline uppercase">Revoke</button>
+                                        <button onclick="openDoneModal(this)" class="text-green-700 font-bold hover:underline uppercase">Done</button>
+                                        <button onclick="openRevokeModal(this)" class="text-rose-700 font-bold hover:underline uppercase">Revoke</button>
                                     </div>
                                 </td>
                             </tr>
@@ -250,6 +250,52 @@
         </div>
     </div>
 
+    <!-- Done Modal -->
+    <div id="doneTaskModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60">
+        <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-sm mx-4 flex flex-col">
+            <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-emerald-700 text-white">
+                <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
+                    <span class="material-icons-round text-[14px]">task_alt</span>
+                    Mark As Done
+                </h2>
+                <button type="button" onclick="closeDoneModal()" class="text-emerald-100 hover:text-white">
+                    <span class="material-icons-round text-[16px]">close</span>
+                </button>
+            </div>
+            <div class="p-4 space-y-2 text-[11px]">
+                <p class="font-bold text-slate-800 uppercase">Confirm completion of this task?</p>
+                <p class="text-slate-500 text-[10px]">Status will be updated to Completed and the action will be locked.</p>
+            </div>
+            <div class="px-4 py-2 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="closeDoneModal()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+                <button type="button" onclick="confirmDoneTask()" class="gov-btn bg-emerald-700 hover:bg-emerald-800 text-white">Yes, Mark Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Revoke Modal -->
+    <div id="revokeTaskModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60">
+        <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-sm mx-4 flex flex-col">
+            <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-rose-700 text-white">
+                <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
+                    <span class="material-icons-round text-[14px]">delete_forever</span>
+                    Revoke Task
+                </h2>
+                <button type="button" onclick="closeRevokeModal()" class="text-rose-100 hover:text-white">
+                    <span class="material-icons-round text-[16px]">close</span>
+                </button>
+            </div>
+            <div class="p-4 space-y-2 text-[11px]">
+                <p class="font-bold text-slate-800 uppercase">Revoke this task?</p>
+                <p class="text-slate-500 text-[10px]">This will remove the task from the list and cannot be undone.</p>
+            </div>
+            <div class="px-4 py-2 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="closeRevokeModal()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700">Cancel</button>
+                <button type="button" onclick="confirmRevokeTask()" class="gov-btn bg-rose-700 hover:bg-rose-800 text-white">Yes, Revoke</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // --- CHARTS CONFIG ---
         Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -347,9 +393,60 @@
             if (e.target === viewModal) closeViewModal();
         });
 
-        function markDone(btn) {
+        // --- DONE / REVOKE MODALS ---
+        const doneModal = document.getElementById('doneTaskModal');
+        const revokeModal = document.getElementById('revokeTaskModal');
+        let pendingActionBtn = null;
+
+        function openDoneModal(btn) {
+            pendingActionBtn = btn;
+            doneModal.classList.remove('hidden');
+            doneModal.classList.add('flex');
+        }
+
+        function closeDoneModal() {
+            doneModal.classList.add('hidden');
+            doneModal.classList.remove('flex');
+            pendingActionBtn = null;
+        }
+
+        function openRevokeModal(btn) {
+            pendingActionBtn = btn;
+            revokeModal.classList.remove('hidden');
+            revokeModal.classList.add('flex');
+        }
+
+        function closeRevokeModal() {
+            revokeModal.classList.add('hidden');
+            revokeModal.classList.remove('flex');
+            pendingActionBtn = null;
+        }
+
+        doneModal.addEventListener('click', function(e) {
+            if (e.target === doneModal) closeDoneModal();
+        });
+
+        revokeModal.addEventListener('click', function(e) {
+            if (e.target === revokeModal) closeRevokeModal();
+        });
+
+        function confirmDoneTask() {
+            if (!pendingActionBtn) return closeDoneModal();
+            markDoneAction(pendingActionBtn);
+            closeDoneModal();
+        }
+
+        function confirmRevokeTask() {
+            if (!pendingActionBtn) return closeRevokeModal();
+            revokeTaskAction(pendingActionBtn);
+            closeRevokeModal();
+        }
+
+        function markDoneAction(btn) {
             const row = btn.closest('tr');
+            if (!row) return;
             const badge = row.querySelector('td:nth-child(3) span');
+            if (!badge) return;
             badge.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-emerald-50 text-emerald-700 border-emerald-200';
             badge.textContent = 'Completed';
             btn.disabled = true;
@@ -357,10 +454,9 @@
             btn.classList.remove('hover:underline');
         }
 
-        function revokeTask(btn) {
-            if (confirm('Revoke this task? This will remove it from the list.')) {
-                btn.closest('tr').remove();
-            }
+        function revokeTaskAction(btn) {
+            const row = btn.closest('tr');
+            if (row) row.remove();
         }
 
         // --- EXPORT TASK LIST ---
@@ -426,8 +522,8 @@
                 <td class="text-center">
                     <div class="flex justify-center gap-2">
                         <button onclick="viewTask(this)" class="text-blue-700 font-bold hover:underline uppercase">View</button>
-                        <button onclick="markDone(this)" class="text-green-700 font-bold hover:underline uppercase">Done</button>
-                        <button onclick="revokeTask(this)" class="text-rose-700 font-bold hover:underline uppercase">Revoke</button>
+                        <button onclick="openDoneModal(this)" class="text-green-700 font-bold hover:underline uppercase">Done</button>
+                        <button onclick="openRevokeModal(this)" class="text-rose-700 font-bold hover:underline uppercase">Revoke</button>
                     </div>
                 </td>
             `;
