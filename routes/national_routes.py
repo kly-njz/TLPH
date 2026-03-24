@@ -1,58 +1,3 @@
-from google.cloud.firestore_v1.base_query import FieldFilter
-def aggregate_regional_audit_logs_to_national():
-    """Aggregate audit logs and transactions from all regions into national_audit_logs collection."""
-    db = get_firestore_db()
-    regions = [
-        'NCR', 'REGION-I', 'REGION-II', 'REGION-III', 'REGION-IV-A', 'REGION-IV-B', 'REGION-V',
-        'REGION-VI', 'REGION-VII', 'REGION-VIII', 'REGION-IX', 'REGION-X', 'REGION-XI',
-        'REGION-XII', 'REGION-XIII', 'CAR', 'REGION-BANGSAMORO'
-    ]
-    batch = db.batch()
-    count = 0
-    for region in regions:
-        # Fetch auditLogs for each region
-        audit_docs = db.collection('auditLogs').where(filter=FieldFilter('region', '==', region)).limit(1000).stream()
-        for doc in audit_docs:
-            entry = doc.to_dict() or {}
-            log = {
-                'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
-                'user': entry.get('actorName') or entry.get('actor') or entry.get('user') or entry.get('actorEmail') or '',
-                'entity': region,
-                'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
-                'details': entry.get('detail') or entry.get('description') or entry.get('message') or '',
-                'ip': entry.get('ip') or entry.get('ipAddress') or '',
-            }
-            ref = db.collection('national_audit_logs').document(f"{region}_{doc.id}")
-            batch.set(ref, log)
-            count += 1
-        # Fetch transactions for each region
-        tx_docs = db.collection('transactions').where(filter=FieldFilter('region', '==', region)).limit(1000).stream()
-        for doc in tx_docs:
-            tx = doc.to_dict() or {}
-            log = {
-                'timestamp': tx.get('updated_at') or tx.get('created_at') or tx.get('createdAt') or '',
-                'user': tx.get('updated_by') or tx.get('forwarded_by') or tx.get('user_email') or 'User',
-                'entity': region,
-                'action': tx.get('status') or '',
-                'details': tx.get('description') or '',
-                'ip': tx.get('ip') or tx.get('ipAddress') or '',
-            }
-            ref = db.collection('national_audit_logs').document(f"{region}_tx_{doc.id}")
-            batch.set(ref, log)
-            count += 1
-    batch.commit()
-    print(f"[INFO] Aggregated {count} audit logs to national_audit_logs.")
-
-@bp.route('/aggregate-audit-logs')
-@role_required('national', 'national_admin')
-def aggregate_audit_logs_route():
-    try:
-        aggregate_regional_audit_logs_to_national()
-        return jsonify({'success': True, 'message': 'Audit logs aggregated.'})
-    except Exception as e:
-        print(f"[ERROR] Failed to aggregate audit logs: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
 
 
 # --- DELETE PROJECT ENDPOINT ---
@@ -2457,3 +2402,60 @@ def api_get_national_employees():
     except Exception as e:
         print(f'[ERROR] Failed to fetch employees: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+
+from google.cloud.firestore_v1.base_query import FieldFilter
+def aggregate_regional_audit_logs_to_national():
+    """Aggregate audit logs and transactions from all regions into national_audit_logs collection."""
+    db = get_firestore_db()
+    regions = [
+        'NCR', 'REGION-I', 'REGION-II', 'REGION-III', 'REGION-IV-A', 'REGION-IV-B', 'REGION-V',
+        'REGION-VI', 'REGION-VII', 'REGION-VIII', 'REGION-IX', 'REGION-X', 'REGION-XI',
+        'REGION-XII', 'REGION-XIII', 'CAR', 'REGION-BANGSAMORO'
+    ]
+    batch = db.batch()
+    count = 0
+    for region in regions:
+        # Fetch auditLogs for each region
+        audit_docs = db.collection('auditLogs').where(filter=FieldFilter('region', '==', region)).limit(1000).stream()
+        for doc in audit_docs:
+            entry = doc.to_dict() or {}
+            log = {
+                'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
+                'user': entry.get('actorName') or entry.get('actor') or entry.get('user') or entry.get('actorEmail') or '',
+                'entity': region,
+                'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
+                'details': entry.get('detail') or entry.get('description') or entry.get('message') or '',
+                'ip': entry.get('ip') or entry.get('ipAddress') or '',
+            }
+            ref = db.collection('national_audit_logs').document(f"{region}_{doc.id}")
+            batch.set(ref, log)
+            count += 1
+        # Fetch transactions for each region
+        tx_docs = db.collection('transactions').where(filter=FieldFilter('region', '==', region)).limit(1000).stream()
+        for doc in tx_docs:
+            tx = doc.to_dict() or {}
+            log = {
+                'timestamp': tx.get('updated_at') or tx.get('created_at') or tx.get('createdAt') or '',
+                'user': tx.get('updated_by') or tx.get('forwarded_by') or tx.get('user_email') or 'User',
+                'entity': region,
+                'action': tx.get('status') or '',
+                'details': tx.get('description') or '',
+                'ip': tx.get('ip') or tx.get('ipAddress') or '',
+            }
+            ref = db.collection('national_audit_logs').document(f"{region}_tx_{doc.id}")
+            batch.set(ref, log)
+            count += 1
+    batch.commit()
+    print(f"[INFO] Aggregated {count} audit logs to national_audit_logs.")
+
+@bp.route('/aggregate-audit-logs')
+@role_required('national', 'national_admin')
+def aggregate_audit_logs_route():
+    try:
+        aggregate_regional_audit_logs_to_national()
+        return jsonify({'success': True, 'message': 'Audit logs aggregated.'})
+    except Exception as e:
+        print(f"[ERROR] Failed to aggregate audit logs: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
