@@ -321,10 +321,13 @@ def user_application_view():
                 stats['pending'] += 1
 
             cat = (
-                data.get('category')
+                data.get('categoryType')
+                or data.get('category')
                 or data.get('applicantCategory')
-                or data.get('applicationType')
-                or form_data.get('applicationType')
+                or data.get('sector')
+                or form_data.get('categoryType')
+                or form_data.get('category')
+                or form_data.get('sector')
                 or ''
             ).strip()
             if cat:

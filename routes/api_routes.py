@@ -1095,7 +1095,16 @@ def _sa_extract_application(doc, users_map):
     )
 
     application_type = _sa_norm_text(data.get('applicationType') or form_data.get('applicationType'), 'General')
-    raw_sector = data.get('category') or data.get('applicantCategory') or form_data.get('category') or _sa_category_from_app_type(application_type)
+    raw_sector = (
+        data.get('categoryType')
+        or data.get('category')
+        or data.get('applicantCategory')
+        or data.get('sector')
+        or form_data.get('categoryType')
+        or form_data.get('category')
+        or form_data.get('sector')
+        or 'General'
+    )
     sector = _sa_sector_label(raw_sector)
 
     name = (
