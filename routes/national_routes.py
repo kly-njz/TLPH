@@ -390,6 +390,39 @@ def permit_national_view():
         )
 
 
+@bp.route('/permit-national/action/<permit_id>', methods=['POST'])
+@role_required('national', 'national_admin')
+def permit_national_action(permit_id):
+    """Approve or reject a forwarded permit at national level."""
+    try:
+        db = get_firestore_db()
+        payload = request.get_json(silent=True) or {}
+        action = str(payload.get('action') or '').strip().lower()
+
+        if action not in {'approved', 'rejected'}:
+            return jsonify({'success': False, 'message': 'Invalid action'}), 400
+
+        doc_ref = db.collection('license_applications').document(permit_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'message': 'Permit not found'}), 404
+
+        update_fields = {
+            'nationalStatus': action,
+            'status': action,
+            'updatedAt': datetime.utcnow(),
+            'forwardedToLevel': 'National',
+            'approvedByLevel': 'National' if action == 'approved' else '',
+            'rejectedByLevel': 'National' if action == 'rejected' else '',
+        }
+        doc_ref.update(update_fields)
+
+        return jsonify({'success': True, 'message': f'Permit {action} successfully'})
+    except Exception as e:
+        print(f'Error updating permit national action: {e}')
+        return jsonify({'success': False, 'message': 'Failed to update permit status'}), 500
+
+
 # -----------------------------
 # SERVICES (National)
 # -----------------------------
