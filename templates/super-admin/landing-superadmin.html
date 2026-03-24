@@ -118,7 +118,7 @@
                     <h3 class="text-[14px] font-black text-slate-900 m-0 mt-1 leading-none" id="kpi-reqs">0</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-amber-500 p-2 text-center transition-colors hover:bg-slate-50">
-                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 leading-none">Permits</p>
+                    <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 leading-none">License & Permit</p>
                     <h3 class="text-[14px] font-black text-slate-900 m-0 mt-1 leading-none" id="kpi-permits">0</h3>
                 </div>
                 <div class="gov-card border-t-2 border-t-emerald-600 p-2 text-center transition-colors hover:bg-slate-50">
@@ -207,7 +207,7 @@
                     <button class="nav-trigger active px-4 py-2 text-[9px] font-black uppercase whitespace-nowrap" data-tab="applications">Applications</button>
                     <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="requests">Service Requests</button>
                     <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="inventory">Inventory</button>
-                    <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="permits">Licensing</button>
+                    <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="permits">License & Permit</button>
                     <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="transactions">Revenue</button>
                     <button class="nav-trigger px-4 py-2 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap" data-tab="users">Accounts</button>
                 </nav>
@@ -260,14 +260,10 @@
         };
 
         const DATA = {
-            applications: [
-                { date: "2026-02-13", ref: "DENR-APP-2026-001", entity: "MIMAROPA Dev Corp", sector: "Forestry Management", region: "IV-B", lgu: "Calapan City", status: "PENDING" },
-                { date: "2026-02-12", ref: "DENR-APP-2026-002", entity: "Naujan NGO", sector: "Biodiversity", region: "IV-B", lgu: "Naujan", status: "APPROVED" },
-                { date: "2026-02-11", ref: "DENR-APP-2026-003", entity: "NCR Project", sector: "Lands", region: "NCR", lgu: "Quezon City", status: "APPROVED" }
-            ],
-            requests: [{ date: "2026-02-13", ref: "SR-9910-B", entity: "Mindoro Cooperative", sector: "Inspection", region: "IV-B", lgu: "Victoria", status: "FOR REVIEW" }],
+            applications: [],
+            requests: [],
             inventory: [{ cat: "Seedlings", desc: "Narra Saplings", qty: 5000, region: "IV-B", lgu: "Baco" }],
-            permits: [{ ref: "PMT-CITES-882", entity: "Nature Exporters", sector: "Wildlife Trade", region: "IV-B", lgu: "San Teodoro", status: "ACTIVE" }],
+            permits: [],
             transactions: [{ ref: "OR-10291-TX", entity: "MIMAROPA Corp", type: "Permit Fee", date: "2026-02-13", region: "IV-B", status: "PAID", amount: 15400 }],
             users: [{ name: "Maria Santos", email: "maria@denr.gov.ph", type: "Regional Director", region: "IV-B", lgu: "Calapan", status: "ACTIVE" }]
         };
@@ -276,7 +272,7 @@
             applications: ["Date", "Registry ID", "Entity", "Sector", "Region", "LGU", "Status"],
             requests: ["Date", "Request ID", "Client", "Category", "Region", "LGU", "Status"],
             inventory: ["Category", "Description", "Qty", "Region", "Muni"],
-            permits: ["License No", "Licensee", "Sector", "Region", "LGU", "Status"],
+            permits: ["License No", "Licensee", "Category", "Region", "LGU", "Status"],
             transactions: ["OR No.", "Payor", "Fee Type", "Date", "Reg", "Status", "Amt"],
             users: ["Personnel", "Email", "Designation", "Reg", "LGU", "Acc"]
         };
@@ -285,10 +281,82 @@
         const $ = (id) => document.getElementById(id);
         let myLineChart, myBarChart, modalChartInstance = null;
 
+        async function loadApplicationsData() {
+            try {
+                const res = await fetch('/api/superadmin/applications');
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message || 'Failed to fetch applications');
+
+                DATA.applications = (json.data || []).map(app => ({
+                    date: app.date || 'N/A',
+                    ref: app.ref || app.id || 'N/A',
+                    entity: app.name || 'N/A',
+                    sector: app.sector || 'General',
+                    region: app.region || 'N/A',
+                    lgu: app.municipality || 'N/A',
+                    status: (app.status_display || app.status || 'PENDING').toUpperCase()
+                }));
+            } catch (err) {
+                console.error('Applications fetch error:', err);
+                DATA.applications = [];
+            }
+        }
+
+        async function loadServiceRequestsData() {
+            try {
+                const res = await fetch('/api/superadmin/service-requests');
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message || 'Failed to fetch service requests');
+
+                const rows = json.requests || json.data || [];
+                DATA.requests = rows.map(req => ({
+                    date: req.date || 'N/A',
+                    ref: req.ref || req.id || 'N/A',
+                    entity: req.name || 'N/A',
+                    sector: req.category || 'General',
+                    region: req.region || 'N/A',
+                    lgu: req.municipality || 'N/A',
+                    status: (req.status_display || req.status || 'PENDING').toUpperCase()
+                }));
+            } catch (err) {
+                console.error('Service requests fetch error:', err);
+                DATA.requests = [];
+            }
+        }
+
+        async function loadPermitsData() {
+            try {
+                const res = await fetch('/api/superadmin/permits');
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message || 'Failed to fetch permits');
+
+                const rows = json.permits || json.data || [];
+                DATA.permits = rows.map(item => ({
+                    ref: item.ref || item.id || 'N/A',
+                    entity: item.name || 'N/A',
+                    sector: item.category || 'General',
+                    region: item.region || 'N/A',
+                    lgu: item.municipality || 'N/A',
+                    status: (item.status_display || item.status || 'PENDING').toUpperCase(),
+                }));
+            } catch (err) {
+                console.error('Permits fetch error:', err);
+                DATA.permits = [];
+            }
+        }
+
         function populateCategories() {
             const select = $("categorySelect");
             select.innerHTML = '<option value="all">-- ALL SECTORS --</option>';
-            (CATEGORIES[activeTab] || []).forEach(cat => {
+            const categories = activeTab === 'applications'
+                ? [...new Set((DATA.applications || []).map(a => a.sector).filter(Boolean))]
+                : activeTab === 'requests'
+                ? [...new Set((DATA.requests || []).map(r => r.sector).filter(Boolean))]
+                : activeTab === 'permits'
+                ? [...new Set((DATA.permits || []).map(p => p.sector).filter(Boolean))]
+                : (CATEGORIES[activeTab] || []);
+
+            categories.forEach(cat => {
                 const opt = document.createElement("option"); opt.value = cat; opt.textContent = cat.toUpperCase(); select.appendChild(opt);
             });
         }
@@ -322,10 +390,13 @@
                     const td = document.createElement("td"); 
                     td.className = "px-3 py-1.5 border-r border-slate-100 whitespace-nowrap font-bold text-slate-700";
                     
-                    if (typeof v === 'string' && (v === 'APPROVED' || v === 'PAID' || v === 'ACTIVE')) {
+                    const textVal = (typeof v === 'string' ? v.toUpperCase() : '');
+                    if (typeof v === 'string' && (textVal.includes('APPROVED') || textVal === 'PAID' || textVal === 'ACTIVE')) {
                         td.innerHTML = `<span class="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase">${v}</span>`;
-                    } else if (typeof v === 'string' && v === 'PENDING') {
+                    } else if (typeof v === 'string' && (textVal.includes('PENDING') || textVal.includes('REVIEW') || textVal.includes('FORWARDED'))) {
                         td.innerHTML = `<span class="bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase">${v}</span>`;
+                    } else if (typeof v === 'string' && (textVal.includes('REJECTED') || textVal.includes('CANCELLED'))) {
+                        td.innerHTML = `<span class="bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase">${v}</span>`;
                     } else if (typeof v === 'number' && v > 1000) {
                         td.textContent = '₱ ' + v.toLocaleString();
                         td.classList.add("text-blue-700", "font-mono");
@@ -338,20 +409,36 @@
             });
         }
 
-        function initCharts() {
+        async function initCharts() {
             const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
             
             myLineChart = new Chart($('lineChart'), { 
                 type: 'line', 
-                data: { labels: ['07','08','09','10','11','12','13'], datasets: [{ label:'Submissions', data:[450, 620, 580, 890, 720, 950, 1100], borderColor:'#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.05)', pointRadius: 2, fill: true, tension: 0.3, borderWidth: 2 }] },
+                data: { labels: [], datasets: [{ label:'Submissions', data:[], borderColor:'#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.05)', pointRadius: 2, fill: true, tension: 0.3, borderWidth: 2 }] },
                 options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}, ticks:{font:chartFont}},y:{grid:{color:'#f1f5f9'}, ticks:{font:chartFont}}}}
             });
             
             myBarChart = new Chart($('barChart'), { 
                 type: 'bar', 
-                data: { labels: ['NCR','IV-A','IV-B','III','VII'], datasets: [{ data:[92, 85, 95, 78, 88], backgroundColor:['#14532d','#15803d','#1e3a8a','#f59e0b','#be123c'], borderRadius: 2 }] },
-                options: { indexAxis: 'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}, max:100,ticks:{font:chartFont}},y:{grid:{display:false}, ticks:{font:chartFont}}} }
+                data: { labels: [], datasets: [{ data:[], backgroundColor:['#14532d','#15803d','#1e3a8a','#f59e0b','#be123c','#7c3aed','#0ea5e9'], borderRadius: 2 }] },
+                options: { indexAxis: 'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}, beginAtZero:true, ticks:{font:chartFont}},y:{grid:{display:false}, ticks:{font:chartFont}}} }
             });
+
+            try {
+                const res = await fetch('/api/superadmin/applications/charts');
+                const json = await res.json();
+                if (json.success) {
+                    myLineChart.data.labels = (json.trend?.labels || []);
+                    myLineChart.data.datasets[0].data = (json.trend?.data || []);
+                    myLineChart.update();
+
+                    myBarChart.data.labels = (json.regions?.labels || []);
+                    myBarChart.data.datasets[0].data = (json.regions?.data || []);
+                    myBarChart.update();
+                }
+            } catch (err) {
+                console.error('Dashboard chart fetch error:', err);
+            }
         }
 
         // --- MODAL LOGIC ---
@@ -387,7 +474,7 @@
                     options: { 
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
                         plugins: { legend: { display: false } },
-                        scales: { x: { grid: {color: '#e2e8f0'}, max: 100, ticks: { font: modalFont } }, y: { grid: {display:false}, ticks: { font: modalFont } } }
+                        scales: { x: { grid: {color: '#e2e8f0'}, beginAtZero: true, ticks: { font: modalFont } }, y: { grid: {display:false}, ticks: { font: modalFont } } }
                     }
                 });
             }
@@ -417,6 +504,50 @@
             a.href = url; a.download = `DENR_MASTER_REPORT_${activeTab.toUpperCase()}_2026.csv`; a.click();
         }
 
+        async function loadApplicationKpis() {
+            try {
+                const res = await fetch('/api/superadmin/applications/stats');
+                const json = await res.json();
+                if (!json.success) return;
+                const stats = json.stats || {};
+                const appsEl = $('kpi-apps');
+                if (appsEl) appsEl.textContent = Number(stats.total || 0).toLocaleString();
+            } catch (err) {
+                console.error('KPI fetch error:', err);
+            }
+        }
+
+        async function loadServiceRequestKpis() {
+            try {
+                const res = await fetch('/api/superadmin/service-requests/stats');
+                const json = await res.json();
+                if (!json.success) return;
+
+                const stats = json.stats || {};
+                const reqsEl = $('kpi-reqs');
+                if (reqsEl) reqsEl.textContent = Number(stats.total || 0).toLocaleString();
+            } catch (err) {
+                console.error('Service request KPI fetch error:', err);
+                const reqsEl = $('kpi-reqs');
+                if (reqsEl) reqsEl.textContent = Number((DATA.requests || []).length).toLocaleString();
+            }
+        }
+
+        async function loadPermitsKpis() {
+            try {
+                const res = await fetch('/api/superadmin/permits/stats');
+                const json = await res.json();
+                if (!json.success) return;
+                const stats = json.stats || {};
+                const el = $('kpi-permits');
+                if (el) el.textContent = Number(stats.total || 0).toLocaleString();
+            } catch (err) {
+                console.error('Permits KPI fetch error:', err);
+                const el = $('kpi-permits');
+                if (el) el.textContent = Number((DATA.permits || []).length).toLocaleString();
+            }
+        }
+
         document.querySelectorAll(".nav-trigger").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 document.querySelectorAll(".nav-trigger").forEach(b => {
@@ -434,12 +565,25 @@
         $("categorySelect").addEventListener("change", renderTable);
         $("scopeSelect").addEventListener("change", renderTable);
 
-        window.onload = () => { 
-            initCharts(); populateCategories(); renderTable(); 
+        window.onload = async () => {
+            await Promise.all([
+                loadApplicationsData(),
+                loadServiceRequestsData(),
+                loadPermitsData(),
+                loadApplicationKpis(),
+                initCharts()
+            ]);
+
+            await loadServiceRequestKpis();
+            await loadPermitsKpis();
+            populateCategories();
+            renderTable();
             ["apps","reqs","permits","inv","uinv","txn","users"].forEach(k => {
                 const el = $( `kpi-${k}`);
                 if (el) {
-                    el.textContent = DATA[k === "uinv" ? "applications" : k === "txn" ? "transactions" : k]?.length || 0;
+                    if (k !== 'apps' && k !== 'reqs' && k !== 'permits') {
+                        el.textContent = DATA[k === "uinv" ? "applications" : k === "txn" ? "transactions" : k]?.length || 0;
+                    }
                 }
             });
         };

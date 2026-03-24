@@ -164,9 +164,48 @@
         </main>
     </div>
 
+    <div id="applicationModal" class="fixed inset-0 z-[120] hidden bg-slate-900/60 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-white rounded-[2px] border border-slate-300 shadow-2xl w-[95vw] max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-800 m-0">Application Full View</h3>
+                <button id="btnCloseAppModalTop" class="text-slate-400 hover:text-rose-600 transition-colors bg-transparent border-none cursor-pointer">
+                    <span class="material-icons-round text-[18px]">close</span>
+                </button>
+            </div>
+
+            <div class="p-4 overflow-y-auto custom-scrollbar bg-white">
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 text-[10px]">
+                    <div><p class="text-[8px] font-black uppercase tracking-widest text-slate-400 m-0">Reference</p><p id="modalRef" class="font-black text-slate-900 m-0 mt-1"></p></div>
+                    <div><p class="text-[8px] font-black uppercase tracking-widest text-slate-400 m-0">Applicant</p><p id="modalName" class="font-black text-slate-900 m-0 mt-1"></p></div>
+                    <div><p class="text-[8px] font-black uppercase tracking-widest text-slate-400 m-0">Status</p><p id="modalStatus" class="font-black text-slate-900 m-0 mt-1"></p></div>
+                    <div><p class="text-[8px] font-black uppercase tracking-widest text-slate-400 m-0">Category</p><p id="modalCategory" class="font-black text-slate-900 m-0 mt-1"></p></div>
+                    <div><p class="text-[8px] font-black uppercase tracking-widest text-slate-400 m-0">Municipality</p><p id="modalMunicipality" class="font-black text-slate-900 m-0 mt-1"></p></div>
+                    <div><p class="text-[8px] font-black uppercase tracking-widest text-slate-400 m-0">Province</p><p id="modalProvince" class="font-black text-slate-900 m-0 mt-1"></p></div>
+                </div>
+
+                <div class="mt-4 border-t border-slate-200 pt-3">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-slate-500 m-0 mb-2">Submitted Application Details</p>
+                    <div id="modalDetailFields" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2"></div>
+                </div>
+
+                <div class="mt-4 border-t border-slate-200 pt-3">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-slate-500 m-0 mb-2">Uploaded Files</p>
+                    <div id="modalUploadFields" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <div class="px-4 py-3 border-t border-slate-200 bg-slate-50 flex flex-wrap justify-end gap-2">
+                <button id="btnModalApprove" class="gov-btn border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700">Approve</button>
+                <button id="btnModalForward" class="gov-btn border border-blue-600 bg-blue-600 text-white hover:bg-blue-700">Forward to National</button>
+                <button id="btnModalReject" class="gov-btn border border-rose-600 bg-rose-600 text-white hover:bg-rose-700">Reject</button>
+                <button id="btnCloseAppModalBottom" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-100">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { auth, db } from '/static/js/firebase-config.js';
-        import { collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { collection, getDocs, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
         let applicants = [];
@@ -177,6 +216,38 @@
         const emptyEl = document.getElementById("emptyState");
         const provinceSelect = document.getElementById("provinceSelect");
         const searchInput = document.getElementById("searchInput");
+        let isUpdating = false;
+        let selectedApplication = null;
+
+        const normalize = (v) => String(v || '').trim().toUpperCase();
+
+        function resolveStatus(data) {
+            const base = normalize(data.status).toLowerCase();
+            const regionalStatus = normalize(data.regionalStatus).toLowerCase();
+            const approvedByLevel = normalize(data.approvedByLevel);
+            const rejectedByLevel = normalize(data.rejectedByLevel);
+            const forwardedToLevel = normalize(data.forwardedToLevel);
+
+            if (base.startsWith('forwarded') || forwardedToLevel === 'NATIONAL' || regionalStatus === 'forwarded') {
+                return { key: 'pending', label: 'Forwarded to National' };
+            }
+
+            if (base === 'approved' || regionalStatus === 'approved') {
+                const lvl = approvedByLevel || (regionalStatus === 'approved' ? 'REGIONAL' : 'SYSTEM');
+                return { key: 'accepted', label: `Approved by ${lvl}` };
+            }
+            if (base === 'rejected' || regionalStatus === 'rejected') {
+                const lvl = rejectedByLevel || (regionalStatus === 'rejected' ? 'REGIONAL' : 'SYSTEM');
+                return { key: 'rejected', label: `Rejected by ${lvl}` };
+            }
+            if (base === 'cancelled' || base === 'canceled') {
+                return { key: 'rejected', label: 'Cancelled' };
+            }
+            if (base === 'to-review' || base === 'to review' || forwardedToLevel === 'REGIONAL' || regionalStatus === 'pending') {
+                return { key: 'pending', label: 'Pending Regional Review' };
+            }
+            return { key: 'pending', label: 'Pending' };
+        }
 
         async function loadUserRegion(user) {
             try {
@@ -215,36 +286,53 @@
                     usersMap[uDoc.id] = {
                         name: `${uData.firstName || ''} ${uData.lastName || ''}`.trim() || uData.email,
                         municipality: uData.municipality || 'N/A',
-                        province: uData.province || 'UNKNOWN' 
+                        province: uData.province || 'UNKNOWN',
+                        region: uData.region || uData.regionName || ''
                     };
                 });
 
-                const snapshot = await getDocs(collection(db, 'licensePermits'));
+                const snapshot = await getDocs(collection(db, 'license_applications'));
                 applicants = [];
                 let acc = 0, rej = 0, pen = 0;
 
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
-                    const info = usersMap[data.userId] || { name: 'Unknown', municipality: 'N/A', province: 'UNKNOWN' };
-                    const itemProvince = info.province.toUpperCase();
-                    
-                    // Only include items from user's provinces
-                    if (userProvinces.length === 0 || userProvinces.includes(itemProvince)) {
-                        let sKey = 'pending';
-                        if (data.status === 'approved') { sKey = 'accepted'; acc++; }
-                        else if (data.status === 'rejected') { sKey = 'rejected'; rej++; }
-                        else { pen++; }
+                    const formData = data.formData || {};
+                    const info = usersMap[data.userId] || { name: 'Unknown', municipality: 'N/A', province: 'UNKNOWN', region: '' };
 
-                        applicants.push({
-                            id: docSnap.id,
-                            name: info.name,
-                            municipality: info.municipality,
-                            province: itemProvince,
-                            reference: `REG-${docSnap.id.substring(0, 6).toUpperCase()}`,
-                            category: data.permitType || 'General Permit',
-                            statusKey: sKey
-                        });
-                    }
+                    const itemProvince = normalize(formData.province || data.province || info.province || 'UNKNOWN');
+                    const itemRegion = normalize(data.region || data.regionName || formData.region || info.region || '');
+
+                    const adminProvinceList = (userProvinces || []).map(p => normalize(p));
+                    const inAdminProvince = adminProvinceList.length ? adminProvinceList.includes(itemProvince) : false;
+                    const inAdminRegion = itemRegion && itemRegion === normalize(userRegion);
+
+                    const statusInfo = resolveStatus(data);
+                    const forwardedToRegional = normalize(data.forwardedToLevel) === 'REGIONAL';
+                    const hasRegionalWorkflow = ['pending', 'approved', 'rejected', 'forwarded'].includes(normalize(data.regionalStatus).toLowerCase());
+
+                    const shouldShow = inAdminProvince || inAdminRegion || forwardedToRegional || hasRegionalWorkflow;
+                    if (!shouldShow) return;
+
+                    if (statusInfo.key === 'accepted') acc++;
+                    else if (statusInfo.key === 'rejected') rej++;
+                    else pen++;
+
+                    applicants.push({
+                        id: docSnap.id,
+                        name: info.name,
+                        municipality: formData.municipality || formData.cityMunicipality || data.municipality || info.municipality || 'N/A',
+                        province: itemProvince,
+                        reference: `REG-${docSnap.id.substring(0, 6).toUpperCase()}`,
+                        category: data.categoryType || data.category || data.applicationType || formData.categoryType || formData.category || formData.applicationType || 'General Permit',
+                        statusKey: statusInfo.key,
+                        statusLabel: statusInfo.label,
+                        rawStatus: String(data.status || '').toLowerCase(),
+                        rawRegionalStatus: String(data.regionalStatus || '').toLowerCase(),
+                        rawNationalStatus: String(data.nationalStatus || '').toLowerCase(),
+                        formData,
+                        raw: data
+                    });
                 });
 
                 document.getElementById("statAccepted").textContent = acc;
@@ -275,14 +363,188 @@
                     </td>
                     <td class="px-4 py-2 align-middle font-bold text-slate-600 uppercase border-r border-slate-100">${a.category}</td>
                     <td class="px-4 py-2 align-middle text-center border-r border-slate-100">
-                        <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border w-[80%] max-w-[100px] text-center ${colors[a.statusKey]}">${a.statusKey}</span>
+                        <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border w-[90%] max-w-[140px] text-center ${colors[a.statusKey]}">${a.statusLabel || a.statusKey}</span>
                     </td>
                     <td class="px-4 py-2 align-middle text-center">
-                        <button class="btn-action btn-view mx-auto" title="View Details">
+                        <button class="btn-action btn-view mx-auto" title="View Details" onclick="window.openApplicationModal('${a.id}')">
                             <span class="material-icons-round text-[14px]">visibility</span>
                         </button>
                     </td>
                 </tr>`;
+        }
+
+        function toReadableLabel(key) {
+            return String(key || '')
+                .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                .replace(/[_-]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function normalizeValue(value) {
+            if (value === null || value === undefined) return '';
+            if (Array.isArray(value)) return value.map(v => String(v)).join(', ');
+            if (typeof value === 'object') {
+                try { return JSON.stringify(value); } catch (_) { return String(value); }
+            }
+            return String(value).trim();
+        }
+
+        function isLinkLike(value) {
+            const v = String(value || '').trim();
+            return v.startsWith('http://') || v.startsWith('https://') || v.startsWith('gs://');
+        }
+
+        function setModalActionState(disabled) {
+            ['btnModalApprove', 'btnModalForward', 'btnModalReject'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                btn.disabled = disabled;
+                btn.style.opacity = disabled ? '0.6' : '1';
+                btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+            });
+        }
+
+        window.openApplicationModal = function(applicationId) {
+            const app = applicants.find(a => a.id === applicationId);
+            if (!app) return;
+            selectedApplication = app;
+
+            document.getElementById('modalRef').textContent = app.reference || 'N/A';
+            document.getElementById('modalName').textContent = app.name || 'N/A';
+            document.getElementById('modalStatus').textContent = app.statusLabel || app.statusKey || 'Pending';
+            document.getElementById('modalCategory').textContent = app.category || 'N/A';
+            document.getElementById('modalMunicipality').textContent = app.municipality || 'N/A';
+            document.getElementById('modalProvince').textContent = app.province || 'N/A';
+
+            const details = document.getElementById('modalDetailFields');
+            const uploads = document.getElementById('modalUploadFields');
+            const skipKeys = new Set(['status', 'regionalStatus', 'nationalStatus', 'userId', 'createdAt', 'updatedAt', 'submittedAt', 'formData']);
+
+            const detailMap = new Map();
+            const uploadList = [];
+
+            Object.entries(app.raw || {}).forEach(([k, v]) => {
+                if (skipKeys.has(k)) return;
+                const label = toReadableLabel(k);
+                if (Array.isArray(v)) {
+                    if (v.some(isLinkLike)) v.forEach((u, i) => uploadList.push({ label: `${label} ${i + 1}`, url: String(u) }));
+                    else {
+                        const txt = normalizeValue(v);
+                        if (txt) detailMap.set(label, txt);
+                    }
+                    return;
+                }
+                const txt = normalizeValue(v);
+                if (!txt) return;
+                if (isLinkLike(txt)) uploadList.push({ label, url: txt });
+                else detailMap.set(label, txt);
+            });
+
+            Object.entries(app.formData || {}).forEach(([k, v]) => {
+                const label = toReadableLabel(k);
+                if (Array.isArray(v)) {
+                    if (v.some(isLinkLike)) v.forEach((u, i) => uploadList.push({ label: `${label} ${i + 1}`, url: String(u) }));
+                    else {
+                        const txt = normalizeValue(v);
+                        if (txt) detailMap.set(label, txt);
+                    }
+                    return;
+                }
+                const txt = normalizeValue(v);
+                if (!txt) return;
+                if (isLinkLike(txt)) uploadList.push({ label, url: txt });
+                else detailMap.set(label, txt);
+            });
+
+            const detailEntries = [...detailMap.entries()];
+            details.innerHTML = detailEntries.length
+                ? detailEntries.map(([label, value]) => `
+                    <div class="bg-slate-50 border border-slate-200 rounded-[2px] p-2">
+                        <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0 mb-1">${label}</p>
+                        <p class="text-[10px] font-bold text-slate-800 m-0 break-words">${value}</p>
+                    </div>`).join('')
+                : '<p class="text-[10px] font-bold text-slate-500 m-0">No submitted fields found.</p>';
+
+            uploads.innerHTML = uploadList.length
+                ? uploadList.map(item => `
+                    <div class="bg-slate-50 border border-slate-200 rounded-[2px] p-2 flex items-center justify-between gap-2">
+                        <div class="min-w-0">
+                            <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">${item.label}</p>
+                            <p class="text-[9px] font-bold text-slate-700 truncate m-0 mt-1">${item.url}</p>
+                        </div>
+                        <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="gov-btn bg-blue-700 text-white hover:bg-blue-800">Open</a>
+                    </div>`).join('')
+                : '<p class="text-[10px] font-bold text-slate-500 m-0">No uploaded file links found.</p>';
+
+            const isFinal = ['approved', 'rejected', 'cancelled', 'canceled'].includes(app.rawStatus) || ['approved', 'rejected'].includes(app.rawRegionalStatus);
+            setModalActionState(isFinal || isUpdating);
+
+            document.getElementById('applicationModal').classList.remove('hidden');
+            document.getElementById('applicationModal').classList.add('flex');
+        };
+
+        window.closeApplicationModal = function() {
+            document.getElementById('applicationModal').classList.add('hidden');
+            document.getElementById('applicationModal').classList.remove('flex');
+            selectedApplication = null;
+        };
+
+        window.handleRegionalAction = async function(applicationId, action) {
+            if (isUpdating) return;
+
+            const app = applicants.find(a => a.id === applicationId);
+            if (!app) return;
+
+            const actionText = action === 'approve'
+                ? 'approve'
+                : action === 'forward'
+                    ? 'forward to national review'
+                    : 'reject';
+
+            const ok = confirm(`Are you sure you want to ${actionText} this application?\n\nReference: ${app.reference}\nApplicant: ${app.name}`);
+            if (!ok) return;
+
+            try {
+                isUpdating = true;
+                const updateFields = { updatedAt: serverTimestamp() };
+
+                if (action === 'approve') {
+                    updateFields.status = 'approved';
+                    updateFields.regionalStatus = 'approved';
+                    updateFields.approvedByLevel = 'Regional';
+                    updateFields.rejectedByLevel = '';
+                    updateFields.forwardedByLevel = '';
+                    updateFields.forwardedToLevel = '';
+                    updateFields.nationalStatus = '';
+                } else if (action === 'forward') {
+                    updateFields.status = 'forwarded-to-national';
+                    updateFields.regionalStatus = 'forwarded';
+                    updateFields.forwardedByLevel = 'Regional';
+                    updateFields.forwardedToLevel = 'National';
+                    updateFields.nationalStatus = 'pending';
+                    updateFields.approvedByLevel = '';
+                    updateFields.rejectedByLevel = '';
+                } else {
+                    updateFields.status = 'rejected';
+                    updateFields.regionalStatus = 'rejected';
+                    updateFields.rejectedByLevel = 'Regional';
+                    updateFields.approvedByLevel = '';
+                    updateFields.forwardedByLevel = '';
+                    updateFields.forwardedToLevel = '';
+                    updateFields.nationalStatus = '';
+                }
+
+                await updateDoc(doc(db, 'license_applications', applicationId), updateFields);
+                window.closeApplicationModal();
+                await loadRegionalData();
+            } catch (error) {
+                console.error('Failed to update regional licensing status:', error);
+                alert('Failed to update application status. Please try again.');
+            } finally {
+                isUpdating = false;
+            }
         }
 
         function applyFilters() {
@@ -312,6 +574,18 @@
             searchInput.value = ""; 
             provinceSelect.value = ""; 
             applyFilters(); 
+        });
+
+        document.getElementById('btnCloseAppModalTop').addEventListener('click', window.closeApplicationModal);
+        document.getElementById('btnCloseAppModalBottom').addEventListener('click', window.closeApplicationModal);
+        document.getElementById('btnModalApprove').addEventListener('click', () => {
+            if (selectedApplication) window.handleRegionalAction(selectedApplication.id, 'approve');
+        });
+        document.getElementById('btnModalForward').addEventListener('click', () => {
+            if (selectedApplication) window.handleRegionalAction(selectedApplication.id, 'forward');
+        });
+        document.getElementById('btnModalReject').addEventListener('click', () => {
+            if (selectedApplication) window.handleRegionalAction(selectedApplication.id, 'reject');
         });
     </script>
 </body>

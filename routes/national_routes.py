@@ -222,20 +222,33 @@ def permit_national_view():
             data = doc.to_dict()
 
             status = (data.get('status', 'pending') or 'pending').lower()
+            national_status = (data.get('nationalStatus', 'pending') or 'pending').lower()
+            regional_status = (data.get('regionalStatus', '') or '').lower()
+            forwarded_to_level = str(data.get('forwardedToLevel') or '').strip().lower()
 
-            if status in ['approved', 'to review', 'review']:
+            is_forwarded_to_national = (
+                forwarded_to_level == 'national'
+                or status.startswith('forwarded')
+                or status in {'forwarded-to-national', 'to-review', 'to review', 'review'}
+                or national_status in {'pending', 'approved', 'rejected', 'cancelled', 'canceled'}
+            )
+
+            if is_forwarded_to_national:
                 total_count += 1
 
-                national_status = (data.get('nationalStatus', 'pending') or 'pending').lower()
                 if national_status == 'approved':
                     approved_count += 1
                 elif national_status == 'rejected':
+                    rejected_count += 1
+                elif national_status in ['cancelled', 'canceled']:
                     rejected_count += 1
                 else:
                     pending_count += 1
 
                 if national_status in ['approved', 'rejected']:
                     status_breakdown[national_status] += 1
+                elif national_status in ['cancelled', 'canceled']:
+                    status_breakdown['rejected'] += 1
                 else:
                     status_breakdown['pending'] += 1
 
@@ -284,6 +297,21 @@ def permit_national_view():
                 issue_date = data.get('issueDate', '—')
                 expiry_date = data.get('expiryDate', '—')
 
+                if national_status == 'approved':
+                    status_display = 'Approved by National'
+                elif national_status == 'rejected':
+                    status_display = 'Rejected by National'
+                elif national_status in ['cancelled', 'canceled']:
+                    status_display = 'Cancelled'
+                elif is_forwarded_to_national:
+                    status_display = 'Forwarded to National'
+                elif regional_status == 'approved':
+                    status_display = 'Approved by Regional'
+                elif regional_status == 'rejected':
+                    status_display = 'Rejected by Regional'
+                else:
+                    status_display = 'Pending National Review'
+
                 permits.append({
                     'id': doc.id,
                     'reference_id': doc.id[:12].upper(),
@@ -292,13 +320,15 @@ def permit_national_view():
                     'location': location,
                     'region': region,
                     'date_filed': date_filed,
-                    'status': national_status,
+                    'status': status_display,
+                    'status_raw': national_status,
                     'regional_status': status,
                     'issue_date': issue_date,
-                    'expiry_date': expiry_date
+                    'expiry_date': expiry_date,
+                    'date_sort': date_obj.timestamp() if date_obj else 0
                 })
 
-        permits.sort(key=lambda x: x['date_filed'], reverse=True)
+        permits.sort(key=lambda x: x.get('date_sort', 0), reverse=True)
 
         import calendar
         current_date = datetime.now()
@@ -362,6 +392,39 @@ def permit_national_view():
             status_labels=['Approved', 'Pending', 'Rejected'],
             status_data=[0, 0, 0]
         )
+
+
+@bp.route('/permit-national/action/<permit_id>', methods=['POST'])
+@role_required('national', 'national_admin')
+def permit_national_action(permit_id):
+    """Approve or reject a forwarded permit at national level."""
+    try:
+        db = get_firestore_db()
+        payload = request.get_json(silent=True) or {}
+        action = str(payload.get('action') or '').strip().lower()
+
+        if action not in {'approved', 'rejected'}:
+            return jsonify({'success': False, 'message': 'Invalid action'}), 400
+
+        doc_ref = db.collection('license_applications').document(permit_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'message': 'Permit not found'}), 404
+
+        update_fields = {
+            'nationalStatus': action,
+            'status': action,
+            'updatedAt': datetime.utcnow(),
+            'forwardedToLevel': 'National',
+            'approvedByLevel': 'National' if action == 'approved' else '',
+            'rejectedByLevel': 'National' if action == 'rejected' else '',
+        }
+        doc_ref.update(update_fields)
+
+        return jsonify({'success': True, 'message': f'Permit {action} successfully'})
+    except Exception as e:
+        print(f'Error updating permit national action: {e}')
+        return jsonify({'success': False, 'message': 'Failed to update permit status'}), 500
 
 
 # -----------------------------
