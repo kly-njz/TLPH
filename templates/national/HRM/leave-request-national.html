@@ -1,13 +1,185 @@
-
 {% block title %}National Leave Request{% endblock %}
 {% extends 'national/operations/leave-request-national.html' %}
 
 {% block leave_content %}
-<section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white mt-1">
+<section x-data="leavePage()" class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white mt-1">
+  
   <div class="p-2 border-b border-slate-200 shrink-0 flex flex-wrap gap-1.5 items-center justify-between bg-slate-50 no-print">
     <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
       <span class="material-icons-round text-[14px]">view_list</span> Application Queue
-    <script type="module">
+    </h2>
+    
+    <div class="flex gap-2">
+      <button @click="openCreateModal()" class="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition">
+        New Request
+      </button>
+      <button @click="downloadCsv(['Name', 'Position', 'Office', 'Type', 'Status'], leaveRequests.map(r => [r.applicant_name, r.position, r.office, r.leave_type, r.status]), 'Leave_Requests.csv')" class="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded hover:bg-emerald-700 transition">
+        Export CSV
+      </button>
+    </div>
+  </div>
+
+  <div x-show="loading" class="flex-1 flex items-center justify-center p-8">
+    <span class="text-sm text-slate-500 flex items-center gap-2">
+      <span class="material-icons-round animate-spin">refresh</span> Loading requests...
+    </span>
+  </div>
+
+  <div x-show="!loading" class="flex-1 overflow-auto bg-white" style="display: none;">
+    <table class="w-full text-left border-collapse">
+      <thead class="bg-slate-50 sticky top-0 z-10 border-b border-slate-200 shadow-sm">
+        <tr>
+          <th class="p-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Applicant Name</th>
+          <th class="p-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Position & Office</th>
+          <th class="p-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Leave Type</th>
+          <th class="p-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+          <th class="p-3 text-xs font-semibold text-slate-600 uppercase tracking-wider text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr x-show="filteredRequests.length === 0">
+          <td colspan="5" class="p-8 text-center text-sm text-slate-500">
+            No leave requests found.
+          </td>
+        </tr>
+        
+        <template x-for="req in filteredRequests" :key="req.id">
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="p-3 text-sm font-medium text-slate-800" x-text="req.applicant_name"></td>
+            <td class="p-3 text-sm text-slate-600">
+              <div x-text="req.position"></div>
+              <div class="text-xs text-slate-400" x-text="req.office"></div>
+            </td>
+            <td class="p-3 text-sm text-slate-600" x-text="req.leave_type"></td>
+            <td class="p-3 text-sm">
+              <span class="px-2 py-1 text-[10px] uppercase tracking-wider font-bold rounded-full"
+                    :class="{
+                      'bg-yellow-100 text-yellow-700': req.status === 'Pending',
+                      'bg-emerald-100 text-emerald-700': req.status === 'Approved',
+                      'bg-red-100 text-red-700': req.status === 'Declined'
+                    }" 
+                    x-text="req.status">
+              </span>
+            </td>
+            <td class="p-3 text-sm text-right">
+              <button @click="openView(req)" class="text-blue-600 hover:text-blue-800 transition">
+                <span class="material-icons-round text-lg">visibility</span>
+              </button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    window.leavePage = function() {
+      return {
+        loading: true, 
+        viewModalOpen: false,
+        createModalOpen: false,
+        selectedRequest: null,
+        viewData: {},
+        leaveRequests: [],
+        newRequest: {
+          applicant_name: '', position: '', office: '',
+          leave_type: 'Vacation Leave', leave_where: '',
+          commutation: '', working_days: '', inclusive_dates: '',
+          status: 'Pending', remarks: ''
+        },
+        filters: { search: '', type: '', status: '' },
+
+        init() {
+          // Listen for Firebase
+          window.addEventListener('firebase-ready', () => {
+            this.loadLeaveRequests();
+          });
+          if (window.LeaveServiceReady) {
+            this.loadLeaveRequests();
+          }
+        },
+
+        async loadLeaveRequests() {
+          this.loading = true;
+          try {
+            this.leaveRequests = await window.LeaveService.getAll();
+          } catch (error) {
+            console.error('[LEAVE] load failed:', error);
+            this.leaveRequests = [];
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        get filteredRequests() {
+          const search = (this.filters.search || '').toLowerCase().trim();
+          const type = (this.filters.type || '').toLowerCase();
+          const status = (this.filters.status || '').toLowerCase();
+          return this.leaveRequests.filter(req => {
+            const rApp = (req.applicant_name || '').toLowerCase();
+            const rPos = (req.position || '').toLowerCase();
+            const rOff = (req.office || '').toLowerCase();
+            const rType = (req.leave_type || '').toLowerCase();
+            const rStat = (req.status || '').toLowerCase();
+            
+            const matchSearch = !search || rApp.includes(search) || rPos.includes(search) || rOff.includes(search);
+            const matchType = !type || rType.includes(type);
+            const matchStatus = !status || rStat.includes(status);
+            return matchSearch && matchType && matchStatus;
+          });
+        },
+
+        openView(req) {
+          this.selectedRequest = req;
+          this.viewData = { ...req };
+          this.viewModalOpen = true;
+        },
+
+        openCreateModal() { this.createModalOpen = true; },
+        
+        closeCreateModal() {
+          this.createModalOpen = false;
+          this.newRequest = {
+            applicant_name: '', position: '', office: '', leave_type: 'Vacation Leave',
+            leave_where: '', commutation: '', working_days: '', inclusive_dates: '',
+            status: 'Pending', remarks: ''
+          };
+        },
+
+        async createLeaveRequest() {
+          try {
+            await window.LeaveService.create({ ...this.newRequest });
+            this.closeCreateModal();
+            await this.loadLeaveRequests();
+          } catch (error) {
+            console.error('[LEAVE] create failed:', error);
+            alert('Failed to create leave request');
+          }
+        }
+      };
+    };
+
+    // Export Utilities
+    function downloadCsv(headers, rows, filename) {
+      const escapeValue = (value) => {
+        const str = String(value ?? '');
+        if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+          return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+      };
+      const lines = [headers, ...rows].map((row) => row.map(escapeValue).join(','));
+      const csv = lines.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = filename;
+      document.body.appendChild(link); link.click();
+      document.body.removeChild(link); URL.revokeObjectURL(url);
+    }
+  </script>
+
+  <script type="module">
     import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
     import { getFirestore, collection, query, getDocs, updateDoc, doc, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
@@ -24,308 +196,27 @@
     let db;
     try {
       const existingApps = getApps();
-      if (existingApps.length > 0) {
-        db = window.db || getFirestore(existingApps[0]);
-      } else {
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-      }
-      window.db = db;
-      console.log('\u2713 Firebase initialized');
+      db = existingApps.length > 0 ? getFirestore(existingApps[0]) : getFirestore(initializeApp(firebaseConfig));
     } catch (error) {
-      console.error('Firebase initialization error:', error);
-      db = window.db;
+      console.error('Firebase init error:', error);
     }
 
-    window.leavePage = function() {
-      return {
-        loading: false,
-        viewModalOpen: false,
-        createModalOpen: false,
-        selectedRequest: null,
-        viewData: {},
-        leaveRequests: [],
-        newRequest: {
-          applicant_name: '',
-          position: '',
-          office: '',
-          leave_type: 'Vacation Leave',
-          leave_where: '',
-          commutation: '',
-          working_days: '',
-          inclusive_dates: '',
-          status: 'Pending',
-          remarks: ''
-        },
-        filters: {
-          search: '',
-          type: '',
-          status: ''
-        },
-
-        async loadLeaveRequests() {
-          this.loading = true;
-          try {
-            const q = query(collection(db, 'leave_requests'));
-            const querySnapshot = await getDocs(q);
-            this.leaveRequests = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          } catch (error) {
-            console.error('[LEAVE] load failed:', error);
-            this.leaveRequests = [];
-          } finally {
-            this.loading = false;
-          }
-        },
-
-        get filteredRequests() {
-          const search = (this.filters.search || '').toLowerCase().trim();
-          const normalizedType = (this.filters.type || '').toLowerCase();
-          const normalizedStatus = (this.filters.status || '').toLowerCase();
-          return this.leaveRequests.filter(req => {
-            const applicant = (req.applicant_name || '').toLowerCase();
-            const position = (req.position || '').toLowerCase();
-            const office = (req.office || '').toLowerCase();
-            const type = (req.leave_type || '').toLowerCase();
-            const status = (req.status || '').toLowerCase();
-            const matchSearch = !search || applicant.includes(search) || position.includes(search) || office.includes(search);
-            const matchType = !normalizedType || type.includes(normalizedType);
-            const matchStatus = !normalizedStatus || status.includes(normalizedStatus);
-            return matchSearch && matchType && matchStatus;
-          });
-        },
-
-        resetFilters() {
-          this.filters = { search: '', type: '', status: '' };
-        },
-
-        openView(req) {
-          this.selectedRequest = req;
-          this.viewData = { ...req };
-          this.viewModalOpen = true;
-        },
-
-        openCreateModal() {
-          this.createModalOpen = true;
-        },
-
-        closeCreateModal() {
-          this.createModalOpen = false;
-          this.newRequest = {
-            applicant_name: '',
-            position: '',
-            office: '',
-            leave_type: 'Vacation Leave',
-            leave_where: '',
-            commutation: '',
-            working_days: '',
-            inclusive_dates: '',
-            status: 'Pending',
-            remarks: ''
-          };
-        },
-
-        async createLeaveRequest() {
-          try {
-            const payload = { ...this.newRequest };
-            await addDoc(collection(db, 'leave_requests'), payload);
-            this.closeCreateModal();
-            await this.loadLeaveRequests();
-          } catch (error) {
-            console.error('[LEAVE] create failed:', error);
-            alert(error.message || 'Failed to create leave request');
-          }
-        },
-
-        async updateStatus(id, status) {
-          try {
-            const docRef = doc(db, 'leave_requests', id);
-            await updateDoc(docRef, { status });
-            this.viewModalOpen = false;
-            this.selectedRequest = null;
-            await this.loadLeaveRequests();
-          } catch (error) {
-            console.error('[LEAVE] status update failed:', error);
-            alert(error.message || 'Failed to update request status');
-          }
-        }
-      };
-    };
-
-    document.addEventListener('alpine:init', () => {
-      Alpine.data('leavePage', window.leavePage);
-    });
-    </script>
-  }
-
-  function downloadCsv(headers, rows, filename) {
-    const escapeValue = (value) => {
-      const str = String(value ?? '');
-      if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
-        return '"' + str.replace(/"/g, '""') + '"';
-      }
-      return str;
-    };
-
-    const lines = [headers, ...rows].map((row) => row.map(escapeValue).join(','));
-    const csv = lines.join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
-
-  function downloadExcel(headers, rows, filename) {
-    const escapeHtml = (value) => String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-
-    const headerRow = '<tr>' + headers.map((h) => '<th>' + escapeHtml(h) + '</th>').join('') + '</tr>';
-    const bodyRows = rows
-      .map((row) => '<tr>' + row.map((cell) => '<td>' + escapeHtml(cell) + '</td>').join('') + '</tr>')
-      .join('');
-
-    const table = '<table>' + headerRow + bodyRows + '</table>';
-    const html = `
-      <html>
-        <head><meta charset="utf-8" /></head>
-        <body>${table}</body>
-      </html>
-    `;
-
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
-</script>
-<script>
-function leavePage() {
-  return {
-    loading: false,
-    viewModalOpen: false,
-    createModalOpen: false,
-    selectedRequest: null,
-    viewData: {},
-    leaveRequests: [],
-    newRequest: {
-      applicant_name: '',
-      position: '',
-      office: '',
-      leave_type: 'Vacation Leave',
-      leave_where: '',
-      commutation: '',
-      working_days: '',
-      inclusive_dates: '',
-      status: 'Pending',
-      remarks: ''
-    },
-    filters: {
-      search: '',
-      type: '',
-      status: ''
-    },
-
-    async loadLeaveRequests() {
-      this.loading = true;
-      try {
+    // Attach to global window object so Alpine can use it
+    window.LeaveService = {
+      async getAll() {
         const q = query(collection(db, 'leave_requests'));
         const querySnapshot = await getDocs(q);
-        this.leaveRequests = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } catch (error) {
-        console.error('[LEAVE] load failed:', error);
-        this.leaveRequests = [];
-      } finally {
-        this.loading = false;
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      },
+      async create(payload) {
+        return await addDoc(collection(db, 'leave_requests'), payload);
       }
-    },
+    };
 
-    get filteredRequests() {
-      const search = (this.filters.search || '').toLowerCase().trim();
-      const normalizedType = (this.filters.type || '').toLowerCase();
-      const normalizedStatus = (this.filters.status || '').toLowerCase();
-      return this.leaveRequests.filter(req => {
-        const applicant = (req.applicant_name || '').toLowerCase();
-        const position = (req.position || '').toLowerCase();
-        const office = (req.office || '').toLowerCase();
-        const type = (req.leave_type || '').toLowerCase();
-        const status = (req.status || '').toLowerCase();
-        const matchSearch = !search || applicant.includes(search) || position.includes(search) || office.includes(search);
-        const matchType = !normalizedType || type.includes(normalizedType);
-        const matchStatus = !normalizedStatus || status.includes(normalizedStatus);
-        return matchSearch && matchType && matchStatus;
-      });
-    },
+    // Tell Alpine the database is ready
+    window.LeaveServiceReady = true;
+    window.dispatchEvent(new CustomEvent('firebase-ready'));
+  </script>
 
-    resetFilters() {
-      this.filters = { search: '', type: '', status: '' };
-    },
-
-    openView(req) {
-      this.selectedRequest = req;
-      this.viewData = { ...req };
-      this.viewModalOpen = true;
-    },
-
-    openCreateModal() {
-      this.createModalOpen = true;
-    },
-
-    closeCreateModal() {
-      this.createModalOpen = false;
-      this.newRequest = {
-        applicant_name: '',
-        position: '',
-        office: '',
-        leave_type: 'Vacation Leave',
-        leave_where: '',
-        commutation: '',
-        working_days: '',
-        inclusive_dates: '',
-        status: 'Pending',
-        remarks: ''
-      };
-    },
-
-    async createLeaveRequest() {
-      try {
-        const payload = { ...this.newRequest };
-        await addDoc(collection(db, 'leave_requests'), payload);
-        this.closeCreateModal();
-        await this.loadLeaveRequests();
-      } catch (error) {
-        console.error('[LEAVE] create failed:', error);
-        alert(error.message || 'Failed to create leave request');
-      }
-    },
-
-    async updateStatus(id, status) {
-      try {
-        const docRef = doc(db, 'leave_requests', id);
-        await updateDoc(docRef, { status });
-        this.viewModalOpen = false;
-        this.selectedRequest = null;
-        await this.loadLeaveRequests();
-      } catch (error) {
-        console.error('[LEAVE] status update failed:', error);
-        alert(error.message || 'Failed to update request status');
-      }
-    }
-  };
-}
-document.addEventListener('alpine:init', () => {
-  Alpine.data('leavePage', leavePage);
-});
-</script>
-    {% endblock %}
+</section>
+{% endblock %}
