@@ -1548,11 +1548,16 @@ def system_logs():
                     'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
                     'user': entry.get('user') or entry.get('actorEmail') or entry.get('actor') or '',
                     'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
-                    'details': entry.get('details') or entry.get('message') or entry.get('description') or '',
-                    'ip': entry.get('ip') or entry.get('ipAddress') or '',
+                    'module': entry.get('module') or 'SYSTEM',
+                    'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                    'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
+                    'device_type': entry.get('device_type') or entry.get('device') or 'Unknown',
+                    'outcome': entry.get('outcome') or 'SUCCESS',
+                    'message': entry.get('message') or entry.get('details') or entry.get('description') or '',
                     'municipality': entry.get('municipality') or entry.get('municipality_name') or '',
                     'region': entry.get('region') or entry.get('region_name') or entry.get('regionName') or '',
                     'role': entry.get('role') or '',
+                    'ip': entry.get('ip') or entry.get('ipAddress') or '',
                 })
         except Exception as e:
             print(f"[ERROR] Direct fetch from system_logs failed: {e}")
