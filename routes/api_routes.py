@@ -1480,6 +1480,8 @@ def _sa_sr_status_payload(data):
 
     resolved_forwarded_by = _norm_level(forwarded_by_level) or ('Regional' if resolved_forward_target == 'National' else 'Municipal')
 
+    pending_target = resolved_forward_target or ('National' if national_status else 'Regional')
+
     if effective_status == 'approved':
         status_display = f"Approved by {_resolve_approved_level()}"
     elif effective_status == 'rejected':
@@ -1489,9 +1491,9 @@ def _sa_sr_status_payload(data):
     elif effective_status == 'forwarded':
         status_display = f"Forwarded by {resolved_forwarded_by} to {resolved_forward_target}"
     elif effective_status == 'to review':
-        status_display = 'For Review'
+        status_display = f"For Review at {pending_target}"
     else:
-        status_display = 'Pending'
+        status_display = f"Pending at {pending_target}"
 
     return {
         'status': effective_status,
@@ -1578,6 +1580,20 @@ def _sa_extract_service_request(doc, users_map):
         'province': _sa_norm_text(province),
         'status': status_payload['status'],
         'status_display': status_payload['status_display'],
+        'status_actor_level': (
+            status_payload['status_origin'].get('resolvedApprovedByLevel')
+            if status_payload['status'] == 'approved'
+            else status_payload['status_origin'].get('resolvedRejectedByLevel')
+            if status_payload['status'] == 'rejected'
+            else status_payload['status_origin'].get('resolvedForwardedByLevel')
+            if status_payload['status'] == 'forwarded'
+            else None
+        ),
+        'status_target_level': (
+            status_payload['status_origin'].get('resolvedForwardedToLevel')
+            if status_payload['status'] in {'pending', 'to review', 'forwarded'}
+            else None
+        ),
         'status_origin': status_payload['status_origin'],
         'email': _sa_norm_text(data.get('email') or data.get('userEmail') or user_data.get('email')),
         'contact': _sa_norm_text(data.get('contact') or data.get('contactNumber') or user_data.get('contactNumber')),
@@ -1609,7 +1625,7 @@ def superadmin_get_service_requests():
         rows = [_sa_extract_service_request(doc, users_map) for doc in docs]
         rows.sort(key=lambda x: x.get('date_iso') or '', reverse=True)
 
-        return jsonify({'success': True, 'data': rows, 'total': len(rows)})
+        return jsonify({'success': True, 'data': rows, 'requests': rows, 'total': len(rows)})
     except Exception as e:
         print(f'[ERROR] superadmin_get_service_requests: {e}')
         return jsonify({'success': False, 'message': str(e)}), 500
