@@ -1407,6 +1407,214 @@ def superadmin_get_application_detail(application_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ==================== SUPERADMIN SERVICE REQUEST REGISTRY ====================
+
+def _sa_sr_status_payload(data):
+    status = str(data.get('status') or 'pending').strip().lower()
+    regional_status = str(data.get('regionalStatus') or '').strip().lower()
+    national_status = str(data.get('nationalStatus') or '').strip().lower()
+
+    approved_by_level = str(data.get('approvedByLevel') or '').strip()
+    rejected_by_level = str(data.get('rejectedByLevel') or '').strip()
+    forwarded_by_level = str(data.get('forwardedByLevel') or data.get('forwardedToNationalByLevel') or '').strip()
+    forwarded_to_level = str(data.get('forwardedToLevel') or '').strip()
+
+    def _norm_level(v):
+        lv = str(v or '').strip().lower()
+        if lv == 'national':
+            return 'National'
+        if lv == 'regional':
+            return 'Regional'
+        if lv == 'municipal':
+            return 'Municipal'
+        return str(v or '').strip()
+
+    def _infer_forward_target():
+        raw = _norm_level(forwarded_to_level)
+        if raw:
+            return raw
+        if 'national' in status or national_status:
+            return 'National'
+        if 'regional' in status or regional_status or status in {'to review', 'to-review', 'review'}:
+            return 'Regional'
+        return 'Regional'
+
+    resolved_forward_target = _infer_forward_target()
+
+    if national_status in {'approved', 'rejected', 'cancelled', 'canceled'}:
+        effective_status = 'cancelled' if national_status in {'cancelled', 'canceled'} else national_status
+    elif status in {'approved', 'rejected', 'cancelled', 'canceled'}:
+        effective_status = 'cancelled' if status in {'cancelled', 'canceled'} else status
+    elif status in {'to review', 'to-review', 'review'} or regional_status in {'to review', 'to-review', 'review'}:
+        effective_status = 'to review'
+    elif status.startswith('forwarded') or forwarded_to_level:
+        effective_status = 'forwarded'
+    else:
+        effective_status = 'pending'
+
+    def _resolve_approved_level():
+        if _norm_level(approved_by_level):
+            return _norm_level(approved_by_level)
+        if national_status == 'approved':
+            return 'National'
+        if regional_status == 'approved':
+            return 'Regional'
+        if resolved_forward_target == 'National':
+            return 'National'
+        if resolved_forward_target == 'Regional':
+            return 'Regional'
+        return 'Municipal'
+
+    def _resolve_rejected_level():
+        if _norm_level(rejected_by_level):
+            return _norm_level(rejected_by_level)
+        if national_status == 'rejected':
+            return 'National'
+        if regional_status == 'rejected':
+            return 'Regional'
+        if resolved_forward_target == 'National':
+            return 'National'
+        if resolved_forward_target == 'Regional':
+            return 'Regional'
+        return 'Municipal'
+
+    resolved_forwarded_by = _norm_level(forwarded_by_level) or ('Regional' if resolved_forward_target == 'National' else 'Municipal')
+
+    if effective_status == 'approved':
+        status_display = f"Approved by {_resolve_approved_level()}"
+    elif effective_status == 'rejected':
+        status_display = f"Rejected by {_resolve_rejected_level()}"
+    elif effective_status == 'cancelled':
+        status_display = f"Cancelled ({rejected_by_level or approved_by_level or 'Applicant/System'})"
+    elif effective_status == 'forwarded':
+        status_display = f"Forwarded by {resolved_forwarded_by} to {resolved_forward_target}"
+    elif effective_status == 'to review':
+        status_display = 'For Review'
+    else:
+        status_display = 'Pending'
+
+    return {
+        'status': effective_status,
+        'status_display': status_display,
+        'status_origin': {
+            'approvedByLevel': approved_by_level,
+            'rejectedByLevel': rejected_by_level,
+            'forwardedByLevel': forwarded_by_level,
+            'forwardedToLevel': forwarded_to_level,
+            'resolvedApprovedByLevel': _resolve_approved_level(),
+            'resolvedRejectedByLevel': _resolve_rejected_level(),
+            'resolvedForwardedByLevel': resolved_forwarded_by,
+            'resolvedForwardedToLevel': resolved_forward_target,
+            'regionalStatus': regional_status,
+            'nationalStatus': national_status,
+            'rawStatus': status,
+        }
+    }
+
+
+def _sa_extract_service_request(doc, users_map):
+    data = doc.to_dict() or {}
+    form_data = data.get('formData') or {}
+    user_data = users_map.get(data.get('userId', ''), {})
+
+    created_dt = _sa_to_datetime(data.get('createdAt') or data.get('submittedAt') or data.get('dateFiled') or data.get('date_filed'))
+    date_filed = created_dt.strftime('%Y-%m-%d') if created_dt else _sa_norm_text(data.get('dateFiled') or data.get('date_filed'), '')
+
+    province = data.get('province') or form_data.get('province') or user_data.get('province') or ''
+    region = (
+        data.get('region')
+        or data.get('regionName')
+        or form_data.get('region')
+        or user_data.get('region')
+        or user_data.get('regionName')
+        or _sa_region_from_province(province)
+        or 'N/A'
+    )
+
+    municipality = (
+        data.get('municipality')
+        or form_data.get('municipality')
+        or form_data.get('cityMunicipality')
+        or data.get('location')
+        or user_data.get('municipality')
+        or 'N/A'
+    )
+
+    category = _sa_norm_text(
+        data.get('categoryType')
+        or data.get('category')
+        or data.get('serviceType')
+        or data.get('serviceCategory')
+        or data.get('requestType')
+        or form_data.get('categoryType')
+        or form_data.get('category')
+        or form_data.get('serviceType')
+        or form_data.get('serviceCategory')
+        or form_data.get('requestType'),
+        'General'
+    )
+
+    name = (
+        data.get('applicantName')
+        or data.get('fullName')
+        or data.get('name')
+        or data.get('userName')
+        or f"{user_data.get('firstName', '')} {user_data.get('lastName', '')}".strip()
+        or user_data.get('displayName')
+        or 'N/A'
+    )
+
+    status_payload = _sa_sr_status_payload(data)
+
+    return {
+        'id': doc.id,
+        'ref': doc.id[:12].upper(),
+        'date': date_filed,
+        'date_iso': date_filed,
+        'name': _sa_norm_text(name),
+        'category': category,
+        'region': _sa_norm_text(region),
+        'municipality': _sa_norm_text(municipality),
+        'province': _sa_norm_text(province),
+        'status': status_payload['status'],
+        'status_display': status_payload['status_display'],
+        'status_origin': status_payload['status_origin'],
+        'email': _sa_norm_text(data.get('email') or data.get('userEmail') or user_data.get('email')),
+        'contact': _sa_norm_text(data.get('contact') or data.get('contactNumber') or user_data.get('contactNumber')),
+        'description': _sa_norm_text(data.get('description') or data.get('notes') or form_data.get('description') or form_data.get('purpose')),
+        'form_data': form_data,
+        'raw': data,
+    }
+
+
+@bp.route('/superadmin/service-requests', methods=['GET'])
+def superadmin_get_service_requests():
+    """Return all service requests for superadmin registry across all municipalities/regions."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = list(db.collection('service_requests').limit(5000).stream())
+
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_service_request(doc, users_map) for doc in docs]
+        rows.sort(key=lambda x: x.get('date_iso') or '', reverse=True)
+
+        return jsonify({'success': True, 'data': rows, 'total': len(rows)})
+    except Exception as e:
+        print(f'[ERROR] superadmin_get_service_requests: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ==================== PROJECT MANAGEMENT ====================
 
 @bp.route('/projects/create', methods=['POST'])
