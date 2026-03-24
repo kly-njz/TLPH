@@ -1,18 +1,4 @@
-@bp.route('/api/user-management/accounts/<user_id>/enable', methods=['POST'])
-@role_required('national', 'national_admin')
-def api_enable_admin_account(user_id):
-    """Enable (restore) a regional or municipal admin account."""
-    try:
-        db = get_firestore_db()
-        user_ref = db.collection('users').document(user_id)
-        user_doc = user_ref.get()
-        if not user_doc.exists:
-            return jsonify({'success': False, 'error': 'User not found'}), 404
-        user_ref.update({'status': 'Active'})
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"[ERROR] Failed to enable admin account: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 
 
@@ -2526,3 +2512,21 @@ def record_national_audit_log(user, entity, action, details, ip=None, timestamp=
         'ip': ip or '',
     }
     db.collection('national_audit_logs').add(log)
+
+
+
+@bp.route('/api/user-management/accounts/<user_id>/enable', methods=['POST'])
+@role_required('national', 'national_admin')
+def api_enable_admin_account(user_id):
+    """Enable (restore) a regional or municipal admin account."""
+    try:
+        db = get_firestore_db()
+        user_ref = db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user_ref.update({'status': 'Active'})
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] Failed to enable admin account: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
