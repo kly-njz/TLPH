@@ -1537,13 +1537,14 @@ def system_logs():
                 'scope': scope or log.get('scope', ''),
             }
 
+        db = get_firestore_db()
         # Fetch and normalize all regional logs (no filter)
-        raw_regional_logs = system_logs_storage.list_regional_system_logs(limit=300)
+        raw_regional_logs = system_logs_storage.list_regional_system_logs(limit=300, db_override=db)
         regional_logs = [normalize_log(log, scope='Regional') for log in raw_regional_logs]
         print(f"[DEBUG] National logs: {len(regional_logs)} regional logs fetched. Sample: {regional_logs[:1]}")
 
         # Fetch and normalize all system logs (no filter)
-        all_system_logs = system_logs_storage.list_system_logs(limit=500)
+        all_system_logs = system_logs_storage.list_system_logs(limit=500, db_override=db)
         print(f"[DEBUG] National logs: {len(all_system_logs)} system_logs fetched. Sample: {all_system_logs[:1]}")
 
         # For national, show all system_logs in both tables (municipal_logs and user_logs)
