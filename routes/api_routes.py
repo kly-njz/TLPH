@@ -1615,6 +1615,152 @@ def superadmin_get_service_requests():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@bp.route('/superadmin/service-requests/stats', methods=['GET'])
+def superadmin_service_request_stats():
+    """Return KPI counts for superadmin service request registry."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = list(db.collection('service_requests').limit(5000).stream())
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_service_request(doc, users_map) for doc in docs]
+
+        stats = {
+            'total': len(rows),
+            'pending': 0,
+            'for_review': 0,
+            'approved': 0,
+            'rejected': 0,
+            'cancelled': 0,
+        }
+
+        for row in rows:
+            st = str(row.get('status') or 'pending').lower()
+            if st == 'approved':
+                stats['approved'] += 1
+            elif st == 'rejected':
+                stats['rejected'] += 1
+            elif st == 'cancelled':
+                stats['cancelled'] += 1
+            elif st in {'to review', 'review', 'forwarded'}:
+                stats['for_review'] += 1
+            else:
+                stats['pending'] += 1
+
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        print(f'[ERROR] superadmin_service_request_stats: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/superadmin/service-requests/charts', methods=['GET'])
+def superadmin_service_request_charts():
+    """Return trend + category chart data for superadmin service request registry."""
+    try:
+        from firebase_config import get_firestore_db
+        from collections import defaultdict
+        import datetime as dt_module
+        db = get_firestore_db()
+
+        docs = list(db.collection('service_requests').limit(5000).stream())
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_service_request(doc, users_map) for doc in docs]
+
+        weekly_trend = defaultdict(int)
+        category_count = defaultdict(int)
+
+        for row in rows:
+            dt = _sa_to_datetime(row.get('date_iso'))
+            if dt:
+                iso = dt.isocalendar()
+                weekly_trend[f"{iso[0]}-W{iso[1]:02d}"] += 1
+            category_count[str(row.get('category') or 'General')] += 1
+
+        now = datetime.now()
+        week_labels = []
+        week_data = []
+        for i in range(7, -1, -1):
+            target = now - dt_module.timedelta(weeks=i)
+            iso = target.isocalendar()
+            key = f"{iso[0]}-W{iso[1]:02d}"
+            week_labels.append(f"W{iso[1]}")
+            week_data.append(weekly_trend.get(key, 0))
+
+        top_categories = sorted(category_count.items(), key=lambda x: x[1], reverse=True)[:6]
+
+        return jsonify({
+            'success': True,
+            'trend': {
+                'labels': week_labels,
+                'data': week_data,
+            },
+            'categories': {
+                'labels': [c[0] for c in top_categories],
+                'data': [c[1] for c in top_categories],
+            }
+        })
+    except Exception as e:
+        print(f'[ERROR] superadmin_service_request_charts: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp.route('/superadmin/service-requests/audit-trail', methods=['GET'])
+def superadmin_service_request_audit():
+    """Return latest service request actions for live audit panel."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = list(db.collection('service_requests').limit(20).stream())
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_service_request(doc, users_map) for doc in docs]
+        rows.sort(key=lambda x: x.get('date_iso') or '', reverse=True)
+
+        entries = []
+        for row in rows[:10]:
+            dt = _sa_to_datetime(row.get('date_iso'))
+            entries.append({
+                'time': dt.strftime('%H:%M') if dt else '--:--',
+                'ref': row.get('ref', 'N/A'),
+                'name': row.get('name', 'N/A'),
+                'status': row.get('status', 'pending'),
+                'status_display': row.get('status_display', 'Pending')
+            })
+
+        return jsonify({'success': True, 'entries': entries})
+    except Exception as e:
+        print(f'[ERROR] superadmin_service_request_audit: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ==================== PROJECT MANAGEMENT ====================
 
 @bp.route('/projects/create', methods=['POST'])
