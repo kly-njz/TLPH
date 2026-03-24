@@ -1777,6 +1777,119 @@ def superadmin_service_request_audit():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ==================== SUPERADMIN LICENSE & PERMIT REGISTRY ====================
+
+def _sa_extract_permit_application(doc, users_map):
+    data = doc.to_dict() or {}
+    form_data = data.get('formData') or {}
+    user_data = users_map.get(data.get('userId', ''), {})
+
+    created_dt = _sa_to_datetime(data.get('createdAt') or data.get('dateFiled') or data.get('date_filed') or data.get('submittedAt'))
+    date_filed = created_dt.strftime('%Y-%m-%d') if created_dt else _sa_norm_text(data.get('dateFiled') or data.get('date_filed'), '')
+
+    province = data.get('province') or form_data.get('province') or user_data.get('province') or user_data.get('Province') or ''
+    region = (
+        data.get('region')
+        or data.get('regionName')
+        or form_data.get('region')
+        or user_data.get('region')
+        or user_data.get('regionName')
+        or _sa_region_from_province(province)
+        or 'N/A'
+    )
+
+    municipality = (
+        data.get('municipality')
+        or form_data.get('municipality')
+        or form_data.get('cityMunicipality')
+        or data.get('location')
+        or user_data.get('municipality')
+        or 'N/A'
+    )
+
+    application_type = _sa_norm_text(data.get('applicationType') or form_data.get('applicationType'), 'General')
+    category = _sa_norm_text(
+        data.get('categoryType')
+        or data.get('category')
+        or form_data.get('categoryType')
+        or form_data.get('category')
+        or application_type,
+        'General'
+    )
+
+    name = (
+        data.get('applicantName')
+        or data.get('fullName')
+        or data.get('name')
+        or f"{user_data.get('firstName', '')} {user_data.get('lastName', '')}".strip()
+        or user_data.get('displayName')
+        or 'N/A'
+    )
+
+    status_payload = _sa_status_payload(data)
+    status = status_payload['status']
+    status_origin = status_payload['status_origin']
+
+    status_actor_level = (
+        status_origin.get('resolvedApprovedByLevel') if status == 'approved'
+        else status_origin.get('resolvedRejectedByLevel') if status == 'rejected'
+        else status_origin.get('resolvedForwardedByLevel') if status == 'forwarded'
+        else None
+    )
+    status_target_level = status_origin.get('resolvedForwardedToLevel') if status in {'pending', 'to review', 'forwarded'} else None
+
+    return {
+        'id': doc.id,
+        'ref': doc.id[:12].upper(),
+        'date': date_filed,
+        'date_iso': date_filed,
+        'name': _sa_norm_text(name),
+        'category': category,
+        'application_type': application_type,
+        'region': _sa_norm_text(region),
+        'municipality': _sa_norm_text(municipality),
+        'province': _sa_norm_text(province),
+        'status': status,
+        'status_display': status_payload['status_display'],
+        'status_actor_level': status_actor_level,
+        'status_target_level': status_target_level,
+        'status_origin': status_origin,
+        'email': _sa_norm_text(data.get('email') or data.get('userEmail') or user_data.get('email')),
+        'contact': _sa_norm_text(data.get('contact') or data.get('contactNumber') or user_data.get('contactNumber')),
+        'description': _sa_norm_text(data.get('description') or data.get('notes') or form_data.get('description') or form_data.get('purpose')),
+        'form_data': form_data,
+        'raw': data,
+    }
+
+
+@bp.route('/superadmin/permits', methods=['GET'])
+def superadmin_get_permits():
+    """Return all license/permit applications across municipalities and regions for superadmin."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        docs = list(db.collection('license_applications').limit(7000).stream())
+
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        permits = [_sa_extract_permit_application(doc, users_map) for doc in docs]
+        permits.sort(key=lambda x: x.get('date_iso') or '', reverse=True)
+
+        return jsonify({'success': True, 'data': permits, 'permits': permits, 'total': len(permits)})
+    except Exception as e:
+        print(f'[ERROR] superadmin_get_permits: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ==================== PROJECT MANAGEMENT ====================
 
 @bp.route('/projects/create', methods=['POST'])
