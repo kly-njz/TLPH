@@ -1,3 +1,32 @@
+@bp.route('/api/projects/<project_id>/fully-complete', methods=['POST'])
+@role_required('national', 'national_admin')
+def mark_project_fully_completed_national(project_id):
+    db = get_firestore_db()
+    try:
+        # Try to update in all possible project collections
+        collections = [
+            'municipal_projects',
+            'regional_projects',
+            'national_projects',
+            'projects'
+        ]
+        found = False
+        for col in collections:
+            doc_ref = db.collection(col).document(project_id)
+            doc = doc_ref.get()
+            if doc.exists:
+                doc_ref.update({
+                    'municipal_completed': True,
+                    'regional_completed': True,
+                    'status': 'fully_completed'
+                })
+                found = True
+                break
+        if not found:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 def record_national_audit_log(user, entity, action, details, ip=None, timestamp=None):
     """Helper to record a new audit log entry in national_audit_logs."""
     db = get_firestore_db()
