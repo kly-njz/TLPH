@@ -149,28 +149,18 @@
               <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
               <script>
 
-                // Firebase config from static/js/firebase-config.js
-                const firebaseConfig = {
-                  apiKey: "AIzaSyCj3EnEG1XhF7_xWgt1vQK_VkT7288yd64",
-                  authDomain: "denr-d02ae.firebaseapp.com",
-                  projectId: "denr-d02ae",
-                  storageBucket: "denr-d02ae.firebasestorage.app",
-                  messagingSenderId: "499245517370",
-                  appId: "1:499245517370:web:c66598d7c86d5567a64303"
-                };
-                if (!firebase.apps.length) {
-                  firebase.initializeApp(firebaseConfig);
-                }
-                const db = firebase.firestore();
-
-                // Fetch and render approved holidays
-                function loadApprovedHolidays() {
-                  db.collection('holidays').where('status', '==', 'approved').orderBy('date').get().then(snapshot => {
+                // Fetch holidays from backend API and render
+                async function fetchAndRenderHolidays() {
+                  try {
+                    const resp = await fetch('/national/api/holidays');
+                    const data = await resp.json();
+                    const holidays = Array.isArray(data.holidays) ? data.holidays : [];
+                    // Approved holidays
+                    const approved = holidays.filter(h => h.status === 'approved');
                     const tbody = document.getElementById('holidayTable');
                     tbody.innerHTML = '';
                     let count = 0;
-                    snapshot.forEach(doc => {
-                      const h = doc.data();
+                    approved.forEach(h => {
                       const row = document.createElement('tr');
                       row.className = 'hover:bg-slate-50 transition holiday-row';
                       row.setAttribute('data-type', h.type || '');
@@ -191,16 +181,12 @@
                       count++;
                     });
                     document.getElementById('recordCount').innerText = count;
-                  });
-                }
 
-                // Fetch and render pending holidays
-                function loadPendingHolidays() {
-                  db.collection('holidays').where('status', '==', 'pending').orderBy('date').get().then(snapshot => {
-                    const tbody = document.getElementById('pendingHolidayTable');
-                    tbody.innerHTML = '';
-                    snapshot.forEach(doc => {
-                      const h = doc.data();
+                    // Pending holidays
+                    const pending = holidays.filter(h => h.status === 'pending');
+                    const pendingTbody = document.getElementById('pendingHolidayTable');
+                    pendingTbody.innerHTML = '';
+                    pending.forEach(h => {
                       const row = document.createElement('tr');
                       row.innerHTML = `
                         <td class="px-3 py-1.5 font-mono font-bold text-yellow-700 border-r border-yellow-100 whitespace-nowrap">${h.date || ''}</td>
@@ -211,30 +197,28 @@
                         <td class="px-3 py-1.5 text-center border-r border-yellow-100 font-bold text-yellow-700 uppercase">${h.scope || ''}</td>
                         <td class="px-3 py-1.5 font-mono text-yellow-500 border-r border-yellow-100">${h.basis || ''}</td>
                         <td class="px-3 py-1.5 text-center space-x-1">
-                          <button onclick="approveHoliday('${doc.id}')" class="text-green-700 hover:text-green-900 font-bold uppercase text-[9px]">Approve</button>
-                          <button onclick="rejectHoliday('${doc.id}')" class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Reject</button>
+                          <button onclick="approveHoliday('${h.id}')" class="text-green-700 hover:text-green-900 font-bold uppercase text-[9px]">Approve</button>
+                          <button onclick="rejectHoliday('${h.id}')" class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px]">Reject</button>
                         </td>
                       `;
-                      tbody.appendChild(row);
+                      pendingTbody.appendChild(row);
                     });
-                  });
+                  } catch (err) {
+                    console.error('Failed to load holidays:', err);
+                  }
                 }
 
-                function approveHoliday(id) {
-                  db.collection('holidays').doc(id).update({ status: 'approved' }).then(() => {
-                    loadApprovedHolidays();
-                    loadPendingHolidays();
-                  });
+                async function approveHoliday(id) {
+                  await fetch(`/api/holidays/${id}/approve`, { method: 'POST' });
+                  fetchAndRenderHolidays();
                 }
-                function rejectHoliday(id) {
-                  db.collection('holidays').doc(id).update({ status: 'rejected' }).then(() => {
-                    loadPendingHolidays();
-                  });
+                async function rejectHoliday(id) {
+                  await fetch(`/api/holidays/${id}/reject`, { method: 'POST' });
+                  fetchAndRenderHolidays();
                 }
 
                 // Initial load
-                loadApprovedHolidays();
-                loadPendingHolidays();
+                fetchAndRenderHolidays();
               </script>
             </table>
           </div>

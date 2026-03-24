@@ -1,3 +1,54 @@
+@bp.route('/api/holidays/<holiday_id>/approve', methods=['POST'])
+@role_required('national', 'national_admin')
+def approve_national_holiday(holiday_id):
+    db = get_firestore_db()
+    ref = db.collection('holidays').document(holiday_id)
+    ref.update({'status': 'approved'})
+    return jsonify({'success': True})
+
+@bp.route('/api/holidays/<holiday_id>/reject', methods=['POST'])
+@role_required('national', 'national_admin')
+def reject_national_holiday(holiday_id):
+    db = get_firestore_db()
+    ref = db.collection('holidays').document(holiday_id)
+    ref.update({'status': 'rejected'})
+    return jsonify({'success': True})
+@bp.route('/api/holidays', methods=['GET'])
+@role_required('national', 'national_admin')
+def get_national_holidays():
+    db = get_firestore_db()
+    holidays = []
+    try:
+        docs = db.collection('holidays').order_by('date').stream()
+    except Exception:
+        docs = db.collection('holidays').stream()
+
+    for doc in docs:
+        item = doc.to_dict() or {}
+        date_value = item.get('date')
+        if isinstance(date_value, str):
+            item['date'] = date_value.split('T')[0]
+        elif hasattr(date_value, 'strftime'):
+            item['date'] = date_value.strftime('%Y-%m-%d')
+        elif hasattr(date_value, 'isoformat'):
+            item['date'] = date_value.isoformat().split('T')[0]
+        elif hasattr(date_value, 'to_datetime'):
+            item['date'] = date_value.to_datetime().strftime('%Y-%m-%d')
+        else:
+            item['date'] = ''
+
+        holidays.append({
+            'id': doc.id,
+            'name': item.get('name', ''),
+            'date': item.get('date', ''),
+            'type': item.get('type', 'Regular Holiday'),
+            'basis': item.get('basis', ''),
+            'description': item.get('description', ''),
+            'scope': item.get('scope', 'NATIONAL'),
+            'status': item.get('status', 'approved')
+        })
+
+    return jsonify({'success': True, 'holidays': holidays})
 # --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
