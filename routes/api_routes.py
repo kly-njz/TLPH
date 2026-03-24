@@ -1940,6 +1940,64 @@ def superadmin_permits_stats():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@bp.route('/superadmin/permits/charts', methods=['GET'])
+def superadmin_permits_charts():
+    """Return chart data for superadmin permits/license dashboard."""
+    try:
+        from firebase_config import get_firestore_db
+        from collections import defaultdict
+        import datetime as dt_module
+        db = get_firestore_db()
+
+        docs = list(db.collection('license_applications').limit(7000).stream())
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        rows = [_sa_extract_permit_application(doc, users_map) for doc in docs]
+
+        month_counts = defaultdict(int)
+        category_counts = defaultdict(int)
+
+        for row in rows:
+            dt = _sa_to_datetime(row.get('date_iso'))
+            if dt:
+                month_counts[dt.strftime('%Y-%m')] += 1
+            category_counts[str(row.get('category') or 'General')] += 1
+
+        now = datetime.now()
+        month_labels = []
+        month_data = []
+        for i in range(5, -1, -1):
+            target = now - dt_module.timedelta(days=30 * i)
+            key = target.strftime('%Y-%m')
+            month_labels.append(target.strftime('%b'))
+            month_data.append(month_counts.get(key, 0))
+
+        top_categories = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:6]
+
+        return jsonify({
+            'success': True,
+            'issuance': {
+                'labels': month_labels,
+                'data': month_data,
+            },
+            'categories': {
+                'labels': [c[0] for c in top_categories],
+                'data': [c[1] for c in top_categories],
+            }
+        })
+    except Exception as e:
+        print(f'[ERROR] superadmin_permits_charts: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ==================== PROJECT MANAGEMENT ====================
 
 @bp.route('/projects/create', methods=['POST'])
