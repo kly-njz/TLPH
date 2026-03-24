@@ -263,7 +263,7 @@
             applications: [],
             requests: [],
             inventory: [{ cat: "Seedlings", desc: "Narra Saplings", qty: 5000, region: "IV-B", lgu: "Baco" }],
-            permits: [{ ref: "PMT-CITES-882", entity: "Nature Exporters", sector: "Wildlife Trade", region: "IV-B", lgu: "San Teodoro", status: "ACTIVE" }],
+            permits: [],
             transactions: [{ ref: "OR-10291-TX", entity: "MIMAROPA Corp", type: "Permit Fee", date: "2026-02-13", region: "IV-B", status: "PAID", amount: 15400 }],
             users: [{ name: "Maria Santos", email: "maria@denr.gov.ph", type: "Regional Director", region: "IV-B", lgu: "Calapan", status: "ACTIVE" }]
         };
@@ -272,7 +272,7 @@
             applications: ["Date", "Registry ID", "Entity", "Sector", "Region", "LGU", "Status"],
             requests: ["Date", "Request ID", "Client", "Category", "Region", "LGU", "Status"],
             inventory: ["Category", "Description", "Qty", "Region", "Muni"],
-            permits: ["License No", "Licensee", "Sector", "Region", "LGU", "Status"],
+            permits: ["License No", "Licensee", "Category", "Region", "LGU", "Status"],
             transactions: ["OR No.", "Payor", "Fee Type", "Date", "Reg", "Status", "Amt"],
             users: ["Personnel", "Email", "Designation", "Reg", "LGU", "Acc"]
         };
@@ -324,6 +324,27 @@
             }
         }
 
+        async function loadPermitsData() {
+            try {
+                const res = await fetch('/api/superadmin/permits');
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message || 'Failed to fetch permits');
+
+                const rows = json.permits || json.data || [];
+                DATA.permits = rows.map(item => ({
+                    ref: item.ref || item.id || 'N/A',
+                    entity: item.name || 'N/A',
+                    sector: item.category || 'General',
+                    region: item.region || 'N/A',
+                    lgu: item.municipality || 'N/A',
+                    status: (item.status_display || item.status || 'PENDING').toUpperCase(),
+                }));
+            } catch (err) {
+                console.error('Permits fetch error:', err);
+                DATA.permits = [];
+            }
+        }
+
         function populateCategories() {
             const select = $("categorySelect");
             select.innerHTML = '<option value="all">-- ALL SECTORS --</option>';
@@ -331,6 +352,8 @@
                 ? [...new Set((DATA.applications || []).map(a => a.sector).filter(Boolean))]
                 : activeTab === 'requests'
                 ? [...new Set((DATA.requests || []).map(r => r.sector).filter(Boolean))]
+                : activeTab === 'permits'
+                ? [...new Set((DATA.permits || []).map(p => p.sector).filter(Boolean))]
                 : (CATEGORIES[activeTab] || []);
 
             categories.forEach(cat => {
@@ -510,6 +533,21 @@
             }
         }
 
+        async function loadPermitsKpis() {
+            try {
+                const res = await fetch('/api/superadmin/permits/stats');
+                const json = await res.json();
+                if (!json.success) return;
+                const stats = json.stats || {};
+                const el = $('kpi-permits');
+                if (el) el.textContent = Number(stats.total || 0).toLocaleString();
+            } catch (err) {
+                console.error('Permits KPI fetch error:', err);
+                const el = $('kpi-permits');
+                if (el) el.textContent = Number((DATA.permits || []).length).toLocaleString();
+            }
+        }
+
         document.querySelectorAll(".nav-trigger").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 document.querySelectorAll(".nav-trigger").forEach(b => {
@@ -531,17 +569,19 @@
             await Promise.all([
                 loadApplicationsData(),
                 loadServiceRequestsData(),
+                loadPermitsData(),
                 loadApplicationKpis(),
                 initCharts()
             ]);
 
             await loadServiceRequestKpis();
+            await loadPermitsKpis();
             populateCategories();
             renderTable();
             ["apps","reqs","permits","inv","uinv","txn","users"].forEach(k => {
                 const el = $( `kpi-${k}`);
                 if (el) {
-                    if (k !== 'apps' && k !== 'reqs') {
+                    if (k !== 'apps' && k !== 'reqs' && k !== 'permits') {
                         el.textContent = DATA[k === "uinv" ? "applications" : k === "txn" ? "transactions" : k]?.length || 0;
                     }
                 }
