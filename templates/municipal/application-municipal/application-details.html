@@ -79,6 +79,50 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        .doc-preview-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.75);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .doc-preview-panel {
+            width: min(1100px, 96vw);
+            max-height: 90vh;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .doc-preview-body {
+            padding: 10px;
+            background: #f8fafc;
+            overflow: auto;
+            flex: 1;
+        }
+
+        .doc-preview-frame {
+            width: 100%;
+            height: 72vh;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+        }
+
+        .doc-preview-image {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+        }
     </style>
 </head>
 <body>
@@ -191,6 +235,18 @@
         </div>
     </div>
 
+    <div id="docPreviewModal" class="doc-preview-overlay" onclick="closeDocumentPreview(event)">
+        <div class="doc-preview-panel" onclick="event.stopPropagation()">
+            <div class="px-3 py-2 bg-slate-900 text-white flex items-center justify-between">
+                <p id="docPreviewTitle" class="text-[11px] font-black uppercase tracking-wider m-0 truncate">Document Preview</p>
+                <button type="button" onclick="closeDocumentPreview()" class="text-white/90 hover:text-white border-0 bg-transparent">
+                    <span class="material-icons-round text-base">close</span>
+                </button>
+            </div>
+            <div id="docPreviewBody" class="doc-preview-body"></div>
+        </div>
+    </div>
+
     <script type="module">
         import { auth, db } from '/static/js/firebase-config.js';
         import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -204,6 +260,7 @@
         let currentCollection = 'applications';
         let currentRecordType = 'application';
         let actionLocked = false;
+        let previewDocuments = [];
 
         const pathParts = window.location.pathname.split('/');
         currentApplicationId = pathParts[pathParts.length - 1];
@@ -456,6 +513,7 @@
                     }
 
                     if (inventoryDocs.length > 0) {
+                        previewDocuments = inventoryDocs;
                         documentsContainer.innerHTML = inventoryDocs.map(doc => `
                             <div class="doc-box">
                                 <i class="fa-solid fa-file text-blue-600 text-xl"></i>
@@ -463,10 +521,11 @@
                                     <p class="text-[9px] font-black uppercase m-0">${doc.name}</p>
                                     <p class="text-[10px] font-bold text-slate-700 m-0">${doc.fileName}</p>
                                 </div>
-                                <button onclick="window.open('${doc.url}', '_blank')" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
+                                <button onclick="openDocumentPreviewByIndex(${inventoryDocs.indexOf(doc)})" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
                             </div>
                         `).join('');
                     } else {
+                        previewDocuments = [];
                         documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No files uploaded.</p>';
                     }
                 } else {
@@ -535,6 +594,7 @@
                     });
 
                     if (uniqueDocs.length > 0) {
+                        previewDocuments = uniqueDocs;
                         documentsContainer.innerHTML = uniqueDocs.map(doc => `
                             <div class="doc-box">
                                 <i class="fa-solid fa-file text-blue-600 text-xl"></i>
@@ -542,10 +602,11 @@
                                     <p class="text-[9px] font-black uppercase m-0">${doc.name || 'Document'}</p>
                                     <p class="text-[10px] font-bold text-slate-700 m-0 truncate">${doc.fileName || 'file'}</p>
                                 </div>
-                                <button onclick="window.open('${doc.url}', '_blank')" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
+                                <button onclick="openDocumentPreviewByIndex(${uniqueDocs.indexOf(doc)})" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
                             </div>
                         `).join('');
                     } else {
+                        previewDocuments = [];
                         documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No documents uploaded.</p>';
                     }
                 }
@@ -558,6 +619,47 @@
                 alert('Error displaying application details: ' + error.message);
             }
         }
+
+        window.openDocumentPreviewByIndex = function(index) {
+            const doc = previewDocuments[index];
+            if (!doc || !doc.url) return;
+
+            const modal = document.getElementById('docPreviewModal');
+            const body = document.getElementById('docPreviewBody');
+            const title = document.getElementById('docPreviewTitle');
+            const url = String(doc.url || '');
+            const lower = url.toLowerCase();
+            const isImage = /\.(png|jpg|jpeg|gif|webp|avif|bmp)(\?|$)/i.test(lower);
+            const isPdf = /\.pdf(\?|$)/i.test(lower);
+
+            title.textContent = (doc.name || 'Document Preview').toUpperCase();
+
+            if (isImage) {
+                body.innerHTML = `<img src="${url}" alt="Document Preview" class="doc-preview-image" />`;
+            } else if (isPdf) {
+                body.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0&scrollbar=1" class="doc-preview-frame"></iframe>`;
+            } else {
+                body.innerHTML = `
+                    <div class="bg-white border border-slate-200 p-5 text-center">
+                        <span class="material-icons-round text-4xl text-slate-400">description</span>
+                        <p class="mt-2 text-[10px] font-black uppercase text-slate-600">Preview not available for this file type.</p>
+                        <button type="button" onclick="window.open('${url}', '_blank')" class="mt-3 btn btn-sm btn-outline-primary text-[10px] font-bold">Open in New Tab</button>
+                    </div>
+                `;
+            }
+
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeDocumentPreview = function(event) {
+            if (event && event.target && event.target.id !== 'docPreviewModal') return;
+            const modal = document.getElementById('docPreviewModal');
+            const body = document.getElementById('docPreviewBody');
+            modal.style.display = 'none';
+            body.innerHTML = '';
+            document.body.style.overflow = '';
+        };
 
         window.updateApplicationStatus = async function(newStatus) {
             if (actionLocked) {
