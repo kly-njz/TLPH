@@ -142,7 +142,7 @@
                     </td>
                     <td class="px-3 py-1.5 text-center flex justify-center gap-2">
                       <button @click="editCategory(category)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] hover:underline">Edit</button>
-                      <button @click="deleteCategory(category.id)" class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px] hover:underline">Delete</button>
+                      <button @click="openDeleteModal(category)" class="text-rose-700 hover:text-rose-900 font-bold uppercase text-[9px] hover:underline">Delete</button>
                     </td>
                   </tr>
                 </template>
@@ -206,6 +206,38 @@
   </div>
 </div>
 
+<!-- Delete Confirmation Modal -->
+<div x-show="deleteModalOpen" x-cloak @click.outside="closeDeleteModal()" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[3010] backdrop-blur-sm">
+  <div class="bg-white rounded-[2px] w-full max-w-sm p-0 shadow-2xl border border-slate-400 overflow-hidden">
+    <div class="bg-rose-800 px-4 py-3 flex justify-between items-center border-b border-rose-900">
+      <h3 class="text-[11px] font-black uppercase tracking-widest text-white m-0 flex items-center gap-1.5">
+        <span class="material-icons-round text-[14px]">warning</span>
+        Confirm Delete
+      </h3>
+      <button @click="closeDeleteModal()" class="text-slate-300 hover:text-white transition-colors">
+        <span class="material-icons-round text-[16px]">close</span>
+      </button>
+    </div>
+    <div class="p-4 bg-slate-50 space-y-3">
+      <p class="text-[10px] font-bold text-slate-700">
+        Are you sure you want to delete this category?
+      </p>
+      <div class="bg-white border border-slate-200 rounded-[2px] p-2 text-[10px] text-slate-600">
+        <div class="font-black uppercase text-slate-900" x-text="deleteTarget?.name || 'Selected Category'">Selected Category</div>
+        <div class="font-mono text-[9px] text-slate-500" x-text="deleteTarget?.coa_code || ''"></div>
+      </div>
+      <div class="flex gap-2 pt-1">
+        <button @click="confirmDelete()" class="flex-1 bg-rose-700 hover:bg-rose-800 text-white py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition-colors">
+          Delete
+        </button>
+        <button @click="closeDeleteModal()" class="flex-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 py-1.5 rounded-[2px] text-[10px] font-black uppercase shadow-sm transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
@@ -219,6 +251,8 @@ function expenseCategoriesApp() {
     statusFilter: 'ALL',
 
     modalOpen: false,
+    deleteModalOpen: false,
+    deleteTarget: null,
     editingCategory: null,
     formData: { name: '', coa_code: '', tax_type: 'VAT', default_rate: 0, status: 'active' },
 
@@ -321,6 +355,22 @@ function expenseCategoriesApp() {
       this.modalOpen = true;
     },
 
+    openDeleteModal(category) {
+      this.deleteTarget = category;
+      this.deleteModalOpen = true;
+    },
+
+    closeDeleteModal() {
+      this.deleteModalOpen = false;
+      this.deleteTarget = null;
+    },
+
+    async confirmDelete() {
+      if (!this.deleteTarget?.id) return;
+      await this.deleteCategory(this.deleteTarget.id);
+      this.closeDeleteModal();
+    },
+
     async saveCategory() {
       try {
         const url = this.editingCategory 
@@ -348,8 +398,6 @@ function expenseCategoriesApp() {
     },
 
     async deleteCategory(id) {
-      if (!confirm('Are you sure you want to delete this category?')) return;
-      
       try {
         const response = await fetch(`/national/api/expense-categories/${id}`, { method: 'DELETE' });
         if (response.ok) {
