@@ -280,6 +280,18 @@ def user_application_view():
         db = get_firestore_db()
         docs = list(db.collection('applications').limit(5000).stream())
 
+        def sector_label(value):
+            raw = str(value or '').strip()
+            key = raw.lower()
+            mapping = {
+                'farming': 'Crop & Plant',
+                'livestock': 'Fisheries & Agriculture',
+                'agribusiness': 'Agribusiness & Agro-Processing',
+                'trade': 'Agricultural Trade',
+                'infrastructure': 'Infrastructure',
+            }
+            return mapping.get(key, raw)
+
         cat_set = set()
         reg_count = defaultdict(int)
 
@@ -316,7 +328,7 @@ def user_application_view():
                 or ''
             ).strip()
             if cat:
-                cat_set.add(cat)
+                cat_set.add(sector_label(cat))
 
             reg = (
                 data.get('region')

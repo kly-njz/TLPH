@@ -945,6 +945,19 @@ def _sa_category_from_app_type(application_type):
     return 'General'
 
 
+def _sa_sector_label(value):
+    raw = str(value or '').strip()
+    key = raw.lower()
+    mapping = {
+        'farming': 'Crop & Plant',
+        'livestock': 'Fisheries & Agriculture',
+        'agribusiness': 'Agribusiness & Agro-Processing',
+        'trade': 'Agricultural Trade',
+        'infrastructure': 'Infrastructure',
+    }
+    return mapping.get(key, raw if raw else 'General')
+
+
 def _sa_status_payload(data):
     status = str(data.get('status') or 'pending').strip().lower()
     regional_status = str(data.get('regionalStatus') or '').strip().lower()
@@ -1082,7 +1095,8 @@ def _sa_extract_application(doc, users_map):
     )
 
     application_type = _sa_norm_text(data.get('applicationType') or form_data.get('applicationType'), 'General')
-    sector = _sa_norm_text(data.get('category') or data.get('applicantCategory') or form_data.get('category') or _sa_category_from_app_type(application_type), 'General')
+    raw_sector = data.get('category') or data.get('applicantCategory') or form_data.get('category') or _sa_category_from_app_type(application_type)
+    sector = _sa_sector_label(raw_sector)
 
     name = (
         data.get('applicantName')
