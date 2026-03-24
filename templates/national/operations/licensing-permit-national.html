@@ -360,14 +360,20 @@
   }
 
   // --- CONFIRMATION MODAL LOGIC ---
-  let pendingAction = { refId: "", action: "" };
+  let pendingAction = { permitId: "", refId: "", action: "" };
 
   function openActionModal(btn, action) {
     const row = btn.closest('tr');
+    const permitId = row.dataset.id;
     const refId = row.dataset.ref;
     const applicant = row.dataset.name;
 
-    pendingAction = { refId, action };
+    if (!permitId) {
+      alert('Unable to process this row. Missing permit ID.');
+      return;
+    }
+
+    pendingAction = { permitId, refId, action };
 
     const isApprove = action === "APPROVE";
     document.getElementById('actionModalHeader').className = isApprove
@@ -398,10 +404,26 @@
     document.getElementById('actionModal').classList.remove('active');
   }
 
-  function confirmAction() {
-    closeActionModal();
-    alert(`Request processed successfully for: ${pendingAction.refId}`);
-    // Backend integration point: call your API here
+  async function confirmAction() {
+    try {
+      const action = pendingAction.action === 'APPROVE' ? 'approved' : 'rejected';
+      const res = await fetch(`/national/permit-national/action/${pendingAction.permitId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+
+      const payload = await res.json();
+      if (!res.ok || !payload.success) {
+        throw new Error(payload.message || 'Failed to update permit status');
+      }
+
+      closeActionModal();
+      alert(`Request processed successfully for: ${pendingAction.refId}`);
+      window.location.reload();
+    } catch (err) {
+      alert(`Failed to process request: ${err.message}`);
+    }
   }
 
   // --- FILTER LOGIC ---
