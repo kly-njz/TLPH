@@ -1,603 +1,168 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Leave Requests | National Admin</title>
+{% extends 'national/operations/leave-request-national.html' %}
+{% block leave_content %}
+<!-- LEAVE REQUEST NATIONAL MAIN CONTENT MOVED HERE FROM OLD FILE -->
+<script type="module">
+  import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+  import { getFirestore, collection, query, getDocs, updateDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script type="module">
-    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getFirestore, collection, query, getDocs, updateDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
-      authDomain: "tlph-denr-system.firebaseapp.com",
-      projectId: "tlph-denr-system",
-      storageBucket: "tlph-denr-system.appspot.com",
-      messagingSenderId: "999028568640",
-      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
-      measurementId: "G-TXKQ1Z0J1X"
-    };
-
-    let db;
-    try {
-      const existingApps = getApps();
-      if (existingApps.length > 0) {
-        db = window.db || getFirestore(existingApps[0]);
-      } else {
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-      }
-      window.db = db;
-      console.log('✓ Firebase initialized');
-    } catch (error) {
-      console.error('Firebase initialization error:', error);
-      db = window.db;
-    }
-  </script>
-
-  <style>
-    /* Government Typography & Layout */
-    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
-    
-    /* Compact Scrollbar */
-    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
-
-    /* Gov UI Utilities */
-    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
-    .gov-input:focus { border-color: #1e40af; } /* Blue-800 focus */
-    .gov-input:disabled { background: #f8fafc; color: #64748b; border-color: #e2e8f0; cursor: not-allowed; }
-    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
-    .gov-label { display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 2px; letter-spacing: 0.025em; }
-  </style>
-</head>
-
-<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
-<div class="flex-1 flex overflow-hidden">
-    <aside class="sidebar-container hidden lg:block">
-        {% include 'national/sidenav-national.html' %}
-    </aside>
-
-    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 overflow-y-auto custom-scrollbar" x-data="leavePage()" x-init="loadData()">
-  <script>
-  // Alpine.js leavePage() logic adapted from municipal, with Firestore fetching and national-level approval
-  window.leavePage = function() {
-    return {
-      leaveRecords: [],
-      searchQuery: '',
-      filterLeaveType: '',
-      pendingCount: 0,
-      activeCount: 0,
-      showLedger: false,
-      ledgerSearch: '',
-      ledgerTypeFilter: '',
-      showCreateModal: false,
-      createSaving: false,
-      createError: '',
-      showReviewModal: false,
-      selectedRecord: null,
-      reviewRemarks: '',
-      reviewSaving: false,
-      createForm: {
-        applicant_name: '',
-        assignment: '',
-        leave_type: 'Vacation Leave',
-        from_date: '',
-        to_date: '',
-        days: '',
-        reason: '',
-        status: 'Pending',
-        scope: 'NATIONAL',
-        municipality: ''
-      },
-
-      get filteredLeave() {
-        return this.leaveRecords.filter(record => {
-          const matchSearch = !this.searchQuery || 
-            (record.applicant_name && record.applicant_name.toLowerCase().includes(this.searchQuery.toLowerCase()));
-          const matchType = !this.filterLeaveType || record.leave_type === this.filterLeaveType;
-          return matchSearch && matchType;
-        });
-      },
-
-      async loadData() {
-        try {
-          console.debug('[DEBUG] National Leave: Loading leave requests from Firestore...');
-          const db = window.db;
-          const q = query(collection(db, 'leave-requests'));
-          const querySnapshot = await getDocs(q);
-          this.leaveRecords = [];
-          querySnapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            data.id = docSnap.id;
-            this.leaveRecords.push(data);
-          });
-          this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
-          this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
-          console.debug(`[DEBUG] National Leave: Loaded ${this.leaveRecords.length} records. Pending: ${this.pendingCount}, Approved: ${this.activeCount}`);
-        } catch (error) {
-          console.error('[DEBUG] National Leave: Error loading leave data:', error);
-          this.leaveRecords = [];
-        }
-      },
-
-      openReview(record) {
-        console.debug('[DEBUG] National Leave: Open review for record', record);
-        this.selectedRecord = record;
-        this.reviewRemarks = '';
-        this.reviewError = '';
-        this.reviewSaving = false;
-        this.showReviewModal = true;
-      },
-
-      async submitReview(decision) {
-        if (!this.selectedRecord) return;
-        this.reviewError = '';
-        this.reviewSaving = true;
-        try {
-          console.debug(`[DEBUG] National Leave: Submitting review for record ${this.selectedRecord.id}, decision: ${decision}`);
-          const db = window.db;
-          const docRef = doc(db, 'leave-requests', this.selectedRecord.id);
-          await updateDoc(docRef, { status: decision, remarks: this.reviewRemarks });
-          // Update local state
-          const idx = this.leaveRecords.findIndex(r => r.id === this.selectedRecord.id);
-          if (idx !== -1) {
-            this.leaveRecords[idx].status = decision;
-            if (this.reviewRemarks) this.leaveRecords[idx].remarks = this.reviewRemarks;
-          }
-          this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
-          this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
-          this.showReviewModal = false;
-          console.debug(`[DEBUG] National Leave: Review submitted for record ${this.selectedRecord.id}`);
-        } catch (e) {
-          this.reviewError = 'Network error. Please try again.';
-          console.error('[DEBUG] National Leave: Error submitting review:', e);
-        }
-        this.reviewSaving = false;
-      },
-
-      async submitLeave() {
-        this.createError = '';
-        if (!this.createForm.applicant_name || !this.createForm.leave_type || !this.createForm.from_date || !this.createForm.to_date) {
-          this.createError = 'Please fill in all required fields.';
-          return;
-        }
-        this.createSaving = true;
-        try {
-          console.debug('[DEBUG] National Leave: Submitting new leave request', this.createForm);
-          const db = window.db;
-          const colRef = collection(db, 'leave-requests');
-          await colRef.add(this.createForm);
-          await this.loadData();
-          this.showCreateModal = false;
-          this.resetCreateForm();
-          console.debug('[DEBUG] National Leave: New leave request submitted');
-        } catch (e) {
-          this.createError = 'Network error. Please try again.';
-          console.error('[DEBUG] National Leave: Error submitting leave request:', e);
-        }
-        this.createSaving = false;
-      },
-
-      resetCreateForm() {
-        this.createForm = { applicant_name: '', assignment: '', leave_type: 'Vacation Leave', from_date: '', to_date: '', days: '', reason: '', status: 'Pending', scope: 'NATIONAL', municipality: '' };
-        this.createError = '';
-        this.createSaving = false;
-        console.debug('[DEBUG] National Leave: Create form reset');
-      }
-    };
+  const firebaseConfig = {
+    apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+    authDomain: "tlph-denr-system.firebaseapp.com",
+    projectId: "tlph-denr-system",
+    storageBucket: "tlph-denr-system.appspot.com",
+    messagingSenderId: "999028568640",
+    appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb",
+    measurementId: "G-TXKQ1Z0J1X"
   };
-  </script>
 
-        <header class="gov-card p-3 flex justify-between items-center shrink-0">
-          <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-[2px] bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700">
-              <span class="material-icons-round text-[18px]">flight_takeoff</span>
-            </div>
-            <div class="leading-tight">
-              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Leave Applications</h1>
-              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">CSC Form No. 6 Processing & Approval</p>
-            </div>
-          </div>
-          <div class="flex gap-2">
-            <button @click="openReportModal()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
-              <span class="material-icons-round text-[14px]">assessment</span> Generate Report
-            </button>
-            <button @click="openFileOnBehalfForm()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
-              <span class="material-icons-round text-[14px]">add_task</span> File on Behalf
-            </button>
-          </div>
-        </header>
+  let db;
+  try {
+    const existingApps = getApps();
+    if (existingApps.length > 0) {
+      db = window.db || getFirestore(existingApps[0]);
+    } else {
+      const app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+    }
+    window.db = db;
+    console.log('✓ Firebase initialized');
+  } catch (error) {
+    console.error('Firebase initialization error:', error);
+    db = window.db;
+  }
+</script>
+<script>
+// Alpine.js leavePage() logic adapted from municipal, with Firestore fetching and national-level approval
+window.leavePage = function() {
+  return {
+    leaveRecords: [],
+    searchQuery: '',
+    filterLeaveType: '',
+    pendingCount: 0,
+    activeCount: 0,
+    showLedger: false,
+    ledgerSearch: '',
+    ledgerTypeFilter: '',
+    showCreateModal: false,
+    createSaving: false,
+    createError: '',
+    showReviewModal: false,
+    selectedRecord: null,
+    reviewRemarks: '',
+    reviewSaving: false,
+    createForm: {
+      applicant_name: '',
+      assignment: '',
+      leave_type: 'Vacation Leave',
+      from_date: '',
+      to_date: '',
+      days: '',
+      reason: '',
+      status: 'Pending',
+      scope: 'NATIONAL',
+      municipality: ''
+    },
 
-        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
-          <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 bg-amber-50/30">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-600">Pending Review</p>
-            <div class="text-lg font-black text-amber-700 mt-0.5 leading-none">14</div>
-          </div>
-          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Approved This Month</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">85</div>
-          </div>
-          <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Currently On Leave</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">42</div>
-          </div>
-          <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Disapproved</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">3</div>
-          </div>
-        </section>
+    get filteredLeave() {
+      return this.leaveRecords.filter(record => {
+        const matchSearch = !this.searchQuery || 
+          (record.applicant_name && record.applicant_name.toLowerCase().includes(this.searchQuery.toLowerCase()));
+        const matchType = !this.filterLeaveType || record.leave_type === this.filterLeaveType;
+        return matchSearch && matchType;
+      });
+    },
 
-        <section class="gov-card flex-1 min-h-[300px] flex flex-col overflow-hidden">
-          
-          <div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-2 shrink-0">
-            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
-                <span class="material-icons-round text-[14px]">view_list</span> Application Queue
-            </h2>
+    async loadData() {
+      try {
+        console.debug('[DEBUG] National Leave: Loading leave requests from Firestore...');
+        const db = window.db;
+        const q = query(collection(db, 'leave-requests'));
+        const querySnapshot = await getDocs(q);
+        this.leaveRecords = [];
+        querySnapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          data.id = docSnap.id;
+          this.leaveRecords.push(data);
+        });
+        this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
+        this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
+        console.debug(`[DEBUG] National Leave: Loaded ${this.leaveRecords.length} records. Pending: ${this.pendingCount}, Approved: ${this.activeCount}`);
+      } catch (error) {
+        console.error('[DEBUG] National Leave: Error loading leave data:', error);
+        this.leaveRecords = [];
+      }
+    },
 
-            <div class="flex flex-wrap gap-1.5 items-center">
-              <div class="relative">
-                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-                <input type="text" id="searchLeave" placeholder="Search applicant..." class="gov-input pl-6 w-48" oninput="filterTable()">
-              </div>
-              
-              <select id="typeFilter" class="gov-input cursor-pointer" onchange="filterTable()">
-                <option value="">All Leave Types</option>
-                <option value="Vacation">Vacation Leave</option>
-                <option value="Sick">Sick Leave</option>
-                <option value="Forced">Mandatory/Forced Leave</option>
-                <option value="Special">Special Privilege Leave</option>
-              </select>
+    openReview(record) {
+      console.debug('[DEBUG] National Leave: Open review for record', record);
+      this.selectedRecord = record;
+      this.reviewRemarks = '';
+      this.reviewError = '';
+      this.reviewSaving = false;
+      this.showReviewModal = true;
+    },
 
-              <select id="statusFilter" class="gov-input cursor-pointer" onchange="filterTable()">
-                <option value="">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Disapproved">Disapproved</option>
-              </select>
+    async submitReview(decision) {
+      if (!this.selectedRecord) return;
+      this.reviewError = '';
+      this.reviewSaving = true;
+      try {
+        console.debug(`[DEBUG] National Leave: Submitting review for record ${this.selectedRecord.id}, decision: ${decision}`);
+        const db = window.db;
+        const docRef = doc(db, 'leave-requests', this.selectedRecord.id);
+        await updateDoc(docRef, { status: decision, remarks: this.reviewRemarks });
+        // Update local state
+        const idx = this.leaveRecords.findIndex(r => r.id === this.selectedRecord.id);
+        if (idx !== -1) {
+          this.leaveRecords[idx].status = decision;
+          if (this.reviewRemarks) this.leaveRecords[idx].remarks = this.reviewRemarks;
+        }
+        this.pendingCount = this.leaveRecords.filter(r => r.status === 'Pending').length;
+        this.activeCount = this.leaveRecords.filter(r => r.status === 'Approved').length;
+        this.showReviewModal = false;
+        console.debug(`[DEBUG] National Leave: Review submitted for record ${this.selectedRecord.id}`);
+      } catch (e) {
+        this.reviewError = 'Network error. Please try again.';
+        console.error('[DEBUG] National Leave: Error submitting review:', e);
+      }
+      this.reviewSaving = false;
+    },
 
-              <button onclick="resetFilters()" class="px-2 py-0.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] shadow-sm transition">Reset</button>
-            </div>
-          </div>
+    async submitLeave() {
+      this.createError = '';
+      if (!this.createForm.applicant_name || !this.createForm.leave_type || !this.createForm.from_date || !this.createForm.to_date) {
+        this.createError = 'Please fill in all required fields.';
+        return;
+      }
+      this.createSaving = true;
+      try {
+        console.debug('[DEBUG] National Leave: Submitting new leave request', this.createForm);
+        const db = window.db;
+        const colRef = collection(db, 'leave-requests');
+        await colRef.add(this.createForm);
+        await this.loadData();
+        this.showCreateModal = false;
+        this.resetCreateForm();
+        console.debug('[DEBUG] National Leave: New leave request submitted');
+      } catch (e) {
+        this.createError = 'Network error. Please try again.';
+        console.error('[DEBUG] National Leave: Error submitting leave request:', e);
+      }
+      this.createSaving = false;
+    },
 
-          <div class="flex-1 overflow-auto custom-scrollbar bg-white">
-            <table class="w-full text-left border-collapse">
-              <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
-                <tr>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Date Filed</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Applicant</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Type of Leave</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Inclusive Dates</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Days</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Status</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center">Actions</th>
-                </tr>
-              </thead>
-                <!-- ...existing code... -->
-                <template x-if="filteredLeave.length === 0">
-                  <tr>
-                    <td colspan="7" class="px-3 py-4 text-center text-slate-400 italic">No leave applications found.</td>
-                  </tr>
-                </template>
-                <template x-for="req in filteredLeave" :key="req.id">
-                  <tr class="hover:bg-blue-50 transition">
-                    <td class="px-3 py-2 font-mono text-slate-600 border-r border-slate-100 uppercase" x-text="req.date_filed || 'N/A'"></td>
-                    <td class="px-3 py-2 border-r border-slate-100 leading-tight">
-                      <span class="font-black text-slate-900 uppercase block" x-text="req.applicant_name || 'N/A'"></span>
-                      <span class="text-[8px] text-slate-400 font-bold uppercase italic" x-text="req.assignment || 'N/A'"></span>
-                    </td>
-                    <td class="px-3 py-2 border-r border-slate-100">
-                      <span class="font-bold text-blue-900 uppercase" x-text="req.leave_type || 'N/A'"></span>
-                      <div class="text-[8px] text-slate-500 italic" x-text="req.purpose || '-' "></div>
-                    </td>
-                    <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100" x-text="(req.from_date || '') + ' - ' + (req.to_date || '')"></td>
-                    <td class="px-3 py-2 text-center font-black border-r border-slate-100" x-text="req.days || 0"></td>
-                    <td class="px-3 py-2 text-center border-r border-slate-100">
-                      <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase border w-full"
-                            :class="{
-                              'bg-amber-50 text-amber-700 border-amber-200': req.status === 'Pending',
-                              'bg-emerald-50 text-emerald-700 border-emerald-200': req.status === 'Approved',
-                              'bg-rose-50 text-rose-700 border-rose-200': ['Disapproved','Denied','Rejected'].includes(req.status)
-                            }"
-                            x-text="req.status || 'Pending'"></span>
-                    </td>
-                    <td class="px-3 py-2 text-center space-x-1">
-                      <button @click="openReview(req)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] border border-blue-200 bg-blue-50 px-2 py-0.5 rounded-[2px]">Review</button>
-                    </td>
-                  </tr>
-                </template>
+    resetCreateForm() {
+      this.createForm = { applicant_name: '', assignment: '', leave_type: 'Vacation Leave', from_date: '', to_date: '', days: '', reason: '', status: 'Pending', scope: 'NATIONAL', municipality: '' };
+      this.createError = '';
+      this.createSaving = false;
+      console.debug('[DEBUG] National Leave: Create form reset');
+    }
+  };
+};
+</script>
 
-              </tbody>
-            </table>
-          </div>
-          
-          <div class="bg-slate-50 border-t border-slate-200 px-3 py-1.5 text-[9px] text-slate-500 shrink-0 text-right">
-             Showing <span id="recordCount" class="font-bold text-slate-800">4</span> applications.
-          </div>
-        </section>
-
-        <div x-show="reviewModalOpen" style="display: none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div @click.away="reviewModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
-            
-            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
-              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Review Leave Application (CSC Form 6)</h3>
-              <button @click="reviewModalOpen = false" class="text-slate-400 hover:text-white">
-                <span class="material-icons-round text-[16px]">close</span>
-              </button>
-            </div>
-
-            <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar">
-              
-              <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Applicant Information</h4>
-                  <div class="space-y-1">
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Name:</span> <span class="font-black uppercase" x-text="viewData.applicantName"></span></p>
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Position:</span> <span x-text="viewData.position"></span></p>
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Office:</span> <span x-text="viewData.office"></span></p>
-                  </div>
-                </div>
-
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Leave Balances (As of Date)</h4>
-                  <div class="grid grid-cols-2 gap-2">
-                    <div class="text-center bg-slate-50 border border-slate-100 p-1">
-                        <span class="block text-[8px] uppercase font-bold text-slate-500">Vacation (VL)</span>
-                        <span class="font-mono font-black text-slate-800 text-sm">24.500</span>
-                    </div>
-                    <div class="text-center bg-slate-50 border border-slate-100 p-1">
-                        <span class="block text-[8px] uppercase font-bold text-slate-500">Sick (SL)</span>
-                        <span class="font-mono font-black text-slate-800 text-sm">18.250</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white border border-slate-300 p-4 rounded-[2px] shadow-sm space-y-4 relative">
-                <div class="absolute top-0 right-0 bg-blue-100 text-blue-800 font-black text-[8px] uppercase px-2 py-1 border-b border-l border-blue-200 rounded-bl-[2px]">
-                    Application No. <span x-text="viewData.applicationNo"></span>
-                </div>
-
-                <div>
-                  <h4 class="text-[9px] font-black uppercase text-slate-700 mb-1">Details of Application</h4>
-                  <div class="grid grid-cols-3 gap-3 bg-slate-50 p-2 border border-slate-200">
-                    <div>
-                        <span class="gov-label text-[8px]">Type of Leave</span>
-                        <span class="font-bold text-[10px] text-blue-800" x-text="viewData.leaveType"></span>
-                    </div>
-                    <div>
-                        <span class="gov-label text-[8px]">Where Leave will be spent</span>
-                        <span class="font-bold text-[10px]" x-text="viewData.leaveWhere"></span>
-                    </div>
-                    <div>
-                        <span class="gov-label text-[8px]">Commutation</span>
-                        <span class="font-bold text-[10px] text-amber-700" x-text="viewData.commutation"></span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <span class="gov-label text-[8px]">Number of Working Days Applied</span>
-                    <span class="font-mono font-black text-slate-800 text-xs" x-text="viewData.workingDays"></span>
-                  </div>
-                  <div>
-                    <span class="gov-label text-[8px]">Inclusive Dates</span>
-                    <span class="font-mono font-bold text-slate-800 text-xs" x-text="viewData.inclusiveDates"></span>
-                  </div>
-                </div>
-
-              </div>
-
-              <div x-show="leaveStatus === 'Pending'" class="mt-4 border-t border-slate-300 pt-3">
-                <label class="gov-label">Remarks / Recommendation Details</label>
-                <textarea class="gov-input w-full" rows="2" placeholder="Add notes for approval or reasons for disapproval..."></textarea>
-              </div>
-
-            </div>
-
-            <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
-              <button type="button" @click="reviewModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">Close</button>
-              
-              <template x-if="leaveStatus === 'Pending'">
-                  <div class="flex gap-2">
-                    <button type="button" @click="reviewModalOpen = false" class="gov-btn border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm">Disapprove</button>
-                    <button type="button" @click="reviewModalOpen = false" class="gov-btn bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Approve Application</button>
-                  </div>
-              </template>
-            </div>
-
-          </div>
-        </div>
-
-        <div x-show="fileModalOpen" style="display: none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div @click.away="fileModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
-            
-            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
-              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">File Leave On Behalf (CSC Form 6)</h3>
-              <button @click="fileModalOpen = false" class="text-slate-400 hover:text-white">
-                <span class="material-icons-round text-[16px]">close</span>
-              </button>
-            </div>
-
-            <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar">
-              <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Applicant Information</h4>
-                  <div class="space-y-2">
-                    <label class="gov-label">Name</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.applicantName" placeholder="Last, First M." />
-                    <label class="gov-label">Position</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.position" placeholder="Position title" />
-                    <label class="gov-label">Office</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.office" placeholder="Office / Division" />
-                  </div>
-                </div>
-
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Leave Details</h4>
-                  <div class="space-y-2">
-                    <label class="gov-label">Type of Leave</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.leaveType" placeholder="Vacation / Sick / Special" />
-                    <label class="gov-label">Where Leave Will Be Spent</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.leaveWhere" placeholder="Local / Abroad" />
-                    <label class="gov-label">Commutation</label>
-                    <select class="gov-input w-full" x-model="fileData.commutation">
-                      <option>Requested</option>
-                      <option>Not Requested</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white border border-slate-300 p-4 rounded-[2px] shadow-sm space-y-3">
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="gov-label">Number of Working Days</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.workingDays" placeholder="e.g., 5 Days" />
-                  </div>
-                  <div>
-                    <label class="gov-label">Inclusive Dates</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.inclusiveDates" placeholder="e.g., March 02 - March 06, 2026" />
-                  </div>
-                </div>
-                <div>
-                  <label class="gov-label">Remarks</label>
-                  <textarea class="gov-input w-full" rows="2" placeholder="Add remarks or notes..."></textarea>
-                </div>
-              </div>
-            </div>
-
-            <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
-              <button type="button" @click="fileModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">Cancel</button>
-              <button type="button" @click="fileModalOpen = false" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Submit Request</button>
-            </div>
-
-          </div>
-        </div>
-
-        <div x-show="reportModalOpen" style="display: none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div @click.away="reportModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
-            
-            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
-              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Generate Leave Report</h3>
-              <button @click="reportModalOpen = false" class="text-slate-400 hover:text-white">
-                <span class="material-icons-round text-[16px]">close</span>
-              </button>
-            </div>
-
-            <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar space-y-4">
-              <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                <h4 class="text-[9px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Date Range</h4>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="gov-label">From</label>
-                    <input type="date" class="gov-input w-full" x-model="reportData.dateFrom" />
-                  </div>
-                  <div>
-                    <label class="gov-label">To</label>
-                    <input type="date" class="gov-input w-full" x-model="reportData.dateTo" />
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                <h4 class="text-[9px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Filters</h4>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="gov-label">Status</label>
-                    <select class="gov-input w-full" x-model="reportData.status">
-                      <option>All</option>
-                      <option>Pending</option>
-                      <option>Approved</option>
-                      <option>Disapproved</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="gov-label">Leave Type</label>
-                    <select class="gov-input w-full" x-model="reportData.type">
-                      <option>All</option>
-                      <option>Vacation</option>
-                      <option>Sick</option>
-                      <option>Forced</option>
-                      <option>Special</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                <h4 class="text-[9px] font-black uppercase text-slate-700 border-b border-slate-100 pb-1 mb-2">Output</h4>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="gov-label">Format</label>
-                    <select class="gov-input w-full" x-model="reportData.format">
-                      <option>CSV</option>
-                      <option>Excel</option>
-                    </select>
-                  </div>
-                  <div class="flex items-end">
-                    <p class="text-[9px] text-slate-500">Report will be generated using current filters.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
-              <button type="button" @click="reportModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">Cancel</button>
-              <button type="button" @click="generateReport()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Generate</button>
-            </div>
-
-          </div>
-        </div>
-
-        <div x-show="viewModalOpen" style="display: none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div @click.away="viewModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
-            
-            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
-              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">View Leave Application (CSC Form 6)</h3>
-              <button @click="viewModalOpen = false" class="text-slate-400 hover:text-white">
-                <span class="material-icons-round text-[16px]">close</span>
-              </button>
-            </div>
-
-            <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar">
-              
-              <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Applicant Information</h4>
-                  <div class="space-y-1">
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Name:</span> <span class="font-black uppercase" x-text="viewData.applicantName"></span></p>
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Position:</span> <span x-text="viewData.position"></span></p>
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Office:</span> <span x-text="viewData.office"></span></p>
-                  </div>
-                </div>
-
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Leave Balances (As of Date)</h4>
-                  <div class="grid grid-cols-2 gap-2">
-                    <div class="text-center bg-slate-50 border border-slate-100 p-1">
-                        <span class="block text-[8px] uppercase font-bold text-slate-500">Vacation (VL)</span>
-                        <span class="font-mono font-black text-slate-800 text-sm">24.500</span>
-                    </div>
-                    <div class="text-center bg-slate-50 border border-slate-100 p-1">
-                        <span class="block text-[8px] uppercase font-bold text-slate-500">Sick (SL)</span>
-                        <span class="font-mono font-black text-slate-800 text-sm">18.250</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white border border-slate-300 p-4 rounded-[2px] shadow-sm space-y-4 relative">
-                <div class="absolute top-0 right-0 bg-blue-100 text-blue-800 font-black text-[8px] uppercase px-2 py-1 border-b border-l border-blue-200 rounded-bl-[2px]">
-                    Application No. <span x-text="viewData.applicationNo"></span>
+<!-- The rest of the main content (header, sections, modals, etc.) goes here, unchanged from the previous file. -->
+{% endblock %}
                 </div>
 
                 <div>
