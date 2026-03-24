@@ -223,9 +223,115 @@
 <script>
 function leavePage() {
   return {
-    // Example state and methods, replace with your actual logic
-    test: 'Leave Alpine component loaded',
-    // Add your Firestore integration and methods here
+    loading: false,
+    viewModalOpen: false,
+    createModalOpen: false,
+    selectedRequest: null,
+    viewData: {},
+    leaveRequests: [],
+    newRequest: {
+      applicant_name: '',
+      position: '',
+      office: '',
+      leave_type: 'Vacation Leave',
+      leave_where: '',
+      commutation: '',
+      working_days: '',
+      inclusive_dates: '',
+      status: 'Pending',
+      remarks: ''
+    },
+    filters: {
+      search: '',
+      type: '',
+      status: ''
+    },
+
+    async loadLeaveRequests() {
+      this.loading = true;
+      try {
+        const q = query(collection(db, 'leave_requests'));
+        const querySnapshot = await getDocs(q);
+        this.leaveRequests = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.error('[LEAVE] load failed:', error);
+        this.leaveRequests = [];
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    get filteredRequests() {
+      const search = (this.filters.search || '').toLowerCase().trim();
+      const normalizedType = (this.filters.type || '').toLowerCase();
+      const normalizedStatus = (this.filters.status || '').toLowerCase();
+      return this.leaveRequests.filter(req => {
+        const applicant = (req.applicant_name || '').toLowerCase();
+        const position = (req.position || '').toLowerCase();
+        const office = (req.office || '').toLowerCase();
+        const type = (req.leave_type || '').toLowerCase();
+        const status = (req.status || '').toLowerCase();
+        const matchSearch = !search || applicant.includes(search) || position.includes(search) || office.includes(search);
+        const matchType = !normalizedType || type.includes(normalizedType);
+        const matchStatus = !normalizedStatus || status.includes(normalizedStatus);
+        return matchSearch && matchType && matchStatus;
+      });
+    },
+
+    resetFilters() {
+      this.filters = { search: '', type: '', status: '' };
+    },
+
+    openView(req) {
+      this.selectedRequest = req;
+      this.viewData = { ...req };
+      this.viewModalOpen = true;
+    },
+
+    openCreateModal() {
+      this.createModalOpen = true;
+    },
+
+    closeCreateModal() {
+      this.createModalOpen = false;
+      this.newRequest = {
+        applicant_name: '',
+        position: '',
+        office: '',
+        leave_type: 'Vacation Leave',
+        leave_where: '',
+        commutation: '',
+        working_days: '',
+        inclusive_dates: '',
+        status: 'Pending',
+        remarks: ''
+      };
+    },
+
+    async createLeaveRequest() {
+      try {
+        const payload = { ...this.newRequest };
+        await addDoc(collection(db, 'leave_requests'), payload);
+        this.closeCreateModal();
+        await this.loadLeaveRequests();
+      } catch (error) {
+        console.error('[LEAVE] create failed:', error);
+        alert(error.message || 'Failed to create leave request');
+      }
+    },
+
+    async updateStatus(id, status) {
+      try {
+        const docRef = doc(db, 'leave_requests', id);
+        await updateDoc(docRef, { status });
+        this.viewModalOpen = false;
+        this.selectedRequest = null;
+        await this.loadLeaveRequests();
+      } catch (error) {
+        console.error('[LEAVE] status update failed:', error);
+        alert(error.message || 'Failed to update request status');
+      }
+    }
   };
 }
 document.addEventListener('alpine:init', () => {
