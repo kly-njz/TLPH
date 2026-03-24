@@ -1,37 +1,4 @@
-# --- API: Mark Project as Completed by Municipal ---
-@bp.route('/api/projects/<project_id>/status', methods=['POST'])
-@role_required('municipal','municipal_admin')
-def api_municipal_project_mark_completed(project_id):
-    """Mark a project as COMPLETED by municipal admin."""
-    from firebase_admin import firestore
-    db = get_firestore_db()
-    data = request.get_json(silent=True) or {}
-    new_status = str(data.get('status', '')).strip().upper()
-    if new_status != 'COMPLETED':
-        return jsonify({'success': False, 'error': 'Invalid status'}), 400
 
-    try:
-        project_ref = db.collection('projects').document(project_id)
-        project_doc = project_ref.get()
-        if not project_doc.exists:
-            return jsonify({'success': False, 'error': 'Project not found'}), 404
-
-        project = project_doc.to_dict() or {}
-        # Only allow marking as completed if status is 'active'
-        if str(project.get('status', '')).lower() != 'active':
-            return jsonify({'success': False, 'error': 'Project is not active'}), 400
-
-        update_payload = {
-            'status': 'completed',
-            'status_code': 'DONE_BY_MUNICIPAL',
-            'updated_at': firestore.SERVER_TIMESTAMP,
-            'updated_by': session.get('user_email', 'system'),
-        }
-        project_ref.update(update_payload)
-        return jsonify({'success': True, 'id': project_id, 'status': 'completed'}), 200
-    except Exception as e:
-        print(f"[ERROR] Failed to update project status: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 # Unified expense categories API for municipal admin
 
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for
@@ -1016,7 +983,7 @@ def projects_municipal_update(project_id):
         return jsonify({'success': False, 'error': 'Missing required project fields'}), 400
 
     try:
-        ref = db.collection('municipal_projects').document(project_id)
+        ref = db.collection('projects').document(project_id)
         doc = ref.get()
         if not doc.exists:
             return jsonify({'success': False, 'error': 'Project not found'}), 404
@@ -2238,3 +2205,39 @@ def api_get_municipal_expense_categories():
     except Exception as e:
         print(f"[ERROR] Municipal: Failed to get expense categories: {e}")
         return jsonify({'error': str(e)}), 500
+    
+
+# --- API: Mark Project as Completed by Municipal ---
+@bp.route('/api/projects/<project_id>/status', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_municipal_project_mark_completed(project_id):
+    """Mark a project as COMPLETED by municipal admin."""
+    from firebase_admin import firestore
+    db = get_firestore_db()
+    data = request.get_json(silent=True) or {}
+    new_status = str(data.get('status', '')).strip().upper()
+    if new_status != 'COMPLETED':
+        return jsonify({'success': False, 'error': 'Invalid status'}), 400
+
+    try:
+        project_ref = db.collection('projects').document(project_id)
+        project_doc = project_ref.get()
+        if not project_doc.exists:
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+
+        project = project_doc.to_dict() or {}
+        # Only allow marking as completed if status is 'active'
+        if str(project.get('status', '')).lower() != 'active':
+            return jsonify({'success': False, 'error': 'Project is not active'}), 400
+
+        update_payload = {
+            'status': 'completed',
+            'status_code': 'DONE_BY_MUNICIPAL',
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': session.get('user_email', 'system'),
+        }
+        project_ref.update(update_payload)
+        return jsonify({'success': True, 'id': project_id, 'status': 'completed'}), 200
+    except Exception as e:
+        print(f"[ERROR] Failed to update project status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
