@@ -955,6 +955,28 @@ def _sa_status_payload(data):
     forwarded_to_level = str(data.get('forwardedToLevel') or '').strip()
     forwarded_by_level = str(data.get('forwardedByLevel') or '').strip()
 
+    def _norm_level(v):
+        lv = str(v or '').strip().lower()
+        if lv == 'national':
+            return 'National'
+        if lv == 'regional':
+            return 'Regional'
+        if lv == 'municipal':
+            return 'Municipal'
+        return str(v or '').strip()
+
+    def _infer_forward_target():
+        raw = _norm_level(forwarded_to_level)
+        if raw:
+            return raw
+        if 'national' in status or national_status:
+            return 'National'
+        if 'regional' in status or regional_status or status in {'to review', 'to-review', 'review'}:
+            return 'Regional'
+        return 'Regional'
+
+    resolved_forwarded_to = _infer_forward_target()
+
     if national_status in {'approved', 'rejected', 'cancelled', 'canceled'}:
         effective_status = 'cancelled' if national_status in {'cancelled', 'canceled'} else national_status
     elif status in {'approved', 'rejected', 'cancelled', 'canceled'}:
@@ -967,28 +989,28 @@ def _sa_status_payload(data):
         effective_status = 'pending'
 
     def _resolve_approved_level():
-        if approved_by_level:
-            return approved_by_level
         if national_status == 'approved':
             return 'National'
         if regional_status == 'approved':
             return 'Regional'
-        if str(forwarded_to_level).strip().lower() == 'national':
+        if _norm_level(approved_by_level):
+            return _norm_level(approved_by_level)
+        if resolved_forwarded_to == 'National':
             return 'National'
-        if str(forwarded_to_level).strip().lower() == 'regional':
+        if resolved_forwarded_to == 'Regional':
             return 'Regional'
         return 'Municipal'
 
     def _resolve_rejected_level():
-        if rejected_by_level:
-            return rejected_by_level
         if national_status == 'rejected':
             return 'National'
         if regional_status == 'rejected':
             return 'Regional'
-        if str(forwarded_to_level).strip().lower() == 'national':
+        if _norm_level(rejected_by_level):
+            return _norm_level(rejected_by_level)
+        if resolved_forwarded_to == 'National':
             return 'National'
-        if str(forwarded_to_level).strip().lower() == 'regional':
+        if resolved_forwarded_to == 'Regional':
             return 'Regional'
         return 'Municipal'
 
@@ -1002,8 +1024,8 @@ def _sa_status_payload(data):
         origin = rejected_by_level or approved_by_level or 'Applicant/System'
         status_display = f'Cancelled ({origin})'
     elif effective_status == 'forwarded':
-        origin = forwarded_by_level or 'Municipal'
-        target = forwarded_to_level or 'Regional'
+        target = resolved_forwarded_to
+        origin = _norm_level(forwarded_by_level) or ('Regional' if target == 'National' else 'Municipal')
         status_display = f'Forwarded by {origin} to {target}'
     elif effective_status == 'to review':
         status_display = 'For Review'
@@ -1018,6 +1040,10 @@ def _sa_status_payload(data):
             'rejectedByLevel': rejected_by_level,
             'forwardedByLevel': forwarded_by_level,
             'forwardedToLevel': forwarded_to_level,
+            'resolvedApprovedByLevel': _resolve_approved_level(),
+            'resolvedRejectedByLevel': _resolve_rejected_level(),
+            'resolvedForwardedByLevel': _norm_level(forwarded_by_level) or ('Regional' if resolved_forwarded_to == 'National' else 'Municipal'),
+            'resolvedForwardedToLevel': resolved_forwarded_to,
             'regionalStatus': regional_status,
             'nationalStatus': national_status,
             'rawStatus': status
