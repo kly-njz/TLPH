@@ -1,3 +1,20 @@
+@bp.route('/api/employees', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_employees():
+    """Fetch all employees from all regions/municipalities for national payroll registry"""
+    try:
+        db = get_firestore_db()
+        employees_ref = db.collection('employees')
+        docs = employees_ref.stream()
+        employees = []
+        for doc in docs:
+            data = doc.to_dict()
+            data['id'] = doc.id
+            employees.append(data)
+        return jsonify({'success': True, 'employees': employees, 'count': len(employees)})
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch employees: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify
