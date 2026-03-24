@@ -1249,7 +1249,6 @@ def superadmin_application_audit():
     """Return recent audit trail entries for application registry"""
     try:
         from firebase_config import get_firestore_db
-        from datetime import datetime as dt
         db = get_firestore_db()
 
         docs = db.collection('applications') \
@@ -1257,39 +1256,38 @@ def superadmin_application_audit():
                  .limit(10) \
                  .stream()
 
+        docs = list(docs)
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
         entries = []
         for doc in docs:
-            data = doc.to_dict() or {}
-            created_at = data.get('createdAt') or data.get('dateFiled')
-            time_str = ''
-            if created_at:
-                if isinstance(created_at, str):
-                    try:
-                        d = dt.fromisoformat(created_at.replace('Z', '+00:00'))
-                        time_str = d.strftime('%H:%M')
-                    except Exception:
-                        time_str = str(created_at)[:5]
-                elif hasattr(created_at, 'strftime'):
-                    time_str = created_at.strftime('%H:%M')
-
-            status = (data.get('status') or 'pending').lower()
-            name = (data.get('applicantName') or data.get('fullName') or doc.id[:8].upper())
+            app = _sa_extract_application(doc, users_map)
+            created_at = _sa_to_datetime(app.get('date_iso'))
+            time_str = created_at.strftime('%H:%M') if created_at else '--:--'
 
             entries.append({
                 'time': time_str,
-                'ref': doc.id[:8].upper(),
-                'name': name,
-                'status': status,
+                'ref': app.get('ref', doc.id[:8].upper()),
+                'name': app.get('name', 'N/A'),
+                'status': app.get('status', 'pending'),
+                'status_display': app.get('status_display', 'Pending')
             })
 
-        return jsonify({'success': True, 'entries': entries})
+        return jsonify(entries)
 
     except Exception as e:
         print(f'[ERROR] superadmin_application_audit: {e}')
         # Fallback: get latest without ordering
         try:
             from firebase_config import get_firestore_db
-            from datetime import datetime as dt
             db = get_firestore_db()
             docs = db.collection('applications').limit(10).stream()
             entries = []
@@ -1298,9 +1296,38 @@ def superadmin_application_audit():
                 status = (data.get('status') or 'pending').lower()
                 name = (data.get('applicantName') or data.get('fullName') or doc.id[:8].upper())
                 entries.append({'time': '--:--', 'ref': doc.id[:8].upper(), 'name': name, 'status': status})
-            return jsonify({'success': True, 'entries': entries})
+            return jsonify(entries)
         except Exception as e2:
             return jsonify({'success': False, 'message': str(e2)}), 500
+
+
+@bp.route('/superadmin/applications/<application_id>', methods=['GET'])
+def superadmin_get_application_detail(application_id):
+    """Return complete and normalized details for one application (superadmin view modal)."""
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+
+        app_doc = db.collection('applications').document(application_id).get()
+        if not app_doc.exists:
+            return jsonify({'success': False, 'message': 'Application not found'}), 404
+
+        data = app_doc.to_dict() or {}
+        user_id = data.get('userId')
+        users_map = {}
+        if user_id:
+            try:
+                u_doc = db.collection('users').document(user_id).get()
+                if u_doc.exists:
+                    users_map[user_id] = u_doc.to_dict() or {}
+            except Exception:
+                pass
+
+        app = _sa_extract_application(app_doc, users_map)
+        return jsonify({'success': True, 'data': app})
+    except Exception as e:
+        print(f'[ERROR] superadmin_get_application_detail: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 # ==================== PROJECT MANAGEMENT ====================
