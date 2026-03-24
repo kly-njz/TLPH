@@ -274,6 +274,21 @@
         </div>
     </div>
 
+    <div id="applicationViewModal" class="gov-modal no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeApplicationView()"></div>
+        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-5xl overflow-hidden relative z-10 flex flex-col max-h-[88vh]">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-id-card text-slate-400"></i> Application Full Profile
+                </h3>
+                <button onclick="closeApplicationView()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div id="applicationViewBody" class="p-4 bg-slate-50 overflow-auto custom-scrollbar text-[10px]"></div>
+        </div>
+    </div>
+
     <script>
         function showToast(msg, type = 'error') {
             const container = document.getElementById('toastContainer');
@@ -526,6 +541,79 @@
             a.click();
             URL.revokeObjectURL(url);
             showToast(`Exported ${filtered.length} records`, 'success');
+        }
+
+        function closeApplicationView() {
+            const modal = document.getElementById('applicationViewModal');
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }
+
+        function _safeHtml(v) {
+            return String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\'': '&#39;', '"': '&quot;' }[c]));
+        }
+
+        function _renderPairs(obj) {
+            return Object.entries(obj || {})
+                .filter(([k, v]) => v !== null && v !== undefined && String(v).trim() !== '')
+                .map(([k, v]) => `<div class="border-b border-slate-200 py-1"><span class="font-black text-slate-500 uppercase">${_safeHtml(k)}</span>: <span class="text-slate-800 break-all">${_safeHtml(typeof v === 'object' ? JSON.stringify(v) : v)}</span></div>`)
+                .join('');
+        }
+
+        async function openApplicationView(appId) {
+            const modal = document.getElementById('applicationViewModal');
+            const body = document.getElementById('applicationViewBody');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            body.innerHTML = '<div class="py-10 text-center text-slate-400 font-black uppercase tracking-widest"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Loading complete application details...</div>';
+
+            try {
+                const res = await fetch(`/api/superadmin/applications/${appId}`);
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message || 'Failed to load application details');
+
+                const d = json.data || {};
+                const statusOrigin = d.status_origin || {};
+                const formData = d.form_data || {};
+                const raw = d.raw || {};
+
+                body.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="bg-white border border-slate-200 p-3">
+                            <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Application Summary</div>
+                            ${_renderPairs({
+                                'Reference': d.ref,
+                                'Date Filed': d.date,
+                                'Applicant': d.name,
+                                'Email': d.email,
+                                'Contact': d.contact,
+                                'Sector': d.sector,
+                                'Application Type': d.application_type,
+                                'Status': d.status,
+                                'Status Display': d.status_display,
+                                'Region': d.region,
+                                'Province': d.province,
+                                'Municipality': d.municipality,
+                                'Description': d.description
+                            })}
+                        </div>
+                        <div class="bg-white border border-slate-200 p-3">
+                            <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Approval / Forwarding Trail</div>
+                            ${_renderPairs(statusOrigin)}
+                        </div>
+                    </div>
+                    <div class="mt-3 bg-white border border-slate-200 p-3">
+                        <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Form Data (Submitted Fields)</div>
+                        <div class="max-h-44 overflow-auto custom-scrollbar">${_renderPairs(formData) || '<span class="text-slate-400">No form data available.</span>'}</div>
+                    </div>
+                    <div class="mt-3 bg-white border border-slate-200 p-3">
+                        <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Raw Document Snapshot</div>
+                        <pre class="m-0 text-[9px] text-slate-700 bg-slate-50 p-2 border border-slate-200 overflow-auto custom-scrollbar max-h-56">${_safeHtml(JSON.stringify(raw, null, 2))}</pre>
+                    </div>
+                `;
+            } catch (e) {
+                body.innerHTML = `<div class="py-10 text-center text-rose-500 font-black uppercase tracking-widest"><i class="fa-solid fa-triangle-exclamation mr-1"></i> ${_safeHtml(e.message)}</div>`;
+            }
         }
 
         function closeChartModal() {
