@@ -1159,61 +1159,50 @@ def superadmin_application_charts():
     """Return chart data for superadmin application registry"""
     try:
         from firebase_config import get_firestore_db
-        from datetime import datetime as dt
         from collections import defaultdict
         import calendar
+        import datetime as dt_module
         db = get_firestore_db()
 
-        docs = db.collection('applications').limit(5000).stream()
+        docs = list(db.collection('applications').limit(5000).stream())
+
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        apps = [_sa_extract_application(doc, users_map) for doc in docs]
 
         monthly_trend = defaultdict(int)
         region_count = defaultdict(int)
         category_count = defaultdict(int)
+        weekly_trend = defaultdict(int)
 
-        for doc in docs:
-            data = doc.to_dict() or {}
-            created_at = data.get('createdAt') or data.get('dateFiled') or data.get('date_filed')
+        for app in apps:
+            created_at = _sa_to_datetime(app.get('date_iso'))
             if created_at:
-                if isinstance(created_at, str):
-                    try:
-                        d = dt.fromisoformat(created_at.replace('Z', '+00:00'))
-                        monthly_trend[d.strftime('%Y-%m')] += 1
-                    except Exception:
-                        pass
-                elif hasattr(created_at, 'strftime'):
-                    monthly_trend[created_at.strftime('%Y-%m')] += 1
+                monthly_trend[created_at.strftime('%Y-%m')] += 1
+                iso = created_at.isocalendar()
+                weekly_trend[f"{iso[0]}-W{iso[1]:02d}"] += 1
 
-            region = (data.get('region') or data.get('regionName') or '').strip()
-            if region:
+            region = str(app.get('region') or '').strip()
+            if region and region.upper() != 'N/A':
                 region_count[region] += 1
 
-            category = (data.get('category') or data.get('applicantCategory') or 'General').strip()
+            category = str(app.get('sector') or 'General').strip()
             category_count[category] += 1
 
         # Last 8 weeks (week-by-week) trend
-        now = dt.now()
+        now = datetime.now()
         week_labels = []
         week_data = []
-        weekly_trend = defaultdict(int)
-
-        docs2 = db.collection('applications').limit(5000).stream()
-        for doc in docs2:
-            data = doc.to_dict() or {}
-            created_at = data.get('createdAt') or data.get('dateFiled') or data.get('date_filed')
-            if created_at:
-                if isinstance(created_at, str):
-                    try:
-                        d = dt.fromisoformat(created_at.replace('Z', '+00:00'))
-                        iso = d.isocalendar()
-                        weekly_trend[f"{iso[0]}-W{iso[1]:02d}"] += 1
-                    except Exception:
-                        pass
-                elif hasattr(created_at, 'strftime'):
-                    iso = created_at.isocalendar()
-                    weekly_trend[f"{iso[0]}-W{iso[1]:02d}"] += 1
 
         for i in range(7, -1, -1):
-            import datetime as dt_module
             target = now - dt_module.timedelta(weeks=i)
             iso = target.isocalendar()
             key = f"{iso[0]}-W{iso[1]:02d}"
