@@ -840,7 +840,7 @@ def submit_application():
         os.makedirs(upload_dir, exist_ok=True)
         
         # Process file uploads
-        file_fields = ['titleFile', 'taxFile', 'blueprintFile', 'landFile', 'cropFile', 'planFile', 'brgyFile']
+        file_fields = ['titleFile', 'taxFile', 'blueprintFile', 'landFile', 'cropFile', 'planFile', 'brgyFile', 'productPictureFile']
         file_paths = {}
         
         for field in file_fields:

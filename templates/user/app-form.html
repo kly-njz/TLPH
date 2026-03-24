@@ -130,6 +130,15 @@
                                 </div>
                             </div>
 
+                            <div class="flex flex-col space-y-1 group">
+                                <span class="text-[9px] font-black text-gray-500 uppercase text-center group-hover:text-green-800">Picture of Product</span>
+                                <div class="border-2 border-dashed border-gray-200 rounded-lg p-2 bg-gray-50 h-20 flex flex-col items-center justify-center relative hover:border-green-600 hover:bg-white transition-all cursor-pointer">
+                                    <i class="fa-solid fa-camera text-gray-300 group-hover:text-green-600 text-sm mb-1 transition-colors"></i>
+                                    <input type="file" id="productPictureFile" accept="image/*" required class="absolute inset-0 opacity-0 cursor-pointer z-10">
+                                    <p id="productPictureName" class="text-[7px] text-green-600 font-bold truncate w-full text-center"></p>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -178,6 +187,7 @@
                 { id: 'landFile', name: 'landName' },
                 { id: 'cropFile', name: 'cropName' },
                 { id: 'planFile', name: 'planName' },
+                { id: 'productPictureFile', name: 'productPictureName' },
                 { id: 'brgyFile', name: 'brgyName' }
             ]
             ;
@@ -249,6 +259,31 @@
                     const amount = parseInt(document.getElementById('xendit_raw_amount').value) || 2450;
                     const productName = productNameInput.value.trim();
                     const category = categorySelect.value;
+
+                    // Upload files first so we can store real URLs in Firestore after payment.
+                    const uploadFormData = new FormData();
+                    uploadFormData.append('userId', currentUser.uid);
+                    uploadFormData.append('userEmail', currentUser.email || '');
+                    uploadFormData.append('category', category);
+                    uploadFormData.append('investmentQty', investmentInput.value || '0');
+                    uploadFormData.append('harvestQty', harvestInput.value || '0');
+
+                    fileConfigs.forEach((f) => {
+                        const input = document.getElementById(f.id);
+                        if (input?.files?.[0]) {
+                            uploadFormData.append(f.id, input.files[0]);
+                        }
+                    });
+
+                    const uploadResponse = await fetch('/api/submit-application', {
+                        method: 'POST',
+                        body: uploadFormData
+                    });
+                    const uploadData = await uploadResponse.json();
+                    if (!uploadResponse.ok || !uploadData.success) {
+                        throw new Error(uploadData.message || 'Failed to upload application files');
+                    }
+
                     const invoiceResponse = await fetch('/api/payments/create-invoice', {
                         method: 'POST',
                         headers: {
@@ -284,6 +319,8 @@
                         category: category,
                         investmentQty: parseFloat(investmentInput.value) || 0,
                         harvestQty: parseFloat(harvestInput.value) || 0,
+                        imageUrl: uploadData.filePaths?.productPicture || uploadData.filePaths?.crop || uploadData.filePaths?.land || '',
+                        files: uploadData.filePaths || {},
                         status: 'pending',
                         invoiceId: invoiceData.invoice_id,
                         externalId: invoiceData.external_id,
@@ -294,7 +331,8 @@
                             blueprint: document.getElementById('blueprintFile').files[0].name,
                             landPhoto: document.getElementById('landFile').files[0].name,
                             cropPhoto: document.getElementById('cropFile').files[0].name,
-                            businessPlan: document.getElementById('planFile').files[0].name
+                            businessPlan: document.getElementById('planFile').files[0].name,
+                            productPicture: document.getElementById('productPictureFile').files[0].name
                         }
                     };
                     
