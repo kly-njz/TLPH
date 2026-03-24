@@ -362,20 +362,36 @@
             });
         }
 
-        function initCharts() {
+        async function initCharts() {
             const chartFont = { size: 9, weight: 'bold', family: 'Verdana, Arial, sans-serif' };
             
             myLineChart = new Chart($('lineChart'), { 
                 type: 'line', 
-                data: { labels: ['07','08','09','10','11','12','13'], datasets: [{ label:'Submissions', data:[450, 620, 580, 890, 720, 950, 1100], borderColor:'#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.05)', pointRadius: 2, fill: true, tension: 0.3, borderWidth: 2 }] },
+                data: { labels: [], datasets: [{ label:'Submissions', data:[], borderColor:'#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.05)', pointRadius: 2, fill: true, tension: 0.3, borderWidth: 2 }] },
                 options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}, ticks:{font:chartFont}},y:{grid:{color:'#f1f5f9'}, ticks:{font:chartFont}}}}
             });
             
             myBarChart = new Chart($('barChart'), { 
                 type: 'bar', 
-                data: { labels: ['NCR','IV-A','IV-B','III','VII'], datasets: [{ data:[92, 85, 95, 78, 88], backgroundColor:['#14532d','#15803d','#1e3a8a','#f59e0b','#be123c'], borderRadius: 2 }] },
-                options: { indexAxis: 'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}, max:100,ticks:{font:chartFont}},y:{grid:{display:false}, ticks:{font:chartFont}}} }
+                data: { labels: [], datasets: [{ data:[], backgroundColor:['#14532d','#15803d','#1e3a8a','#f59e0b','#be123c','#7c3aed','#0ea5e9'], borderRadius: 2 }] },
+                options: { indexAxis: 'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}, beginAtZero:true, ticks:{font:chartFont}},y:{grid:{display:false}, ticks:{font:chartFont}}} }
             });
+
+            try {
+                const res = await fetch('/api/superadmin/applications/charts');
+                const json = await res.json();
+                if (json.success) {
+                    myLineChart.data.labels = (json.trend?.labels || []);
+                    myLineChart.data.datasets[0].data = (json.trend?.data || []);
+                    myLineChart.update();
+
+                    myBarChart.data.labels = (json.regions?.labels || []);
+                    myBarChart.data.datasets[0].data = (json.regions?.data || []);
+                    myBarChart.update();
+                }
+            } catch (err) {
+                console.error('Dashboard chart fetch error:', err);
+            }
         }
 
         // --- MODAL LOGIC ---
@@ -411,7 +427,7 @@
                     options: { 
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false, devicePixelRatio: window.devicePixelRatio || 2,
                         plugins: { legend: { display: false } },
-                        scales: { x: { grid: {color: '#e2e8f0'}, max: 100, ticks: { font: modalFont } }, y: { grid: {display:false}, ticks: { font: modalFont } } }
+                        scales: { x: { grid: {color: '#e2e8f0'}, beginAtZero: true, ticks: { font: modalFont } }, y: { grid: {display:false}, ticks: { font: modalFont } } }
                     }
                 });
             }
