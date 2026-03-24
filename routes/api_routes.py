@@ -1096,28 +1096,39 @@ def superadmin_application_stats():
     """Return KPI stats for superadmin application registry"""
     try:
         from firebase_config import get_firestore_db
-        from datetime import datetime as dt
         db = get_firestore_db()
 
-        docs = db.collection('applications').limit(5000).stream()
+        docs = list(db.collection('applications').limit(5000).stream())
+
+        user_ids = {d.to_dict().get('userId') for d in docs if (d.to_dict() or {}).get('userId')}
+        users_map = {}
+        for uid in user_ids:
+            try:
+                u_doc = db.collection('users').document(uid).get()
+                if u_doc.exists:
+                    users_map[uid] = u_doc.to_dict() or {}
+            except Exception:
+                continue
+
+        apps = [_sa_extract_application(doc, users_map) for doc in docs]
 
         total = 0
         pending = 0
         approved = 0
         rejected = 0
         to_review = 0
+        cancelled = 0
 
-        for doc in docs:
-            data = doc.to_dict() or {}
+        for app in apps:
             total += 1
-            national_status = (data.get('nationalStatus') or '').lower()
-            status = (data.get('status') or 'pending').lower()
-            effective = national_status if national_status else status
+            effective = app.get('status', 'pending')
 
             if effective in ['approved']:
                 approved += 1
             elif effective in ['rejected']:
                 rejected += 1
+            elif effective in ['cancelled']:
+                cancelled += 1
             elif effective in ['to review', 'review']:
                 to_review += 1
             else:
@@ -1133,6 +1144,7 @@ def superadmin_application_stats():
                 'approved': approved,
                 'rejected': rejected,
                 'to_review': to_review,
+                'cancelled': cancelled,
                 'approval_rate': approval_rate,
             }
         })
