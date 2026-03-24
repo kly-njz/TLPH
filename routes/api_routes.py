@@ -989,12 +989,13 @@ def _sa_status_payload(data):
         effective_status = 'pending'
 
     def _resolve_approved_level():
+        # Source of truth: explicit workflow actor level saved in document.
+        if _norm_level(approved_by_level):
+            return _norm_level(approved_by_level)
         if national_status == 'approved':
             return 'National'
         if regional_status == 'approved':
             return 'Regional'
-        if _norm_level(approved_by_level):
-            return _norm_level(approved_by_level)
         if resolved_forwarded_to == 'National':
             return 'National'
         if resolved_forwarded_to == 'Regional':
@@ -1002,12 +1003,13 @@ def _sa_status_payload(data):
         return 'Municipal'
 
     def _resolve_rejected_level():
+        # Source of truth: explicit workflow actor level saved in document.
+        if _norm_level(rejected_by_level):
+            return _norm_level(rejected_by_level)
         if national_status == 'rejected':
             return 'National'
         if regional_status == 'rejected':
             return 'Regional'
-        if _norm_level(rejected_by_level):
-            return _norm_level(rejected_by_level)
         if resolved_forwarded_to == 'National':
             return 'National'
         if resolved_forwarded_to == 'Regional':
