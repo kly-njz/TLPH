@@ -1,3 +1,4 @@
+from google.cloud.firestore_v1.base_query import FieldFilter
 import firebase_admin
 from firebase_admin import credentials
 
@@ -35,8 +36,8 @@ def add_revenue_mix_record(user_id, transaction_id, amount, details):
     }
     db.collection('revenue_mix').document(doc_id).set(record)
     return doc_id
-def add_holiday_to_firestore(date_iso, name, description, holiday_type, office_status='closed', open_time='', close_time=''):
-    """Add a holiday record to Firestore"""
+def add_holiday_to_firestore(date_iso, name, description, holiday_type, office_status='closed', open_time='', close_time='', status='pending'):
+    """Add a holiday record to Firestore with status"""
     db = firestore.client()
     doc_id = f"{date_iso}|{name}"
     holiday = {
@@ -46,7 +47,8 @@ def add_holiday_to_firestore(date_iso, name, description, holiday_type, office_s
         'type': holiday_type,
         'office_status': office_status,
         'open_time': open_time,
-        'close_time': close_time
+        'close_time': close_time,
+        'status': status
     }
     db.collection('holidays').document(doc_id).set(holiday)
     return doc_id

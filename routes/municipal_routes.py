@@ -2172,9 +2172,11 @@ def add_holiday():
     office_status = data.get('office_status', 'closed')
     open_time = data.get('open_time', '')
     close_time = data.get('close_time', '')
+    # Always set status to 'pending' for municipal/regional proposals
+    status = 'pending'
     if not date_iso or not name:
         return jsonify({'success': False, 'error': 'Missing date or name'}), 400
-    doc_id = add_holiday_to_firestore(date_iso, name, description, holiday_type, office_status, open_time, close_time)
+    doc_id = add_holiday_to_firestore(date_iso, name, description, holiday_type, office_status, open_time, close_time, status)
     return jsonify({'success': True, 'doc_id': doc_id})
 # Add this route at the end of the file:
 #

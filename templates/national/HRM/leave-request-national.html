@@ -1,857 +1,315 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Leave Requests | National Admin</title>
+{% block title %}National Leave Request{% endblock %}
+{% extends 'national/operations/leave-request-national.html' %}
 
-  <script src="https://cdn.tailwindcss.com"></script>
+{% block leave_content %}
+<div x-data="leavePage()" class="flex flex-col gap-2">
+  
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-2">
+    <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 bg-amber-50/30">
+      <p class="text-[8px] font-black uppercase tracking-widest text-amber-800 m-0">Pending Review</p>
+      <div class="text-xl font-black text-amber-700 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'pending').length">0</div>
+    </div>
+    <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
+      <p class="text-[8px] font-black uppercase tracking-widest text-emerald-800 m-0">Approved</p>
+      <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'approved').length">0</div>
+    </div>
+    <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
+      <p class="text-[8px] font-black uppercase tracking-widest text-blue-800 m-0">Current Leaves</p>
+      <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => (r.status || '').toLowerCase() === 'approved').length">0</div>
+    </div>
+    <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600">
+      <p class="text-[8px] font-black uppercase tracking-widest text-rose-800 m-0">Disapproved</p>
+      <div class="text-xl font-black text-slate-900 leading-none mt-1" x-text="leaveRequests.filter(r => ['disapproved','denied','rejected'].includes((r.status || '').toLowerCase())).length">0</div>
+    </div>
+  </section>
 
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <section class="gov-card p-2 px-3 flex flex-wrap gap-2 items-center justify-between bg-slate-50 border-b border-slate-200 no-print">
+    <div class="flex flex-wrap gap-1.5 items-center">
+      <select class="gov-input cursor-pointer" x-model="filters.type" title="Filter by leave type">
+        <option value="">All Types</option>
+        <option value="Vacation">Vacation</option>
+        <option value="Sick">Sick</option>
+        <option value="Forced">Forced</option>
+      </select>
+      <select class="gov-input cursor-pointer" x-model="filters.status" title="Filter by status">
+        <option value="">All Status</option>
+        <option value="Pending">Pending</option>
+        <option value="Approved">Approved</option>
+        <option value="Disapproved">Disapproved</option>
+      </select>
+      <div class="relative min-w-[180px]">
+        <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+        <input type="text" placeholder="Search applicant..." class="gov-input pl-6 w-full" x-model="filters.search">
+      </div>
+      <button @click="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-800 font-bold uppercase text-[9px] rounded-[2px] transition hover:bg-slate-300 shadow-sm">Reset</button>
+    </div>
+    <div class="flex gap-2">
+      <button @click="openCreateModal()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
+        <span class="material-icons-round text-[14px]">add_task</span> New Request
+      </button>
+      <button @click="downloadCsv(['Name', 'Position', 'Office', 'Type', 'Status'], leaveRequests.map(r => [r.applicant_name, r.position, r.office, r.leave_type, r.status]), 'Leave_Requests.csv')" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
+        <span class="material-icons-round text-[14px]">assessment</span> Export CSV
+      </button>
+    </div>
+  </section>
 
-  <style>
-    /* Government Typography & Layout */
-    body { font-family: 'Verdana', 'Arial', sans-serif; background: #e2e8f0; font-size: 11px; }
+  <section class="gov-card flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white mt-1">
+    <div x-show="loading" class="flex-1 flex items-center justify-center p-8">
+      <span class="text-sm text-slate-500 flex items-center gap-2">
+        <span class="material-icons-round animate-spin">refresh</span> Loading requests...
+      </span>
+    </div>
     
-    /* Compact Scrollbar */
-    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 2px; }
-
-    /* Gov UI Utilities */
-    .gov-card { background: white; border: 1px solid #cbd5e1; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-    .gov-input { padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 2px; background: white; outline: none; transition: border-color 0.2s; }
-    .gov-input:focus { border-color: #1e40af; } /* Blue-800 focus */
-    .gov-input:disabled { background: #f8fafc; color: #64748b; border-color: #e2e8f0; cursor: not-allowed; }
-    .gov-btn { padding: 4px 12px; border-radius: 2px; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em; transition: all 0.2s; cursor: pointer; }
-    .gov-label { display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 2px; letter-spacing: 0.025em; }
-  </style>
-</head>
-
-<body class="text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
-<div class="flex-1 flex overflow-hidden">
-    <aside class="sidebar-container hidden lg:block">
-        {% include 'national/sidenav-national.html' %}
-    </aside>
-
-    <main class="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 overflow-y-auto custom-scrollbar" x-data="{
-      reviewModalOpen: false,
-      viewModalOpen: false,
-      fileModalOpen: false,
-      reportModalOpen: false,
-      leaveStatus: 'Pending',
-      viewData: {
-        applicantName: '',
-        position: '',
-        office: '',
-        leaveType: '',
-        leaveWhere: '',
-        commutation: '',
-        workingDays: '',
-        inclusiveDates: '',
-        applicationNo: '',
-        remarks: ''
-      },
-      fileData: {
-        applicantName: '',
-        position: '',
-        office: '',
-        leaveType: '',
-        leaveWhere: '',
-        commutation: 'Not Requested',
-        workingDays: '',
-        inclusiveDates: ''
-      },
-      reportData: {
-        dateFrom: '',
-        dateTo: '',
-        status: 'All',
-        type: 'All',
-        format: 'CSV'
-      },
-      openViewForm(event) {
-        const row = event.currentTarget.closest('tr');
-        if (!row) return;
-        const d = row.dataset;
-        this.viewData = {
-          applicantName: d.applicantName || '',
-          position: d.position || '',
-          office: d.office || '',
-          leaveType: d.leaveType || '',
-          leaveWhere: d.leaveWhere || '',
-          commutation: d.commutation || '',
-          workingDays: d.workingDays || '',
-          inclusiveDates: d.inclusiveDates || '',
-          applicationNo: d.applicationNo || '',
-          remarks: d.remarks || ''
-        };
-        this.leaveStatus = d.status || this.leaveStatus;
-        this.viewModalOpen = true;
-      },
-      openReviewForm(event) {
-        const row = event.currentTarget.closest('tr');
-        if (!row) return;
-        const d = row.dataset;
-        this.viewData = {
-          applicantName: d.applicantName || '',
-          position: d.position || '',
-          office: d.office || '',
-          leaveType: d.leaveType || '',
-          leaveWhere: d.leaveWhere || '',
-          commutation: d.commutation || '',
-          workingDays: d.workingDays || '',
-          inclusiveDates: d.inclusiveDates || '',
-          applicationNo: d.applicationNo || '',
-          remarks: d.remarks || ''
-        };
-        this.leaveStatus = d.status || this.leaveStatus;
-        this.reviewModalOpen = true;
-      },
-      openFileOnBehalfForm() {
-        this.fileData = {
-          applicantName: '',
-          position: '',
-          office: '',
-          leaveType: '',
-          leaveWhere: '',
-          commutation: 'Not Requested',
-          workingDays: '',
-          inclusiveDates: ''
-        };
-        this.fileModalOpen = true;
-      },
-      openReportModal() {
-        this.reportData = {
-          dateFrom: '',
-          dateTo: '',
-          status: 'All',
-          type: 'All',
-          format: 'CSV'
-        };
-        this.reportModalOpen = true;
-      },
-      generateReport() {
-        window.generateLeaveReport(this.reportData);
-        this.reportModalOpen = false;
-      }
-    }">
-
-        <header class="gov-card p-3 flex justify-between items-center shrink-0">
-          <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-[2px] bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700">
-              <span class="material-icons-round text-[18px]">flight_takeoff</span>
-            </div>
-            <div class="leading-tight">
-              <h1 class="text-sm font-black text-slate-900 uppercase tracking-tight m-0">Leave Applications</h1>
-              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest m-0">CSC Form No. 6 Processing & Approval</p>
-            </div>
-          </div>
-          <div class="flex gap-2">
-            <button @click="openReportModal()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm flex items-center gap-1">
-              <span class="material-icons-round text-[14px]">assessment</span> Generate Report
-            </button>
-            <button @click="openFileOnBehalfForm()" class="gov-btn bg-blue-800 hover:bg-blue-900 text-white shadow-sm flex items-center gap-1">
-              <span class="material-icons-round text-[14px]">add_task</span> File on Behalf
-            </button>
-          </div>
-        </header>
-
-        <section class="grid grid-cols-1 sm:grid-cols-4 gap-2 shrink-0">
-          <div class="gov-card p-2 px-3 border-l-4 border-l-amber-500 bg-amber-50/30">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-600">Pending Review</p>
-            <div class="text-lg font-black text-amber-700 mt-0.5 leading-none">14</div>
-          </div>
-          <div class="gov-card p-2 px-3 border-l-4 border-l-emerald-600">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Approved This Month</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">85</div>
-          </div>
-          <div class="gov-card p-2 px-3 border-l-4 border-l-blue-600">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Currently On Leave</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">42</div>
-          </div>
-          <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600">
-            <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Disapproved</p>
-            <div class="text-lg font-black text-slate-800 mt-0.5 leading-none">3</div>
-          </div>
-        </section>
-
-        <section class="gov-card flex-1 min-h-[300px] flex flex-col overflow-hidden">
+    <div x-show="!loading" class="flex-1 overflow-auto custom-scrollbar bg-white" style="display: none;">
+      <table class="w-full text-left border-collapse">
+        <thead class="sticky top-0 z-10 shadow-sm bg-slate-100">
+          <tr>
+            <th class="border-r border-slate-200 w-48 p-2">Employee / ID</th>
+            <th class="border-r border-slate-200 p-2">Leave Type</th>
+            <th class="border-r border-slate-200 text-center w-44 p-2">Inclusive Dates</th>
+            <th class="border-r border-slate-200 text-center w-12 p-2">Days</th>
+            <th class="border-r border-slate-200 text-center w-20 p-2">Status</th>
+            <th class="text-center w-16 no-print p-2">Action</th>
+          </tr>
+        </thead>
+        <tbody class="text-[10px] divide-y divide-slate-100">
           
-          <div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-2 shrink-0">
-            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1">
-                <span class="material-icons-round text-[14px]">view_list</span> Application Queue
-            </h2>
-
-            <div class="flex flex-wrap gap-1.5 items-center">
-              <div class="relative">
-                <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
-                <input type="text" id="searchLeave" placeholder="Search applicant..." class="gov-input pl-6 w-48" oninput="filterTable()">
-              </div>
-              
-              <select id="typeFilter" class="gov-input cursor-pointer" onchange="filterTable()">
-                <option value="">All Leave Types</option>
-                <option value="Vacation">Vacation Leave</option>
-                <option value="Sick">Sick Leave</option>
-                <option value="Forced">Mandatory/Forced Leave</option>
-                <option value="Special">Special Privilege Leave</option>
-              </select>
-
-              <select id="statusFilter" class="gov-input cursor-pointer" onchange="filterTable()">
-                <option value="">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Disapproved">Disapproved</option>
-              </select>
-
-              <button onclick="resetFilters()" class="px-2 py-0.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] shadow-sm transition">Reset</button>
-            </div>
-          </div>
-
-          <div class="flex-1 overflow-auto custom-scrollbar bg-white">
-            <table class="w-full text-left border-collapse">
-              <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10">
-                <tr>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Date Filed</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Applicant</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200">Type of Leave</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Inclusive Dates</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Days</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 border-r border-slate-200 text-center">Status</th>
-                  <th class="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="leaveTable" class="text-[10px] divide-y divide-slate-100">
-                
-                <tr class="hover:bg-slate-50 transition leave-row"
-                    data-type="Vacation"
-                    data-status="Pending"
-                    data-applicant-name="Santos, Maria Clara P."
-                    data-position="Chief Accountant"
-                    data-office="Accounting Div, Central Office"
-                    data-leave-type="Vacation Leave"
-                    data-leave-where="Abroad (Japan)"
-                    data-commutation="Requested"
-                    data-working-days="5 Days"
-                    data-inclusive-dates="March 02 - March 06, 2026"
-                    data-application-no="2026-045"
-                    data-remarks="Pending review.">
-                  <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">2026-02-18</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-black text-slate-900 uppercase block leading-tight">Santos, Maria Clara P.</span>
-                    <span class="text-[8px] text-slate-500 uppercase">Chief Accountant • Accounting Div</span>
-                  </td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-bold text-blue-800">Vacation Leave (VL)</span><br>
-                    <span class="text-[8px] text-slate-500 italic">Travel Abroad</span>
-                  </td>
-                  <td class="px-3 py-1.5 font-mono text-center text-slate-800 border-r border-slate-100 font-bold">Mar 02 - Mar 06, 2026</td>
-                  <td class="px-3 py-1.5 text-center font-bold border-r border-slate-100">5.0</td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-amber-50 text-amber-700 border border-amber-300 w-16 text-center">Pending</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center space-x-1">
-                    <button @click="openReviewForm($event)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] border border-blue-200 bg-blue-50 px-2 py-0.5 rounded-[2px]">Review</button>
-                  </td>
-                </tr>
-
-                <tr class="hover:bg-slate-50 transition leave-row"
-                    data-type="Sick"
-                    data-status="Pending"
-                    data-applicant-name="Dimaculangan, Arthur S."
-                    data-position="Data Encoder"
-                    data-office="Clearance Sec, Central Office"
-                    data-leave-type="Sick Leave"
-                    data-leave-where="Local (Out-Patient)"
-                    data-commutation="Not Requested"
-                    data-working-days="2 Days"
-                    data-inclusive-dates="February 16 - February 17, 2026"
-                    data-application-no="2026-044"
-                    data-remarks="Pending medical clearance.">
-                  <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">2026-02-17</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-black text-slate-900 uppercase block leading-tight">Dimaculangan, Arthur S.</span>
-                    <span class="text-[8px] text-slate-500 uppercase">Data Encoder • Clearance Sec</span>
-                  </td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-bold text-rose-700">Sick Leave (SL)</span><br>
-                    <span class="text-[8px] text-slate-500 italic">Out-Patient</span>
-                  </td>
-                  <td class="px-3 py-1.5 font-mono text-center text-slate-800 border-r border-slate-100 font-bold">Feb 16 - Feb 17, 2026</td>
-                  <td class="px-3 py-1.5 text-center font-bold border-r border-slate-100">2.0</td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-amber-50 text-amber-700 border border-amber-300 w-16 text-center">Pending</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center space-x-1">
-                    <button @click="openReviewForm($event)" class="text-blue-700 hover:text-blue-900 font-bold uppercase text-[9px] border border-blue-200 bg-blue-50 px-2 py-0.5 rounded-[2px]">Review</button>
-                  </td>
-                </tr>
-
-                <tr class="hover:bg-slate-50 transition leave-row"
-                    data-type="Forced"
-                    data-status="Approved"
-                    data-applicant-name="Pelaez, Juanito R."
-                    data-position="Director IV"
-                    data-office="FMS, Central Office"
-                    data-leave-type="Mandatory / Forced Leave"
-                    data-leave-where="Local"
-                    data-commutation="Not Requested"
-                    data-working-days="5 Days"
-                    data-inclusive-dates="February 23 - February 27, 2026"
-                    data-application-no="2026-041"
-                    data-remarks="Approved with no changes.">
-                  <td class="px-3 py-1.5 font-mono text-slate-600 border-r border-slate-100">2026-02-10</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-black text-slate-900 uppercase block leading-tight">Pelaez, Juanito R.</span>
-                    <span class="text-[8px] text-slate-500 uppercase">Director IV • FMS</span>
-                  </td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-bold text-slate-700">Mandatory / Forced Leave</span><br>
-                    <span class="text-[8px] text-slate-500 italic">Annual Requirement</span>
-                  </td>
-                  <td class="px-3 py-1.5 font-mono text-center text-slate-800 border-r border-slate-100 font-bold">Feb 23 - Feb 27, 2026</td>
-                  <td class="px-3 py-1.5 text-center font-bold border-r border-slate-100">5.0</td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-300 w-16 text-center">Approved</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center space-x-1">
-                    <button @click="openViewForm($event)" class="text-slate-500 hover:text-blue-700 font-bold uppercase text-[9px]">View Form</button>
-                  </td>
-                </tr>
-
-                <tr class="hover:bg-slate-50 transition leave-row opacity-70"
-                    data-type="Special"
-                    data-status="Disapproved"
-                    data-applicant-name="Macaraeg, Luzviminda T."
-                    data-position="IT Officer I"
-                    data-office="Network Ops, Central Office"
-                    data-leave-type="Special Privilege Leave"
-                    data-leave-where="Local (Personal)"
-                    data-commutation="Not Requested"
-                    data-working-days="1 Day"
-                    data-inclusive-dates="February 13, 2026"
-                    data-application-no="2026-039"
-                    data-remarks="Disapproved due to staffing constraints.">
-                  <td class="px-3 py-1.5 font-mono text-slate-500 border-r border-slate-100">2026-02-05</td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-black text-slate-700 uppercase block leading-tight">Macaraeg, Luzviminda T.</span>
-                    <span class="text-[8px] text-slate-400 uppercase">IT Officer I • Network Ops</span>
-                  </td>
-                  <td class="px-3 py-1.5 border-r border-slate-100">
-                    <span class="font-bold text-slate-600">Special Privilege Leave</span><br>
-                    <span class="text-[8px] text-slate-500 italic">Personal Milestone</span>
-                  </td>
-                  <td class="px-3 py-1.5 font-mono text-center text-slate-500 border-r border-slate-100 font-bold">Feb 13 - Feb 13, 2026</td>
-                  <td class="px-3 py-1.5 text-center font-bold border-r border-slate-100 text-slate-500">1.0</td>
-                  <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-300 w-16 text-center">Disapproved</span>
-                  </td>
-                  <td class="px-3 py-1.5 text-center space-x-1">
-                    <button @click="openViewForm($event)" class="text-slate-500 hover:text-blue-700 font-bold uppercase text-[9px]">View Form</button>
-                  </td>
-                </tr>
-
-              </tbody>
-            </table>
-          </div>
+          <template x-if="!loading && filteredRequests.length === 0">
+            <tr>
+              <td colspan="7" class="px-3 py-8 text-center text-slate-400 italic text-sm">No leave applications found.</td>
+            </tr>
+          </template>
           
-          <div class="bg-slate-50 border-t border-slate-200 px-3 py-1.5 text-[9px] text-slate-500 shrink-0 text-right">
-             Showing <span id="recordCount" class="font-bold text-slate-800">4</span> applications.
+          <template x-for="req in filteredRequests" :key="req.id">
+            <tr class="hover:bg-blue-50 transition">
+              <td class="px-3 py-2 border-r border-slate-100 leading-tight">
+                <span class="font-black text-slate-900 uppercase block text-[13px]" x-text="req.applicant_name || 'N/A'"></span>
+                <span class="text-[10px] text-slate-500 font-mono block" x-text="req.employee_id || req.id || ''"></span>
+              </td>
+              <td class="px-3 py-2 border-r border-slate-100">
+                <span class="font-bold text-blue-900 uppercase block" x-text="req.leave_type || 'N/A'"></span>
+                <span class="text-[10px] text-slate-400 block" x-text="req.purpose || '-' "></span>
+              </td>
+              <td class="px-3 py-2 font-mono text-center font-bold text-slate-800 border-r border-slate-100" x-text="formatInclusive(req.from_date, req.to_date)"></td>
+              <td class="px-3 py-2 text-center font-black border-r border-slate-100" x-text="req.days || 0"></td>
+              <td class="px-3 py-2 text-center border-r border-slate-100">
+                <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[10px] font-black uppercase border w-full"
+                      :class="statusClass(req.status)"
+                      x-text="req.status || 'Pending'"></span>
+              </td>
+              <td class="px-3 py-2 text-center no-print">
+                <button @click="openView(req)" class="text-blue-700 hover:scale-125 transition-transform font-bold text-xs">REVIEW</button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="bg-slate-50 border-t border-slate-200 px-3 py-1 text-[9px] text-slate-500 flex justify-between items-center shrink-0 italic uppercase tracking-wider">
+      <span>Official National Leave Registry • FY 2026</span>
+      <span>Visible Applications: <span class="font-black text-slate-800" x-text="filteredRequests.length">0</span></span>
+    </div>
+  </section>
+
+  <!-- Review Modal -->
+  <div x-show="viewModalOpen && selectedRequest" style="display:none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div @click.away="viewModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
+      <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
+        <h3 class="text-[10px] font-black uppercase tracking-widest m-0">Review Leave Application</h3>
+        <button @click="viewModalOpen = false" class="text-slate-400 hover:text-white transition-colors">
+          <span class="material-icons-round text-[16px]">close</span>
+        </button>
+      </div>
+      <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar flex-1">
+        <template x-if="selectedRequest">
+          <div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <div class="bg-white border border-slate-200 p-3 rounded-[2px]">
+                <h4 class="text-[8px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Applicant Information</h4>
+                <div class="space-y-1 uppercase font-bold text-slate-700 text-[9px]">
+                  <p><span class="text-slate-400">Name:</span> <span x-text="selectedRequest.applicant_name || 'N/A'"></span></p>
+                  <p><span class="text-slate-400">Employee ID:</span> <span x-text="selectedRequest.employee_id || selectedRequest.id || 'N/A'"></span></p>
+                </div>
+              </div>
+              <div class="bg-white border border-slate-200 p-3 rounded-[2px]">
+                <h4 class="text-[8px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Leave Details</h4>
+                <div class="grid grid-cols-2 gap-2 text-center">
+                  <div class="bg-slate-50 p-1 border border-slate-100"><span class="block text-[7px] text-slate-400 font-black">Type</span><span class="font-mono font-black text-slate-800" x-text="selectedRequest.leave_type || 'N/A'"></span></div>
+                  <div class="bg-slate-50 p-1 border border-slate-100"><span class="block text-[7px] text-slate-400 font-black">Days</span><span class="font-mono font-black text-slate-800" x-text="selectedRequest.days || 0"></span></div>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white border border-slate-300 p-4 rounded-[2px] space-y-4">
+              <h4 class="text-[9px] font-black uppercase text-slate-800 border-b border-slate-100 pb-1">Application Details</h4>
+              <div class="grid grid-cols-3 gap-3">
+                <div><label class="gov-label">Leave Type</label><span class="font-black text-blue-900 uppercase" x-text="selectedRequest.leave_type || 'N/A'"></span></div>
+                <div><label class="gov-label">Purpose</label><span class="font-black text-amber-700 uppercase" x-text="selectedRequest.purpose || '-' "></span></div>
+                <div><label class="gov-label">Days Applied</label><span class="font-black text-slate-800 font-mono text-sm" x-text="(selectedRequest.days || 0) + ' Days'"></span></div>
+              </div>
+              <div><label class="gov-label">Inclusive Dates</label><span class="font-black text-slate-800 uppercase font-mono tracking-tight" x-text="formatInclusive(selectedRequest.from_date, selectedRequest.to_date)"></span></div>
+            </div>
+            <div class="mt-4">
+              <label class="gov-label">Admin Remarks</label>
+              <textarea x-model="selectedRequest.remarks" class="gov-input w-full text-[10px]" rows="2" placeholder="Enter notes or recommendation..."></textarea>
+            </div>
           </div>
-        </section>
-
-        <div x-show="reviewModalOpen" style="display: none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div @click.away="reviewModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
-            
-            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
-              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Review Leave Application (CSC Form 6)</h3>
-              <button @click="reviewModalOpen = false" class="text-slate-400 hover:text-white">
-                <span class="material-icons-round text-[16px]">close</span>
-              </button>
-            </div>
-
-            <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar">
-              
-              <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Applicant Information</h4>
-                  <div class="space-y-1">
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Name:</span> <span class="font-black uppercase" x-text="viewData.applicantName"></span></p>
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Position:</span> <span x-text="viewData.position"></span></p>
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Office:</span> <span x-text="viewData.office"></span></p>
-                  </div>
-                </div>
-
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Leave Balances (As of Date)</h4>
-                  <div class="grid grid-cols-2 gap-2">
-                    <div class="text-center bg-slate-50 border border-slate-100 p-1">
-                        <span class="block text-[8px] uppercase font-bold text-slate-500">Vacation (VL)</span>
-                        <span class="font-mono font-black text-slate-800 text-sm">24.500</span>
-                    </div>
-                    <div class="text-center bg-slate-50 border border-slate-100 p-1">
-                        <span class="block text-[8px] uppercase font-bold text-slate-500">Sick (SL)</span>
-                        <span class="font-mono font-black text-slate-800 text-sm">18.250</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white border border-slate-300 p-4 rounded-[2px] shadow-sm space-y-4 relative">
-                <div class="absolute top-0 right-0 bg-blue-100 text-blue-800 font-black text-[8px] uppercase px-2 py-1 border-b border-l border-blue-200 rounded-bl-[2px]">
-                    Application No. <span x-text="viewData.applicationNo"></span>
-                </div>
-
-                <div>
-                  <h4 class="text-[9px] font-black uppercase text-slate-700 mb-1">Details of Application</h4>
-                  <div class="grid grid-cols-3 gap-3 bg-slate-50 p-2 border border-slate-200">
-                    <div>
-                        <span class="gov-label text-[8px]">Type of Leave</span>
-                        <span class="font-bold text-[10px] text-blue-800" x-text="viewData.leaveType"></span>
-                    </div>
-                    <div>
-                        <span class="gov-label text-[8px]">Where Leave will be spent</span>
-                        <span class="font-bold text-[10px]" x-text="viewData.leaveWhere"></span>
-                    </div>
-                    <div>
-                        <span class="gov-label text-[8px]">Commutation</span>
-                        <span class="font-bold text-[10px] text-amber-700" x-text="viewData.commutation"></span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <span class="gov-label text-[8px]">Number of Working Days Applied</span>
-                    <span class="font-mono font-black text-slate-800 text-xs" x-text="viewData.workingDays"></span>
-                  </div>
-                  <div>
-                    <span class="gov-label text-[8px]">Inclusive Dates</span>
-                    <span class="font-mono font-bold text-slate-800 text-xs" x-text="viewData.inclusiveDates"></span>
-                  </div>
-                </div>
-
-              </div>
-
-              <div x-show="leaveStatus === 'Pending'" class="mt-4 border-t border-slate-300 pt-3">
-                <label class="gov-label">Remarks / Recommendation Details</label>
-                <textarea class="gov-input w-full" rows="2" placeholder="Add notes for approval or reasons for disapproval..."></textarea>
-              </div>
-
-            </div>
-
-            <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
-              <button type="button" @click="reviewModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">Close</button>
-              
-              <template x-if="leaveStatus === 'Pending'">
-                  <div class="flex gap-2">
-                    <button type="button" @click="reviewModalOpen = false" class="gov-btn border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm">Disapprove</button>
-                    <button type="button" @click="reviewModalOpen = false" class="gov-btn bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Approve Application</button>
-                  </div>
-              </template>
-            </div>
-
-          </div>
-        </div>
-
-        <div x-show="fileModalOpen" style="display: none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div @click.away="fileModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
-            
-            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
-              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">File Leave On Behalf (CSC Form 6)</h3>
-              <button @click="fileModalOpen = false" class="text-slate-400 hover:text-white">
-                <span class="material-icons-round text-[16px]">close</span>
-              </button>
-            </div>
-
-            <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar">
-              <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Applicant Information</h4>
-                  <div class="space-y-2">
-                    <label class="gov-label">Name</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.applicantName" placeholder="Last, First M." />
-                    <label class="gov-label">Position</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.position" placeholder="Position title" />
-                    <label class="gov-label">Office</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.office" placeholder="Office / Division" />
-                  </div>
-                </div>
-
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Leave Details</h4>
-                  <div class="space-y-2">
-                    <label class="gov-label">Type of Leave</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.leaveType" placeholder="Vacation / Sick / Special" />
-                    <label class="gov-label">Where Leave Will Be Spent</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.leaveWhere" placeholder="Local / Abroad" />
-                    <label class="gov-label">Commutation</label>
-                    <select class="gov-input w-full" x-model="fileData.commutation">
-                      <option>Requested</option>
-                      <option>Not Requested</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white border border-slate-300 p-4 rounded-[2px] shadow-sm space-y-3">
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="gov-label">Number of Working Days</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.workingDays" placeholder="e.g., 5 Days" />
-                  </div>
-                  <div>
-                    <label class="gov-label">Inclusive Dates</label>
-                    <input type="text" class="gov-input w-full" x-model="fileData.inclusiveDates" placeholder="e.g., March 02 - March 06, 2026" />
-                  </div>
-                </div>
-                <div>
-                  <label class="gov-label">Remarks</label>
-                  <textarea class="gov-input w-full" rows="2" placeholder="Add remarks or notes..."></textarea>
-                </div>
-              </div>
-            </div>
-
-            <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
-              <button type="button" @click="fileModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">Cancel</button>
-              <button type="button" @click="fileModalOpen = false" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Submit Request</button>
-            </div>
-
-          </div>
-        </div>
-
-        <div x-show="reportModalOpen" style="display: none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div @click.away="reportModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
-            
-            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
-              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">Generate Leave Report</h3>
-              <button @click="reportModalOpen = false" class="text-slate-400 hover:text-white">
-                <span class="material-icons-round text-[16px]">close</span>
-              </button>
-            </div>
-
-            <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar space-y-4">
-              <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                <h4 class="text-[9px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Date Range</h4>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="gov-label">From</label>
-                    <input type="date" class="gov-input w-full" x-model="reportData.dateFrom" />
-                  </div>
-                  <div>
-                    <label class="gov-label">To</label>
-                    <input type="date" class="gov-input w-full" x-model="reportData.dateTo" />
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                <h4 class="text-[9px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Filters</h4>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="gov-label">Status</label>
-                    <select class="gov-input w-full" x-model="reportData.status">
-                      <option>All</option>
-                      <option>Pending</option>
-                      <option>Approved</option>
-                      <option>Disapproved</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="gov-label">Leave Type</label>
-                    <select class="gov-input w-full" x-model="reportData.type">
-                      <option>All</option>
-                      <option>Vacation</option>
-                      <option>Sick</option>
-                      <option>Forced</option>
-                      <option>Special</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                <h4 class="text-[9px] font-black uppercase text-slate-700 border-b border-slate-100 pb-1 mb-2">Output</h4>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="gov-label">Format</label>
-                    <select class="gov-input w-full" x-model="reportData.format">
-                      <option>CSV</option>
-                      <option>Excel</option>
-                    </select>
-                  </div>
-                  <div class="flex items-end">
-                    <p class="text-[9px] text-slate-500">Report will be generated using current filters.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
-              <button type="button" @click="reportModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">Cancel</button>
-              <button type="button" @click="generateReport()" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 shadow-sm">Generate</button>
-            </div>
-
-          </div>
-        </div>
-
-        <div x-show="viewModalOpen" style="display: none;" class="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div @click.away="viewModalOpen = false" class="bg-white rounded-[2px] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-400 flex flex-col max-h-[90vh]">
-            
-            <div class="flex justify-between items-center border-b border-slate-700 px-4 py-2 bg-slate-800 text-white shrink-0">
-              <h3 class="text-[11px] font-black uppercase tracking-widest m-0">View Leave Application (CSC Form 6)</h3>
-              <button @click="viewModalOpen = false" class="text-slate-400 hover:text-white">
-                <span class="material-icons-round text-[16px]">close</span>
-              </button>
-            </div>
-
-            <div class="p-4 bg-slate-50 overflow-y-auto custom-scrollbar">
-              
-              <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-blue-800 border-b border-slate-100 pb-1 mb-2">Applicant Information</h4>
-                  <div class="space-y-1">
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Name:</span> <span class="font-black uppercase" x-text="viewData.applicantName"></span></p>
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Position:</span> <span x-text="viewData.position"></span></p>
-                    <p class="text-[10px]"><span class="text-slate-500 font-bold">Office:</span> <span x-text="viewData.office"></span></p>
-                  </div>
-                </div>
-
-                <div class="bg-white border border-slate-200 p-3 rounded-[2px] shadow-sm">
-                  <h4 class="text-[9px] font-black uppercase text-emerald-700 border-b border-slate-100 pb-1 mb-2">Leave Balances (As of Date)</h4>
-                  <div class="grid grid-cols-2 gap-2">
-                    <div class="text-center bg-slate-50 border border-slate-100 p-1">
-                        <span class="block text-[8px] uppercase font-bold text-slate-500">Vacation (VL)</span>
-                        <span class="font-mono font-black text-slate-800 text-sm">24.500</span>
-                    </div>
-                    <div class="text-center bg-slate-50 border border-slate-100 p-1">
-                        <span class="block text-[8px] uppercase font-bold text-slate-500">Sick (SL)</span>
-                        <span class="font-mono font-black text-slate-800 text-sm">18.250</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white border border-slate-300 p-4 rounded-[2px] shadow-sm space-y-4 relative">
-                <div class="absolute top-0 right-0 bg-blue-100 text-blue-800 font-black text-[8px] uppercase px-2 py-1 border-b border-l border-blue-200 rounded-bl-[2px]">
-                    Application No. <span x-text="viewData.applicationNo"></span>
-                </div>
-
-                <div>
-                  <h4 class="text-[9px] font-black uppercase text-slate-700 mb-1">Details of Application</h4>
-                  <div class="grid grid-cols-3 gap-3 bg-slate-50 p-2 border border-slate-200">
-                    <div>
-                        <span class="gov-label text-[8px]">Type of Leave</span>
-                        <span class="font-bold text-[10px] text-blue-800" x-text="viewData.leaveType"></span>
-                    </div>
-                    <div>
-                        <span class="gov-label text-[8px]">Where Leave will be spent</span>
-                        <span class="font-bold text-[10px]" x-text="viewData.leaveWhere"></span>
-                    </div>
-                    <div>
-                        <span class="gov-label text-[8px]">Commutation</span>
-                        <span class="font-bold text-[10px] text-amber-700" x-text="viewData.commutation"></span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <span class="gov-label text-[8px]">Number of Working Days Applied</span>
-                    <span class="font-mono font-black text-slate-800 text-xs" x-text="viewData.workingDays"></span>
-                  </div>
-                  <div>
-                    <span class="gov-label text-[8px]">Inclusive Dates</span>
-                    <span class="font-mono font-bold text-slate-800 text-xs" x-text="viewData.inclusiveDates"></span>
-                  </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200">
-                  <div>
-                    <span class="gov-label text-[8px]">Status</span>
-                    <span class="inline-block px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase border w-20 text-center"
-                      :class="leaveStatus === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-rose-50 text-rose-700 border-rose-300'">
-                      <span x-text="leaveStatus"></span>
-                    </span>
-                  </div>
-                  <div>
-                    <span class="gov-label text-[8px]">Remarks</span>
-                    <span class="text-[10px] font-bold text-slate-700" x-text="viewData.remarks"></span>
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-
-            <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end">
-              <button type="button" @click="viewModalOpen = false" class="gov-btn border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">Close</button>
-            </div>
-
-          </div>
-        </div>
-
-    </main>
+        </template>
+      </div>
+      <div class="p-3 border-t border-slate-200 bg-slate-100 shrink-0 flex justify-end gap-2">
+        <button @click="updateStatus(selectedRequest.id, 'Disapproved')" class="gov-btn border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100">Disapprove</button>
+        <button @click="updateStatus(selectedRequest.id, 'Approved')" class="gov-btn bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">Approve Form</button>
+      </div>
+    </div>
   </div>
 
   <script>
-    // Filtering Logic for Table
-    function filterTable() {
-      const query = document.getElementById('searchLeave').value.toLowerCase().trim();
-      const typeFilter = document.getElementById('typeFilter').value;
-      const statusFilter = document.getElementById('statusFilter').value;
-      
-      const rows = document.querySelectorAll('.leave-row');
-      let visibleCount = 0;
+    window.leavePage = function() {
+      return {
+        loading: true, 
+        viewModalOpen: false,
+        createModalOpen: false,
+        selectedRequest: null,
+        viewData: {},
+        leaveRequests: [],
+        filters: { search: '', type: '', status: '' },
 
-      rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        const type = row.getAttribute('data-type') || '';
-        const status = row.getAttribute('data-status') || '';
-        
-        const matchQuery = text.includes(query);
-        const matchType = !typeFilter || type === typeFilter;
-        const matchStatus = !statusFilter || status === statusFilter;
+        init() {
+          // Listen for Firebase to be ready
+          window.addEventListener('firebase-ready', () => {
+            this.loadLeaveRequests();
+          });
+          if (window.LeaveServiceReady) {
+            this.loadLeaveRequests();
+          }
+        },
 
-        if (matchQuery && matchType && matchStatus) {
-            row.style.display = '';
-            visibleCount++;
-        } else {
-            row.style.display = 'none';
+        async loadLeaveRequests() {
+          this.loading = true;
+          try {
+            this.leaveRequests = await window.LeaveService.getAll();
+          } catch (error) {
+            console.error('[LEAVE] load failed:', error);
+            this.leaveRequests = [];
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        get filteredRequests() {
+          const search = (this.filters.search || '').toLowerCase().trim();
+          const type = (this.filters.type || '').toLowerCase();
+          const status = (this.filters.status || '').toLowerCase();
+          
+          return this.leaveRequests.filter(req => {
+            const rApp = (req.applicant_name || '').toLowerCase();
+            const rType = (req.leave_type || '').toLowerCase();
+            const rStat = (req.status || 'pending').toLowerCase();
+            
+            const matchSearch = !search || rApp.includes(search);
+            const matchType = !type || rType.includes(type.toLowerCase());
+            const matchStatus = !status || rStat.includes(status.toLowerCase());
+            
+            return matchSearch && matchType && matchStatus;
+          });
+        },
+
+        resetFilters() {
+          this.filters = { search: '', type: '', status: '' };
+        },
+
+        openView(req) {
+          this.selectedRequest = req;
+          this.viewData = { ...req };
+          this.viewModalOpen = true;
+        },
+
+        openCreateModal() { this.createModalOpen = true; },
+
+        // HELPER: Format dates for the table
+        formatInclusive(from, to) {
+          if (!from && !to) return '-';
+          return `${from || '?'} to ${to || '?'}`;
+        },
+
+        // HELPER: Dynamic status colors for the table
+        statusClass(status) {
+          const s = (status || '').toLowerCase();
+          if (s === 'approved') return 'border-emerald-500 text-emerald-700 bg-emerald-50';
+          if (['disapproved', 'denied', 'rejected'].includes(s)) return 'border-rose-500 text-rose-700 bg-rose-50';
+          return 'border-amber-500 text-amber-700 bg-amber-50'; // Default Pending
+        },
+
+        async updateStatus(id, status) {
+          try {
+            await window.LeaveService.updateStatus(id, status, this.selectedRequest.remarks);
+            this.viewModalOpen = false;
+            this.selectedRequest = null;
+            await this.loadLeaveRequests();
+          } catch (error) {
+            alert('Failed to update status');
+          }
         }
-      });
+      };
+    };
 
-      document.getElementById('recordCount').innerText = visibleCount;
-    }
-
-    function resetFilters() {
-        document.getElementById('searchLeave').value = '';
-        document.getElementById('typeFilter').value = '';
-        document.getElementById('statusFilter').value = '';
-        filterTable();
-    }
-
-    function generateLeaveReport(reportData) {
-      const rows = Array.from(document.querySelectorAll('.leave-row'));
-      const selectedStatus = (reportData.status || 'All').toLowerCase();
-      const selectedType = (reportData.type || 'All').toLowerCase();
-      const dateFrom = reportData.dateFrom ? new Date(reportData.dateFrom + 'T00:00:00') : null;
-      const dateTo = reportData.dateTo ? new Date(reportData.dateTo + 'T23:59:59') : null;
-      const format = (reportData.format || 'CSV').toLowerCase();
-
-      const filtered = rows.filter((row) => {
-        const data = row.dataset;
-        const status = (data.status || '').toLowerCase();
-        const type = (data.type || '').toLowerCase();
-
-        const dateFiledCell = row.querySelector('td');
-        const dateFiledText = dateFiledCell ? dateFiledCell.textContent.trim() : '';
-        const dateFiled = dateFiledText ? new Date(dateFiledText + 'T00:00:00') : null;
-
-        const statusOk = selectedStatus === 'all' || status === selectedStatus;
-        const typeOk = selectedType === 'all' || type === selectedType;
-        const fromOk = !dateFrom || (dateFiled && dateFiled >= dateFrom);
-        const toOk = !dateTo || (dateFiled && dateFiled <= dateTo);
-
-        return statusOk && typeOk && fromOk && toOk;
-      });
-
-      const headers = [
-        'Date Filed',
-        'Applicant',
-        'Position',
-        'Office',
-        'Leave Type',
-        'Where Leave Will Be Spent',
-        'Commutation',
-        'Working Days',
-        'Inclusive Dates',
-        'Status',
-        'Application No',
-        'Remarks'
-      ];
-
-      const records = filtered.map((row) => {
-        const data = row.dataset;
-        const dateFiledCell = row.querySelector('td');
-        const dateFiledText = dateFiledCell ? dateFiledCell.textContent.trim() : '';
-        return [
-          dateFiledText,
-          data.applicantName || '',
-          data.position || '',
-          data.office || '',
-          data.leaveType || '',
-          data.leaveWhere || '',
-          data.commutation || '',
-          data.workingDays || '',
-          data.inclusiveDates || '',
-          data.status || '',
-          data.applicationNo || '',
-          data.remarks || ''
-        ];
-      });
-
-      const baseName = 'leave-report-' + new Date().toISOString().slice(0, 10);
-
-      if (format === 'excel') {
-        downloadExcel(headers, records, baseName + '.xls');
-      } else {
-        downloadCsv(headers, records, baseName + '.csv');
-      }
-    }
-
+    // Global Export Utility
     function downloadCsv(headers, rows, filename) {
       const escapeValue = (value) => {
         const str = String(value ?? '');
-        if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+        if (str.includes('"') || str.includes(',') || str.includes('\n')) {
           return '"' + str.replace(/"/g, '""') + '"';
         }
         return str;
       };
-
       const lines = [headers, ...rows].map((row) => row.map(escapeValue).join(','));
       const csv = lines.join('\r\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }
-
-    function downloadExcel(headers, rows, filename) {
-      const escapeHtml = (value) => String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-
-      const headerRow = '<tr>' + headers.map((h) => '<th>' + escapeHtml(h) + '</th>').join('') + '</tr>';
-      const bodyRows = rows
-        .map((row) => '<tr>' + row.map((cell) => '<td>' + escapeHtml(cell) + '</td>').join('') + '</tr>')
-        .join('');
-
-      const table = '<table>' + headerRow + bodyRows + '</table>';
-      const html = `
-        <html>
-          <head><meta charset="utf-8" /></head>
-          <body>${table}</body>
-        </html>
-      `;
-
-      const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      link.href = url; link.download = filename;
+      document.body.appendChild(link); link.click();
+      document.body.removeChild(link); URL.revokeObjectURL(url);
     }
   </script>
-</body>
-</html>
+
+  <script type="module">
+    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, query, getDocs, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpdvsvmF5JI7B50L8P_f9Q_OULRSCm9w4",
+      authDomain: "tlph-denr-system.firebaseapp.com",
+      projectId: "tlph-denr-system",
+      storageBucket: "tlph-denr-system.appspot.com",
+      messagingSenderId: "999028568640",
+      appId: "1:999028568640:web:2b488c8ea8e24ba39f19eb"
+    };
+
+    let db;
+    try {
+      const existingApps = getApps();
+      db = existingApps.length > 0 ? getFirestore(existingApps[0]) : getFirestore(initializeApp(firebaseConfig));
+    } catch (error) {
+      console.error('Firebase init error:', error);
+    }
+
+    // Attach to global window object
+    window.LeaveService = {
+      async getAll() {
+        const q = query(collection(db, 'leave_requests'));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      },
+      async updateStatus(id, status, remarks) {
+        const docRef = doc(db, 'leave_requests', id);
+        await updateDoc(docRef, { status, remarks });
+      }
+    };
+
+    // Tell Alpine the database is ready
+    window.LeaveServiceReady = true;
+    window.dispatchEvent(new CustomEvent('firebase-ready'));
+  </script>
+</div>
+{% endblock %}

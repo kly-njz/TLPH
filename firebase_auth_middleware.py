@@ -12,8 +12,13 @@ def _detect_device_from_request():
 
 def _resolve_municipality_for_session():
     municipality = session.get('municipality') or session.get('user_municipality')
+    user_role = session.get('user_role', '')
     if municipality and str(municipality).lower() not in ('unknown', 'municipality', ''):
         return municipality
+
+    # For national/national_admin, allow 'unknown' municipality without error
+    if user_role in ('national', 'national_admin', 'super-admin', 'superadmin'):
+        return 'unknown'
 
     try:
         db = get_firestore_db()
@@ -41,6 +46,7 @@ def _resolve_municipality_for_session():
     except Exception as e:
         print(f'⚠️ Could not resolve municipality for session: {e}')
 
+    # For all other roles, return 'unknown' if not found
     return 'unknown'
 
 def firebase_auth_required(f):

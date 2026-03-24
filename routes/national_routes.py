@@ -1,7 +1,9 @@
+
+
 # --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
-from google.cloud.firestore_v1 import FieldFilter
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -1497,6 +1499,11 @@ def holidays_national_view():
 @bp.route('/leave-requests')
 @role_required('national', 'national_admin')
 def leave_requests_national_view():
+    # Debug: Print session info for diagnosis
+    print("[DEBUG] /national/leave-requests accessed")
+    print("[DEBUG] session:", dict(session))
+    print("[DEBUG] user_role:", session.get('user_role'))
+    print("[DEBUG] user_email:", session.get('user_email'))
     return render_template('national/HRM/leave-request-national.html')
 
 @bp.route('/payroll')
@@ -2250,4 +2257,76 @@ def api_revoke_admin_account(user_id):
         return jsonify({'success': True})
     except Exception as e:
         print(f"[ERROR] Failed to revoke admin account: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
+
+@bp.route('/api/holidays/<holiday_id>/approve', methods=['POST'])
+@role_required('national', 'national_admin')
+def approve_national_holiday(holiday_id):
+    db = get_firestore_db()
+    ref = db.collection('holidays').document(holiday_id)
+    ref.update({'status': 'approved'})
+    return jsonify({'success': True})
+
+@bp.route('/api/holidays/<holiday_id>/reject', methods=['POST'])
+@role_required('national', 'national_admin')
+def reject_national_holiday(holiday_id):
+    db = get_firestore_db()
+    ref = db.collection('holidays').document(holiday_id)
+    ref.update({'status': 'rejected'})
+    return jsonify({'success': True})
+@bp.route('/api/holidays', methods=['GET'])
+@role_required('national', 'national_admin')
+def get_national_holidays():
+    db = get_firestore_db()
+    holidays = []
+    try:
+        docs = db.collection('holidays').order_by('date').stream()
+    except Exception:
+        docs = db.collection('holidays').stream()
+
+    for doc in docs:
+        item = doc.to_dict() or {}
+        date_value = item.get('date')
+        if isinstance(date_value, str):
+            item['date'] = date_value.split('T')[0]
+        elif hasattr(date_value, 'strftime'):
+            item['date'] = date_value.strftime('%Y-%m-%d')
+        elif hasattr(date_value, 'isoformat'):
+            item['date'] = date_value.isoformat().split('T')[0]
+        elif hasattr(date_value, 'to_datetime'):
+            item['date'] = date_value.to_datetime().strftime('%Y-%m-%d')
+        else:
+            item['date'] = ''
+
+        holidays.append({
+            'id': doc.id,
+            'name': item.get('name', ''),
+            'date': item.get('date', ''),
+            'type': item.get('type', 'Regular Holiday'),
+            'basis': item.get('basis', ''),
+            'description': item.get('description', ''),
+            'scope': item.get('scope', 'NATIONAL'),
+            'status': item.get('status', 'approved')
+        })
+
+    return jsonify({'success': True, 'holidays': holidays})
+
+
+@bp.route('/api/employees', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_employees():
+    """Fetch all employees from all regions/municipalities for national payroll registry"""
+    try:
+        db = get_firestore_db()
+        employees_ref = db.collection('employees')
+        docs = employees_ref.stream()
+        employees = []
+        for doc in docs:
+            data = doc.to_dict()
+            data['id'] = doc.id
+            employees.append(data)
+        return jsonify({'success': True, 'employees': employees, 'count': len(employees)})
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch employees: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
