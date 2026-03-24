@@ -1576,7 +1576,7 @@ def leave_requests_national_view():
 @bp.route('/payroll')
 @role_required('national', 'national_admin')
 def payroll_national_view():
-    return render_template('national/HRM/payroll.html')
+    return render_template('national/operations/payroll-national.html')
 
 @bp.route('/audit-logs')
 @role_required('national', 'national_admin')
