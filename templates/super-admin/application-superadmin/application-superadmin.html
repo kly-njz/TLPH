@@ -213,6 +213,8 @@
                             <option value="approved">Approved</option>
                             <option value="rejected">Rejected</option>
                             <option value="to review">For Review</option>
+                            <option value="forwarded">Forwarded</option>
+                            <option value="cancelled">Cancelled</option>
                         </select>
                         <div class="flex items-center gap-1">
                             <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">From</span>
@@ -341,7 +343,12 @@
                 const matchSearch = Object.values(item).join(' ').toLowerCase().includes(search);
                 const matchCat = category === 'all' || item.sector === category;
                 const matchReg = region === 'all' || item.region === region;
-                const matchStatus = statusV === 'all' || item.status === statusV;
+                const itemStatus = (item.status || '').toLowerCase();
+                const itemDisplay = (item.status_display || '').toLowerCase();
+                const selectedStatus = statusV.toLowerCase();
+                const matchStatus = statusV === 'all'
+                    || itemStatus === selectedStatus
+                    || itemDisplay.includes(selectedStatus);
                 const matchFrom = !dateFrom || item.date >= dateFrom;
                 const matchTo = !dateTo || item.date <= dateTo;
                 return matchSearch && matchCat && matchReg && matchStatus && matchFrom && matchTo;
@@ -365,9 +372,21 @@
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                     : s === 'rejected'
                     ? 'bg-rose-50 text-rose-800 border-rose-200'
+                    : s === 'cancelled'
+                    ? 'bg-slate-200 text-slate-700 border-slate-300'
+                    : s === 'forwarded'
+                    ? 'bg-violet-50 text-violet-800 border-violet-200'
                     : s === 'to review' || s === 'review'
                     ? 'bg-blue-50 text-blue-800 border-blue-200'
                     : 'bg-amber-50 text-amber-800 border-amber-200';
+
+                const origin = row.status_origin || {};
+                const statusMeta = [];
+                if (origin.approvedByLevel) statusMeta.push(`Approved by ${origin.approvedByLevel}`);
+                if (origin.rejectedByLevel) statusMeta.push(`Rejected by ${origin.rejectedByLevel}`);
+                if (origin.forwardedByLevel || origin.forwardedToLevel) statusMeta.push(`Forwarded ${origin.forwardedByLevel || 'Unknown'} → ${origin.forwardedToLevel || 'N/A'}`);
+                if (origin.nationalStatus) statusMeta.push(`National: ${origin.nationalStatus}`);
+                else if (origin.regionalStatus) statusMeta.push(`Regional: ${origin.regionalStatus}`);
 
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-slate-50 transition-colors data-row';
@@ -380,11 +399,11 @@
                     <td class="px-3 py-1.5 font-bold uppercase text-slate-700 border-r border-slate-100 tracking-widest text-[9px]">${row.sector || 'N/A'}</td>
                     <td class="px-3 py-1.5 font-black text-slate-800 border-r border-slate-100 whitespace-nowrap uppercase tracking-widest text-[9px]">${row.region || 'N/A'}${row.municipality && row.municipality !== 'N/A' ? '<br><span class="text-[8px] text-slate-400 font-bold">' + row.municipality + '</span>' : ''}</td>
                     <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                        <span class="status-badge ${statusColor}">${s.toUpperCase()}</span>
-                        ${row.regional_status && row.regional_status !== s ? '<br><span class="text-[7px] text-slate-400 font-bold uppercase mt-0.5 block">Regional: ' + row.regional_status + '</span>' : ''}
+                        <span class="status-badge ${statusColor}">${(row.status_display || s || 'pending').toUpperCase()}</span>
+                        ${statusMeta.length ? '<br><span class="text-[7px] text-slate-400 font-bold uppercase mt-0.5 block">' + statusMeta.join(' • ') + '</span>' : ''}
                     </td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <a href="/superadmin/user-application/view/${row.id}" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">View</a>
+                        <button onclick="openApplicationView('${row.id}')" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer bg-transparent border-none">View</button>
                     </td>`;
                 body.appendChild(tr);
             });
