@@ -162,46 +162,81 @@
               </tr>
             </thead>
             <tbody id="payrollBody" class="text-[10px] divide-y divide-slate-100">
-              <tr class="hover:bg-blue-50 transition payroll-row" data-office="Regional Office" data-scope="REGIONAL" data-mun="" data-status="Posted">
-                <td class="px-3 py-2 border-r border-slate-100 leading-tight">
-                  <span class="font-black text-slate-900 uppercase block">Santos, Maria Clara P.</span>
-                  <span class="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Chief Accountant • SG-24</span>
-                </td>
-                <td class="px-3 py-2 border-r border-slate-100 font-bold text-slate-700">Regional Office</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono">45,102.50</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono">1,000.00</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono font-black text-slate-900">46,102.50</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono val-negative">8,210.45</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono val-negative">2,500.00</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono val-positive">35,392.05</td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                  <span class="text-blue-800 font-black text-[8px] uppercase">Regional</span>
-                </td>
-                <td class="px-3 py-2 text-center">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-100">Posted</span>
-                </td>
-              </tr>
-
-              <tr class="hover:bg-blue-50 transition payroll-row" data-office="Municipality B" data-scope="MUNICIPAL" data-mun="Municipality B" data-status="Pending">
-                <td class="px-3 py-2 border-r border-slate-100 leading-tight">
-                  <span class="font-black text-slate-900 uppercase block">Crisostomo, Rizalino M.</span>
-                  <span class="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">PDO II • SG-15</span>
-                </td>
-                <td class="px-3 py-2 border-r border-slate-100 font-bold text-slate-700 uppercase">Municipality B</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono">18,500.00</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono">1,000.00</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono font-black text-slate-900">19,500.00</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono val-negative">3,120.00</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono val-negative">4,500.00</td>
-                <td class="px-3 py-2 text-right border-r border-slate-100 font-mono val-positive">11,880.00</td>
-                <td class="px-3 py-2 text-center border-r border-slate-100">
-                   <span class="text-amber-800 font-black text-[8px] uppercase">Municipal</span>
-                </td>
-                <td class="px-3 py-2 text-center">
-                  <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-amber-50 text-amber-700 border border-amber-100 animate-pulse">Pending</span>
-                </td>
-              </tr>
+              <!-- Payroll rows will be injected here by JS -->
             </tbody>
+            <script>
+              async function loadPayrollData() {
+                const resp = await fetch('/regional/api/hrm/employees');
+                const data = await resp.json();
+                if (!data.success) return;
+                const employees = data.employees || [];
+                const payrollBody = document.getElementById('payrollBody');
+                payrollBody.innerHTML = '';
+                let totalGross = 0, totalDeductions = 0, totalNet = 0;
+                let visibleCount = 0;
+                employees.forEach(emp => {
+                  // Compose name
+                  const last = emp.last_name || emp.lastName || '';
+                  const first = emp.first_name || emp.firstName || '';
+                  const middle = emp.middle_name || emp.middleName || '';
+                  const employee_name = `${last}, ${first}${middle ? ' ' + middle[0] + '.' : ''}`.toUpperCase();
+                  // Compose position
+                  const position = (emp.designation || emp.position || 'N/A') + (emp.salaryGrade ? ` • SG-${emp.salaryGrade}` : '');
+                  // Office assignment
+                  const office = emp.department_name || emp.division || emp.municipality || emp.region || 'N/A';
+                  // Scope
+                  let scope = (emp.scope || '').toUpperCase();
+                  if (!scope) scope = (emp.municipality ? 'MUNICIPAL' : 'REGIONAL');
+                  // Payroll fields (dummy logic, replace with real fields if available)
+                  const basic_pay = Number(emp.basicPay || emp.basic_pay || emp.salary || 0);
+                  const allowances = Number(emp.allowances || emp.allowance || emp.pera || 0);
+                  const gross = basic_pay + allowances;
+                  const gsis_tax = Number(emp.gsis || emp.tax || 0);
+                  const loans = Number(emp.loans || 0);
+                  const net_pay = gross - gsis_tax - loans;
+                  // Status (dummy: all posted for now)
+                  const status = 'Posted';
+                  // Row HTML
+                  const row = document.createElement('tr');
+                  row.className = 'hover:bg-blue-50 transition payroll-row';
+                  row.setAttribute('data-office', office);
+                  row.setAttribute('data-scope', scope);
+                  row.setAttribute('data-mun', emp.municipality || '');
+                  row.setAttribute('data-status', status);
+                  row.innerHTML = `
+                    <td class="px-3 py-2 border-r border-slate-100 leading-tight">
+                      <span class="font-black text-slate-900 uppercase block">${employee_name}</span>
+                      <span class="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">${position}</span>
+                    </td>
+                    <td class="px-3 py-2 border-r border-slate-100 font-bold text-slate-700">${office}</td>
+                    <td class="px-3 py-2 text-right border-r border-slate-100 font-mono">${basic_pay.toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
+                    <td class="px-3 py-2 text-right border-r border-slate-100 font-mono">${allowances.toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
+                    <td class="px-3 py-2 text-right border-r border-slate-100 font-mono font-black text-slate-900">${gross.toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
+                    <td class="px-3 py-2 text-right border-r border-slate-100 font-mono val-negative">${gsis_tax.toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
+                    <td class="px-3 py-2 text-right border-r border-slate-100 font-mono val-negative">${loans.toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
+                    <td class="px-3 py-2 text-right border-r border-slate-100 font-mono val-positive">${net_pay.toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
+                    <td class="px-3 py-2 text-center border-r border-slate-100">
+                      <span class="${scope === 'REGIONAL' ? 'text-blue-800' : 'text-amber-800'} font-black text-[8px] uppercase">${scope.charAt(0) + scope.slice(1).toLowerCase()}</span>
+                    </td>
+                    <td class="px-3 py-2 text-center">
+                      <span class="inline-block px-1.5 py-0.5 rounded-[1px] text-[8px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-100">${status}</span>
+                    </td>
+                  `;
+                  payrollBody.appendChild(row);
+                  totalGross += gross;
+                  totalDeductions += (gsis_tax + loans);
+                  totalNet += net_pay;
+                  visibleCount++;
+                });
+                // Update summary cards
+                document.querySelectorAll('.gov-card .font-mono')[0].textContent = `₱ ${totalGross.toLocaleString('en-PH', {minimumFractionDigits:2})}`;
+                document.querySelectorAll('.gov-card .font-mono')[1].textContent = `₱ ${totalDeductions.toLocaleString('en-PH', {minimumFractionDigits:2})}`;
+                document.querySelectorAll('.gov-card .font-mono')[2].textContent = `₱ ${totalNet.toLocaleString('en-PH', {minimumFractionDigits:2})}`;
+                document.getElementById('visibleCount').textContent = visibleCount;
+                filterTable();
+              }
+              window.addEventListener('DOMContentLoaded', loadPayrollData);
+            </script>
           </table>
         </div>
 
