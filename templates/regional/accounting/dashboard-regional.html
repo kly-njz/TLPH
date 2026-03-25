@@ -676,44 +676,55 @@
       options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10 } } } }
     });
 
-    new Chart(document.getElementById('usageBarChart'), {
-      // Fetch real data and render Usage per Municipality
-      fetch('/api/accounting/expenses')
-        .then(resp => resp.json())
-        .then(data => {
-          if (!data.success || !Array.isArray(data.expenses)) throw new Error('No data');
-          // Aggregate usage per municipality
-          const usage = {};
-          data.expenses.forEach(tx => {
-            const muni = (tx.municipality || tx.recipient || 'N/A').toUpperCase();
-            const amt = Number(tx.amount) || 0;
-            if (!usage[muni]) usage[muni] = 0;
-            usage[muni] += amt;
-          });
-          // Sort by usage descending, take top 10
-          const sorted = Object.entries(usage).sort((a,b) => b[1]-a[1]).slice(0, 10);
-          const labels = sorted.map(([k]) => k);
-          const values = sorted.map(([,v]) => v);
-          new Chart(document.getElementById('usageBarChart'), {
-            type: 'bar',
-            data: {
-              labels: labels,
-              datasets: [{ label: 'Total Usage', data: values, backgroundColor: '#2563eb', borderRadius: 2 }]
-            },
-            options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-          });
-        })
-        .catch(err => {
-          // fallback to empty chart
-          new Chart(document.getElementById('usageBarChart'), {
-            type: 'bar',
-            data: {
-              labels: [],
-              datasets: [{ label: 'Total Usage', data: [], backgroundColor: '#2563eb', borderRadius: 2 }]
-            },
-            options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-          });
-        });
+
+    // Fetch both municipal offices (admin accounts) and expenses, then cross-filter
+    Promise.all([
+      fetch('/api/hrm/municipal-offices').then(r => r.json()),
+      fetch('/api/accounting/expenses').then(r => r.json())
+    ]).then(([officesData, expensesData]) => {
+      if (!officesData.success || !Array.isArray(officesData.offices)) throw new Error('No municipal offices');
+      if (!expensesData.success || !Array.isArray(expensesData.expenses)) throw new Error('No expenses data');
+
+      // Build a set of municipality names with admin accounts (normalize to uppercase)
+      const muniSet = new Set(
+        officesData.offices
+          .map(o => (o.municipality_name || '').toUpperCase().trim())
+          .filter(Boolean)
+      );
+
+      // Aggregate usage only for municipalities with admin accounts
+      const usage = {};
+      expensesData.expenses.forEach(tx => {
+        const muni = (tx.municipality || tx.recipient || '').toUpperCase().trim();
+        const amt = Number(tx.amount) || 0;
+        if (!muniSet.has(muni)) return; // Only count if admin account exists
+        if (!usage[muni]) usage[muni] = 0;
+        usage[muni] += amt;
+      });
+
+      // Sort by usage descending, take top 10
+      const sorted = Object.entries(usage).sort((a,b) => b[1]-a[1]).slice(0, 10);
+      const labels = sorted.map(([k]) => k);
+      const values = sorted.map(([,v]) => v);
+      new Chart(document.getElementById('usageBarChart'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{ label: 'Total Usage', data: values, backgroundColor: '#2563eb', borderRadius: 2 }]
+        },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      });
+    }).catch(err => {
+      // fallback to empty chart
+      new Chart(document.getElementById('usageBarChart'), {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [{ label: 'Total Usage', data: [], backgroundColor: '#2563eb', borderRadius: 2 }]
+        },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      });
+    });
 
     new Chart(document.getElementById('latencyLineChart'), {
       type: 'line',
