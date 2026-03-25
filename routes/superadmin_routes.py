@@ -1,20 +1,4 @@
-@bp.route('/api/hrm/payroll', methods=['GET'])
-@role_required('super-admin','superadmin')
-def api_get_superadmin_payroll():
-    """Fetch all payroll records for superadmin payroll registry (all regions/municipalities)."""
-    try:
-        db = get_firestore_db()
-        payroll_ref = db.collection('payroll')
-        docs = payroll_ref.stream()
-        payrolls = []
-        for doc in docs:
-            data = doc.to_dict()
-            data['id'] = doc.id
-            payrolls.append(data)
-        return jsonify({'success': True, 'payrolls': payrolls, 'count': len(payrolls)})
-    except Exception as e:
-        print(f'[ERROR] Failed to fetch payroll records: {e}')
-        return jsonify({'success': False, 'error': str(e)}), 500
+
 from flask import Blueprint, render_template, request, jsonify
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
@@ -563,3 +547,22 @@ def superadmin_payroll_audit_log(payroll_id):
 @role_required('super-admin','superadmin')
 def hr_payroll_view():
     return render_template('super-admin/human-resource-superadmin/payroll-superadmin.html')
+
+
+@bp.route('/api/hrm/payroll', methods=['GET'])
+@role_required('super-admin','superadmin')
+def api_get_superadmin_payroll():
+    """Fetch all payroll records for superadmin payroll registry (all regions/municipalities)."""
+    try:
+        db = get_firestore_db()
+        payroll_ref = db.collection('payroll')
+        docs = payroll_ref.stream()
+        payrolls = []
+        for doc in docs:
+            data = doc.to_dict()
+            data['id'] = doc.id
+            payrolls.append(data)
+        return jsonify({'success': True, 'payrolls': payrolls, 'count': len(payrolls)})
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch payroll records: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
