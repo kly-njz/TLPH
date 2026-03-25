@@ -691,3 +691,43 @@ def hrm_shift_superadmin():
         return render_template('super-admin/human-resource-superadmin/shift-superadmin.html')
     except Exception:
         abort(404)
+
+@bp.route('/api/hrm/holidays', methods=['GET'])
+@role_required('super-admin','superadmin')
+def get_superadmin_holidays():
+    db = get_firestore_db()
+    holidays = []
+    try:
+        docs = db.collection('holidays').order_by('date').stream()
+    except Exception:
+        docs = db.collection('holidays').stream()
+
+    for doc in docs:
+        item = doc.to_dict() or {}
+        date_value = item.get('date')
+        if isinstance(date_value, str):
+            item['date'] = date_value.split('T')[0]
+        elif hasattr(date_value, 'strftime'):
+            item['date'] = date_value.strftime('%Y-%m-%d')
+        elif hasattr(date_value, 'isoformat'):
+            item['date'] = date_value.isoformat().split('T')[0]
+        elif hasattr(date_value, 'to_datetime'):
+            item['date'] = date_value.to_datetime().strftime('%Y-%m-%d')
+        else:
+            item['date'] = ''
+
+        holidays.append({
+            'id': doc.id,
+            'name': item.get('name', ''),
+            'date': item.get('date', ''),
+            'type': item.get('type', 'Regular Holiday'),
+            'basis': item.get('basis', ''),
+            'description': item.get('description', ''),
+            'scope': item.get('scope', 'NATIONAL'),
+            'status': item.get('status', 'approved'),
+            'office_status': item.get('office_status', ''),
+            'open_time': item.get('open_time', ''),
+            'close_time': item.get('close_time', '')
+        })
+
+    return jsonify({'success': True, 'holidays': holidays})

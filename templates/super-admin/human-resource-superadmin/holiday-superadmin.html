@@ -580,13 +580,33 @@
       if(i === 1) opt.selected = true; $("wdMonth").appendChild(opt);
     });
 
-    // Mock DB
-    let holidays = [
-      {id:crypto.randomUUID(),date:"2026-01-01",name:"New Year's Day",type:"REGULAR",scope:"NATIONAL",reg:"",mun:"",notes:""},
-      {id:crypto.randomUUID(),date:"2026-04-09",name:"Araw ng Kagitingan",type:"REGULAR",scope:"NATIONAL",reg:"",mun:"",notes:""},
-      {id:crypto.randomUUID(),date:"2026-02-25",name:"Local Foundation Day",type:"LOCAL",scope:"MUNICIPALITY",reg:"CALABARZON",mun:"City of San Pedro",notes:"Ordinance #12"},
-      {id:crypto.randomUUID(),date:"2026-08-21",name:"Ninoy Aquino Day",type:"SPECIAL_NON_WORKING",scope:"NATIONAL",reg:"",mun:"",notes:""}
-    ];
+
+    // Fetch holidays from backend
+    let holidays = [];
+    async function fetchHolidays() {
+      try {
+        const res = await fetch('/superadmin/api/hrm/holidays');
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.holidays)) {
+          holidays = data.holidays.map(h => ({
+            ...h,
+            reg: h.region || h.reg || '',
+            mun: h.municipality || h.mun || '',
+            notes: h.basis || h.notes || '',
+          }));
+        } else {
+          holidays = [];
+        }
+        rerenderAll();
+      } catch (err) {
+        holidays = [];
+        rerenderAll();
+        toast('Error', 'Failed to load holidays');
+      }
+    }
+
+    // Initial load
+    fetchHolidays();
 
     const keyFor = (h) => {
       const d = norm(h.date), s = norm(h.scope), r = norm(h.reg), m = low(h.mun);
