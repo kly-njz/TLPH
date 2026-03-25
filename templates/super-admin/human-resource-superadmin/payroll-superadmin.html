@@ -887,20 +887,30 @@
         $("status").value = "DRAFT";
       }
 
-      if(mode==="edit"){
-        const x = rows.find(z=>z.id===id); if(!x) return;
-        $("eid").value=x.id; $("payNo").value=x.payNo; $("month").value=x.month; $("period").value=x.period;
-        $("no").value=x.no; $("name").value=x.name; $("cat").value=x.cat; $("status").value=x.status;
-        $("basic").value=x.basic; $("allow").value=x.allow; $("ot").value=x.ot; $("ded").value=x.ded; $("remarks").value=x.remarks||"";
-        
-        const fReg = $("reg"); fReg.value = x.reg || "";
-        const selectedOption = Array.from(fReg.options).find(opt => opt.value === x.reg);
-        if (selectedOption && selectedOption.dataset.code) {
-           await loadMunicipalities(selectedOption.dataset.code, 'mun', 'Select Municipality / City', false);
-           $("mun").value = x.mun || "";
-        }
-        updateCalc();
-      } else updateCalc();
+            if(mode==="edit"){
+                const x = rows.find(z=>z.id===id); if(!x) return;
+                $("eid").value=x.id;
+                // Auto-generate payroll number if missing
+                if (!x.payNo || x.payNo === "") {
+                    const now = new Date();
+                    const y = now.getFullYear();
+                    const m = String(now.getMonth()+1).padStart(2,'0');
+                    const d = String(now.getDate()).padStart(2,'0');
+                    $("payNo").value = `PAY-${y}${m}${d}-${Math.floor(Math.random()*9000+1000)}`;
+                } else {
+                    $("payNo").value = x.payNo;
+                }
+                $("month").value=x.month; $("period").value=x.period;
+                $("no").value=x.no; $("name").value=x.name; $("cat").value=x.cat; $("status").value=x.status;
+                $("basic").value=x.basic; $("allow").value=x.allow; $("ot").value=x.ot; $("ded").value=x.ded; $("remarks").value=x.remarks||"";
+                const fReg = $("reg"); fReg.value = x.reg || "";
+                const selectedOption = Array.from(fReg.options).find(opt => opt.value === x.reg);
+                if (selectedOption && selectedOption.dataset.code) {
+                     await loadMunicipalities(selectedOption.dataset.code, 'mun', 'Select Municipality / City', false);
+                     $("mun").value = x.mun || "";
+                }
+                updateCalc();
+            } else updateCalc();
     };
     const closeM = () => $("mb").classList.remove("flex");
 
@@ -912,7 +922,29 @@
     document.addEventListener("DOMContentLoaded", async () => {
       await initLocationAPI();
 
-      $("btnOpenCreate").onclick=()=>openM("create");
+            $("btnOpenCreate").onclick=async()=>{
+                // Open modal for new employee creation
+                // Generate new employee_id
+                const empId = `EMP-${Date.now()}-${Math.floor(Math.random()*9000+1000)}`;
+                $("eid").value = empId;
+                $("payNo").value = "";
+                $("month").value = new Date().toISOString().slice(0,7);
+                $("period").value = "MONTHLY";
+                $("no").value = empId;
+                $("name").value = "";
+                $("cat").value = "";
+                $("status").value = "DRAFT";
+                $("basic").value = 0;
+                $("allow").value = 0;
+                $("ot").value = 0;
+                $("ded").value = 0;
+                $("remarks").value = "";
+                $("reg").value = "";
+                $("mun").innerHTML = '<option value="">Select Region First</option>';
+                $("mun").disabled = true;
+                updateCalc();
+                $("mb").classList.add("flex");
+            };
       $("mx").onclick=$("mc").onclick=closeM; $("mb").onclick=e=>{if(e.target===$("mb")) closeM();};
       $("cx").onclick=$("cc").onclick=closeConfirm; $("cm").onclick=e=>{if(e.target===$("cm")) closeConfirm();};
       $("co").onclick=()=>{ if(confirmAction){ const fn=confirmAction; closeConfirm(); fn(); } };
