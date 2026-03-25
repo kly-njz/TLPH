@@ -7,6 +7,33 @@
 import { auth, db } from '/static/js/firebase-config.js';
 import { collection, addDoc, doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
+async function uploadServiceFiles(form, userId) {
+  const fileInputs = Array.from(form.querySelectorAll('input[type="file"]'));
+  const hasFiles = fileInputs.some(input => input.files && input.files.length > 0);
+  if (!hasFiles) return {};
+
+  const formData = new FormData();
+  formData.append('userId', userId);
+
+  fileInputs.forEach((input) => {
+    const key = input.id || input.name;
+    if (!key || !input.files || input.files.length === 0) return;
+    Array.from(input.files).forEach(file => formData.append(key, file));
+  });
+
+  const res = await fetch('/api/upload-service-files', {
+    method: 'POST',
+    body: formData
+  });
+
+  const payload = await res.json();
+  if (!res.ok || !payload.success) {
+    throw new Error(payload.message || 'Failed to upload service files');
+  }
+
+  return payload.filePaths || {};
+}
+
 /**
  * Submit a service request with payment
  * @param {Object} config Configuration object
@@ -37,8 +64,18 @@ export async function submitServiceRequest(config) {
   // Mark as handled to avoid auto-binding on the same form
   form.dataset.serviceHandler = 'manual';
 
+  // Prevent duplicate binding (can happen if init code runs twice)
+  if (form.dataset.serviceSubmitBound === '1') {
+    return;
+  }
+  form.dataset.serviceSubmitBound = '1';
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    // Hard guard against double-submit while request is in-flight
+    if (form.dataset.serviceSubmitting === '1') return;
+    form.dataset.serviceSubmitting = '1';
 
     try {
       // Check if user is authenticated
@@ -68,6 +105,9 @@ export async function submitServiceRequest(config) {
         createdAt: new Date().toISOString()
       };
 
+      // Upload all file inputs first, then store URLs in Firestore
+      const uploadedFilePaths = await uploadServiceFiles(form, auth.currentUser.uid);
+
       // Enrich with user profile data (municipality, province, barangay, name) for proper routing
       try {
         const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
@@ -89,9 +129,12 @@ export async function submitServiceRequest(config) {
           const element = document.getElementById(fieldId);
           if (element) {
             if (element.type === 'file') {
-              // For file inputs, store file names and count
               const files = element.files;
-              if (files.length > 0) {
+              const uploaded = uploadedFilePaths[fieldId] || uploadedFilePaths[element.name] || [];
+              if (uploaded.length > 0) {
+                serviceData[fieldName] = uploaded;
+                serviceData[`${fieldName}Count`] = uploaded.length;
+              } else if (files.length > 0) {
                 serviceData[fieldName] = Array.from(files).map(f => f.name);
                 serviceData[`${fieldName}Count`] = files.length;
               }
@@ -101,7 +144,7 @@ export async function submitServiceRequest(config) {
           }
         }
       } else {
-        captureAllFields(form, serviceData);
+        captureAllFields(form, serviceData, uploadedFilePaths);
       }
 
       const amount = parseInt(document.getElementById('xendit_raw_amount')?.value || config.amount) || config.amount;
@@ -176,6 +219,8 @@ export async function submitServiceRequest(config) {
       // Reset button
       btnText.textContent = originalText;
       submitBtn.disabled = false;
+    } finally {
+      form.dataset.serviceSubmitting = '0';
     }
   });
 }
@@ -198,8 +243,18 @@ export async function submitFreeServiceRequest(config) {
   // Mark as handled to avoid auto-binding on the same form
   form.dataset.serviceHandler = 'manual';
 
+  // Prevent duplicate binding (can happen if init code runs twice)
+  if (form.dataset.serviceSubmitBound === '1') {
+    return;
+  }
+  form.dataset.serviceSubmitBound = '1';
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    // Hard guard against double-submit while request is in-flight
+    if (form.dataset.serviceSubmitting === '1') return;
+    form.dataset.serviceSubmitting = '1';
 
     try {
       // Check if user is authenticated
@@ -229,6 +284,9 @@ export async function submitFreeServiceRequest(config) {
         createdAt: new Date().toISOString()
       };
 
+      // Upload all file inputs first, then store URLs in Firestore
+      const uploadedFilePaths = await uploadServiceFiles(form, auth.currentUser.uid);
+
       // Enrich with user profile data (municipality, province, name) for proper routing
       try {
         const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
@@ -251,7 +309,11 @@ export async function submitFreeServiceRequest(config) {
           if (element) {
             if (element.type === 'file') {
               const files = element.files;
-              if (files.length > 0) {
+              const uploaded = uploadedFilePaths[fieldId] || uploadedFilePaths[element.name] || [];
+              if (uploaded.length > 0) {
+                serviceData[fieldName] = uploaded;
+                serviceData[`${fieldName}Count`] = uploaded.length;
+              } else if (files.length > 0) {
                 serviceData[fieldName] = Array.from(files).map(f => f.name);
                 serviceData[`${fieldName}Count`] = files.length;
               }
@@ -261,7 +323,7 @@ export async function submitFreeServiceRequest(config) {
           }
         }
       } else {
-        captureAllFields(form, serviceData);
+        captureAllFields(form, serviceData, uploadedFilePaths);
       }
 
       // Store service request in Firebase
@@ -293,11 +355,13 @@ export async function submitFreeServiceRequest(config) {
       // Reset button
       btnText.textContent = originalText;
       submitBtn.disabled = false;
+    } finally {
+      form.dataset.serviceSubmitting = '0';
     }
   });
 }
 
-function captureAllFields(form, target) {
+function captureAllFields(form, target, uploadedFilePaths = {}) {
   const elements = form.querySelectorAll('input, textarea, select');
   elements.forEach((element) => {
     const key = element.name || element.id;
@@ -305,7 +369,11 @@ function captureAllFields(form, target) {
 
     if (element.type === 'file') {
       const files = element.files;
-      if (files && files.length > 0) {
+      const uploaded = uploadedFilePaths[element.id] || uploadedFilePaths[element.name] || [];
+      if (uploaded && uploaded.length > 0) {
+        target[key] = uploaded;
+        target[`${key}Count`] = uploaded.length;
+      } else if (files && files.length > 0) {
         target[key] = Array.from(files).map(f => f.name);
         target[`${key}Count`] = files.length;
       }
