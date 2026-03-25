@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
 from google.cloud.firestore_v1.base_query import FieldFilter
 from firebase_admin import firestore
+from national_system_logs_storage import list_national_system_logs
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -41,6 +42,7 @@ def application_national_view():
         approved_count = 0
         pending_count = 0
         rejected_count = 0
+        forwarded_count = 0
 
         from collections import defaultdict
         monthly_trend = defaultdict(int)
@@ -153,6 +155,7 @@ def application_national_view():
             approved_count=approved_count,
             pending_count=pending_count,
             rejected_count=rejected_count,
+            forwarded_count=forwarded_count,
             trend_labels=last_6_months,
             trend_data=trend_data,
             region_labels=region_labels,
@@ -173,6 +176,7 @@ def application_national_view():
             approved_count=0,
             pending_count=0,
             rejected_count=0,
+            forwarded_count=0,
             trend_labels=['S', 'O', 'N', 'D', 'J', 'F'],
             trend_data=[0, 0, 0, 0, 0, 0],
             region_labels=['N/A'],
@@ -1605,56 +1609,35 @@ def audit_logs():
 @bp.route('/system-logs')
 @role_required('national', 'national_admin')
 def system_logs():
-    import system_logs_storage
     try:
-        # Helper to normalize log fields for the template
-        def normalize_log(log, scope=None):
-            return {
-                'timestamp': log.get('timestamp') or log.get('created_at') or log.get('createdAt') or '',
-                'user': log.get('user') or log.get('actorEmail') or log.get('actor') or '',
-                'region': log.get('region', ''),
-                'municipality': log.get('municipality', ''),
-                'role': log.get('role', ''),
-                'action': log.get('action', ''),
-                'details': log.get('details') or log.get('message') or '',
-                'ip': log.get('ip') or log.get('ipAddress') or '',
-                'scope': scope or log.get('scope', ''),
-            }
-
-        db = get_firestore_db()
-        # Fetch last 40 logs directly from system_logs, no filtering or normalization
-        logs = []
-        try:
-            query = db.collection('system_logs').order_by('created_at', direction=firestore.Query.DESCENDING).limit(40)
-            for doc in query.stream():
-                entry = doc.to_dict()
-                logs.append({
-                    'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
-                    'user': entry.get('user') or entry.get('actorEmail') or entry.get('actor') or '',
-                    'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
-                    'module': entry.get('module') or 'SYSTEM',
-                    'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
-                    'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
-                    'device_type': entry.get('device_type') or entry.get('device') or 'Unknown',
-                    'outcome': entry.get('outcome') or 'SUCCESS',
-                    'message': entry.get('message') or entry.get('details') or entry.get('description') or '',
-                    'municipality': entry.get('municipality') or entry.get('municipality_name') or '',
-                    'region': entry.get('region') or entry.get('region_name') or entry.get('regionName') or '',
-                    'role': entry.get('role') or '',
-                    'ip': entry.get('ip') or entry.get('ipAddress') or '',
-                })
-        except Exception as e:
-            print(f"[ERROR] Direct fetch from system_logs failed: {e}")
-        print(f"[DEBUG] Direct system_logs fetch: {len(logs)} logs. Sample: {logs[:1]}")
-        # Pass normalized logs to all tables for debug
+        # Fetch last 40 logs from national_system_logs
+        logs = list_national_system_logs(limit=40)
+        # Normalize for template
+        normalized_logs = []
+        for entry in logs:
+            normalized_logs.append({
+                'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
+                'user': entry.get('user') or entry.get('actorEmail') or entry.get('actor') or '',
+                'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
+                'module': entry.get('module') or 'SYSTEM',
+                'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
+                'device_type': entry.get('device_type') or entry.get('device') or 'Unknown',
+                'outcome': entry.get('outcome') or 'SUCCESS',
+                'message': entry.get('message') or entry.get('details') or entry.get('description') or '',
+                'municipality': entry.get('municipality') or entry.get('municipality_name') or '',
+                'region': entry.get('region') or entry.get('region_name') or entry.get('regionName') or '',
+                'role': entry.get('role') or '',
+                'ip': entry.get('ip') or entry.get('ipAddress') or '',
+            })
         return render_template(
             'national/system/system-logs.html',
-            regional_logs=logs,
-            municipal_logs=logs,
-            user_logs=logs
+            regional_logs=normalized_logs,
+            municipal_logs=normalized_logs,
+            user_logs=normalized_logs
         )
     except Exception as e:
-        print(f"[ERROR] Failed to fetch system logs: {e}")
+        print(f"[ERROR] Failed to fetch national system logs: {e}")
         return render_template('national/system/system-logs.html',
             regional_logs=[],
             municipal_logs=[],
