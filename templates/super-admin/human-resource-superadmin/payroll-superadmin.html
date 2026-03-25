@@ -579,6 +579,78 @@
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
+                // Action button handlers
+                document.addEventListener("click", async (e) => {
+                    const approveBtn = e.target.closest(".btn-superadmin-approve");
+                    const rejectBtn = e.target.closest(".btn-superadmin-reject");
+                    const overrideBtn = e.target.closest(".btn-superadmin-override");
+                    const auditBtn = e.target.closest(".btn-superadmin-audit");
+                    const delBtn = e.target.closest(".rm");
+                    const postBtn = e.target.closest(".post");
+                    const paidBtn = e.target.closest(".paid");
+                    const editBtn = e.target.closest(".ed");
+                    if (approveBtn) {
+                        const id = approveBtn.dataset.id;
+                        if (!id) return;
+                        const resp = await fetch(`/superadmin/api/hrm/payroll/${id}/approve`, {method: 'POST'});
+                        const data = await resp.json();
+                        toast("Approved", data.message || "Payroll approved.");
+                        await fetchPayrollRecords();
+                        render();
+                    } else if (rejectBtn) {
+                        const id = rejectBtn.dataset.id;
+                        if (!id) return;
+                        const resp = await fetch(`/superadmin/api/hrm/payroll/${id}/reject`, {method: 'POST'});
+                        const data = await resp.json();
+                        toast("Rejected", data.message || "Payroll rejected.");
+                        await fetchPayrollRecords();
+                        render();
+                    } else if (overrideBtn) {
+                        const id = overrideBtn.dataset.id;
+                        if (!id) return;
+                        const newStatus = prompt("Enter new status for this payroll record:");
+                        if (!newStatus) return;
+                        const resp = await fetch(`/superadmin/api/hrm/payroll/${id}/override`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({status: newStatus})
+                        });
+                        const data = await resp.json();
+                        toast("Overridden", data.message || "Payroll status overridden.");
+                        await fetchPayrollRecords();
+                        render();
+                    } else if (auditBtn) {
+                        const id = auditBtn.dataset.id;
+                        if (!id) return;
+                        const resp = await fetch(`/superadmin/api/hrm/payroll/${id}/audit-log`);
+                        const data = await resp.json();
+                        if (data.success && Array.isArray(data.logs)) {
+                            alert("Audit Log:\n" + data.logs.map(l => `${l.at}: ${l.action} by ${l.by}`).join("\n"));
+                        } else {
+                            alert("No audit log found.");
+                        }
+                    } else if (delBtn) {
+                        // Existing delete logic
+                        const id = delBtn.dataset.id;
+                        if (!id) return;
+                        openConfirm('<i class="fa-solid fa-trash text-rose-300"></i> Delete Payroll', `Remove payroll for this record? This cannot be undone.`, "danger", () => { del(id); render(); toast("Removed","Payroll deleted."); });
+                    } else if (postBtn) {
+                        // Existing post logic
+                        const id = postBtn.dataset.id;
+                        if (!id) return;
+                        openConfirm('<i class="fa-solid fa-upload text-sky-300"></i> Post Payroll', `Post payroll for this record?`, "info", () => { setStatus(id,"POSTED"); render(); toast("Posted","Payroll posted."); });
+                    } else if (paidBtn) {
+                        // Existing paid logic
+                        const id = paidBtn.dataset.id;
+                        if (!id) return;
+                        openConfirm('<i class="fa-solid fa-check text-emerald-300"></i> Mark Paid', `Mark payroll as paid?`, "success", () => { setStatus(id,"PAID"); render(); toast("Paid","Payroll marked as paid."); });
+                    } else if (editBtn) {
+                        // Existing edit logic
+                        const id = editBtn.dataset.id;
+                        if (!id) return;
+                        openM("edit", id);
+                    }
+                });
         await initLocationAPI();
         await fetchPayrollRecords();
 
