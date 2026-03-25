@@ -558,9 +558,36 @@ def api_get_superadmin_payroll():
         employees_ref = db.collection('employees')
         docs = employees_ref.stream()
         employees = []
+        required_fields = [
+            'employee_id', 'first_name', 'middle_name', 'last_name', 'email',
+            'designation', 'department_name', 'division', 'role', 'region', 'municipality',
+            'basic_pay', 'allowances', 'gross_pay', 'deductions', 'net_pay',
+            'status', 'hire_date', 'period', 'month', 'payroll_no'
+        ]
         for doc in docs:
-            data = doc.to_dict()
+            data = doc.to_dict() or {}
             data['id'] = doc.id
+            # Compose full name if missing
+            if not data.get('name'):
+                fn = data.get('first_name', '')
+                mn = data.get('middle_name', '')
+                ln = data.get('last_name', '')
+                data['name'] = f"{fn} {mn} {ln}".replace('  ', ' ').strip()
+            # Fill missing payroll fields with defaults
+            for field in required_fields:
+                if field not in data or data[field] is None:
+                    if field in ['basic_pay', 'allowances', 'gross_pay', 'deductions', 'net_pay']:
+                        data[field] = 0
+                    elif field == 'status':
+                        data[field] = 'DRAFT'
+                    elif field == 'period':
+                        data[field] = 'MONTHLY'
+                    elif field == 'month':
+                        data[field] = ''
+                    elif field == 'payroll_no':
+                        data[field] = ''
+                    else:
+                        data[field] = ''
             employees.append(data)
         return jsonify({'success': True, 'payrolls': employees, 'count': len(employees)})
     except Exception as e:
