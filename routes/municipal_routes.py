@@ -2073,7 +2073,12 @@ def accounting_coa_templates_municipal():
 @bp.route('/accounting/expense-category-municipal')
 @role_required('municipal','municipal_admin')
 def accounting_expense_category_municipal():
-    return render_template('municipal/accounting/expense-category-municipal.html')
+    from flask import session
+    municipality = session.get('municipality') or session.get('user_municipality')
+    return render_template(
+        'municipal/accounting/expense-category-municipal.html',
+        municipality=municipality
+    )
 
 @bp.route('/accounting/deposit-category-municipal')
 @role_required('municipal','municipal_admin')
