@@ -677,13 +677,43 @@
     });
 
     new Chart(document.getElementById('usageBarChart'), {
-      type: 'bar',
-      data: {
-        labels: ['CABUYAO','SANTA ROSA','CALAMBA','BINAN','SAN PEDRO','LOS BANOS'],
-        datasets: [{ label: 'Entries', data: [320,210,180,150,120,110], backgroundColor: '#2563eb', borderRadius: 2 }]
-      },
-      options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-    });
+      // Fetch real data and render Usage per Municipality
+      fetch('/api/accounting/expenses')
+        .then(resp => resp.json())
+        .then(data => {
+          if (!data.success || !Array.isArray(data.expenses)) throw new Error('No data');
+          // Aggregate usage per municipality
+          const usage = {};
+          data.expenses.forEach(tx => {
+            const muni = (tx.municipality || tx.recipient || 'N/A').toUpperCase();
+            const amt = Number(tx.amount) || 0;
+            if (!usage[muni]) usage[muni] = 0;
+            usage[muni] += amt;
+          });
+          // Sort by usage descending, take top 10
+          const sorted = Object.entries(usage).sort((a,b) => b[1]-a[1]).slice(0, 10);
+          const labels = sorted.map(([k]) => k);
+          const values = sorted.map(([,v]) => v);
+          new Chart(document.getElementById('usageBarChart'), {
+            type: 'bar',
+            data: {
+              labels: labels,
+              datasets: [{ label: 'Total Usage', data: values, backgroundColor: '#2563eb', borderRadius: 2 }]
+            },
+            options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+          });
+        })
+        .catch(err => {
+          // fallback to empty chart
+          new Chart(document.getElementById('usageBarChart'), {
+            type: 'bar',
+            data: {
+              labels: [],
+              datasets: [{ label: 'Total Usage', data: [], backgroundColor: '#2563eb', borderRadius: 2 }]
+            },
+            options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+          });
+        });
 
     new Chart(document.getElementById('latencyLineChart'), {
       type: 'line',
