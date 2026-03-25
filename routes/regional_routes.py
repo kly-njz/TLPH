@@ -2224,58 +2224,21 @@ def get_regional_municipal_offices():
         # Auto-seed municipalities based on region
         region_municipalities = {
             'CALABARZON': [
-                # Cavite Province
-                {'name': 'Bacoor', 'province': 'Cavite', 'code': 'MUN-CAV-001', 'status': 'Active'},
-                {'name': 'Imus', 'province': 'Cavite', 'code': 'MUN-CAV-002', 'status': 'Active'},
-                {'name': 'Dasmariñas', 'province': 'Cavite', 'code': 'MUN-CAV-003', 'status': 'Active'},
-                {'name': 'Cavite City', 'province': 'Cavite', 'code': 'MUN-CAV-004', 'status': 'Active'},
-                {'name': 'Tagaytay', 'province': 'Cavite', 'code': 'MUN-CAV-005', 'status': 'Active'},
-                {'name': 'Trece Martires', 'province': 'Cavite', 'code': 'MUN-CAV-006', 'status': 'Active'},
-                
-                # Laguna Province
-                {'name': 'Santa Rosa', 'province': 'Laguna', 'code': 'MUN-LAG-001', 'status': 'Active'},
-                {'name': 'Calamba', 'province': 'Laguna', 'code': 'MUN-LAG-002', 'status': 'Active'},
-                {'name': 'Biñan', 'province': 'Laguna', 'code': 'MUN-LAG-003', 'status': 'Active'},
-                {'name': 'San Pedro', 'province': 'Laguna', 'code': 'MUN-LAG-004', 'status': 'Active'},
-                {'name': 'Cabuyao', 'province': 'Laguna', 'code': 'MUN-LAG-005', 'status': 'Active'},
-                {'name': 'Los Baños', 'province': 'Laguna', 'code': 'MUN-LAG-006', 'status': 'Active'},
-                
-                # Batangas Province
-                {'name': 'Batangas City', 'province': 'Batangas', 'code': 'MUN-BAT-001', 'status': 'Active'},
-                {'name': 'Lipa', 'province': 'Batangas', 'code': 'MUN-BAT-002', 'status': 'Active'},
-                {'name': 'Tanauan', 'province': 'Batangas', 'code': 'MUN-BAT-003', 'status': 'Active'},
-                {'name': 'Santo Tomas', 'province': 'Batangas', 'code': 'MUN-BAT-004', 'status': 'Active'},
-                {'name': 'Taal', 'province': 'Batangas', 'code': 'MUN-BAT-005', 'status': 'Active'},
-                
-                # Rizal Province
-                {'name': 'Antipolo', 'province': 'Rizal', 'code': 'MUN-RIZ-001', 'status': 'Active'},
-                {'name': 'Cainta', 'province': 'Rizal', 'code': 'MUN-RIZ-002', 'status': 'Active'},
-                {'name': 'Taytay', 'province': 'Rizal', 'code': 'MUN-RIZ-003', 'status': 'Active'},
-                {'name': 'Binangonan', 'province': 'Rizal', 'code': 'MUN-RIZ-004', 'status': 'Active'},
-                {'name': 'Rodriguez', 'province': 'Rizal', 'code': 'MUN-RIZ-005', 'status': 'Active'},
-                
-                # Quezon Province
-                {'name': 'Lucena City', 'province': 'Quezon', 'code': 'MUN-QUE-001', 'status': 'Active'},
-                {'name': 'Tayabas', 'province': 'Quezon', 'code': 'MUN-QUE-002', 'status': 'Active'},
-                {'name': 'Sariaya', 'province': 'Quezon', 'code': 'MUN-QUE-003', 'status': 'Active'},
-                {'name': 'Candelaria', 'province': 'Quezon', 'code': 'MUN-QUE-004', 'status': 'Active'},
-                {'name': 'Tiaong', 'province': 'Quezon', 'code': 'MUN-QUE-005', 'status': 'Active'},
+                // ...existing code for CALABARZON...
             ],
             'MIMAROPA': [
-                # Marinduque Province
+                // Marinduque Province
                 {'name': 'Boac', 'province': 'Marinduque', 'code': 'MUN-MAR-001', 'status': 'Active'},
                 {'name': 'Santa Cruz', 'province': 'Marinduque', 'code': 'MUN-MAR-002', 'status': 'Active'},
                 {'name': 'Buenavista', 'province': 'Marinduque', 'code': 'MUN-MAR-003', 'status': 'Active'},
                 {'name': 'Gasan', 'province': 'Marinduque', 'code': 'MUN-MAR-004', 'status': 'Active'},
                 {'name': 'Mogpog', 'province': 'Marinduque', 'code': 'MUN-MAR-005', 'status': 'Active'},
-                
-                # Occidental Mindoro Province
-                {'name': 'Puerto Princesa', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-001', 'status': 'Active'},
-                {'name': 'San Jose', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-002', 'status': 'Active'},
-                {'name': 'Mamburao', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-003', 'status': 'Active'},
-                
 
-                # Oriental Mindoro Province (full list)
+                // Occidental Mindoro Province
+                {'name': 'San Jose', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-001', 'status': 'Active'},
+                {'name': 'Mamburao', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-002', 'status': 'Active'},
+
+                // Oriental Mindoro Province (full list)
                 {'name': 'Baco', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-001', 'status': 'Active'},
                 {'name': 'Bansud', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-002', 'status': 'Active'},
                 {'name': 'Bongabong', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-003', 'status': 'Active'},
@@ -2286,6 +2249,35 @@ def get_regional_municipal_offices():
                 {'name': 'Naujan', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-008', 'status': 'Active'},
                 {'name': 'Pinamalayan', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-009', 'status': 'Active'},
                 {'name': 'Pola', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-010', 'status': 'Active'},
+                {'name': 'Puerto Galera', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-011', 'status': 'Active'},
+                {'name': 'Roxas', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-012', 'status': 'Active'},
+                {'name': 'San Teodoro', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-013', 'status': 'Active'},
+                {'name': 'Socorro', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-014', 'status': 'Active'},
+                {'name': 'Victoria', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-015', 'status': 'Active'},
+
+                // Palawan Province
+                {'name': 'Puerto Princesa', 'province': 'Palawan', 'code': 'MUN-PAL-001', 'status': 'Active'},
+                {'name': 'Coron', 'province': 'Palawan', 'code': 'MUN-PAL-002', 'status': 'Active'},
+                {'name': 'El Nido', 'province': 'Palawan', 'code': 'MUN-PAL-003', 'status': 'Active'},
+                {'name': "Brooke's Point", 'province': 'Palawan', 'code': 'MUN-PAL-004', 'status': 'Active'},
+
+                // Romblon Province
+                {'name': 'Odiongan', 'province': 'Romblon', 'code': 'MUN-ROM-001', 'status': 'Active'},
+                {'name': 'Calatrava', 'province': 'Romblon', 'code': 'MUN-ROM-002', 'status': 'Active'},
+                {'name': 'San Andres', 'province': 'Romblon', 'code': 'MUN-ROM-003', 'status': 'Active'},
+            ]
+        }
+
+        municipalities = region_municipalities.get(region_name, []) or region_municipalities.get(firestore_region, [])
+        for mun in municipalities:
+            office_doc = {
+                'office_code': mun['code'],
+                'municipality_name': mun['name'],
+                'province': mun['province'],
+                'region': firestore_region,
+                'status': mun['status']
+            }
+            db.collection('municipal_offices').add(office_doc)
                 {'name': 'Puerto Galera', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-011', 'status': 'Active'},
                 {'name': 'Roxas', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-012', 'status': 'Active'},
                 {'name': 'San Teodoro', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-013', 'status': 'Active'},
