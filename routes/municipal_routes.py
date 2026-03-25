@@ -2073,7 +2073,12 @@ def accounting_coa_templates_municipal():
 @bp.route('/accounting/expense-category-municipal')
 @role_required('municipal','municipal_admin')
 def accounting_expense_category_municipal():
-    return render_template('municipal/accounting/expense-category-municipal.html')
+    from flask import session
+    municipality = session.get('municipality') or session.get('user_municipality')
+    return render_template(
+        'municipal/accounting/expense-category-municipal.html',
+        municipality=municipality
+    )
 
 @bp.route('/accounting/deposit-category-municipal')
 @role_required('municipal','municipal_admin')
@@ -2193,6 +2198,7 @@ from expense_storage import get_all_expense_categories
 @role_required('municipal', 'municipal_admin')
 def api_get_municipal_expense_categories():
     """Get all expense categories for this municipality only"""
+    import traceback
     try:
         municipality = request.args.get('municipality')
         if not municipality:
@@ -2200,10 +2206,13 @@ def api_get_municipal_expense_categories():
             municipality = session.get('municipality') or session.get('user_municipality')
         if not municipality:
             return jsonify({'error': 'Municipality not specified'}), 400
+        municipality = municipality.strip().upper()
         categories = get_all_expense_categories(municipality=municipality)
+        # Always return 200 with a list (even if empty)
         return jsonify(categories), 200
     except Exception as e:
         print(f"[ERROR] Municipal: Failed to get expense categories: {e}")
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     
 
