@@ -686,6 +686,7 @@
       if (!expensesData.success || !Array.isArray(expensesData.expenses)) throw new Error('No expenses data');
 
 
+
       // Helper to normalize names
       function normalize(str) {
         return (str || '')
@@ -699,15 +700,25 @@
       // Build a set of valid municipality+province keys from admin accounts
       const muniSet = new Set();
       const muniDisplay = {};
+      const muniKeysDebug = [];
       officesData.offices.forEach(o => {
         const muniKey = normalize(o.municipality_name) + '|' + normalize(o.province);
         muniSet.add(muniKey);
         muniDisplay[muniKey] = o.municipality_name + (o.province ? ' (' + o.province + ')' : '');
+        muniKeysDebug.push({
+          raw_muni: o.municipality_name,
+          raw_prov: o.province,
+          muniKey: muniKey
+        });
       });
+
+      // Debug: print all admin account keys
+      console.log('[DEBUG] Admin account muniKeys:', muniKeysDebug);
 
       // Aggregate usage only for municipalities with admin accounts (match both muni and province)
       const usage = {};
       const unmatched = new Set();
+      const expenseDebug = [];
       expensesData.expenses.forEach(tx => {
         let rawMuni = tx.municipality || tx.recipient || '';
         let rawProv = tx.province || '';
@@ -720,6 +731,9 @@
         if (normalize(rawMuni) === 'NATIONALGOVERNMENT') return; // skip
         const muniKey = normalize(rawMuni) + '|' + normalize(rawProv);
         const amt = Number(tx.amount) || 0;
+        expenseDebug.push({
+          rawMuni, rawProv, muniKey, amt
+        });
         if (!muniSet.has(muniKey)) {
           if (rawMuni) unmatched.add(rawMuni + (rawProv ? ' (' + rawProv + ')' : ''));
           return;
@@ -729,7 +743,8 @@
         usage[displayName] += amt;
       });
 
-      // Debug: log unmatched municipalities to the console
+      // Debug: log all expense keys and unmatched
+      console.log('[DEBUG] Expense entries:', expenseDebug);
       if (unmatched.size > 0) {
         console.warn('Municipalities in expenses not matched to admin accounts:', Array.from(unmatched));
       }
