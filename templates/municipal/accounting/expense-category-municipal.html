@@ -294,16 +294,19 @@
 
       async loadCategories(){
         try {
-          // Always include municipality in the request
+          // Always require municipality in the request
           const muni = '{{ municipality_name|default("", true) }}';
-          const url = muni ? `/api/expense-categories?municipality=${encodeURIComponent(muni)}` : '/api/expense-categories';
+          if (!muni) {
+            console.error('Municipality is not set. Cannot load categories.');
+            return;
+          }
+          const url = `/api/expense-categories?municipality=${encodeURIComponent(muni)}`;
           const res = await fetch(url);
           if(!res.ok) {
             console.error('Failed to load expense categories:', res.status);
             return;
           }
           const data = await res.json();
-          // The endpoint returns an array, not {categories: []}
           this.categories = Array.isArray(data) ? data : (data.categories || []);
         } catch(e){
           console.error('Error loading expense categories:', e);
@@ -371,7 +374,13 @@
           return;
         }
         try {
-          const res = await fetch('/api/expense-categories', {
+          const muni = '{{ municipality_name|default("", true) }}';
+          if (!muni) {
+            alert('Municipality is not set. Cannot save category.');
+            return;
+          }
+          const url = `/api/expense-categories?municipality=${encodeURIComponent(muni)}`;
+          const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(this.newCategory)
