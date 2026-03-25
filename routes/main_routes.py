@@ -293,6 +293,10 @@ def national_dashboard():
 @bp.route('/national/system-logs')
 @role_required('national', 'national_admin')
 def national_system_logs_fallback():
+        # Debug: Print the number of logs and a sample log
+        print(f"[DEBUG] regional_logs count: {len(regional_logs)}")
+        if regional_logs:
+            print(f"[DEBUG] Sample regional_log: {regional_logs[0]}")
     """
     Show only regional transactions and fund transfers in the national audit log page.
     """
