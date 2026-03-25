@@ -1570,7 +1570,7 @@ def leave_requests_national_view():
 @bp.route('/payroll')
 @role_required('national', 'national_admin')
 def payroll_national_view():
-    return render_template('national/HRM/payroll.html')
+    return render_template('national/operations/payroll-national.html')
 
 @bp.route('/audit-logs')
 @role_required('national', 'national_admin')
@@ -2636,5 +2636,6 @@ def api_get_national_leave_requests():
     except Exception as e:
         print(f'[ERROR] Failed to fetch leave requests: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 

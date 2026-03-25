@@ -48,6 +48,11 @@
                         <span id="statusBadge" class="px-3 py-1 rounded-lg text-[9px] font-black uppercase"></span>
                     </div>
 
+                    <div id="rejectionReasonBox" class="hidden mt-12 mb-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <label class="text-[8px] font-black text-red-700 uppercase tracking-widest block mb-1">Rejection Message</label>
+                        <p id="rejectionReasonText" class="text-[11px] font-semibold text-red-800 m-0"></p>
+                    </div>
+
                     <div class="space-y-2 md:space-y-3">
                         <span id="sectorBadge" class="inline-block text-[8px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded uppercase tracking-widest"></span>
                         <h1 id="productTitle" class="text-xl md:text-3xl font-black text-emerald-950 uppercase tracking-tighter italic leading-none"></h1>
@@ -139,6 +144,8 @@
                             <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Submitted Date</label>
                             <span id="appSubmittedDate" class="text-sm font-bold text-slate-600"></span>
                         </div>
+
+                        <div id="applicationMetaFields" class="mt-4 pt-4 border-t border-slate-100"></div>
                     </div>
                 </div>
             </div>
@@ -191,6 +198,29 @@
 
         function normalizeStatus(value) {
             return String(value || '').toLowerCase().trim().replace(/\s+/g, '_');
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function getRejectionReason(item) {
+            return (
+                item?.rejectionReason ||
+                item?.rejectionNote ||
+                item?.rejectedReason ||
+                item?.rejectReason ||
+                item?.remarks ||
+                item?.note ||
+                item?.nationalRejectionReason ||
+                item?.regionalRejectionReason ||
+                ''
+            );
         }
 
         function getInventoryStatusMeta(item) {
@@ -272,6 +302,90 @@
             };
         }
 
+        function getApplicationStatusMeta(item) {
+            const main = normalizeStatus(item.status || 'pending');
+            const regional = normalizeStatus(item.regionalStatus);
+            const national = normalizeStatus(item.nationalStatus);
+
+            let status = main || 'pending';
+
+            if (national === 'approved' || national === 'rejected') {
+                status = national;
+            } else if (
+                main === 'to-review' ||
+                main === 'to_review' ||
+                main === 'forwarded-to-national' ||
+                main === 'forwarded_to_national' ||
+                main.includes('forward')
+            ) {
+                status = main;
+            } else if (regional === 'approved' || regional === 'rejected') {
+                status = regional;
+            }
+
+            const approvedBy = (item.approvedByLevel || (national === 'approved' ? 'NATIONAL' : (regional === 'approved' ? 'REGIONAL' : 'MUNICIPAL'))).toUpperCase();
+            const rejectedBy = (item.rejectedByLevel || (national === 'rejected' ? 'NATIONAL' : (regional === 'rejected' ? 'REGIONAL' : 'MUNICIPAL'))).toUpperCase();
+            const forwardedTo = (item.forwardedToLevel || '').toUpperCase();
+
+            const pendingLevel = (() => {
+                if (national === 'pending' || main === 'forwarded-to-national' || main === 'forwarded_to_national') return 'NATIONAL';
+                if (regional === 'pending' || main === 'to-review' || main === 'to_review') return 'REGIONAL';
+                return 'MUNICIPAL';
+            })();
+
+            if (status === 'approved' || status === 'active') {
+                return {
+                    status,
+                    label: approvedBy ? `APPROVED BY ${approvedBy}` : 'APPROVED',
+                    className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-green-50 text-green-700 border border-green-200',
+                    icon: 'fa-check'
+                };
+            }
+
+            if (status === 'rejected') {
+                return {
+                    status,
+                    label: rejectedBy ? `REJECTED BY ${rejectedBy}` : 'REJECTED',
+                    className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-red-50 text-red-700 border border-red-200',
+                    icon: 'fa-times'
+                };
+            }
+
+            if (status === 'to-review' || status === 'to_review' || status.includes('forward')) {
+                return {
+                    status,
+                    label: forwardedTo ? `FORWARDED TO ${forwardedTo}` : `PENDING AT ${pendingLevel}`,
+                    className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-indigo-50 text-indigo-700 border border-indigo-200',
+                    icon: 'fa-share'
+                };
+            }
+
+            if (status === 'pending_payment' || status === 'payment_pending') {
+                return {
+                    status,
+                    label: 'AWAITING PAYMENT',
+                    className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-orange-50 text-orange-700 border border-orange-200',
+                    icon: 'fa-credit-card'
+                };
+            }
+
+            if (status === 'under-review') {
+                return {
+                    status,
+                    label: `PENDING AT ${pendingLevel}`,
+                    className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-blue-50 text-blue-700 border border-blue-200',
+                    icon: 'fa-magnifying-glass'
+                };
+            }
+
+            return {
+                status,
+                label: `PENDING AT ${pendingLevel}`,
+                className: 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-yellow-50 text-yellow-700 border border-yellow-200',
+                icon: 'fa-clock'
+            };
+        }
+
         function getApplicationId() {
             const pathParts = window.location.pathname.split('/');
             return pathParts[pathParts.length - 1];
@@ -299,7 +413,7 @@
                 const app = docSnap.data();
 
                 // --- Common header ---
-                const imageUrl = app.imageUrl || null;
+                const imageUrl = app.imageUrl || app?.files?.crop || app?.files?.land || null;
                 const imgEl = document.getElementById('productImage');
                 const noPhoto = document.getElementById('noPhotoState');
                 if (imageUrl) {
@@ -321,22 +435,28 @@
                 // --- Status badge ---
                 const statusBadge = document.getElementById('statusBadge');
                 const st = normalizeStatus(app.status || 'pending');
+                let resolvedStatusMeta;
                 if (isInventoryReg) {
                     const meta = getInventoryStatusMeta(app);
                     statusBadge.className = meta.className;
                     statusBadge.innerHTML = `<i class="fa-solid ${meta.icon} mr-1"></i> ${meta.label}`;
-                } else if (st === 'approved' || st === 'active') {
-                    statusBadge.className = 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-green-50 text-green-700 border border-green-200';
-                    statusBadge.innerHTML = '<i class="fa-solid fa-check mr-1"></i> APPROVED';
-                } else if (st === 'pending_payment' || st === 'payment_pending') {
-                    statusBadge.className = 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-orange-50 text-orange-700 border border-orange-200';
-                    statusBadge.innerHTML = '<i class="fa-solid fa-credit-card mr-1"></i> AWAITING PAYMENT';
-                } else if (st === 'rejected') {
-                    statusBadge.className = 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-red-50 text-red-700 border border-red-200';
-                    statusBadge.innerHTML = '<i class="fa-solid fa-times mr-1"></i> REJECTED';
+                    resolvedStatusMeta = meta;
                 } else {
-                    statusBadge.className = 'px-3 py-1 rounded-lg text-[9px] font-black uppercase bg-yellow-50 text-yellow-700 border border-yellow-200';
-                    statusBadge.textContent = String(app.status || 'pending').replace(/_/g, ' ').toUpperCase();
+                    const meta = getApplicationStatusMeta(app);
+                    statusBadge.className = meta.className;
+                    statusBadge.innerHTML = `<i class="fa-solid ${meta.icon} mr-1"></i> ${meta.label}`;
+                    resolvedStatusMeta = meta;
+                }
+
+                const rejectionReason = getRejectionReason(app);
+                const rejectionReasonBox = document.getElementById('rejectionReasonBox');
+                const rejectionReasonText = document.getElementById('rejectionReasonText');
+                if ((resolvedStatusMeta?.status || '').toLowerCase() === 'rejected' && rejectionReason) {
+                    rejectionReasonBox.classList.remove('hidden');
+                    rejectionReasonText.innerHTML = escapeHtml(rejectionReason);
+                } else {
+                    rejectionReasonBox.classList.add('hidden');
+                    rejectionReasonText.innerHTML = '';
                 }
 
                 if (isInventoryReg) {
@@ -397,7 +517,7 @@
                     };
                     const categoryLabel = categoryLabels[app.category] || app.category || 'Application';
                     document.getElementById('sectorBadge').textContent = categoryLabel;
-                    document.getElementById('productTitle').textContent = categoryLabel + ' Application';
+                    document.getElementById('productTitle').textContent = app.productName || (categoryLabel + ' Application');
 
                     const investment = app.investmentQty || app.totalValue || 0;
                     const harvest = app.harvestQty || app.stockAvailable || 0;
@@ -408,9 +528,38 @@
                     document.getElementById('unitPrice').textContent = '₱' + unitPrice;
                     document.getElementById('appSubmittedDate').textContent = formatDate(app.submittedAt || app.createdAt);
 
+                    document.getElementById('applicationMetaFields').innerHTML = `
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                                <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Category</label>
+                                <span class="text-sm font-bold text-slate-700">${categoryLabel}</span>
+                            </div>
+                            <div>
+                                <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Product Name</label>
+                                <span class="text-sm font-bold text-slate-700">${app.productName || 'N/A'}</span>
+                            </div>
+                            <div>
+                                <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Municipality</label>
+                                <span class="text-sm font-semibold text-slate-700">${app.municipality || 'N/A'}</span>
+                            </div>
+                            <div>
+                                <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Province</label>
+                                <span class="text-sm font-semibold text-slate-700">${app.province || 'N/A'}</span>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">User Email</label>
+                                <span class="text-sm font-semibold text-slate-700 break-all">${app.userEmail || 'N/A'}</span>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Reference ID</label>
+                                <span class="text-[11px] font-mono text-slate-600 break-all">${app.externalId || app.invoiceId || appId}</span>
+                            </div>
+                        </div>
+                    `;
+
                     document.getElementById('applicationFields').classList.remove('hidden');
 
-                    // Show documents
+                    // Show documents / uploaded file references
                     const documentsList = document.getElementById('documentsList');
                     const docIcons = { 'title': 'description', 'tax': 'receipt_long', 'blueprint': 'architecture', 'plan': 'business_center', 'brgy': 'location_city', 'land': 'landscape', 'crop': 'eco' };
                     const docLabels = { 'title': 'Title / Tax Dec', 'tax': 'Tax Receipt', 'blueprint': 'Blueprint', 'plan': 'Business Plan', 'brgy': 'Brgy Cert', 'land': 'Land Photo', 'crop': 'Crop Photo' };
@@ -420,6 +569,15 @@
                                 <span class="material-icons-round text-slate-300 group-hover:text-emerald-600 text-sm">${docIcons[key] || 'description'}</span>
                                 <span class="text-[8px] font-black text-slate-500 group-hover:text-emerald-700 uppercase truncate">${docLabels[key] || key}</span>
                             </a>`).join('');
+                    } else if (app.fileReferences) {
+                        documentsList.innerHTML = Object.entries(app.fileReferences).map(([key, fileName]) => `
+                            <div class="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg">
+                                <span class="material-icons-round text-slate-400 text-sm">description</span>
+                                <div class="min-w-0">
+                                    <p class="text-[8px] font-black text-slate-500 uppercase m-0">${key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}</p>
+                                    <p class="text-[9px] font-semibold text-slate-700 truncate m-0">${fileName || 'N/A'}</p>
+                                </div>
+                            </div>`).join('');
                     } else {
                         documentsList.innerHTML = '<p class="col-span-full text-center text-xs text-gray-400">No documents available</p>';
                     }

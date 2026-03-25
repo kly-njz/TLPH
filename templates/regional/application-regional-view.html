@@ -29,6 +29,26 @@
     dl dd { font-size: 11px; font-weight: 700; color: #0f172a; margin-bottom: 12px; margin-left: 0; }
     dl dd:last-child { margin-bottom: 0; }
 
+    .rejection-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+
+    .rejection-dialog {
+      background: white;
+      border: 2px solid #dc2626;
+      border-radius: 4px;
+      width: min(500px, 90vw);
+      box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    [x-cloak] { display: none !important; }
+
     @media print {
       .no-print { display: none !important; }
       .print-wrapper { margin-left: 0 !important; padding: 0 !important; }
@@ -159,14 +179,14 @@
 
               <div class="flex-1 overflow-y-auto custom-scrollbar pr-1">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  <template x-for="doc in documents" :key="doc.name">
-                    <a href="#" class="group flex items-center justify-between border border-slate-200 bg-slate-50 p-2 hover:bg-blue-50 hover:border-blue-300 transition-all rounded-[2px] no-underline">
+                  <template x-for="doc in documents" :key="doc.url || doc.name">
+                    <button type="button" @click="openDocumentPreview(doc)" class="w-full text-left group flex items-center justify-between border border-slate-200 bg-slate-50 p-2 hover:bg-blue-50 hover:border-blue-300 transition-all rounded-[2px] no-underline">
                       <div class="flex items-center gap-2 overflow-hidden">
                         <span class="material-icons-round text-slate-400 group-hover:text-blue-700 text-[16px]" x-text="doc.icon"></span>
                         <span class="text-[9px] font-black uppercase text-slate-700 group-hover:text-blue-900 truncate" x-text="doc.name"></span>
                       </div>
-                      <span class="material-icons-round text-slate-300 group-hover:text-blue-600 text-[14px]">download</span>
-                    </a>
+                      <span class="material-icons-round text-slate-300 group-hover:text-blue-600 text-[14px]">visibility</span>
+                    </button>
                   </template>
                 </div>
               </div>
@@ -180,7 +200,7 @@
                 </div>
                 
                 <div class="flex gap-1.5">
-                  <button @click="updateStatus('rejected')" :disabled="isFinal" :class="isFinal ? 'opacity-40 cursor-not-allowed' : ''" class="gov-btn border border-rose-600 bg-transparent text-rose-400 hover:bg-rose-600 hover:text-white transition-colors">
+                  <button @click="showRejectionModal()" :disabled="isFinal" :class="isFinal ? 'opacity-40 cursor-not-allowed' : ''" class="gov-btn border border-rose-600 bg-transparent text-rose-400 hover:bg-rose-600 hover:text-white transition-colors">
                     Reject
                   </button>
                   <button @click="forwardToNational()" :disabled="isFinal" :class="isFinal ? 'opacity-40 cursor-not-allowed' : ''" class="gov-btn border border-blue-400 bg-transparent text-blue-300 hover:bg-blue-600 hover:text-white transition-colors">
@@ -197,6 +217,52 @@
 
         </div>
       </main>
+    </div>
+  </div>
+
+  <div x-show="showingRejectionModal" x-cloak class="rejection-modal" @click="closeRejectionModal($event)">
+    <div class="rejection-dialog" @click.stop>
+      <div class="px-4 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
+        <h3 class="text-sm font-black uppercase text-red-800 m-0">Rejection Reason</h3>
+        <button type="button" @click="closeRejectionModal()" class="text-red-600 hover:text-red-800 border-0 bg-transparent text-lg">✕</button>
+      </div>
+      <div class="px-4 py-4">
+        <p class="text-[10px] font-bold text-slate-600 uppercase mb-3">Add a message explaining the reason for rejection (visible to applicant):</p>
+        <textarea x-model="rejectionMessage" class="w-full border border-slate-300 rounded-sm p-2 text-[11px] font-semibold focus:outline-none focus:border-red-500" rows="4" placeholder="e.g., Missing required documents, Incomplete business plan, Insufficient investment capital..."></textarea>
+      </div>
+      <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex gap-2 justify-end">
+        <button type="button" @click="closeRejectionModal()" class="gov-btn border border-slate-300 bg-white text-slate-700">Cancel</button>
+        <button type="button" @click="confirmRejection()" class="gov-btn border border-red-600 bg-red-600 text-white">Reject &amp; Send Message</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Document Preview Modal -->
+  <div x-show="preview.open" x-cloak class="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4" style="display:none;" @click.self="closeDocumentPreview()">
+    <div class="bg-white w-full max-w-5xl rounded-[2px] border border-slate-300 shadow-xl overflow-hidden">
+      <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
+        <h3 class="text-[10px] font-black uppercase tracking-widest truncate" x-text="preview.name || 'Document Preview'"></h3>
+        <button type="button" class="text-white/80 hover:text-white" @click="closeDocumentPreview()">
+          <span class="material-icons-round text-[18px]">close</span>
+        </button>
+      </div>
+
+      <div class="bg-slate-50 p-3 max-h-[78vh] overflow-auto custom-scrollbar">
+        <template x-if="preview.type === 'image'">
+          <img :src="preview.url" alt="Document Preview" class="w-full h-auto border border-slate-200 bg-white" />
+        </template>
+
+        <template x-if="preview.type === 'pdf'">
+          <iframe :src="preview.url + '#toolbar=0&navpanes=0&scrollbar=1'" class="w-full h-[72vh] border border-slate-200 bg-white"></iframe>
+        </template>
+
+        <template x-if="preview.type !== 'image' && preview.type !== 'pdf'">
+          <div class="text-center py-12 bg-white border border-slate-200">
+            <span class="material-icons-round text-4xl text-slate-400">description</span>
+            <p class="mt-2 text-[10px] font-black uppercase text-slate-600">Preview not available for this file type.</p>
+          </div>
+        </template>
+      </div>
     </div>
   </div>
 
@@ -231,11 +297,19 @@
         currentCollection: 'applications',
         currentRecordType: 'application',
         isFinal: false,
+        rejectionMessage: '',
+        showingRejectionModal: false,
         stats: {
           species: "0",
           harvest: "0"
         },
         documents: [],
+        preview: {
+          open: false,
+          name: '',
+          url: '',
+          type: 'file'
+        },
 
         async init() {
           // Add a tiny delay to ensure module scripts attach to window object first
@@ -330,15 +404,88 @@
                     : (appData.harvestQty || appData.maxHarvestQty || "0")
                 };
 
-                this.documents = [
-                  { name: "Land Title / Tax Declaration", icon: "description" },
-                  { name: "Tax Receipt", icon: "receipt_long" },
-                  { name: "Blueprint / Site Plan", icon: "architecture" },
-                  { name: "Land / Site Photo", icon: "terrain" },
-                  { name: "Crop / Product Photo", icon: "grass" },
-                  { name: "Business Plan", icon: "assignment" },
-                  { name: "Barangay Clearance", icon: "storefront" }
-                ];
+                const labelMap = {
+                  brgy: 'Barangay Clearance',
+                  title: 'Land Title / Tax Declaration',
+                  tax: 'Tax Receipt',
+                  blueprint: 'Blueprint / Site Plan',
+                  land: 'Land / Site Photo',
+                  crop: 'Crop / Product Photo',
+                  plan: 'Business Plan',
+                  productPicture: 'Product Picture',
+                  image: 'Resource Photo',
+                  permit: 'Permit File'
+                };
+
+                const iconMap = {
+                  brgy: 'storefront',
+                  title: 'description',
+                  tax: 'receipt_long',
+                  blueprint: 'architecture',
+                  land: 'terrain',
+                  crop: 'grass',
+                  plan: 'assignment',
+                  productPicture: 'image',
+                  image: 'image',
+                  permit: 'description'
+                };
+
+                const docs = [];
+
+                if (appData.files && typeof appData.files === 'object') {
+                  Object.entries(appData.files).forEach(([key, url]) => {
+                    if (typeof url === 'string' && url.trim()) {
+                      docs.push({
+                        name: labelMap[key] || key,
+                        icon: iconMap[key] || 'description',
+                        url
+                      });
+                    }
+                  });
+                }
+
+                if (Array.isArray(appData.documents)) {
+                  appData.documents.forEach((d) => {
+                    if (d && d.url) {
+                      docs.push({
+                        name: d.name || 'Document',
+                        icon: 'description',
+                        url: d.url
+                      });
+                    }
+                  });
+                }
+
+                if (appData.uploadedFiles && typeof appData.uploadedFiles === 'object') {
+                  Object.entries(appData.uploadedFiles).forEach(([key, val]) => {
+                    const arr = Array.isArray(val) ? val : [val];
+                    arr.forEach((f) => {
+                      if (f && f.downloadUrl) {
+                        docs.push({
+                          name: labelMap[key] || key,
+                          icon: iconMap[key] || 'description',
+                          url: f.downloadUrl
+                        });
+                      }
+                    });
+                  });
+                }
+
+                if (this.currentRecordType === 'inventory') {
+                  if (appData.imageUrl) {
+                    docs.push({ name: 'Resource Photo', icon: 'image', url: appData.imageUrl });
+                  }
+                  if (appData.permitUrl) {
+                    docs.push({ name: 'Permit File', icon: 'description', url: appData.permitUrl });
+                  }
+                }
+
+                const seen = new Set();
+                this.documents = docs.filter((d) => {
+                  if (!d.url || seen.has(d.url)) return false;
+                  seen.add(d.url);
+                  return true;
+                });
 
                 this.loading = false;
 
@@ -356,8 +503,29 @@
           }, 100);
         },
 
-        async updateStatus(newStatus) {
-          if (!confirm(`Are you sure you want to ${newStatus.toUpperCase()} this request?`)) {
+        showRejectionModal() {
+          if (this.isFinal) return;
+          this.rejectionMessage = '';
+          this.showingRejectionModal = true;
+        },
+
+        closeRejectionModal(event = null) {
+          if (event && event.target !== event.currentTarget) return;
+          this.showingRejectionModal = false;
+        },
+
+        async confirmRejection() {
+          const rejectionText = String(this.rejectionMessage || '').trim();
+          if (!rejectionText) {
+            alert('Please provide a rejection reason before proceeding.');
+            return;
+          }
+
+          await this.updateStatus('rejected', true);
+        },
+
+        async updateStatus(newStatus, skipPrompt = false) {
+          if (!skipPrompt && !confirm(`Are you sure you want to ${newStatus.toUpperCase()} this request?`)) {
             return;
           }
 
@@ -365,7 +533,7 @@
             const applicationId = window.location.pathname.split('/').pop();
             const { updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
 
-            await updateDoc(window.firebaseDoc(window.firebaseDB, this.currentCollection, applicationId), {
+            const updatePayload = {
               status: newStatus,
               regionalStatus: newStatus,
               approvedByLevel: newStatus === 'approved' ? 'Regional' : '',
@@ -374,14 +542,41 @@
               rejectedByEmail: newStatus === 'rejected' ? (window.firebaseAuth.currentUser?.email || 'regional-admin') : '',
               regionalUpdatedAt: new Date().toISOString(),
               regionalUpdatedBy: window.firebaseAuth.currentUser?.email || 'regional-admin'
-            });
+            };
+
+            if (newStatus === 'rejected') {
+              updatePayload.rejectionReason = String(this.rejectionMessage || '').trim() || 'No reason provided';
+            }
+
+            await updateDoc(window.firebaseDoc(window.firebaseDB, this.currentCollection, applicationId), updatePayload);
 
             alert(`Request ${newStatus.toUpperCase()} successfully!`);
+            this.closeRejectionModal();
             window.location.href = '/regional/application-list';
           } catch (error) {
             console.error('Error updating status:', error);
             alert('Error updating request status: ' + error.message);
           }
+        },
+
+        openDocumentPreview(doc) {
+          if (!doc || !doc.url) return;
+          const url = String(doc.url || '');
+          const lower = url.toLowerCase();
+          let type = 'file';
+          if (/\.(png|jpg|jpeg|gif|webp|avif|bmp)(\?|$)/i.test(lower)) type = 'image';
+          else if (/\.pdf(\?|$)/i.test(lower)) type = 'pdf';
+
+          this.preview = {
+            open: true,
+            name: doc.name || 'Document Preview',
+            url,
+            type
+          };
+        },
+
+        closeDocumentPreview() {
+          this.preview.open = false;
         },
 
         async forwardToNational() {

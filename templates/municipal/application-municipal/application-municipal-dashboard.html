@@ -147,9 +147,10 @@
       <section class="flex-1 flex flex-col min-h-0 border border-gray-300 rounded-sm bg-white overflow-hidden shadow-sm">
         
         <div class="shrink-0 hidden grid-cols-12 gap-2 border-b-2 border-gray-400 bg-gray-200 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-gray-700 md:grid">
-          <div class="col-span-4 truncate">Reference &amp; Applicant</div>
-          <div class="col-span-3 truncate">Application Category</div>
-          <div class="col-span-2 truncate">Filed Date</div>
+          <div class="col-span-3 truncate">Reference &amp; Applicant</div>
+          <div class="col-span-3 truncate">Product Name</div>
+          <div class="col-span-2 truncate">Application Category</div>
+          <div class="col-span-1 truncate">Filed Date</div>
           <div class="col-span-2 truncate">Status</div>
           <div class="col-span-1 text-right truncate">Action</div>
         </div>
@@ -287,6 +288,13 @@
             const natStatus = (data.nationalStatus || '').toLowerCase();
             const regStatus = (data.regionalStatus || '').toLowerCase();
             const mainStatus = (data.status || '').toLowerCase();
+            const approvedByLevel = (data.approvedByLevel || '').toLowerCase();
+            const rejectedByLevel = (data.rejectedByLevel || '').toLowerCase();
+
+            const formatLevel = (level) => {
+              if (!level) return '';
+              return level.charAt(0).toUpperCase() + level.slice(1).toLowerCase();
+            };
 
             if (natStatus === 'approved') {
               statusKey = 'approved-national';
@@ -297,12 +305,14 @@
             } else if (mainStatus === 'forwarded-to-national') {
               statusKey = 'forwarded-national';
               statusText = 'Forwarded to National';
-            } else if (regStatus === 'approved' || mainStatus === 'approved') {
-              statusKey = 'approved-regional';
-              statusText = 'Approved by Regional';
+            } else if (mainStatus === 'approved' || regStatus === 'approved') {
+              const byLevel = formatLevel(approvedByLevel) || (regStatus === 'approved' ? 'Regional' : 'Municipal');
+              statusKey = byLevel.toLowerCase() === 'regional' ? 'approved-regional' : 'accepted';
+              statusText = `Approved by ${byLevel}`;
             } else if (regStatus === 'rejected' || (mainStatus === 'rejected' && !natStatus)) {
+              const byLevel = formatLevel(rejectedByLevel) || (regStatus === 'rejected' ? 'Regional' : 'Municipal');
               statusKey = 'rejected';
-              statusText = 'Rejected';
+              statusText = `Rejected by ${byLevel}`;
             } else if (mainStatus === 'to-review') {
               statusKey = 'forwarded-regional';
               statusText = 'Forwarded to Regional';
@@ -320,6 +330,7 @@
               id: doc.id,
               type: 'application',
               name: userName,
+              productName: data.productName || data.item_name || data.itemName || 'N/A',
               reference: doc.id.substring(0, 12),
               filedDate,
               status: data.status,
@@ -664,18 +675,24 @@
       // ULTRA-COMPACT ROW DESIGN
       return `
         <div class="grid grid-cols-12 items-center gap-2 border-b border-gray-200 bg-white px-2 py-1.5 hover:bg-emerald-50 transition-colors">
-          <div class="col-span-12 md:col-span-4 min-w-0 flex flex-col justify-center">
+          <div class="col-span-12 md:col-span-3 min-w-0 flex flex-col justify-center">
             <span class="text-[10px] font-bold text-gray-900 truncate">${a.name}</span>
             <span class="text-[8px] font-bold uppercase tracking-widest text-gray-500 truncate">${a.reference}</span>
           </div>
 
           <div class="col-span-12 md:col-span-3 min-w-0">
+            <span class="text-[9px] font-semibold text-gray-800 truncate block w-full">
+              ${a.productName || 'N/A'}
+            </span>
+          </div>
+
+          <div class="col-span-12 md:col-span-2 min-w-0">
             <span class="text-[9px] font-semibold text-gray-700 truncate block w-full">
               ${a.categoryLabel}
             </span>
           </div>
 
-          <div class="col-span-12 md:col-span-2 min-w-0">
+          <div class="col-span-12 md:col-span-1 min-w-0">
             <span class="text-[9px] font-medium text-gray-600 truncate block">${a.filedDate}</span>
           </div>
 
@@ -714,7 +731,7 @@
         if (!q) return matchesCategory;
 
         const haystack = normalize(
-          `${a.name} ${a.reference} ${a.filedDate} ${a.categoryLabel} ${a.status}`
+          `${a.name} ${a.productName || ''} ${a.reference} ${a.filedDate} ${a.categoryLabel} ${a.status}`
         );
 
         return matchesCategory && haystack.includes(q);
