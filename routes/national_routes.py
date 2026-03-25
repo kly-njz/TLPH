@@ -1586,9 +1586,11 @@ def audit_logs():
         docs = db.collection('national_audit_logs').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(200).stream()
         for doc in docs:
             entry = doc.to_dict() or {}
+            # Prefer email if available, fallback to name, then 'User'
+            user_val = entry.get('user') or entry.get('user_email') or entry.get('actorEmail') or entry.get('actorName') or entry.get('actor') or 'User'
             logs.append({
                 'timestamp': entry.get('timestamp') or '',
-                'user': entry.get('user') or '',
+                'user': user_val,
                 'entity': entry.get('entity') or '',
                 'action': entry.get('action') or '',
                 'details': entry.get('details') or '',
