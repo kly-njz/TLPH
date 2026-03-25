@@ -380,6 +380,10 @@ def national_system_logs_fallback():
         print(f"[national_system_logs_fallback] Error: {e}")
         regional_logs = []
 
+    # Map 'ts' to 'timestamp' and 'message' to 'details' for frontend compatibility
+    for log in regional_logs:
+        log['timestamp'] = log.get('ts', '')
+        log['details'] = log.get('message', '')
     return render_template('national/system/system-logs.html',
         regional_logs=regional_logs,
         municipal_logs=[],
