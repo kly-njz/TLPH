@@ -324,11 +324,11 @@
                         
                         console.log('Users loaded:', Object.keys(usersMap).length);
                         
-                        // Query applications with status 'to-review', 'pending', or 'under-review'
+                        // Query applications that can belong to regional workflow
                         const q = window.firebaseQuery(
                             window.firebaseCollection(window.firebaseDB, 'applications'),
                             window.firebaseWhere('status', 'in', [
-                                'to-review', 'pending', 'under-review',
+                                'to-review',
                                 'approved', 'rejected', 'forwarded-to-national', 'cancelled'
                             ])
                         );
@@ -343,6 +343,26 @@
                                 const appProvince = (data.province || userInfo?.province || '').toUpperCase();
                                 const appMunicipality = (data.municipality || userInfo?.municipality || 'N/A').toUpperCase();
                                 const applicantName = (userInfo?.name || data.userName || 'Unknown').toUpperCase();
+                                const status = (data.status || 'pending').toLowerCase();
+                                const regionalStatus = (data.regionalStatus || '').toLowerCase();
+                                const nationalStatus = (data.nationalStatus || '').toLowerCase();
+                                const forwardedByLevel = (data.forwardedByLevel || '').toLowerCase();
+                                const approvedByLevel = (data.approvedByLevel || '').toLowerCase();
+                                const rejectedByLevel = (data.rejectedByLevel || '').toLowerCase();
+
+                                // Hard gate: regional should only see records that already entered regional workflow.
+                                const enteredRegionalWorkflow = (
+                                    ['to-review', 'forwarded-to-national'].includes(status) ||
+                                    ['approved', 'rejected', 'forwarded'].includes(regionalStatus) ||
+                                    ['approved', 'rejected'].includes(nationalStatus) ||
+                                    approvedByLevel === 'regional' ||
+                                    rejectedByLevel === 'regional' ||
+                                    !!data.forwardedAt ||
+                                    !!data.forwardedToRegionalAt ||
+                                    forwardedByLevel === 'municipal'
+                                );
+
+                                if (!enteredRegionalWorkflow) return;
                                 
                                 // Only include applications from user's provinces
                                 if (this.userProvinces.includes(appProvince)) {
@@ -354,9 +374,9 @@
                                         applicant: applicantName,
                                         productName: (data.productName || data.item_name || data.itemName || (data.resourceName || 'N/A')).toUpperCase(),
                                         category: this.resolveCategory(data),
-                                        status: (data.status || 'pending').toLowerCase(),
+                                        status,
                                         nationalStatus: (data.nationalStatus || '').toLowerCase(),
-                                        regionalStatus: (data.regionalStatus || '').toLowerCase()
+                                        regionalStatus
                                     });
                                 }
                             });
