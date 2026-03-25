@@ -542,12 +542,111 @@
     $("fr").addEventListener("change", function() { loadMunicipalities(this.options[this.selectedIndex].dataset.code, 'fm', 'All Municipalities', true); render(); });
     $("reg").addEventListener("change", function() { loadMunicipalities(this.options[this.selectedIndex].dataset.code, 'mun', 'Select Municipality / City', false); });
 
-    let rows=[
-      {id:crypto.randomUUID(),payNo:"PR-2026-00021",month:"2026-02",period:"1-15",no:"DENR-2026-0007",name:"Dela Cruz, Juan",cat:"REGIONAL",reg:"National Capital Region",mun:"",status:"POSTED",basic:20000,allow:2000,ot:500,ded:1500,remarks:""},
-      {id:crypto.randomUUID(),payNo:"PR-2026-00025",month:"2026-02",period:"16-EOM",no:"DENR-2026-0011",name:"Santos, Maria",cat:"MUNICIPALITY",reg:"CALABARZON",mun:"City of San Pedro",status:"PAID",basic:18000,allow:1500,ot:0,ded:1200,remarks:""},
-      {id:crypto.randomUUID(),payNo:"PR-2026-00031",month:"2026-03",period:"1-15",no:"DENR-2026-0012",name:"Reyes, Carlo",cat:"REGIONAL",reg:"National Capital Region",mun:"",status:"DRAFT",basic:21000,allow:2200,ot:800,ded:1700,remarks:""},
-      {id:crypto.randomUUID(),payNo:"PR-2026-00044",month:"2026-03",period:"MONTHLY",no:"DENR-2026-0018",name:"Garcia, Ana",cat:"MUNICIPALITY",reg:"CALABARZON",mun:"City of Biñan",status:"CANCELLED",basic:17500,allow:1200,ot:0,ded:900,remarks:"Cancelled due to correction"}
-    ];
+
+    let rows = [];
+
+    async function fetchPayrollRecords() {
+        try {
+            const resp = await fetch('/superadmin/api/hrm/payroll');
+            const data = await resp.json();
+            if (data.success && Array.isArray(data.payrolls)) {
+                rows = data.payrolls.map(x => ({
+                    id: x.id,
+                    payNo: x.payNo || x.pay_no || '',
+                    month: x.month || '',
+                    period: x.period || '',
+                    no: x.no || x.employee_no || '',
+                    name: x.name || x.employee_name || '',
+                    cat: x.cat || x.category || '',
+                    reg: x.reg || x.region || '',
+                    mun: x.mun || x.municipality || '',
+                    status: x.status || 'DRAFT',
+                    basic: Number(x.basic) || 0,
+                    allow: Number(x.allow) || 0,
+                    ot: Number(x.ot) || 0,
+                    ded: Number(x.ded) || 0,
+                    remarks: x.remarks || ''
+                }));
+            } else {
+                rows = [];
+            }
+        } catch (e) {
+            rows = [];
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        await initLocationAPI();
+        await fetchPayrollRecords();
+
+        // ...rest of the DOMContentLoaded logic remains unchanged...
+
+        $("btnOpenCreate").onclick=()=>openM("create");
+        $("mx").onclick=$("mc").onclick=closeM; $("mb").onclick=e=>{if(e.target===$("mb")) closeM();};
+        $("cx").onclick=$("cc").onclick=closeConfirm; $("cm").onclick=e=>{if(e.target===$("cm")) closeConfirm();};
+        $("co").onclick=()=>{ if(confirmAction){ const fn=confirmAction; closeConfirm(); fn(); } };
+        ["basic","allow","ot","ded"].forEach(id=>$(id).addEventListener("input",updateCalc));
+
+        ["fc","fr","fs","fPeriod"].forEach(id=>$(id).addEventListener("change",render));
+        ["fm","fMonth","fSearch"].forEach(id=>$(id).addEventListener("input",render));
+        $("btnClear").onclick=()=>{
+            $("fc").value="ALL"; $("fr").value="ALL"; $("fs").value="ALL"; $("fMonth").value=""; $("fPeriod").value="ALL"; $("fSearch").value="";
+            $("fm").innerHTML='<option value="ALL">All Municipalities</option>'; $("fm").disabled=true;
+            render(); toast("Cleared","Filters reset.");
+        };
+
+        $("btnExport").onclick = () => {
+            const view = filt(rows).map(x=>({ ...x, ...calc(x) }));
+            const csv = [["Payroll No.","Month","Period","Employee No.","Employee Name","Category","Region","Municipality","Basic","Allowances","Overtime","Gross","Deductions","Net","Status","Remarks"], ...view.map(x=>[x.payNo,x.month,x.period,x.no,x.name,x.cat,x.reg||"",x.mun||"",x.basic,x.allow,x.ot,x.gross,x.ded,x.net,x.status,x.remarks||""])].map(r=>r.map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(",")).join("\n");
+            const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"})); a.download = "denr_hr_payroll.csv"; document.body.appendChild(a); a.click(); a.remove(); toast("Exported","CSV file downloaded.");
+        };
+
+        $("sa").onchange=(e)=>q(".rc").forEach(x=>x.checked=e.target.checked);
+        $("btnBulkPost").onclick=()=>{ 
+            const ids=selected(); 
+            if(!ids.length) return toast("No selection","Select at least one payroll.");
+            openConfirm('<i class="fa-solid fa-upload text-sky-300"></i> Post Selected', `Post ${ids.length} selected payroll record(s)?`, "info", () => { ids.forEach(id=>setStatus(id,"POSTED")); render(); toast("Updated","Selected payroll posted."); });
+        };
+        $("btnBulkPaid").onclick=()=>{ 
+            const ids=selected(); 
+            if(!ids.length) return toast("No selection","Select at least one payroll.");
+            openConfirm('<i class="fa-solid fa-check text-emerald-300"></i> Mark Selected Paid', `Mark ${ids.length} selected payroll record(s) as paid?`, "success", () => { ids.forEach(id=>setStatus(id,"PAID")); render(); toast("Updated","Selected payroll marked as paid."); });
+        };
+        $("btnBulkDelete").onclick=()=>{ 
+            const ids=selected(); 
+            if(!ids.length) return toast("No selection","Select at least one payroll.");
+            openConfirm('<i class="fa-solid fa-trash text-rose-300"></i> Delete Selected', `Remove ${ids.length} selected payroll record(s)? This cannot be undone.`, "danger", () => { ids.forEach(del); render(); toast("Removed","Selected records deleted."); });
+        };
+
+        document.addEventListener("click",(e)=>{
+            const ed=e.target.closest(".ed"), rm=e.target.closest(".rm"), post=e.target.closest(".post"), paid=e.target.closest(".paid");
+            if(ed) return openM("edit",ed.dataset.id);
+            if(post){ 
+                const id=post.dataset.id; const x=rows.find(z=>z.id===id); if(!x) return;
+                return openConfirm('<i class="fa-solid fa-upload text-sky-300"></i> Post Payroll', `Post payroll ${x.payNo} for ${x.name}?`, "info", () => { setStatus(id,"POSTED"); render(); toast("Posted","Payroll posted."); });
+            }
+            if(paid){ 
+                const id=paid.dataset.id; const x=rows.find(z=>z.id===id); if(!x) return;
+                return openConfirm('<i class="fa-solid fa-check text-emerald-300"></i> Mark Paid', `Mark payroll ${x.payNo} for ${x.name} as paid?`, "success", () => { setStatus(id,"PAID"); render(); toast("Paid","Payroll marked as paid."); });
+            }
+            if(rm){ 
+                const id=rm.dataset.id; const x=rows.find(z=>z.id===id); if(!x) return; 
+                return openConfirm('<i class="fa-solid fa-trash text-rose-300"></i> Delete Payroll', `Remove payroll ${x.payNo} for ${x.name}? This cannot be undone.`, "danger", () => { del(id); render(); toast("Removed","Payroll deleted."); });
+            }
+        });
+
+        $("f").onsubmit=(e)=>{
+            e.preventDefault();
+            const payload={ payNo:$("payNo").value.trim().toUpperCase(), month:$("month").value, period:$("period").value, no:$("no").value.trim().toUpperCase(), name:$("name").value.trim(), cat:$("cat").value, reg:$("reg").value, mun:$("mun").value, status:$("status").value, basic:num($("basic").value), allow:num($("allow").value), ot:num($("ot").value), ded:num($("ded").value), remarks:$("remarks").value.trim() };
+            if(payload.cat==="MUNICIPALITY" && !payload.mun) return toast("Missing field","Municipality is required.");
+            const id=$("eid").value.trim()||null;
+            const dup=rows.some(x=>x.payNo.toLowerCase()===payload.payNo.toLowerCase() && x.id!==id);
+            if(dup) return toast("Duplicate","Payroll No. must be unique.");
+            upsert(payload,id); closeM(); render(); toast("Saved","Payroll record saved.");
+        };
+
+        render();
+    });
 
     const calc = (x) => ({gross:num(x.basic)+num(x.allow)+num(x.ot), net:(num(x.basic)+num(x.allow)+num(x.ot))-num(x.ded)});
 
