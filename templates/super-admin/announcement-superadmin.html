@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Superadmin | Announcement Management</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --gov-primary: #064e3b; 
+            --gov-secondary: #047857;
+            --gov-surface: #ffffff;
+            --gov-bg: #f1f5f9; 
+            --gov-border: #cbd5e1; 
+            --text-main: #0f172a;
+            --text-muted: #475569; 
+        }
+
+        /* FIX: MODAL Z-INDEX (Dapat mas mataas sa Sidenav na 1060) */
+        .modal { z-index: 1080 !important; }
+        .modal-backdrop { z-index: 1070 !important; }
+
+        /* 100VH NO SCROLL SETUP */
+        html, body {
+            height: 100vh;
+            overflow: hidden; 
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--gov-bg);
+            color: var(--text-main);
+            font-size: 0.8125rem;
+        }
+
+        /* HEADER */
+        .admin-header {
+            background-color: var(--gov-primary);
+            color: white;
+            padding: 0.6rem 0; 
+            border-bottom: 3px solid #f59e0b; 
+            flex-shrink: 0; 
+        }
+        .header-title { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 0;}
+        .header-subtitle { font-size: 0.65rem; color: #a7f3d0; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 0.1rem;}
+
+        /* MAIN CONTENT AREA */
+        .main-wrapper {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 0.75rem 1rem;
+        }
+
+        .panel {
+            background: var(--gov-surface);
+            border: 1px solid var(--gov-border);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* TOP INSIGHT CARDS */
+        .insight-card {
+            background: var(--gov-surface);
+            border: 1px solid var(--gov-border);
+            border-radius: 4px;
+            padding: 0.6rem 0.8rem;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            height: 100%;
+        }
+        .insight-icon { width: 32px; height: 32px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; margin-right: 0.75rem; }
+        .insight-value { font-size: 1.25rem; font-weight: 700; line-height: 1; color: var(--text-main); margin-bottom: 0.1rem;}
+        .insight-label { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;}
+
+        /* TABLE CONTAINER & INTERNAL SCROLLING */
+        .table-panel-body {
+            flex-grow: 1;
+            overflow-y: auto; 
+            min-height: 0; 
+        }
+        
+        .table-panel-body::-webkit-scrollbar { width: 6px; }
+        .table-panel-body::-webkit-scrollbar-track { background: #f8fafc; }
+        .table-panel-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .table-panel-body::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .table-custom { margin-bottom: 0; min-width: 700px; } 
+        
+        .table-custom th { 
+            background-color: #f8fafc; 
+            color: var(--text-muted); 
+            font-size: 0.65rem; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px; 
+            padding: 0.6rem 0.75rem;
+            border-bottom: 2px solid var(--gov-border);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            box-shadow: 0 1px 0 var(--gov-border); 
+        }
+        
+        .table-custom td { 
+            padding: 0.6rem 0.75rem; 
+            vertical-align: middle; 
+            border-bottom: 1px solid #e2e8f0;
+            color: var(--text-main);
+        }
+        .table-custom tbody tr:hover { background-color: #f1f5f9; }
+        
+        .data-title { font-size: 0.8rem; font-weight: 700; color: #0f172a; margin-bottom: 0.1rem; }
+        .data-excerpt { 
+            font-size: 0.75rem; 
+            color: var(--text-muted); 
+            line-height: 1.4;
+            display: -webkit-box;
+            line-clamp: 1; 
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        /* Badges */
+        .badge-gov { font-size: 0.6rem; padding: 0.25em 0.5em; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block;}
+        .bg-urgent { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5;}
+        .bg-policy { background-color: #dcfce7; color: #15803d; border: 1px solid #86efac;}
+        .bg-system { background-color: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc;}
+        .bg-general { background-color: #fef3c7; color: #b45309; border: 1px solid #fde047;}
+        
+        /* STATUS PILLS */
+        .status-pill { font-size: 0.65rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.25rem; border: 1px solid transparent;}
+        .status-active { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0;}
+        .status-draft { background: #f8fafc; color: #64748b; border-color: #e2e8f0;}
+        .status-completed { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe;}
+        .status-inactive { background: #fef2f2; color: #dc2626; border-color: #fecaca;}
+
+        /* Compact Buttons */
+        .btn-action { width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; border: 1px solid var(--gov-border); background: white; color: var(--text-muted); font-size: 0.7rem; transition: 0.1s; cursor: pointer;}
+        .btn-action:hover { background: #f1f5f9; color: var(--gov-primary); border-color: var(--gov-primary); }
+        .btn-action-delete:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+
+        .btn-clear { border-color: var(--gov-border); color: #94a3b8; background: white; padding: 0.2rem 0.5rem;}
+        .btn-clear:hover { color: #ef4444; background: #f8fafc; }
+
+        /* IMAGE PREVIEW STYLE */
+        #imagePreviewContainer {
+            width: 100%;
+            max-height: 150px;
+            border: 1px dashed var(--gov-border);
+            border-radius: 4px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: #f8fafc;
+            margin-top: 5px;
+        }
+        #imagePreviewContainer img {
+            max-width: 100%;
+            max-height: 140px;
+            object-fit: contain;
+        }
+
+        /* VIEW MODAL STYLE */
+        .view-image {
+            width: 100%;
+            max-height: 250px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            border: 1px solid var(--gov-border);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50 relative">
+    
+    <div class="gov-strip no-print"></div>
+
+    <div class="fixed left-0 top-0 h-full z-[1060] hidden lg:block w-[260px] no-print">
+        {% include 'super-admin/sidenav-superadmin.html' %}
+    </div>
+
+    <div class="fixed top-[3px] w-full lg:w-[calc(100%-260px)] lg:left-[260px] z-[1050] no-print">
+        {% include 'super-admin/header-superadmin.html' %}
+    </div>
+    
+    <main class="absolute top-[53px] right-0 bottom-0 left-0 lg:left-[260px] p-3 gap-2 overflow-hidden flex flex-col z-10">
+
+        <header class="admin-header rounded-1 shadow-sm">
+            <div class="container-fluid px-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="header-subtitle"><i class="fa-solid fa-shield-halved me-1"></i> DENR Central Command</div>
+                        <h1 class="header-title">Announcement Management</h1>
+                    </div>
+                    <button class="btn btn-light btn-sm fw-bold text-success border border-success-subtle px-3 py-1 rounded-1 shadow-sm" onclick="openAddModal()">
+                        <i class="fa-solid fa-file-circle-plus me-1"></i> Draft New Memo
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-wrapper">
+            <div class="row g-2 mb-2 flex-shrink-0">
+                <div class="col-3"><div class="insight-card"><div class="insight-icon bg-light text-secondary border"><i class="fa-solid fa-bullhorn"></i></div><div><div class="insight-value">124</div><div class="insight-label">Total Published</div></div></div></div>
+                <div class="col-3"><div class="insight-card border-danger border-opacity-50" style="background-color: #fffafb;"><div class="insight-icon bg-urgent"><i class="fa-solid fa-triangle-exclamation"></i></div><div><div class="insight-value text-danger">2</div><div class="insight-label text-danger">Active Urgent</div></div></div></div>
+                <div class="col-3"><div class="insight-card"><div class="insight-icon bg-policy"><i class="fa-solid fa-scale-balanced"></i></div><div><div class="insight-value">45</div><div class="insight-label">Active Policies</div></div></div></div>
+                <div class="col-3"><div class="insight-card"><div class="insight-icon bg-light text-warning border"><i class="fa-solid fa-pen-ruler"></i></div><div><div class="insight-value">5</div><div class="insight-label">Drafts Pending</div></div></div></div>
+            </div>
+
+            <div class="row g-2 flex-grow-1 min-vh-0">
+                <div class="col-lg-4 d-flex flex-column h-100">
+                    <div class="panel h-100 p-2 d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-center mb-2 px-1 flex-shrink-0">
+                            <h6 class="fw-bold mb-0 text-uppercase" style="font-size: 0.7rem; color: var(--text-main);">Memo Trend</h6>
+                            <select class="form-select form-select-sm w-auto border-0 bg-light fw-bold text-muted py-0" style="font-size: 0.7rem;">
+                                <option>Last 6 Months</option>
+                            </select>
+                        </div>
+                        <div style="position: relative; flex-grow: 1; min-height: 0; width: 100%;">
+                            <canvas id="announcementChart" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-8 d-flex flex-column h-100">
+                    <div class="panel p-0 h-100 d-flex flex-column overflow-hidden">
+                        <div class="px-3 py-2 border-bottom bg-light d-flex justify-content-between align-items-center flex-shrink-0">
+                            <h6 class="fw-bold mb-0 text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px; color: var(--text-main);">Registry</h6>
+                            <div class="d-flex gap-2">
+                                <select id="categoryFilter" class="form-select form-select-sm border-secondary-subtle" style="width: auto; font-size: 0.75rem;">
+                                    <option value="all">All Categories</option>
+                                    <option value="urgent">Urgent</option>
+                                    <option value="policy">Policy</option>
+                                    <option value="system">System</option>
+                                </select>
+                                <div class="input-group input-group-sm" style="width: 220px;">
+                                    <span class="input-group-text bg-white border-end-0 px-2"><i class="fa-solid fa-search text-muted" style="font-size: 0.65rem;"></i></span>
+                                    <input type="text" id="searchBox" class="form-control border-start-0 border-end-0 ps-0" placeholder="Search title..." style="font-size: 0.75rem;">
+                                    <button class="btn btn-clear border-start-0" type="button" id="clearBtn"><i class="fa-solid fa-xmark"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-panel-body">
+                            <table class="table table-custom w-100">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 15%; padding-left: 1rem;">Date</th>
+                                        <th style="width: 45%;">Announcement Details</th>
+                                        <th style="width: 15%;">Type</th>
+                                        <th style="width: 10%;" class="text-center">Status</th>
+                                        <th style="width: 15%; padding-right: 1rem;" class="text-end">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody">
+                                    <tr class="js-row" data-category="urgent">
+                                        <td style="padding-left: 1rem;"><div class="fw-bold text-dark" style="font-size: 0.75rem;">Mar 24, 2026</div></td>
+                                        <td>
+                                            <div class="data-title search-target">Database Migration Downtime</div>
+                                            <div class="data-excerpt search-target">Scheduled migration to accommodate regional nodes.</div>
+                                        </td>
+                                        <td><span class="badge-gov bg-urgent">Urgent</span></td>
+                                        <td class="text-center"><span class="status-pill status-active"><i class="fa-solid fa-circle" style="font-size: 0.3rem;"></i> Active</span></td>
+                                        <td class="text-end" style="padding-right: 1rem;">
+                                            <button class="btn-action me-1" title="View Detail" onclick="openViewModal('DOC-001', 'Database Migration Downtime', 'urgent', 'all', 'Scheduled migration to accommodate regional nodes. System will be down for 4 hours.', 'https://via.placeholder.com/600x300')"><i class="fa-solid fa-eye"></i></button>
+                                            <button class="btn-action me-1" onclick="openEditModal('DOC-001', 'Database Migration Downtime', 'urgent', 'all', 'Scheduled migration to accommodate regional nodes.', 'active')"><i class="fa-solid fa-pen"></i></button>
+                                            <button class="btn-action btn-action-delete" onclick="openDeleteModal('DOC-001', 'Database Migration Downtime')"><i class="fa-solid fa-trash-can"></i></button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div id="noResultsMsg" class="text-center py-4 d-none">
+                                <i class="fa-solid fa-folder-open text-muted mb-2" style="font-size: 1.5rem; opacity: 0.5;"></i>
+                                <h6 class="fw-bold text-dark mb-1" style="font-size: 0.8rem;">No records found</h6>
+                            </div>
+                        </div>
+                        
+                        <div class="px-3 py-2 border-top bg-light d-flex justify-content-between align-items-center flex-shrink-0">
+                            <span class="text-muted" style="font-size: 0.7rem; font-weight: 500;">Showing <span id="visibleCount">1</span> records</span>
+                            <nav><ul class="pagination pagination-sm mb-0"><li class="page-item active"><a class="page-link bg-success border-success py-1" href="#" style="font-size: 0.7rem;">1</a></li></ul></nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal fade" id="announcementModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 4px;">
+                <div class="modal-header bg-light border-bottom px-4 py-3">
+                    <h6 class="modal-title fw-bold text-uppercase" id="modalTitle" style="font-size: 0.85rem;">Draft Official Memo</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <form id="announcementForm">
+                        <input type="hidden" id="memoId">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-12">
+                                <label class="form-label">Subject / Title</label>
+                                <input type="text" id="memoTitle" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Classification</label>
+                                <select id="memoCategory" class="form-select form-select-sm" required>
+                                    <option value="policy">Policy Memo</option>
+                                    <option value="urgent">Urgent Advisory</option>
+                                    <option value="system">System Update</option>
+                                    <option value="general">General Info</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Target Audience</label>
+                                <select id="memoAudience" class="form-select form-select-sm" required>
+                                    <option value="all">All Portal Users</option>
+                                    <option value="municipal">Municipal Admins Only</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Post Status</label>
+                                <select id="memoStatus" class="form-select form-select-sm" required>
+                                    <option value="active">Active / Published</option>
+                                    <option value="draft">Draft</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Attachment Image (Optional)</label>
+                                <input type="file" id="memoImage" class="form-control form-control-sm" accept="image/*" onchange="previewImage(this)">
+                                <div id="imagePreviewContainer">
+                                    <img id="imagePreview" src="" alt="Preview">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-4"><label class="form-label">Content Details</label><textarea id="memoContent" class="form-control form-control-sm" rows="5" required></textarea></div>
+                        <div class="d-flex justify-content-end gap-2 border-top pt-3">
+                            <button type="button" class="btn btn-light btn-sm fw-bold border px-3" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" id="submitBtn" class="btn btn-success btn-sm fw-bold px-3">Publish Now</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="viewAnnouncementModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-md modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 4px;">
+                <div class="modal-header bg-slate-800 text-white px-4 py-2">
+                    <h6 class="modal-title fw-bold text-uppercase" style="font-size: 0.8rem;">Announcement Detail</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div id="viewImageDisplay"></div>
+                    <div class="mb-2">
+                        <span id="viewBadge" class="badge-gov"></span>
+                        <small class="text-muted ms-2" id="viewAudienceLabel"></small>
+                    </div>
+                    <h5 class="fw-bold text-slate-900 mb-3" id="viewTitle"></h5>
+                    <div class="text-slate-600" id="viewContent" style="white-space: pre-wrap; font-size: 0.85rem; line-height: 1.6;"></div>
+                </div>
+                <div class="modal-footer bg-light p-2">
+                    <button type="button" class="btn btn-secondary btn-sm px-4" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 4px;">
+                <div class="modal-header bg-danger text-white px-3 py-2" style="border-radius: 4px 4px 0 0;">
+                    <h6 class="modal-title fw-bold text-uppercase" style="font-size: 0.75rem;">Confirm Deletion</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 text-center">
+                    <p class="text-muted mb-1" style="font-size: 0.8rem;">Are you sure?</p>
+                    <p class="fw-bold text-dark mb-0" id="deleteMemoTitle" style="font-size: 0.85rem;"></p>
+                    <input type="hidden" id="deleteMemoId">
+                </div>
+                <div class="modal-footer bg-light px-3 py-2 border-top-0 justify-content-center">
+                    <button type="button" class="btn btn-light btn-sm border px-3" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger btn-sm px-4" onclick="executeDelete()">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // IMAGE PREVIEW LOGIC
+        function previewImage(input) {
+            const container = document.getElementById('imagePreviewContainer');
+            const img = document.getElementById('imagePreview');
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    img.src = e.target.result;
+                    container.style.display = 'flex';
+                }
+                reader.readAsDataURL(input.files[0]);
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = "Draft Official Memo";
+            document.getElementById('submitBtn').innerText = "Publish Now";
+            document.getElementById('memoId').value = ""; 
+            document.getElementById('announcementForm').reset(); 
+            document.getElementById('imagePreviewContainer').style.display = 'none';
+            new bootstrap.Modal(document.getElementById('announcementModal')).show();
+        }
+
+        function openEditModal(id, title, category, audience, content, status) {
+            document.getElementById('modalTitle').innerText = "Edit Official Memo";
+            document.getElementById('submitBtn').innerText = "Save Changes";
+            document.getElementById('memoId').value = id;
+            document.getElementById('memoTitle').value = title;
+            document.getElementById('memoCategory').value = category;
+            document.getElementById('memoAudience').value = audience;
+            document.getElementById('memoContent').value = content;
+            document.getElementById('memoStatus').value = status || 'active'; // Map status during edit
+            document.getElementById('imagePreviewContainer').style.display = 'none';
+            new bootstrap.Modal(document.getElementById('announcementModal')).show();
+        }
+
+        // SAVE LOGIC (SUBMIT FORM)
+        document.getElementById('announcementForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const id = document.getElementById('memoId').value;
+            const title = document.getElementById('memoTitle').value;
+            const status = document.getElementById('memoStatus').value;
+            
+            // Simulation of Backend Save
+            alert(`Saving changes for: ${title}\nStatus set to: ${status.toUpperCase()}\nID: ${id || 'New'}`);
+            
+            bootstrap.Modal.getInstance(document.getElementById('announcementModal')).hide();
+        });
+
+        // VIEW MODAL LOGIC
+        function openViewModal(id, title, category, audience, content, imageUrl) {
+            document.getElementById('viewTitle').innerText = title;
+            document.getElementById('viewContent').innerText = content;
+            document.getElementById('viewAudienceLabel').innerText = "Target: " + (audience === 'all' ? 'All Users' : 'Municipal Admins');
+            
+            const badge = document.getElementById('viewBadge');
+            badge.innerText = category.toUpperCase();
+            badge.className = "badge-gov bg-" + category;
+
+            const imgDisplay = document.getElementById('viewImageDisplay');
+            if(imageUrl) {
+                imgDisplay.innerHTML = `<img src="${imageUrl}" class="view-image" alt="Memo Banner">`;
+            } else {
+                imgDisplay.innerHTML = "";
+            }
+
+            new bootstrap.Modal(document.getElementById('viewAnnouncementModal')).show();
+        }
+
+        function openDeleteModal(id, title) {
+            document.getElementById('deleteMemoId').value = id;
+            document.getElementById('deleteMemoTitle').innerText = '"' + title + '"'; 
+            new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+        }
+
+        function executeDelete() {
+            alert("Record Deleted: " + document.getElementById('deleteMemoId').value);
+            bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal')).hide();
+        }
+
+        // Live Search & Filter
+        document.addEventListener("DOMContentLoaded", () => {
+            const searchBox = document.getElementById("searchBox"), catFilter = document.getElementById("categoryFilter"), 
+                  rows = document.querySelectorAll(".js-row"), countText = document.getElementById("visibleCount");
+
+            function filterTable() {
+                const term = searchBox.value.toLowerCase().trim(), selected = catFilter.value;
+                let visibleRows = 0;
+                rows.forEach(row => {
+                    const text = row.querySelector('.data-title').innerText.toLowerCase();
+                    const rowCat = row.getAttribute("data-category");
+                    const match = text.includes(term) && (selected === "all" || rowCat === selected);
+                    row.style.display = match ? "" : "none";
+                    if (match) visibleRows++;
+                });
+                document.getElementById("noResultsMsg").classList.toggle("d-none", visibleRows !== 0);
+                countText.innerText = visibleRows;
+            }
+
+            searchBox.addEventListener("input", filterTable);
+            catFilter.addEventListener("change", filterTable);
+            document.getElementById("clearBtn").onclick = () => { searchBox.value = ""; catFilter.value = "all"; filterTable(); };
+        });
+
+        // Chart Init
+        document.addEventListener("DOMContentLoaded", function() {
+            const ctx = document.getElementById('announcementChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Nov', 'Dec', 'Jan', 'Feb', 'Mar'],
+                    datasets: [
+                        { label: 'Policy', data: [6, 3, 5, 2, 8], backgroundColor: '#10b981', borderRadius: 2 },
+                        { label: 'System', data: [3, 1, 4, 3, 2], backgroundColor: '#3b82f6', borderRadius: 2 },
+                        { label: 'Urgent', data: [0, 0, 1, 0, 1], backgroundColor: '#ef4444', borderRadius: 2 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top', align: 'start', labels: { usePointStyle: true, boxWidth: 6, font: { size: 9 } } } },
+                    scales: {
+                        y: { stacked: true, grid: { color: '#e2e8f0' }, border: { display: false }, ticks: { font: { size: 9 } } },
+                        x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

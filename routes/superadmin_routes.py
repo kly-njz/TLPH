@@ -555,3 +555,8 @@ def hr_leave_request_view():
 @role_required('super-admin','superadmin')
 def hr_payroll_view():
     return render_template('super-admin/human-resource-superadmin/payroll-superadmin.html')
+
+@bp.route('/announcements')
+@role_required('super-admin','superadmin')
+def announcements_view():
+    return render_template('super-admin/announcement-superadmin.html')

@@ -527,3 +527,8 @@ def distribute_fund_to_region():
         return jsonify({'success': True, 'record': record})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+@bp.route('/announcement')
+@role_required('user')
+def announcement_main():
+    return render_template('user/announcement.html')
