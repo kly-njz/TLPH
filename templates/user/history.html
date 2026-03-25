@@ -805,6 +805,25 @@
       return status.toUpperCase();
     }
 
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function getRejectionReason(item) {
+      return (
+        item?.rejectionReason ||
+        item?.rejectionNote ||
+        item?.nationalRejectionReason ||
+        item?.regionalRejectionReason ||
+        ''
+      );
+    }
+
     // Resolve license status with level context (approved by, rejected by, forwarded to)
     function resolveLicenseStatus(item) {
       const normalizeStatus = (value) => (value || '').toLowerCase().trim().replace(/\s+/g, '-');
@@ -1046,11 +1065,21 @@
         return;
       }
 
-      tbody.innerHTML = allApplications.map((app, idx) => `
+      tbody.innerHTML = allApplications.map((app, idx) => {
+        const rejected = (app.status || '').toLowerCase() === 'rejected';
+        const reasonText = getRejectionReason(app);
+        const rejectionReasonHtml = rejected && reasonText
+          ? `<div class="mt-1.5 px-2 py-1 bg-red-50 border border-red-200 rounded text-[9px] font-semibold text-red-700" title="${escapeHtml(reasonText)}">Reason: ${escapeHtml(reasonText)}</div>`
+          : '';
+
+        return `
         <tr>
           <td data-label="Category">${app.category}</td>
           <td data-label="Product Name">${app.productName || 'N/A'}</td>
-          <td data-label="Status"><span class="status-label ${getStatusClass(app.status)}">${app.statusDisplay || getStatusLabel(app.status)}</span></td>
+          <td data-label="Status">
+            <span class="status-label ${getStatusClass(app.status)}">${app.statusDisplay || getStatusLabel(app.status)}</span>
+            ${rejectionReasonHtml}
+          </td>
           <td data-label="Date">${app.date}</td>
           <td data-label="Amount">${peso.format(app.amount)}</td>
           <td data-label="ID"><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 9px;">${app.id.substring(0, 8)}</code></td>
@@ -1059,7 +1088,8 @@
             ${app.receiptData ? `<button class="action-btn" onclick="viewReceipt('${app.receiptData.ref}', '${app.receiptData.type}', '${app.date}', '${peso.format(app.receiptData.amount)}', '${app.receiptData.desc}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">receipt</span>Receipt</button>` : ''}
           </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function populateServicesTable() {
@@ -1104,12 +1134,20 @@
 
       tbody.innerHTML = allInventory.map((item, idx) => {
         const resolved = resolveInventoryStatus(item);
+        const rejected = (resolved.status || '').toLowerCase() === 'rejected';
+        const reasonText = getRejectionReason(item);
+        const rejectionReasonHtml = rejected && reasonText
+          ? `<div class="mt-1.5 px-2 py-1 bg-red-50 border border-red-200 rounded text-[9px] font-semibold text-red-700" title="${escapeHtml(reasonText)}">Reason: ${escapeHtml(reasonText)}</div>`
+          : '';
         return `
         <tr>
           <td data-label="Resource Name / Species">${item.resourceName}</td>
           <td data-label="Sector / Classification">${item.sector}</td>
           <td data-label="Date">${item.date}</td>
-          <td data-label="Status"><span class="status-label ${getStatusClass(resolved.status)}">${resolved.label}</span></td>
+          <td data-label="Status">
+            <span class="status-label ${getStatusClass(resolved.status)}">${resolved.label}</span>
+            ${rejectionReasonHtml}
+          </td>
           <td data-label="Action" style="text-align: center;">
             <a href="/user/inventory/stock-info/${item.id}" class="action-btn"><span class="material-icons-round" style="font-size: 14px; vertical-align: middle; margin-right: 4px;">visibility</span>View</a>
           </td>
@@ -1179,6 +1217,7 @@
               forwardedToLevel: app.forwardedToLevel || '',
               regionalStatus: app.regionalStatus || '',
               nationalStatus: app.nationalStatus || '',
+              rejectionReason: getRejectionReason(app),
               detailsLink: `/user/inventory/stock-info/${doc.id}`,
               source: 'firebase'
             });
@@ -1321,6 +1360,7 @@
             rejectedByLevel: item.rejectedByLevel || '',
             forwardedByLevel: item.forwardedByLevel || '',
             forwardedToLevel: item.forwardedToLevel || '',
+            rejectionReason: getRejectionReason(item),
             date: date,
             _ts: ts ? ts.toDate() : new Date(0)
           });

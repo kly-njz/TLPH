@@ -48,6 +48,11 @@
                         <span id="statusBadge" class="px-3 py-1 rounded-lg text-[9px] font-black uppercase"></span>
                     </div>
 
+                    <div id="rejectionReasonBox" class="hidden mt-12 mb-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <label class="text-[8px] font-black text-red-700 uppercase tracking-widest block mb-1">Rejection Message</label>
+                        <p id="rejectionReasonText" class="text-[11px] font-semibold text-red-800 m-0"></p>
+                    </div>
+
                     <div class="space-y-2 md:space-y-3">
                         <span id="sectorBadge" class="inline-block text-[8px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded uppercase tracking-widest"></span>
                         <h1 id="productTitle" class="text-xl md:text-3xl font-black text-emerald-950 uppercase tracking-tighter italic leading-none"></h1>
@@ -193,6 +198,25 @@
 
         function normalizeStatus(value) {
             return String(value || '').toLowerCase().trim().replace(/\s+/g, '_');
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function getRejectionReason(item) {
+            return (
+                item?.rejectionReason ||
+                item?.rejectionNote ||
+                item?.nationalRejectionReason ||
+                item?.regionalRejectionReason ||
+                ''
+            );
         }
 
         function getInventoryStatusMeta(item) {
@@ -401,14 +425,28 @@
                 // --- Status badge ---
                 const statusBadge = document.getElementById('statusBadge');
                 const st = normalizeStatus(app.status || 'pending');
+                let resolvedStatusMeta;
                 if (isInventoryReg) {
                     const meta = getInventoryStatusMeta(app);
                     statusBadge.className = meta.className;
                     statusBadge.innerHTML = `<i class="fa-solid ${meta.icon} mr-1"></i> ${meta.label}`;
+                    resolvedStatusMeta = meta;
                 } else {
                     const meta = getApplicationStatusMeta(app);
                     statusBadge.className = meta.className;
                     statusBadge.innerHTML = `<i class="fa-solid ${meta.icon} mr-1"></i> ${meta.label}`;
+                    resolvedStatusMeta = meta;
+                }
+
+                const rejectionReason = getRejectionReason(app);
+                const rejectionReasonBox = document.getElementById('rejectionReasonBox');
+                const rejectionReasonText = document.getElementById('rejectionReasonText');
+                if ((resolvedStatusMeta?.status || '').toLowerCase() === 'rejected' && rejectionReason) {
+                    rejectionReasonBox.classList.remove('hidden');
+                    rejectionReasonText.innerHTML = escapeHtml(rejectionReason);
+                } else {
+                    rejectionReasonBox.classList.add('hidden');
+                    rejectionReasonText.innerHTML = '';
                 }
 
                 if (isInventoryReg) {
