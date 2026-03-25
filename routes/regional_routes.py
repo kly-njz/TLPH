@@ -2224,7 +2224,7 @@ def get_regional_municipal_offices():
         # Auto-seed municipalities based on region
         region_municipalities = {
             'CALABARZON': [
-                // ...existing code for CALABARZON...
+                # ...existing code for CALABARZON...
             ],
             'MIMAROPA': [
                 # Marinduque Province
@@ -2268,35 +2268,6 @@ def get_regional_municipal_offices():
             ]
         }
 
-        municipalities = region_municipalities.get(region_name, []) or region_municipalities.get(firestore_region, [])
-        for mun in municipalities:
-            office_doc = {
-                'office_code': mun['code'],
-                'municipality_name': mun['name'],
-                'province': mun['province'],
-                'region': firestore_region,
-                'status': mun['status']
-            }
-            db.collection('municipal_offices').add(office_doc)
-                {'name': 'Puerto Galera', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-011', 'status': 'Active'},
-                {'name': 'Roxas', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-012', 'status': 'Active'},
-                {'name': 'San Teodoro', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-013', 'status': 'Active'},
-                {'name': 'Socorro', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-014', 'status': 'Active'},
-                {'name': 'Victoria', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-015', 'status': 'Active'},
-                
-                # Palawan Province
-                {'name': 'Puerto Princesa', 'province': 'Palawan', 'code': 'MUN-PAL-001', 'status': 'Active'},
-                {'name': 'Coron', 'province': 'Palawan', 'code': 'MUN-PAL-002', 'status': 'Active'},
-                {'name': 'El Nido', 'province': 'Palawan', 'code': 'MUN-PAL-003', 'status': 'Active'},
-                {'name': 'Brooke\'s Point', 'province': 'Palawan', 'code': 'MUN-PAL-004', 'status': 'Active'},
-                
-                # Romblon Province
-                {'name': 'Odiongan', 'province': 'Romblon', 'code': 'MUN-ROM-001', 'status': 'Active'},
-                {'name': 'Calatrava', 'province': 'Romblon', 'code': 'MUN-ROM-002', 'status': 'Active'},
-                {'name': 'San Andres', 'province': 'Romblon', 'code': 'MUN-ROM-003', 'status': 'Active'},
-            ]
-        }
-        
         municipalities = region_municipalities.get(region_name, []) or region_municipalities.get(firestore_region, [])
         for mun in municipalities:
             office_doc = {
