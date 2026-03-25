@@ -5,7 +5,7 @@ def main():
     initialize_firebase_admin()
     db = get_firestore_db()
 
-    municipality = "Victoria"
+    municipality = "Victoria".upper()
     seed_rows = [
         {
             "name": "Fuel and Lubricants",
