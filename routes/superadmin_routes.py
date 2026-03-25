@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request, jsonify
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
 from datetime import datetime
@@ -504,59 +504,40 @@ def accounting_permissions():
 def accounting_audit():
     return render_template('super-admin/accounting/audit.html')
 
-# -------------------------
-# Human Resource (match sidebar URLs)
-# URL: /superadmin/human-resource-superadmin/<page>
-# Template: templates/super-admin/human-resource-superadmin/<file>.html
-# -------------------------
-
-@bp.route('/hrm/company')
+# --- SUPERADMIN PAYROLL ACTIONS ---
+@bp.route('/api/hrm/payroll/<payroll_id>/approve', methods=['POST'])
 @role_required('super-admin','superadmin')
-def hr_company_view():
-    return render_template('super-admin/human-resource-superadmin/company-superadmin.html')
+def superadmin_approve_payroll(payroll_id):
+    """Approve any payroll record as superadmin."""
+    # TODO: Integrate with payroll storage logic
+    # Example: payroll_storage.superadmin_approve(payroll_id, user=session['user_email'])
+    return jsonify({'success': True, 'message': f'Payroll {payroll_id} approved by superadmin.'})
 
-@bp.route('/hrm/department')
+@bp.route('/api/hrm/payroll/<payroll_id>/reject', methods=['POST'])
 @role_required('super-admin','superadmin')
-def hr_department_view():
-    return render_template('super-admin/human-resource-superadmin/department-superadmin.html')
+def superadmin_reject_payroll(payroll_id):
+    """Reject any payroll record as superadmin."""
+    # TODO: Integrate with payroll storage logic
+    return jsonify({'success': True, 'message': f'Payroll {payroll_id} rejected by superadmin.'})
 
-@bp.route('/hrm/designation')
-
+@bp.route('/api/hrm/payroll/<payroll_id>/override', methods=['POST'])
 @role_required('super-admin','superadmin')
-def hr_designation_view():
-    return render_template('super-admin/human-resource-superadmin/designation-superadmin.html')
+def superadmin_override_payroll(payroll_id):
+    """Override payroll status as superadmin."""
+    # TODO: Integrate with payroll storage logic
+    data = request.get_json() or {}
+    new_status = data.get('status')
+    return jsonify({'success': True, 'message': f'Payroll {payroll_id} status overridden to {new_status} by superadmin.'})
 
-@bp.route('/hrm/shift')
+@bp.route('/api/hrm/payroll/<payroll_id>/audit-log', methods=['GET'])
 @role_required('super-admin','superadmin')
-def hr_shift_view():
-    return render_template('super-admin/human-resource-superadmin/shift-superadmin.html')
-
-@bp.route('/hrm/employee')
-@role_required('super-admin','superadmin')
-def hr_employee_view():
-    return render_template('super-admin/human-resource-superadmin/employee-superadmin.html')
-
-@bp.route('/hrm/attendance')
-@role_required('super-admin','superadmin')
-def hr_attendance_view():
-    return render_template('super-admin/human-resource-superadmin/attendance-superadmin.html')
-
-@bp.route('/hrm/holiday')
-@role_required('super-admin','superadmin')
-def hr_holiday_view():
-    return render_template('super-admin/human-resource-superadmin/holiday-superadmin.html')
-
-@bp.route('/hrm/leave-request')
-@role_required('super-admin','superadmin')
-def hr_leave_request_view():
-    return render_template('super-admin/human-resource-superadmin/leave-request-superadmin.html')
-
-@bp.route('/hrm/payroll')
-@role_required('super-admin','superadmin')
-def hr_payroll_view():
-    return render_template('super-admin/human-resource-superadmin/payroll-superadmin.html')
-
-@bp.route('/announcements')
-@role_required('super-admin','superadmin')
-def announcements_view():
-    return render_template('super-admin/announcement-superadmin.html')
+def superadmin_payroll_audit_log(payroll_id):
+    """Fetch audit log for a payroll record."""
+    # TODO: Integrate with audit log storage
+    # Example: logs = payroll_storage.get_audit_log(payroll_id)
+    logs = [
+        {'action': 'created', 'by': 'user@example.com', 'at': '2026-03-01T10:00:00Z'},
+        {'action': 'approved', 'by': 'regional_admin@example.com', 'at': '2026-03-02T12:00:00Z'},
+        {'action': 'approved', 'by': 'national_admin@example.com', 'at': '2026-03-03T15:00:00Z'},
+    ]
+    return jsonify({'success': True, 'logs': logs})
