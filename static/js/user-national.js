@@ -1,4 +1,4 @@
-async function enableNationalAccount(userId, userName) {
+window.enableNationalAccount = async function(userId, userName) {
   if (!confirm(`Enable access for ${userName}?`)) return;
   try {
     const res = await fetch(`/national/api/user-management/accounts/${userId}/enable`, { method: 'POST' });
