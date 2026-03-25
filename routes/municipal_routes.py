@@ -2198,6 +2198,7 @@ from expense_storage import get_all_expense_categories
 @role_required('municipal', 'municipal_admin')
 def api_get_municipal_expense_categories():
     """Get all expense categories for this municipality only"""
+    import traceback
     try:
         municipality = request.args.get('municipality')
         if not municipality:
@@ -2207,9 +2208,11 @@ def api_get_municipal_expense_categories():
             return jsonify({'error': 'Municipality not specified'}), 400
         municipality = municipality.strip().upper()
         categories = get_all_expense_categories(municipality=municipality)
+        # Always return 200 with a list (even if empty)
         return jsonify(categories), 200
     except Exception as e:
         print(f"[ERROR] Municipal: Failed to get expense categories: {e}")
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     
 
