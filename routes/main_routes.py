@@ -289,11 +289,99 @@ def national_dashboard():
         as_of=datetime.now().strftime('%b %d, %Y %I:%M %p'),
     )
 
+
 @bp.route('/national/system-logs')
 @role_required('national', 'national_admin')
 def national_system_logs_fallback():
+    """
+    Show only regional transactions and fund transfers in the national audit log page.
+    """
+    from firebase_config import get_firestore_db
+    from datetime import datetime
+    db = get_firestore_db()
+    regional_logs = []
+    try:
+        # Fetch all transactions (regional scope)
+        tx_docs = db.collection('transactions').limit(5000).stream()
+        for tx_doc in tx_docs:
+            tx = tx_doc.to_dict() or {}
+            status_value = str(tx.get('status') or '').strip().upper() or 'PENDING'
+            ts_value = (
+                tx.get('updated_at')
+                or tx.get('forwarded_at')
+                or tx.get('created_at')
+                or tx.get('createdAt')
+                or tx.get('updatedAt')
+            )
+            outcome_value = 'SUCCESS' if status_value in {'PAID', 'APPROVED', 'COMPLETED'} else ('FAIL' if status_value in {'FAILED', 'REJECTED', 'CANCELLED'} else 'WARN')
+            regional_logs.append({
+                'id': tx_doc.id,
+                'ts': ts_value,
+                'user': tx.get('updated_by') or tx.get('forwarded_by') or tx.get('user_email') or 'User',
+                'role': 'Municipal',
+                'module': 'PAYMENTS',
+                'action': status_value,
+                'target': tx.get('transaction_name') or tx.get('description') or 'Payment',
+                'targetId': tx.get('invoice_id') or tx.get('external_id') or tx_doc.id,
+                'device_type': tx.get('device_type') or tx.get('device') or '',
+                'ip': tx.get('ip') or '',
+                'outcome': outcome_value,
+                'message': tx.get('description') or '',
+                'forwarded_message': tx.get('forwarded_message') or tx.get('forwardMessage') or '',
+                'forwarded_by': tx.get('forwarded_by') or '',
+                'municipality': tx.get('municipality') or tx.get('municipality_name') or tx.get('target_municipality') or '',
+                'region': tx.get('region') or tx.get('region_name') or tx.get('regionName') or '',
+                'canReview': status_value == 'FORWARDED',
+                'diff': tx,
+            })
+
+        # Fetch all regional fund transfers
+        fund_docs = db.collection('regional_fund_distribution').limit(5000).stream()
+        for fund_doc in fund_docs:
+            fund = fund_doc.to_dict() or {}
+            status_value = str(fund.get('status') or '').strip().upper() or 'PENDING'
+            ts_value = fund.get('updated_at') or fund.get('created_at') or fund.get('date')
+            outcome_value = 'SUCCESS' if status_value in {'COMPLETED', 'APPROVED', 'RELEASED'} else ('FAIL' if status_value in {'FAILED', 'REJECTED', 'CANCELLED'} else 'WARN')
+            regional_logs.append({
+                'id': fund_doc.id,
+                'ts': ts_value,
+                'user': fund.get('updated_by') or fund.get('initiated_by') or 'Regional Office',
+                'role': 'Regional',
+                'module': 'FUND_TRANSFER',
+                'action': status_value,
+                'target': fund.get('region') or 'Region',
+                'targetId': fund.get('reference') or fund_doc.id,
+                'device_type': '',
+                'ip': fund.get('ip') or '',
+                'outcome': outcome_value,
+                'message': fund.get('description') or '',
+                'forwarded_message': '',
+                'forwarded_by': '',
+                'municipality': '',
+                'region': fund.get('region') or fund.get('region_name') or fund.get('regionName') or '',
+                'canReview': False,
+                'diff': fund,
+            })
+
+        # Sort logs by timestamp descending (most recent first)
+        def _parse_ts(ts):
+            if not ts:
+                return datetime.min
+            try:
+                if isinstance(ts, datetime):
+                    return ts
+                if isinstance(ts, str):
+                    return datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            except Exception:
+                pass
+            return datetime.min
+        regional_logs.sort(key=lambda x: _parse_ts(x.get('ts')), reverse=True)
+    except Exception as e:
+        print(f"[national_system_logs_fallback] Error: {e}")
+        regional_logs = []
+
     return render_template('national/system/system-logs.html',
-        regional_logs=[],
+        regional_logs=regional_logs,
         municipal_logs=[],
         user_logs=[]
     )
