@@ -2194,17 +2194,14 @@ def get_regional_municipal_offices():
 
     db = get_firestore_db()
     
-    # Get the user's region
+    # Get the user's region and map to Firestore region name
     region_name = session.get('region') or session.get('user_region')
-    
     if not region_name or str(region_name).strip().lower() == 'unknown':
         user_id = session.get('user_id')
         user_email = session.get('user_email')
-
         if user_id or user_email:
             try:
                 user_doc = None
-
                 if user_id:
                     user_doc = db.collection('users').document(user_id).get()
                 elif user_email:
@@ -2212,21 +2209,17 @@ def get_regional_municipal_offices():
                     for doc in docs:
                         user_doc = doc
                         break
-
                 if user_doc and user_doc.exists:
                     user_data = user_doc.to_dict() or {}
                     region_name = user_data.get('regionName') or user_data.get('region_name') or user_data.get('region')
             except Exception:
                 pass
-
     if not region_name:
         region_name = 'CALABARZON'
-    
+    firestore_region = get_firestore_region_name(region_name)
     offices = []
-
-    # Check if there are any municipal offices for this region
-    existing_docs = list(db.collection('municipal_offices').where(filter=FieldFilter('region', '==', region_name)).limit(1).stream())
-    
+    # Check if there are any municipal offices for this region (using Firestore region name)
+    existing_docs = list(db.collection('municipal_offices').where(filter=FieldFilter('region', '==', firestore_region)).limit(1).stream())
     if not existing_docs:
         # Auto-seed municipalities based on region
         region_municipalities = {
@@ -2299,31 +2292,27 @@ def get_regional_municipal_offices():
             ]
         }
         
-        municipalities = region_municipalities.get(region_name, [])
-        
+        municipalities = region_municipalities.get(region_name, []) or region_municipalities.get(firestore_region, [])
         for mun in municipalities:
             office_doc = {
                 'office_code': mun['code'],
                 'municipality_name': mun['name'],
                 'province': mun['province'],
-                'region': region_name,
+                'region': firestore_region,
                 'status': mun['status']
             }
             db.collection('municipal_offices').add(office_doc)
-    
-    # Now fetch municipal offices for this region only
-    for doc in db.collection('municipal_offices').where(filter=FieldFilter('region', '==', region_name)).stream():
+    # Now fetch municipal offices for this region only (using Firestore region name)
+    for doc in db.collection('municipal_offices').where(filter=FieldFilter('region', '==', firestore_region)).stream():
         item = doc.to_dict() or {}
-        
         offices.append({
             'id': doc.id,
             'office_code': item.get('office_code', ''),
             'municipality_name': item.get('municipality_name', ''),
             'province': item.get('province', ''),
-            'region': item.get('region', region_name),
+            'region': item.get('region', firestore_region),
             'status': item.get('status', 'Active')
         })
-    
     offices.sort(key=lambda o: (o.get('province') or '', o.get('municipality_name') or ''))
     return jsonify({'success': True, 'offices': offices})
 
