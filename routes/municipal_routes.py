@@ -2205,6 +2205,7 @@ def api_get_municipal_expense_categories():
             municipality = session.get('municipality') or session.get('user_municipality')
         if not municipality:
             return jsonify({'error': 'Municipality not specified'}), 400
+        municipality = municipality.strip().upper()
         categories = get_all_expense_categories(municipality=municipality)
         return jsonify(categories), 200
     except Exception as e:
