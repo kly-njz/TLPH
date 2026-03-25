@@ -2512,6 +2512,103 @@ def aggregate_regional_audit_logs_to_national():
             ref = db.collection('national_audit_logs').document(f"{region}_tx_{doc.id}")
             batch.set(ref, log)
             count += 1
+
+    # --- NATIONAL SCOPE: Aggregate all payment-related logs ---
+    # 1. All transactions (national scope)
+    tx_docs = db.collection('transactions').limit(5000).stream()
+    for doc in tx_docs:
+        tx = doc.to_dict() or {}
+        log = {
+            'timestamp': tx.get('updated_at') or tx.get('created_at') or tx.get('createdAt') or '',
+            'user': tx.get('updated_by') or tx.get('forwarded_by') or tx.get('user_email') or 'User',
+            'entity': tx.get('region') or 'NATIONAL',
+            'action': tx.get('status') or '',
+            'details': tx.get('description') or '',
+            'ip': tx.get('ip') or tx.get('ipAddress') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_tx_{doc.id}")
+        batch.set(ref, log)
+        count += 1
+
+    # 2. All regional fund distributions (national to regions)
+    fund_docs = db.collection('regional_fund_distribution').limit(5000).stream()
+    for doc in fund_docs:
+        fund = doc.to_dict() or {}
+        log = {
+            'timestamp': fund.get('updated_at') or fund.get('created_at') or fund.get('date') or '',
+            'user': fund.get('updated_by') or fund.get('initiated_by') or 'National',
+            'entity': fund.get('region') or 'NATIONAL',
+            'action': fund.get('status') or '',
+            'details': fund.get('description') or fund.get('fund_type') or '',
+            'ip': fund.get('ip') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_fund_{doc.id}")
+        batch.set(ref, log)
+        count += 1
+
+    # 3. All municipal fund distributions (regions/national to municipalities)
+    muni_fund_docs = db.collection('municipal_fund_distribution').limit(5000).stream()
+    for doc in muni_fund_docs:
+        fund = doc.to_dict() or {}
+        log = {
+            'timestamp': fund.get('updated_at') or fund.get('created_at') or fund.get('date') or '',
+            'user': fund.get('updated_by') or fund.get('initiated_by') or 'National',
+            'entity': fund.get('municipality') or 'NATIONAL',
+            'action': fund.get('status') or '',
+            'details': fund.get('description') or fund.get('fund_type') or '',
+            'ip': fund.get('ip') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_munifund_{doc.id}")
+        batch.set(ref, log)
+        count += 1
+
+    # 4. All applications with payment info
+    app_docs = db.collection('applications').limit(5000).stream()
+    for doc in app_docs:
+        app = doc.to_dict() or {}
+        log = {
+            'timestamp': app.get('updated_at') or app.get('created_at') or app.get('createdAt') or '',
+            'user': app.get('updated_by') or app.get('user_email') or 'User',
+            'entity': app.get('region') or 'NATIONAL',
+            'action': app.get('status') or '',
+            'details': app.get('description') or app.get('application_type') or '',
+            'ip': app.get('ip') or app.get('ipAddress') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_app_{doc.id}")
+        batch.set(ref, log)
+        count += 1
+
+    # 5. All service requests with payment info
+    sr_docs = db.collection('service_requests').limit(5000).stream()
+    for doc in sr_docs:
+        sr = doc.to_dict() or {}
+        log = {
+            'timestamp': sr.get('updated_at') or sr.get('created_at') or sr.get('createdAt') or '',
+            'user': sr.get('updated_by') or sr.get('user_email') or 'User',
+            'entity': sr.get('region') or 'NATIONAL',
+            'action': sr.get('status') or '',
+            'details': sr.get('description') or sr.get('service_type') or '',
+            'ip': sr.get('ip') or sr.get('ipAddress') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_sr_{doc.id}")
+        batch.set(ref, log)
+        count += 1
+
+    # 6. All license applications (permits) with payment info
+    permit_docs = db.collection('license_applications').limit(5000).stream()
+    for doc in permit_docs:
+        permit = doc.to_dict() or {}
+        log = {
+            'timestamp': permit.get('updated_at') or permit.get('created_at') or permit.get('createdAt') or '',
+            'user': permit.get('updated_by') or permit.get('user_email') or 'User',
+            'entity': permit.get('region') or 'NATIONAL',
+            'action': permit.get('status') or '',
+            'details': permit.get('description') or permit.get('applicationType') or '',
+            'ip': permit.get('ip') or permit.get('ipAddress') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_permit_{doc.id}")
+        batch.set(ref, log)
+        count += 1
     batch.commit()
     print(f"[INFO] Aggregated {count} audit logs to national_audit_logs.")
 
