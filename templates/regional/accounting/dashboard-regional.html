@@ -685,35 +685,40 @@
       if (!officesData.success || !Array.isArray(officesData.offices)) throw new Error('No municipal offices');
       if (!expensesData.success || !Array.isArray(expensesData.expenses)) throw new Error('No expenses data');
 
-      // Helper to normalize municipality names for matching
-      function normalizeMuni(name) {
-        return (name || '')
+
+      // Helper to normalize names
+      function normalize(str) {
+        return (str || '')
           .toUpperCase()
           .replace(/ CITY$/, '')
           .replace(/ MUNICIPALITY$/, '')
-          .replace(/[^A-Z0-9]/g, '') // Remove spaces and special chars
+          .replace(/[^A-Z0-9]/g, '')
           .trim();
       }
 
-      // Build a map of normalized municipality names to display names
-      const muniMap = {};
+      // Build a set of valid municipality+province keys from admin accounts
+      const muniSet = new Set();
+      const muniDisplay = {};
       officesData.offices.forEach(o => {
-        const norm = normalizeMuni(o.municipality_name);
-        if (norm) muniMap[norm] = o.municipality_name;
+        const muniKey = normalize(o.municipality_name) + '|' + normalize(o.province);
+        muniSet.add(muniKey);
+        muniDisplay[muniKey] = o.municipality_name + (o.province ? ' (' + o.province + ')' : '');
       });
 
-      // Aggregate usage only for municipalities with admin accounts (robust match)
+      // Aggregate usage only for municipalities with admin accounts (match both muni and province)
       const usage = {};
       const unmatched = new Set();
       expensesData.expenses.forEach(tx => {
-        const rawMuni = tx.municipality || tx.recipient || '';
-        const normMuni = normalizeMuni(rawMuni);
+        let rawMuni = tx.municipality || tx.recipient || '';
+        let rawProv = tx.province || '';
+        if (normalize(rawMuni) === 'NATIONALGOVERNMENT') return; // skip
+        const muniKey = normalize(rawMuni) + '|' + normalize(rawProv);
         const amt = Number(tx.amount) || 0;
-        if (!muniMap[normMuni]) {
-          if (rawMuni) unmatched.add(rawMuni);
-          return; // Only count if admin account exists
+        if (!muniSet.has(muniKey)) {
+          if (rawMuni) unmatched.add(rawMuni + (rawProv ? ' (' + rawProv + ')' : ''));
+          return;
         }
-        const displayName = muniMap[normMuni];
+        const displayName = muniDisplay[muniKey];
         if (!usage[displayName]) usage[displayName] = 0;
         usage[displayName] += amt;
       });
