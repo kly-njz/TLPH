@@ -19,20 +19,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 mail = Mail(app)
 
 # Initialize Firebase
-import os
-import json
-
 if not firebase_admin._apps:
-    firebase_json = os.environ.get("FIREBASE_CREDENTIALS")
-
-    if firebase_json:
-        # Production (Render)
-        cred_dict = json.loads(firebase_json)
-        cred = credentials.Certificate(cred_dict)
-    else:
-        # Local development fallback
-        cred = credentials.Certificate("firebase-credentials.json")
-
+    cred = credentials.Certificate("firebase-credentials.json")
     firebase_admin.initialize_app(cred)
 
 
