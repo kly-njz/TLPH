@@ -1,9 +1,3 @@
-
-
-
-
-
-# --- DELETE PROJECT ENDPOINT ---
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -2593,3 +2587,55 @@ def api_enable_admin_account(user_id):
     except Exception as e:
         print(f"[ERROR] Failed to enable admin account: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+
+
+@bp.route('/api/leave-requests', methods=['GET'])
+@role_required('national', 'national_admin')
+def api_get_national_leave_requests():
+    """Fetch all leave requests with employee name and ID for national leave registry"""
+    try:
+        db = get_firestore_db()
+        leave_docs = db.collection('leave_requests').stream()
+        employee_docs = db.collection('employees').stream()
+
+        # Build employee lookup by employee_id and doc id
+        employees_by_id = {}
+        employees_by_doc = {}
+        for doc in employee_docs:
+            emp = doc.to_dict() or {}
+            emp_id = emp.get('employee_id') or doc.id
+            name = emp.get('full_name') or emp.get('name') or f"{emp.get('firstName','')} {emp.get('lastName','')}".strip()
+            employees_by_id[emp_id] = {'name': name, 'employee_id': emp_id}
+            employees_by_doc[doc.id] = {'name': name, 'employee_id': emp_id}
+
+        leave_requests = []
+        for doc in leave_docs:
+            data = doc.to_dict() or {}
+            leave_id = doc.id
+            emp_id = data.get('employee_id') or ''
+            # Try to resolve employee name
+            emp_info = employees_by_id.get(emp_id) or employees_by_doc.get(emp_id) or {}
+            applicant_name = data.get('employee_name') or emp_info.get('name', 'N/A')
+            employee_id = emp_id or emp_info.get('employee_id', leave_id)
+
+            leave_requests.append({
+                'id': leave_id,
+                'employee_id': employee_id,
+                'applicant_name': applicant_name,
+                'leave_type': data.get('leave_type', ''),
+                'from_date': data.get('from_date', ''),
+                'to_date': data.get('to_date', ''),
+                'days': data.get('days', 0),
+                'purpose': data.get('reason', ''),
+                'status': data.get('status', 'Pending'),
+                'municipality': data.get('municipality', ''),
+                'created_at': data.get('created_at', ''),
+            })
+        return jsonify({'success': True, 'leave_requests': leave_requests, 'count': len(leave_requests)})
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch leave requests: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+
