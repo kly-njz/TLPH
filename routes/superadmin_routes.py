@@ -1,5 +1,3 @@
-
-
 from flask import Blueprint, render_template, request, jsonify
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
@@ -625,3 +623,71 @@ def api_create_employee():
     except Exception as e:
         print(f'[ERROR] Failed to create employee: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# --- HRM SUPERADMIN PAGES ---
+from flask import abort
+
+@bp.route('/hrm/attendance')
+@role_required('super-admin','superadmin')
+def hrm_attendance_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/attendance-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/company')
+@role_required('super-admin','superadmin')
+def hrm_company_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/company-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/department')
+@role_required('super-admin','superadmin')
+def hrm_department_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/department-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/designation')
+@role_required('super-admin','superadmin')
+def hrm_designation_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/designation-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/employee')
+@role_required('super-admin','superadmin')
+def hrm_employee_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/employee-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/holiday')
+@role_required('super-admin','superadmin')
+def hrm_holiday_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/holiday-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/leave-request')
+@role_required('super-admin','superadmin')
+def hrm_leave_request_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/leave-request-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/shift')
+@role_required('super-admin','superadmin')
+def hrm_shift_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/shift-superadmin.html')
+    except Exception:
+        abort(404)
