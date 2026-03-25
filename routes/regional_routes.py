@@ -2227,18 +2227,18 @@ def get_regional_municipal_offices():
                 // ...existing code for CALABARZON...
             ],
             'MIMAROPA': [
-                // Marinduque Province
+                # Marinduque Province
                 {'name': 'Boac', 'province': 'Marinduque', 'code': 'MUN-MAR-001', 'status': 'Active'},
                 {'name': 'Santa Cruz', 'province': 'Marinduque', 'code': 'MUN-MAR-002', 'status': 'Active'},
                 {'name': 'Buenavista', 'province': 'Marinduque', 'code': 'MUN-MAR-003', 'status': 'Active'},
                 {'name': 'Gasan', 'province': 'Marinduque', 'code': 'MUN-MAR-004', 'status': 'Active'},
                 {'name': 'Mogpog', 'province': 'Marinduque', 'code': 'MUN-MAR-005', 'status': 'Active'},
 
-                // Occidental Mindoro Province
+                # Occidental Mindoro Province
                 {'name': 'San Jose', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-001', 'status': 'Active'},
                 {'name': 'Mamburao', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-002', 'status': 'Active'},
 
-                // Oriental Mindoro Province (full list)
+                # Oriental Mindoro Province (full list)
                 {'name': 'Baco', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-001', 'status': 'Active'},
                 {'name': 'Bansud', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-002', 'status': 'Active'},
                 {'name': 'Bongabong', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-003', 'status': 'Active'},
@@ -2255,13 +2255,13 @@ def get_regional_municipal_offices():
                 {'name': 'Socorro', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-014', 'status': 'Active'},
                 {'name': 'Victoria', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-015', 'status': 'Active'},
 
-                // Palawan Province
+                # Palawan Province
                 {'name': 'Puerto Princesa', 'province': 'Palawan', 'code': 'MUN-PAL-001', 'status': 'Active'},
                 {'name': 'Coron', 'province': 'Palawan', 'code': 'MUN-PAL-002', 'status': 'Active'},
                 {'name': 'El Nido', 'province': 'Palawan', 'code': 'MUN-PAL-003', 'status': 'Active'},
                 {'name': "Brooke's Point", 'province': 'Palawan', 'code': 'MUN-PAL-004', 'status': 'Active'},
 
-                // Romblon Province
+                # Romblon Province
                 {'name': 'Odiongan', 'province': 'Romblon', 'code': 'MUN-ROM-001', 'status': 'Active'},
                 {'name': 'Calatrava', 'province': 'Romblon', 'code': 'MUN-ROM-002', 'status': 'Active'},
                 {'name': 'San Andres', 'province': 'Romblon', 'code': 'MUN-ROM-003', 'status': 'Active'},
