@@ -44,32 +44,36 @@ document.addEventListener('DOMContentLoaded', function () {
   function renderTable() {
     const tb = document.getElementById('tb');
     if (!tb) return;
-    tb.innerHTML = holidays.length ? holidays.map(x => `
-      <tr class="hover:bg-slate-50 transition-colors data-row">
-        <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">
-          <input type="checkbox" class="rc cursor-pointer" data-id="${x.id}" ${selectedIds.has(x.id) ? 'checked' : ''}>
-        </td>
-        <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100 font-mono text-slate-800 font-bold">${x.date || ''}</td>
-        <td class="px-3 py-1.5 align-middle border-r border-slate-100">
-          <div class="font-black text-slate-900 uppercase tracking-tight">${x.name || ''}</div>
-          ${x.basis ? `<div class="text-[9px] text-slate-500 mt-0.5 tracking-widest font-bold">${x.basis}</div>` : ''}
-        </td>
-        <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${x.type || ''}</td>
-        <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${x.scope || ''}</td>
-        <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase tracking-widest text-center">${x.region || ''}</td>
-        <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase tracking-widest text-center">${x.municipality || ''}</td>
-        <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-700 uppercase tracking-widest text-center">${x.basis || ''}</td>
-        <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-center">
-          ${x.office_status === 'open' ? `<span class='text-emerald-700 font-bold'>Open${x.open_time && x.close_time ? ` (${x.open_time} - ${x.close_time})` : ''}</span>` : `<span class='text-rose-700 font-bold'>Closed</span>`}
-        </td>
-        <td class="px-3 py-1.5 align-middle text-center no-print w-[60px]">
-          <div class="flex justify-center gap-1 flex-nowrap">
-            <button class="ed btn-action btn-edit" title="Edit" data-id="${x.id}"><span class="material-icons-round text-[12px]">edit</span></button>
-            <button class="rm btn-action btn-delete" title="Delete" data-id="${x.id}"><span class="material-icons-round text-[12px]">delete</span></button>
-          </div>
-        </td>
-      </tr>
-    `).join('') : '<tr><td colspan="10" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No holiday records found.</td></tr>';
+      tb.innerHTML = holidays.length ? holidays.map(x => {
+        const region = x.region && x.region.trim() ? x.region : 'REGIONWIDE';
+        const municipality = x.municipality && x.municipality.trim() ? x.municipality : 'ALL';
+        return `
+        <tr class="hover:bg-slate-50 transition-colors data-row">
+          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">
+            <input type="checkbox" class="rc cursor-pointer" data-id="${x.id}" ${selectedIds.has(x.id) ? 'checked' : ''}>
+          </td>
+          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100 font-mono text-slate-800 font-bold">${x.date || ''}</td>
+          <td class="px-3 py-1.5 align-middle border-r border-slate-100">
+            <div class="font-black text-slate-900 uppercase tracking-tight">${x.name || ''}</div>
+            ${x.basis ? `<div class="text-[9px] text-slate-500 mt-0.5 tracking-widest font-bold">${x.basis}</div>` : ''}
+          </td>
+          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${x.type || ''}</td>
+          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${x.scope || ''}</td>
+          <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase tracking-widest text-center">${region}</td>
+          <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase tracking-widest text-center">${municipality}</td>
+          <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-700 uppercase tracking-widest text-center">${x.basis || ''}</td>
+          <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-center">
+            ${x.office_status === 'open' ? `<span class='text-emerald-700 font-bold'>Open${x.open_time && x.close_time ? ` (${x.open_time} - ${x.close_time})` : ''}</span>` : `<span class='text-rose-700 font-bold'>Closed</span>`}
+          </td>
+          <td class="px-3 py-1.5 align-middle text-center no-print w-[60px]">
+            <div class="flex justify-center gap-1 flex-nowrap">
+              <button class="ed btn-action btn-edit" title="Edit" data-id="${x.id}"><span class="material-icons-round text-[12px]">edit</span></button>
+              <button class="rm btn-action btn-delete" title="Delete" data-id="${x.id}"><span class="material-icons-round text-[12px]">delete</span></button>
+            </div>
+          </td>
+        </tr>
+        `;
+      }).join('') : '<tr><td colspan="10" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No holiday records found.</td></tr>';
   }
 
   // Render charts (simple count by type, scope)
