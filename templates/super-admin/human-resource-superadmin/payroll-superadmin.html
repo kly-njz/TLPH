@@ -712,12 +712,49 @@
 
         $("f").onsubmit=(e)=>{
             e.preventDefault();
-            const payload={ payNo:$("payNo").value.trim().toUpperCase(), month:$("month").value, period:$("period").value, no:$("no").value.trim().toUpperCase(), name:$("name").value.trim(), cat:$("cat").value, reg:$("reg").value, mun:$("mun").value, status:$("status").value, basic:num($("basic").value), allow:num($("allow").value), ot:num($("ot").value), ded:num($("ded").value), remarks:$("remarks").value.trim() };
+            const isCreate = !$("eid").value || rows.every(x=>x.id!==$("eid").value);
+            const payload={
+                payNo:$("payNo").value.trim().toUpperCase(),
+                month:$("month").value,
+                period:$("period").value,
+                no:$("no").value.trim().toUpperCase(),
+                name:$("name").value.trim(),
+                cat:$("cat").value,
+                reg:$("reg").value,
+                mun:$("mun").value,
+                status:$("status").value,
+                basic:num($("basic").value),
+                allow:num($("allow").value),
+                ot:num($("ot").value),
+                ded:num($("ded").value),
+                remarks:$("remarks").value.trim(),
+                employee_id: $("eid").value.trim()
+            };
             if(payload.cat==="MUNICIPALITY" && !payload.mun) return toast("Missing field","Municipality is required.");
             const id=$("eid").value.trim()||null;
             const dup=rows.some(x=>x.payNo.toLowerCase()===payload.payNo.toLowerCase() && x.id!==id);
             if(dup) return toast("Duplicate","Payroll No. must be unique.");
-            upsert(payload,id); closeM(); render(); toast("Saved","Payroll record saved.");
+            if(isCreate) {
+                // POST to backend to create new employee
+                fetch('/superadmin/api/hrm/employee', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                })
+                .then(resp => resp.json())
+                .then(data => {
+                    if(data.success) {
+                        toast("Created","Employee created.");
+                        fetchPayrollRecords().then(render);
+                        closeM();
+                    } else {
+                        toast("Error", data.error || "Failed to create employee.");
+                    }
+                })
+                .catch(()=>toast("Error","Failed to create employee."));
+            } else {
+                upsert(payload,id); closeM(); render(); toast("Saved","Payroll record saved.");
+            }
         };
 
         render();

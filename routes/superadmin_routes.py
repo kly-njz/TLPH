@@ -1,3 +1,32 @@
+@bp.route('/api/hrm/employee', methods=['POST'])
+@role_required('super-admin','superadmin')
+def api_create_employee():
+    """Create a new employee in the employees collection."""
+    try:
+        db = get_firestore_db()
+        data = request.get_json() or {}
+        # Auto-generate employee_id if not provided
+        employee_id = data.get('employee_id') or f"EMP-{int(datetime.utcnow().timestamp())}-{str(hash(str(data)))[:6]}"
+        data['employee_id'] = employee_id
+        # Set default payroll fields if missing
+        for field, default in [
+            ('basic_pay', 0), ('allowances', 0), ('gross_pay', 0), ('deductions', 0), ('net_pay', 0),
+            ('status', 'DRAFT'), ('period', 'MONTHLY'), ('month', ''), ('payroll_no', ''), ('name', ''),
+            ('region', ''), ('municipality', ''), ('designation', ''), ('department_name', ''), ('division', ''), ('role', ''), ('email', ''), ('first_name', ''), ('middle_name', ''), ('last_name', ''), ('remarks', '')
+        ]:
+            if field not in data:
+                data[field] = default
+        # Compose full name if missing
+        if not data.get('name'):
+            fn = data.get('first_name', '')
+            mn = data.get('middle_name', '')
+            ln = data.get('last_name', '')
+            data['name'] = f"{fn} {mn} {ln}".replace('  ', ' ').strip()
+        db.collection('employees').document(employee_id).set(data)
+        return jsonify({'success': True, 'employee_id': employee_id})
+    except Exception as e:
+        print(f'[ERROR] Failed to create employee: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 from flask import Blueprint, render_template, request, jsonify
 from firebase_auth_middleware import role_required
