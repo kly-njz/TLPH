@@ -123,7 +123,23 @@
             border: 1px solid #cbd5e1;
             background: #fff;
         }
-    </style>
+        .rejection-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .rejection-dialog {
+            background: white;
+            border: 2px solid #dc2626;
+            border-radius: 4px;
+            width: min(500px, 90vw);
+            box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+        }    </style>
 </head>
 <body>
 
@@ -216,7 +232,7 @@
                                     <i class="fa-solid fa-arrow-up-right-from-square me-2"></i> <span id="forwardBtnText">Send To Regional Review</span>
                                 </button>
                                 
-                                <button onclick="updateApplicationStatus('rejected')" class="btn btn-danger bg-red-600 border-0 btn-action shadow-sm">
+                                <button onclick="showRejectionModal()" class="btn btn-danger bg-red-600 border-0 btn-action shadow-sm">
                                     <i class="fa-solid fa-circle-xmark me-2"></i> <span id="rejectBtnText">Reject Request</span>
                                 </button>
                             </div>
@@ -247,7 +263,26 @@
         </div>
     </div>
 
-    <script type="module">
+    <div id="rejectionModal" class="rejection-modal" onclick="closeRejectionModal(event)">
+        <div class="rejection-dialog" onclick="event.stopPropagation()">
+            <div class="px-4 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
+                <h3 class="text-sm font-black uppercase text-red-800 m-0">Rejection Reason</h3>
+                <button type="button" onclick="closeRejectionModal()" class="text-red-600 hover:text-red-800 border-0 bg-transparent text-lg">
+                    ✕
+                </button>
+            </div>
+            <div class="px-4 py-4">
+                <p class="text-[10px] font-bold text-slate-600 uppercase mb-3">Add a message explaining the reason for rejection (visible to applicant):</p>
+                <textarea id="rejectionMessage" class="form-control" rows="4" placeholder="e.g., Missing required documents, Incomplete business plan, Insufficient investment capital..." style="font-size: 11px; font-weight: 500;"></textarea>
+            </div>
+            <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex gap-2 justify-end">
+                <button type="button" onclick="closeRejectionModal()" class="btn btn-sm btn-secondary">Cancel</button>
+                <button type="button" onclick="confirmRejection()" class="btn btn-sm btn-danger font-weight-bold">Reject & Send Message</button>
+            </div>
+        </div>
+    </div>
+ 
+     <script type="module">
         import { auth, db } from '/static/js/firebase-config.js';
         import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
@@ -261,6 +296,8 @@
         let currentRecordType = 'application';
         let actionLocked = false;
         let previewDocuments = [];
+        let isSubmittingRejection = false;
+        let rejectionMessage = '';
 
         const pathParts = window.location.pathname.split('/');
         currentApplicationId = pathParts[pathParts.length - 1];
@@ -701,6 +738,8 @@
                     updateFields.rejectedByEmail = auth.currentUser ? auth.currentUser.email : '';
                     updateFields.approvedByLevel = '';
                     updateFields.approvedByEmail = '';
+                    updateFields.rejectionReason = rejectionMessage || 'No reason provided';
+                    updateFields.rejectedAt = serverTimestamp();
                 }
 
                 if (newStatus === 'to-review') {
@@ -740,6 +779,7 @@
                 await loadApplicationDetails(); 
             } catch (error) {
                 console.error('Error updating status:', error);
+                isSubmittingRejection = false;
                 alert('Failed to update application status: ' + error.message);
                 
                 // Re-enable buttons on error
@@ -759,6 +799,29 @@
                 loadApplicationDetails();
             }
         });
+
+        window.showRejectionModal = function() {
+            if (actionLocked) {
+                alert('This request is already finalized/forwarded and can no longer be changed.');
+                return;
+            }
+            document.getElementById('rejectionMessage').value = '';
+            document.getElementById('rejectionModal').style.display = 'flex';
+        };
+
+        window.closeRejectionModal = function(event) {
+            if (event && event.target && event.target.id !== 'rejectionModal') return;
+            document.getElementById('rejectionModal').style.display = 'none';
+        };
+
+        window.confirmRejection = function() {
+            if (isSubmittingRejection) return;
+            isSubmittingRejection = true;
+            document.getElementById('rejectionModal').style.display = 'none';
+            const msg = document.getElementById('rejectionMessage').value.trim();
+            rejectionMessage = msg;
+            updateApplicationStatus('rejected');
+        };
     </script>
 
 </body>
