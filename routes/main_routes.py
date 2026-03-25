@@ -293,10 +293,6 @@ def national_dashboard():
 @bp.route('/national/system-logs')
 @role_required('national', 'national_admin')
 def national_system_logs_fallback():
-        # Debug: Print the number of logs and a sample log
-        print(f"[DEBUG] regional_logs count: {len(regional_logs)}")
-        if regional_logs:
-            print(f"[DEBUG] Sample regional_log: {regional_logs[0]}")
     """
     Show only regional transactions and fund transfers in the national audit log page.
     """
@@ -388,6 +384,10 @@ def national_system_logs_fallback():
     for log in regional_logs:
         log['timestamp'] = log.get('ts', '')
         log['details'] = log.get('message', '')
+    # Debug: Print the number of logs and a sample log
+    print(f"[DEBUG] regional_logs count: {len(regional_logs)}")
+    if regional_logs:
+        print(f"[DEBUG] Sample regional_log: {regional_logs[0]}")
     return render_template('national/system/system-logs.html',
         regional_logs=regional_logs,
         municipal_logs=[],
