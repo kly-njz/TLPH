@@ -873,6 +873,57 @@ def submit_application():
             'message': f'Failed to submit application: {str(e)}'
         }), 500
 
+
+@bp.route('/upload-service-files', methods=['POST'])
+@firebase_auth_required
+def upload_service_files():
+    """Upload service request files and return web URLs grouped by field id/name."""
+    try:
+        import os
+        from werkzeug.utils import secure_filename
+
+        user_id = (request.form.get('userId') or '').strip()
+        if not user_id:
+            return jsonify({'success': False, 'message': 'Missing userId'}), 400
+
+        upload_dir = os.path.join('static', 'uploads', 'service_requests', user_id)
+        os.makedirs(upload_dir, exist_ok=True)
+
+        file_paths = {}
+        timestamp = int(datetime.now().timestamp())
+
+        for field in request.files:
+            files = request.files.getlist(field)
+            saved_urls = []
+
+            for idx, file in enumerate(files):
+                if not file or not file.filename:
+                    continue
+
+                filename = secure_filename(file.filename)
+                unique_filename = f"{timestamp}_{field}_{idx}_{filename}"
+                file_path = os.path.join(upload_dir, unique_filename)
+                file.save(file_path)
+
+                web_path = f"/static/uploads/service_requests/{user_id}/{unique_filename}"
+                saved_urls.append(web_path)
+
+            if saved_urls:
+                file_paths[field] = saved_urls
+
+        return jsonify({
+            'success': True,
+            'message': 'Service files uploaded successfully',
+            'filePaths': file_paths
+        })
+
+    except Exception as e:
+        print(f'Error uploading service files: {str(e)}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to upload service files: {str(e)}'
+        }), 500
+
 @bp.route('/get-applications/<user_id>', methods=['GET'])
 @firebase_auth_required
 def get_user_applications(user_id):
