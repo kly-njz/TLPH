@@ -555,14 +555,14 @@ def api_get_superadmin_payroll():
     """Fetch all payroll records for superadmin payroll registry (all regions/municipalities)."""
     try:
         db = get_firestore_db()
-        payroll_ref = db.collection('payroll')
-        docs = payroll_ref.stream()
-        payrolls = []
+        employees_ref = db.collection('employees')
+        docs = employees_ref.stream()
+        employees = []
         for doc in docs:
             data = doc.to_dict()
             data['id'] = doc.id
-            payrolls.append(data)
-        return jsonify({'success': True, 'payrolls': payrolls, 'count': len(payrolls)})
+            employees.append(data)
+        return jsonify({'success': True, 'payrolls': employees, 'count': len(employees)})
     except Exception as e:
-        print(f'[ERROR] Failed to fetch payroll records: {e}')
+        print(f'[ERROR] Failed to fetch employees for payroll: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
