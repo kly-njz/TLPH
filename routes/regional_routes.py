@@ -2274,10 +2274,23 @@ def get_regional_municipal_offices():
                 {'name': 'San Jose', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-002', 'status': 'Active'},
                 {'name': 'Mamburao', 'province': 'Occidental Mindoro', 'code': 'MUN-OCM-003', 'status': 'Active'},
                 
-                # Oriental Mindoro Province
-                {'name': 'Calapan', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-001', 'status': 'Active'},
-                {'name': 'Roxas', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-002', 'status': 'Active'},
+
+                # Oriental Mindoro Province (full list)
+                {'name': 'Baco', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-001', 'status': 'Active'},
+                {'name': 'Bansud', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-002', 'status': 'Active'},
                 {'name': 'Bongabong', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-003', 'status': 'Active'},
+                {'name': 'Bulalacao', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-004', 'status': 'Active'},
+                {'name': 'Calapan', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-005', 'status': 'Active'},
+                {'name': 'Gloria', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-006', 'status': 'Active'},
+                {'name': 'Mansalay', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-007', 'status': 'Active'},
+                {'name': 'Naujan', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-008', 'status': 'Active'},
+                {'name': 'Pinamalayan', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-009', 'status': 'Active'},
+                {'name': 'Pola', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-010', 'status': 'Active'},
+                {'name': 'Puerto Galera', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-011', 'status': 'Active'},
+                {'name': 'Roxas', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-012', 'status': 'Active'},
+                {'name': 'San Teodoro', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-013', 'status': 'Active'},
+                {'name': 'Socorro', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-014', 'status': 'Active'},
+                {'name': 'Victoria', 'province': 'Oriental Mindoro', 'code': 'MUN-ORM-015', 'status': 'Active'},
                 
                 # Palawan Province
                 {'name': 'Puerto Princesa', 'province': 'Palawan', 'code': 'MUN-PAL-001', 'status': 'Active'},
