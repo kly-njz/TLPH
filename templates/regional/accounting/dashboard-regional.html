@@ -685,22 +685,43 @@
       if (!officesData.success || !Array.isArray(officesData.offices)) throw new Error('No municipal offices');
       if (!expensesData.success || !Array.isArray(expensesData.expenses)) throw new Error('No expenses data');
 
-      // Build a set of municipality names with admin accounts (normalize to uppercase)
-      const muniSet = new Set(
-        officesData.offices
-          .map(o => (o.municipality_name || '').toUpperCase().trim())
-          .filter(Boolean)
-      );
+      // Helper to normalize municipality names for matching
+      function normalizeMuni(name) {
+        return (name || '')
+          .toUpperCase()
+          .replace(/ CITY$/, '')
+          .replace(/ MUNICIPALITY$/, '')
+          .replace(/[^A-Z0-9]/g, '') // Remove spaces and special chars
+          .trim();
+      }
 
-      // Aggregate usage only for municipalities with admin accounts
-      const usage = {};
-      expensesData.expenses.forEach(tx => {
-        const muni = (tx.municipality || tx.recipient || '').toUpperCase().trim();
-        const amt = Number(tx.amount) || 0;
-        if (!muniSet.has(muni)) return; // Only count if admin account exists
-        if (!usage[muni]) usage[muni] = 0;
-        usage[muni] += amt;
+      // Build a map of normalized municipality names to display names
+      const muniMap = {};
+      officesData.offices.forEach(o => {
+        const norm = normalizeMuni(o.municipality_name);
+        if (norm) muniMap[norm] = o.municipality_name;
       });
+
+      // Aggregate usage only for municipalities with admin accounts (robust match)
+      const usage = {};
+      const unmatched = new Set();
+      expensesData.expenses.forEach(tx => {
+        const rawMuni = tx.municipality || tx.recipient || '';
+        const normMuni = normalizeMuni(rawMuni);
+        const amt = Number(tx.amount) || 0;
+        if (!muniMap[normMuni]) {
+          if (rawMuni) unmatched.add(rawMuni);
+          return; // Only count if admin account exists
+        }
+        const displayName = muniMap[normMuni];
+        if (!usage[displayName]) usage[displayName] = 0;
+        usage[displayName] += amt;
+      });
+
+      // Debug: log unmatched municipalities to the console
+      if (unmatched.size > 0) {
+        console.warn('Municipalities in expenses not matched to admin accounts:', Array.from(unmatched));
+      }
 
       // Sort by usage descending, take top 10
       const sorted = Object.entries(usage).sort((a,b) => b[1]-a[1]).slice(0, 10);
