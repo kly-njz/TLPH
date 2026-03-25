@@ -29,6 +29,26 @@
     dl dd { font-size: 11px; font-weight: 700; color: #0f172a; margin-bottom: 12px; margin-left: 0; }
     dl dd:last-child { margin-bottom: 0; }
 
+    .rejection-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+
+    .rejection-dialog {
+      background: white;
+      border: 2px solid #dc2626;
+      border-radius: 4px;
+      width: min(500px, 90vw);
+      box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    [x-cloak] { display: none !important; }
+
     @media print {
       .no-print { display: none !important; }
       .print-wrapper { margin-left: 0 !important; padding: 0 !important; }
@@ -180,7 +200,7 @@
                 </div>
                 
                 <div class="flex gap-1.5">
-                  <button @click="updateStatus('rejected')" :disabled="isFinal" :class="isFinal ? 'opacity-40 cursor-not-allowed' : ''" class="gov-btn border border-rose-600 bg-transparent text-rose-400 hover:bg-rose-600 hover:text-white transition-colors">
+                  <button @click="showRejectionModal()" :disabled="isFinal" :class="isFinal ? 'opacity-40 cursor-not-allowed' : ''" class="gov-btn border border-rose-600 bg-transparent text-rose-400 hover:bg-rose-600 hover:text-white transition-colors">
                     Reject
                   </button>
                   <button @click="forwardToNational()" :disabled="isFinal" :class="isFinal ? 'opacity-40 cursor-not-allowed' : ''" class="gov-btn border border-blue-400 bg-transparent text-blue-300 hover:bg-blue-600 hover:text-white transition-colors">
@@ -197,6 +217,23 @@
 
         </div>
       </main>
+    </div>
+  </div>
+
+  <div x-show="showingRejectionModal" x-cloak class="rejection-modal" @click="closeRejectionModal($event)">
+    <div class="rejection-dialog" @click.stop>
+      <div class="px-4 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
+        <h3 class="text-sm font-black uppercase text-red-800 m-0">Rejection Reason</h3>
+        <button type="button" @click="closeRejectionModal()" class="text-red-600 hover:text-red-800 border-0 bg-transparent text-lg">✕</button>
+      </div>
+      <div class="px-4 py-4">
+        <p class="text-[10px] font-bold text-slate-600 uppercase mb-3">Add a message explaining the reason for rejection (visible to applicant):</p>
+        <textarea x-model="rejectionMessage" class="w-full border border-slate-300 rounded-sm p-2 text-[11px] font-semibold focus:outline-none focus:border-red-500" rows="4" placeholder="e.g., Missing required documents, Incomplete business plan, Insufficient investment capital..."></textarea>
+      </div>
+      <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex gap-2 justify-end">
+        <button type="button" @click="closeRejectionModal()" class="gov-btn border border-slate-300 bg-white text-slate-700">Cancel</button>
+        <button type="button" @click="confirmRejection()" class="gov-btn border border-red-600 bg-red-600 text-white">Reject &amp; Send Message</button>
+      </div>
     </div>
   </div>
 
@@ -260,6 +297,8 @@
         currentCollection: 'applications',
         currentRecordType: 'application',
         isFinal: false,
+        rejectionMessage: '',
+        showingRejectionModal: false,
         stats: {
           species: "0",
           harvest: "0"
@@ -464,8 +503,29 @@
           }, 100);
         },
 
-        async updateStatus(newStatus) {
-          if (!confirm(`Are you sure you want to ${newStatus.toUpperCase()} this request?`)) {
+        showRejectionModal() {
+          if (this.isFinal) return;
+          this.rejectionMessage = '';
+          this.showingRejectionModal = true;
+        },
+
+        closeRejectionModal(event = null) {
+          if (event && event.target !== event.currentTarget) return;
+          this.showingRejectionModal = false;
+        },
+
+        async confirmRejection() {
+          const rejectionText = String(this.rejectionMessage || '').trim();
+          if (!rejectionText) {
+            alert('Please provide a rejection reason before proceeding.');
+            return;
+          }
+
+          await this.updateStatus('rejected', true);
+        },
+
+        async updateStatus(newStatus, skipPrompt = false) {
+          if (!skipPrompt && !confirm(`Are you sure you want to ${newStatus.toUpperCase()} this request?`)) {
             return;
           }
 
@@ -473,7 +533,7 @@
             const applicationId = window.location.pathname.split('/').pop();
             const { updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
 
-            await updateDoc(window.firebaseDoc(window.firebaseDB, this.currentCollection, applicationId), {
+            const updatePayload = {
               status: newStatus,
               regionalStatus: newStatus,
               approvedByLevel: newStatus === 'approved' ? 'Regional' : '',
@@ -482,9 +542,16 @@
               rejectedByEmail: newStatus === 'rejected' ? (window.firebaseAuth.currentUser?.email || 'regional-admin') : '',
               regionalUpdatedAt: new Date().toISOString(),
               regionalUpdatedBy: window.firebaseAuth.currentUser?.email || 'regional-admin'
-            });
+            };
+
+            if (newStatus === 'rejected') {
+              updatePayload.rejectionReason = String(this.rejectionMessage || '').trim() || 'No reason provided';
+            }
+
+            await updateDoc(window.firebaseDoc(window.firebaseDB, this.currentCollection, applicationId), updatePayload);
 
             alert(`Request ${newStatus.toUpperCase()} successfully!`);
+            this.closeRejectionModal();
             window.location.href = '/regional/application-list';
           } catch (error) {
             console.error('Error updating status:', error);

@@ -46,6 +46,24 @@
       main { margin-left: 0 !important; padding: 0 !important; }
     }
 
+    .rejection-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+
+    .rejection-dialog {
+      background: white;
+      border: 2px solid #dc2626;
+      border-radius: 4px;
+      width: min(500px, 90vw);
+      box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+    }
+
     [x-cloak] { display: none !important; }
   </style>
 </head>
@@ -234,7 +252,7 @@
               </div>
               
               <div class="flex gap-2">
-                <button @click="updateNationalStatus('rejected')" class="border border-rose-600 bg-white px-6 py-2 text-[10px] font-black uppercase text-rose-600 hover:bg-rose-600 hover:text-white transition-all rounded-[1px]">
+                <button @click="showRejectionModal()" class="border border-rose-600 bg-white px-6 py-2 text-[10px] font-black uppercase text-rose-600 hover:bg-rose-600 hover:text-white transition-all rounded-[1px]">
                   <span class="material-icons-round text-[14px] align-middle mr-1">cancel</span> Disapprove
                 </button>
                 <button @click="updateNationalStatus('approved')" class="bg-emerald-700 px-8 py-2 text-[10px] font-black uppercase text-white hover:bg-emerald-800 shadow-sm transition-all rounded-[1px]">
@@ -263,6 +281,23 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <div x-show="showingRejectionModal" x-cloak class="rejection-modal" style="display:none;" @click="closeRejectionModal($event)">
+    <div class="rejection-dialog" @click.stop>
+      <div class="px-4 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
+        <h3 class="text-sm font-black uppercase text-red-800 m-0">Rejection Reason</h3>
+        <button type="button" @click="closeRejectionModal()" class="text-red-600 hover:text-red-800 border-0 bg-transparent text-lg">✕</button>
+      </div>
+      <div class="px-4 py-4">
+        <p class="text-[10px] font-bold text-slate-600 uppercase mb-3">Add a message explaining the reason for rejection (visible to applicant):</p>
+        <textarea x-model="rejectionMessage" class="w-full border border-slate-300 rounded-sm p-2 text-[11px] font-semibold focus:outline-none focus:border-red-500" rows="4" placeholder="e.g., Missing required documents, Incomplete business plan, Insufficient investment capital..."></textarea>
+      </div>
+      <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex gap-2 justify-end">
+        <button type="button" @click="closeRejectionModal()" class="border border-slate-300 bg-white px-4 py-1.5 text-[10px] font-black uppercase text-slate-700 rounded-[1px]">Cancel</button>
+        <button type="button" @click="confirmRejection()" class="border border-red-600 bg-red-600 px-4 py-1.5 text-[10px] font-black uppercase text-white rounded-[1px]">Reject &amp; Send Message</button>
+      </div>
+    </div>
   </div>
 
   <!-- Document Preview Modal -->
@@ -320,6 +355,8 @@
         currentCollection: 'applications',
         currentRecordType: 'application',
         documents: [],
+        rejectionMessage: '',
+        showingRejectionModal: false,
         preview: {
           open: false,
           name: '',
@@ -514,18 +551,54 @@
           }
         },
 
-        async updateNationalStatus(newStatus) {
-          if (!confirm(`Are you sure you want to ${newStatus} this record?`)) return;
+        showRejectionModal() {
+          this.rejectionMessage = '';
+          this.showingRejectionModal = true;
+        },
+
+        closeRejectionModal(event = null) {
+          if (event && event.target !== event.currentTarget) return;
+          this.showingRejectionModal = false;
+        },
+
+        async confirmRejection() {
+          const rejectionText = String(this.rejectionMessage || '').trim();
+          if (!rejectionText) {
+            alert('Please provide a rejection reason before proceeding.');
+            return;
+          }
+
+          await this.updateNationalStatus('rejected', true);
+        },
+
+        async updateNationalStatus(newStatus, skipPrompt = false) {
+          if (!skipPrompt && !confirm(`Are you sure you want to ${newStatus} this record?`)) return;
           try {
             const pathParts = window.location.pathname.split('/');
             const applicationId = pathParts[pathParts.length - 1];
+            const actorEmail = window.firebaseAuth.currentUser?.email || 'national-admin';
             const updateData = {
               status: newStatus,
               nationalStatus: newStatus,
-              [`national${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}edAt`]: new Date().toISOString(),
-              [`national${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}edBy`]: window.firebaseAuth.currentUser?.email || 'national-admin'
+              nationalUpdatedAt: new Date().toISOString(),
+              nationalUpdatedBy: actorEmail
             };
+
+            if (newStatus === 'approved') {
+              updateData.nationalApprovedAt = new Date().toISOString();
+              updateData.nationalApprovedBy = actorEmail;
+            }
+
+            if (newStatus === 'rejected') {
+              updateData.nationalRejectedAt = new Date().toISOString();
+              updateData.nationalRejectedBy = actorEmail;
+              updateData.rejectedByLevel = 'National';
+              updateData.rejectedByEmail = actorEmail;
+              updateData.rejectionReason = String(this.rejectionMessage || '').trim() || 'No reason provided';
+            }
+
             await window.firebaseUpdateDoc(window.firebaseDoc(window.firebaseDB, this.currentCollection, applicationId), updateData);
+            this.closeRejectionModal();
             window.location.reload();
           } catch (error) {
             alert('Error: ' + error.message);
