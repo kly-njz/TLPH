@@ -541,3 +541,8 @@ def superadmin_payroll_audit_log(payroll_id):
         {'action': 'approved', 'by': 'national_admin@example.com', 'at': '2026-03-03T15:00:00Z'},
     ]
     return jsonify({'success': True, 'logs': logs})
+
+@bp.route('/hrm/payroll')
+@role_required('super-admin','superadmin')
+def hr_payroll_view():
+    return render_template('super-admin/human-resource-superadmin/payroll-superadmin.html')
