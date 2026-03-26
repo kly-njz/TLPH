@@ -632,3 +632,7 @@ def announcement_main():
 @bp.route('/news')
 def news_main():
     return render_template('news.html')
+
+@bp.route('/programs')
+def programs_main():
+    return render_template('programs.html')
