@@ -755,10 +755,8 @@ def api_get_fund_distribution():
             reg_docs = db.collection('regional_fund_distribution').stream()
             for doc in reg_docs:
                 data = doc.to_dict() or {}
-                print(f'[DEBUG] Regional Fund Doc: {doc.id} Data: {data}')
                 region = data.get('region') or doc.id
                 amount = data.get('amount', 0)
-                print(f'[DEBUG] Regional Fund - region: {region}, amount(raw): {amount}')
                 try:
                     amount = float(str(amount).replace(',', ''))
                 except Exception as e:
@@ -777,11 +775,9 @@ def api_get_fund_distribution():
             muni_docs = db.collection('municipal_fund_distribution').stream()
             for doc in muni_docs:
                 data = doc.to_dict() or {}
-                print(f'[DEBUG] Municipal Fund Doc: {doc.id} Data: {data}')
                 municipality = data.get('municipality') or data.get('muni') or ''
                 region = data.get('region') or ''
                 amount = data.get('amount', 0)
-                print(f'[DEBUG] Municipal Fund - municipality: {municipality}, region: {region}, amount(raw): {amount}')
                 try:
                     amount = float(str(amount).replace(',', ''))
                 except Exception as e:
@@ -807,8 +803,9 @@ def api_get_fund_distribution():
         for region in all_regions:
             regional_funds.append({
                 'region': region,
-                'regional_total': regional_totals.get(region, 0),
-                'municipal_total': municipal_totals_by_region.get(region, 0)
+                'amount': regional_totals.get(region, 0),
+                'municipal_total': municipal_totals_by_region.get(region, 0),
+                'fund_type': 'GENERAL'
             })
 
         # 5. Compose municipal fund summary (municipality, region, total)
@@ -816,10 +813,12 @@ def api_get_fund_distribution():
         for muni in municipal_totals_by_muni:
             # Find region for this municipality (from first matching entry in municipal_funds)
             region = next((f['region'] for f in municipal_funds if f['municipality'] == muni), '')
+            fund_type = next((f['fund_type'] for f in municipal_funds if f['municipality'] == muni), 'GENERAL')
             municipal_fund_summary.append({
                 'municipality': muni,
                 'region': region,
-                'total': municipal_totals_by_muni[muni]
+                'amount': municipal_totals_by_muni[muni],
+                'fund_type': fund_type
             })
 
         return jsonify({
