@@ -644,25 +644,49 @@
       }
 
       // Documents — scan all array/string fields with file extensions
-      const fileExts = /\.(pdf|jpg|jpeg|png|gif|doc|docx)$/i;
+      const fileExts = /\.(pdf|jpg|jpeg|png|gif|webp|bmp|svg|avif|doc|docx|xls|xlsx|csv|txt|zip)$/i;
       const docsEl = document.getElementById('mDocs');
+      const normalizeFileUrl = (raw, userId) => {
+        const str = String(raw || '').trim();
+        if (!str) return '';
+        if (/^(https?:\/\/|\/static\/|static\/)/i.test(str)) {
+          return str.startsWith('static/') ? `/${str}` : str;
+        }
+        if (!fileExts.test(str) || !userId) return '';
+        const encoded = str.split('/').map(part => encodeURIComponent(part)).join('/');
+        return `/static/uploads/service_requests/${encodeURIComponent(userId)}/${encoded}`;
+      };
+      const displayFileName = (value) => {
+        try {
+          const clean = String(value || '').split('?')[0];
+          const base = clean.split('/').filter(Boolean).pop() || 'Attachment';
+          return decodeURIComponent(base);
+        } catch (_) {
+          return 'Attachment';
+        }
+      };
       docsEl.innerHTML = '';
       let fileCount = 0;
       for (const [key, val] of Object.entries(d)) {
         const items = Array.isArray(val) ? val : [val];
         items.forEach(item => {
           if (typeof item === 'string' && fileExts.test(item)) {
+            const fileUrl = normalizeFileUrl(item, d.userId || d.userID || d.uid || '');
+            if (!fileUrl) return;
             fileCount++;
             const label = key.replace(/File$|Files$/i,'').replace(/([A-Z])/g,' $1').trim();
             const icon  = /\.(jpg|jpeg|png|gif)$/i.test(item) ? 'image' : /\.pdf$/i.test(item) ? 'picture_as_pdf' : 'attach_file';
+            const encodedUrl = encodeURIComponent(fileUrl);
+            const fileName = displayFileName(item);
             docsEl.innerHTML += `
               <div class="col-md-6">
                 <div class="d-flex align-items-center gap-2 border p-2" style="border-radius:2px; background:#f8fafc;">
                   <span class="material-icons-round text-primary" style="font-size:18px;">${icon}</span>
                   <div class="min-w-0 flex-fill">
-                    <div class="fw-bold text-uppercase" style="font-size:0.6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item}</div>
+                    <div class="fw-bold text-uppercase" style="font-size:0.6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${fileName}</div>
                     <div class="text-muted" style="font-size:0.55rem;">${label}</div>
                   </div>
+                  <button type="button" class="btn btn-sm btn-outline-primary fw-bold py-0 px-2" style="font-size:0.58rem;border-radius:2px;" onclick="openNationalAttachmentPreview('${encodedUrl}', '${encodeURIComponent(fileName)}')">VIEW</button>
                 </div>
               </div>`;
           }
@@ -797,6 +821,52 @@
     document.getElementById('natRejectModal').style.display = 'none';
     document.getElementById('natRejectNoteInput').value = '';
   };
+
+  window.openNationalAttachmentPreview = function(encodedUrl, encodedName) {
+    try {
+      const url = decodeURIComponent(encodedUrl || '');
+      const name = decodeURIComponent(encodedName || 'Attachment');
+      const ext = String(url).toLowerCase();
+      const isImg = /\.(png|jpe?g|gif|webp|bmp|svg|avif)(\?|$)/i.test(ext);
+      const isPdf = /\.pdf(\?|$)/i.test(ext);
+
+      const modal = document.getElementById('nationalAttachmentPreviewModal');
+      const title = document.getElementById('napTitle');
+      const img = document.getElementById('napImage');
+      const frame = document.getElementById('napFrame');
+      const fallback = document.getElementById('napFallback');
+
+      title.textContent = name;
+      img.style.display = 'none';
+      frame.style.display = 'none';
+      fallback.style.display = 'none';
+
+      if (isImg) {
+        img.src = url;
+        img.style.display = 'block';
+      } else if (isPdf) {
+        frame.src = `${url}#toolbar=0&navpanes=0&scrollbar=1`;
+        frame.style.display = 'block';
+      } else {
+        fallback.style.display = 'block';
+      }
+
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    } catch (err) {
+      console.error('Failed to preview attachment:', err);
+    }
+  };
+
+  window.closeNationalAttachmentPreview = function() {
+    const modal = document.getElementById('nationalAttachmentPreviewModal');
+    const img = document.getElementById('napImage');
+    const frame = document.getElementById('napFrame');
+    img.src = '';
+    frame.src = '';
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+  };
 </script>
 
 <!-- National Rejection Note Modal -->
@@ -814,6 +884,21 @@
         <button onclick="cancelNatRejection()" class="btn btn-outline-secondary btn-sm fw-bold text-uppercase flex-fill" style="font-size:10px;">Cancel</button>
         <button onclick="confirmNatRejection()" class="btn btn-danger btn-sm fw-bold text-uppercase flex-fill" style="font-size:10px;"><i class="bi bi-x-circle-fill me-1"></i> Confirm Rejection</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- National Attachment Preview Modal (View Only) -->
+<div id="nationalAttachmentPreviewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;align-items:center;justify-content:center;padding:1rem;" onclick="closeNationalAttachmentPreview()">
+  <div style="width:100%;max-width:1000px;background:#fff;border:1px solid #cbd5e1;" onclick="event.stopPropagation()">
+    <div class="d-flex align-items-center justify-content-between border-bottom px-3 py-2 bg-slate-50">
+      <div id="napTitle" class="fw-bold text-uppercase text-truncate" style="font-size:0.62rem;max-width:85%;"></div>
+      <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.6rem;" onclick="closeNationalAttachmentPreview()">Close</button>
+    </div>
+    <div class="p-2 bg-slate-100 d-flex align-items-center justify-content-center" style="min-height:65vh;max-height:75vh;overflow:auto;">
+      <img id="napImage" src="" alt="Attachment Preview" style="display:none;max-width:100%;max-height:70vh;object-fit:contain;border:1px solid #e2e8f0;background:#fff;" />
+      <iframe id="napFrame" src="" title="Document Preview" style="display:none;width:100%;height:70vh;border:1px solid #e2e8f0;background:#fff;"></iframe>
+      <div id="napFallback" style="display:none;font-size:0.7rem;color:#64748b;font-weight:700;">Preview is available for images and PDF only.</div>
     </div>
   </div>
 </div>
