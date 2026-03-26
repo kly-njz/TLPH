@@ -2,15 +2,15 @@
 // --- View Quotation Modal Logic ---
 function viewQuotation(btn) {
     const row = btn.closest('tr');
-    // Try to get values from data attributes, fallback to cell text
-    document.getElementById('vqNumber').textContent = row.getAttribute('data-number') || row.children[0]?.textContent || 'N/A';
-    document.getElementById('vqClient').textContent = row.getAttribute('data-client') || row.children[1]?.textContent || 'N/A';
-    document.getElementById('vqMunicipality').textContent = row.getAttribute('data-municipality') || row.children[2]?.textContent || 'N/A';
-    document.getElementById('vqStatus').textContent = row.getAttribute('data-status') || row.children[8]?.textContent || 'N/A';
-    document.getElementById('vqDate').textContent = row.getAttribute('data-date') || row.children[4]?.textContent || 'N/A';
-    let amt = row.getAttribute('data-amount') || row.children[3]?.textContent?.replace(/[^\d.]/g, '') || '0';
+    document.getElementById('vqNumber').textContent = row.getAttribute('data-number') || 'N/A';
+    document.getElementById('vqClient').textContent = row.getAttribute('data-client') || 'N/A';
+    document.getElementById('vqMunicipality').textContent = row.getAttribute('data-municipality') || 'N/A';
+    document.getElementById('vqStatus').textContent = row.getAttribute('data-status') || 'N/A';
+    document.getElementById('vqDate').textContent = row.getAttribute('data-date') || 'N/A';
+    let amt = row.getAttribute('data-amount') || '0';
     let formattedAmt = parseFloat(amt).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     document.getElementById('vqAmount').textContent = '₱ ' + formattedAmt;
+    // Add more fields here if needed for full parity
     const modal = document.getElementById('viewQuotationModal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -90,24 +90,26 @@ async function editQuotation(quoteId) {
         return;
     }
     const data = await res.json();
-    // Populate modal fields
+    // Populate modal fields (full parity with backend schema)
     document.getElementById('editMetaRow').classList.remove('hidden');
-    document.getElementById('editQuoteDisplay').value = data.id || '';
-    document.getElementById('editIssueDate').value = data.issue_date || '';
-    document.getElementById('newBuyer').value = data.buyer || data.client || '';
+    document.getElementById('editQuoteDisplay').value = data.number || data.id || '';
+    document.getElementById('editQuoteId').value = data.id || '';
+    document.getElementById('editIssueDate').value = data.date || data.issue_date || data.created_at || '';
+    document.getElementById('newBuyer').value = data.client || data.buyer || '';
     document.getElementById('newTitle').value = data.title || '';
     document.getElementById('newCategory').value = data.category || '';
     document.getElementById('newSupplier').value = data.supplier || '';
     document.getElementById('newDeliverFrom').value = data.deliver_from || '';
-    document.getElementById('newDeliverTo').value = data.deliver_to || '';
+    document.getElementById('newDeliverTo').value = data.municipality || data.deliver_to || '';
     document.getElementById('newStatusRow').classList.remove('hidden');
-    document.getElementById('newStatus').value = data.status || 'pending';
+    document.getElementById('newStatus').value = (data.status || 'pending').toLowerCase();
     document.getElementById('newBuyerType').value = data.buyer_type || 'company';
     document.getElementById('newProd').value = data.product || '';
     document.getElementById('newQty').value = data.quantity || 0;
     document.getElementById('newPrice').value = data.unit_price || 0;
     document.getElementById('newOtherCharges').value = data.other_charges || 0;
     document.getElementById('newOtherChargesNote').value = data.other_charges_note || '';
+    // Add missing fields for full parity
     // Show modal
     modal.classList.remove('opacity-0', 'pointer-events-none');
     modal.classList.add('opacity-100');
