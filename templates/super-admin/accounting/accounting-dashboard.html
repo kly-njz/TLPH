@@ -2,17 +2,45 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Accounting Dashboard — Super Admin</title>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <script>
-        tailwind.config = {
-            theme: {
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Accounting Dashboard</title>
+                                // New structure: regional_funds (with regional_total, municipal_total), municipal_funds (with total)
+                                // --- PATCHED: Ensure correct mapping and type assignment after API call ---
+                                this.funds = [];
+                                if (data.national_fund && Number(data.national_fund) > 0) {
+                                    this.funds.push({
+                                        id: 'NATIONAL',
+                                        type: 'national',
+                                        label: 'NATIONAL',
+                                        amount: Number(data.national_fund),
+                                        fund_type: 'national'
+                                    });
+                                }
+                                // Collect all municipality names for exclusion
+                                const municipalityNames = new Set((data.municipal_funds || []).map(f => f.municipality));
+                                (data.regional_funds || []).forEach((f, i) => {
+                                    const regionName = f.region || f.municipality;
+                                    if (!municipalityNames.has(regionName)) {
+                                        this.funds.push({
+                                            id: regionName || `region-${i}`,
+                                            type: 'region',
+                                            region: regionName,
+                                            amount: Number(f.amount) || 0,
+                                            fund_type: f.fund_type || 'GENERAL'
+                                        });
+                                    }
+                                });
+                                (data.municipal_funds || []).forEach((f, i) => {
+                                    this.funds.push({
+                                        id: f.municipality || `muni-${i}`,
+                                        type: 'municipality',
+                                        municipality: f.municipality,
+                                        region: f.region,
+                                        amount: Number(f.amount),
+                                        fund_type: f.fund_type || 'GENERAL'
+                                    });
+                                });
+                                this.totalFunds = this.funds.reduce((sum, fund) => sum + (fund.amount || 0), 0);
                 extend: {
                     colors: {
                         'gov-blue': '#1e3a8a', 
@@ -124,22 +152,42 @@
 
             <section class="gov-card p-2 shrink-0">
                 <div class="flex items-center justify-between mb-2 border-b border-slate-100 pb-1">
-                    <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 m-0">Fund Distribution by Municipality</h2>
+                    <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-700 m-0">Fund Distribution by Regional & Municipality</h2>
                 </div>
-                <div class="grid grid-cols-2 lg:grid-cols-5 gap-2">
-                    <template x-for="fund in funds.slice(0, 5)" :key="fund.id">
-                        <div class="gov-card p-2 border-l-4 border-l-denr-green bg-green-50/20 shadow-none">
-                            <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 truncate" x-text="fund.municipality"></p>
-                            <h3 class="text-[13px] font-black text-denr-green leading-none mt-1 m-0 font-mono" x-text="formatCurrency(fund.amount)"></h3>
-                            <p class="text-[7px] font-bold text-slate-400 uppercase mt-1 m-0" x-text="(fund.fund_type || 'General').toUpperCase() + ' FUND'"></p>
-                        </div>
-                    </template>
-                    <div class="gov-card p-2 border-l-4 border-l-gov-blue bg-blue-50 border-blue-200 shadow-none">
-                        <p class="text-[8px] font-black text-blue-800 uppercase tracking-widest m-0">Total Allocated</p>
-                        <h3 class="text-[13px] font-black text-gov-blue leading-none mt-1 m-0 font-mono" x-text="formatCurrency(totalFunds)"></h3>
-                        <p class="text-[7px] font-bold text-blue-500 uppercase mt-1 m-0">All Municipalities</p>
-                    </div>
-                </div>
+                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                                    <!-- Regional Fund Cards -->
+                                    <template x-for="fund in funds.filter(f => f.type === 'region')" :key="fund.region">
+                                        <div class="gov-card p-2 border-l-4 border-l-gov-blue bg-blue-50/20 shadow-none">
+                                            <p class="text-[8px] font-black text-blue-800 uppercase tracking-widest m-0 truncate" x-text="fund.region"></p>
+                                            <h3 class="text-[13px] font-black text-gov-blue leading-none mt-1 m-0 font-mono" x-text="formatCurrency(fund.amount)"></h3>
+                                            <p class="text-[7px] font-bold text-blue-500 uppercase mt-1 m-0" x-text="(fund.fund_type || 'General').toUpperCase() + ' FUND'"></p>
+                                        </div>
+                                    </template>
+                                    <!-- Municipality Fund Cards -->
+                                    <template x-for="fund in funds.filter(f => f.type === 'municipality')" :key="fund.id">
+                                        <div class="gov-card p-2 border-l-4 border-l-denr-green bg-green-50/20 shadow-none">
+                                            <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 truncate" x-text="fund.municipality"></p>
+                                            <h3 class="text-[13px] font-black text-denr-green leading-none mt-1 m-0 font-mono" x-text="formatCurrency(fund.amount)"></h3>
+                                            <p class="text-[7px] font-bold text-slate-400 uppercase mt-1 m-0" x-text="(fund.fund_type || 'General').toUpperCase() + ' FUND'"></p>
+                                        </div>
+                                    </template>
+                                    <!-- National Fund Card -->
+                                    <template x-if="funds.some(f => f.type === 'national')">
+                                        <div class="gov-card p-2 border-l-4 border-l-gov-red bg-red-50/20 shadow-none">
+                                            <p class="text-[8px] font-black text-gov-red uppercase tracking-widest m-0">NATIONAL</p>
+                                            <h3 class="text-[13px] font-black text-gov-red leading-none mt-1 m-0 font-mono" x-text="formatCurrency(funds.find(f => f.type === 'national').amount)"></h3>
+                                            <p class="text-[7px] font-bold text-gov-red uppercase mt-1 m-0">GENERAL FUND</p>
+                                        </div>
+                                    </template>
+                                    <!-- Total Allocated Card -->
+                                    <div class="gov-card p-2 border-l-4 border-l-gov-blue bg-blue-50 border-blue-200 shadow-none">
+                                        <p class="text-[8px] font-black text-blue-800 uppercase tracking-widest m-0">Total Allocated</p>
+                                        <h3 class="text-[13px] font-black text-gov-blue leading-none mt-1 m-0 font-mono" x-text="formatCurrency(totalFunds)"></h3>
+                                        <p class="text-[7px] font-bold text-blue-500 uppercase mt-1 m-0">All Municipalities</p>
+                                    </div>
+                                </div>
+
+                                <!-- Municipality Allocation Table REMOVED -->
             </section>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-2 shrink-0 no-print">
@@ -227,33 +275,54 @@
         </div>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
     <script>
-        // ALPINE COMPONENT LOGIC (Local Data Version)
-        window.accountingDashboard = function() {
-          return {
-            // Local Dummy Data representing funds
-            funds: [
-                { id: 1, municipality: "Calapan City", amount: 4500000, fund_type: "general" },
-                { id: 2, municipality: "Naujan", amount: 3200000, fund_type: "national" },
-                { id: 3, municipality: "Victoria", amount: 2800000, fund_type: "general" },
-                { id: 4, municipality: "Baco", amount: 1500000, fund_type: "general" },
-                { id: 5, municipality: "San Teodoro", amount: 1100000, fund_type: "national" }
-            ],
-            totalFunds: 0,
-            
-            formatCurrency(value) {
-              if (!value) return '₱ 0.00';
-              return '₱ ' + parseFloat(value).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-            },
-            
-            loadData() {
-                // Compute total funds from local array
-                this.totalFunds = this.funds.reduce((sum, fund) => sum + (fund.amount || 0), 0);
-            }
-          }
-        }
+                // ALPINE COMPONENT LOGIC (Live Data Version)
+                window.accountingDashboard = function() {
+                    return {
+                        funds: [],
+                        totalFunds: 0,
+                        loadingFunds: false,
+                        errorFunds: '',
+                        formatCurrency(value) {
+                            if (!value) return '₱ 0.00';
+                            return '₱ ' + parseFloat(value).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                        },
+                        async loadData() {
+                            this.loadingFunds = true;
+                            this.errorFunds = '';
+                            try {
+                                const resp = await fetch('/superadmin/api/accounting/funds');
+                                if (!resp.ok) throw new Error('Failed to fetch funds');
+                                const data = await resp.json();
+                                if (!data.success) throw new Error(data.error || 'Unknown error');
+                                // Merge all funds: national, regional, municipal
+                                const funds = [];
+                                if (data.national_fund && data.national_fund > 0) {
+                                    funds.push({ id: 'NATIONAL', municipality: 'NATIONAL', amount: data.national_fund, fund_type: 'GENERAL' });
+                                }
+                                (data.regional_funds || []).forEach((r, i) => {
+                                    funds.push({ id: `REGION-${r.region || i}`, municipality: r.region || 'REGION', amount: r.general_fund, fund_type: 'GENERAL' });
+                                });
+                                (data.municipal_funds || []).forEach((m, i) => {
+                                    funds.push({ id: `MUNI-${m.municipality || i}`, municipality: m.municipality || 'MUNICIPALITY', amount: m.amount, fund_type: m.fund_type || 'GENERAL', region: m.region });
+                                });
+                                // Sort by amount descending
+                                funds.sort((a, b) => (b.amount || 0) - (a.amount || 0));
+                                this.funds = funds;
+                                this.totalFunds = funds.reduce((sum, fund) => sum + (fund.amount || 0), 0);
+                            } catch (e) {
+                                this.errorFunds = e.message || 'Error loading funds';
+                                this.funds = [];
+                                this.totalFunds = 0;
+                            } finally {
+                                this.loadingFunds = false;
+                            }
+                        }
+                    }
+                }
     </script>
 
     <script>

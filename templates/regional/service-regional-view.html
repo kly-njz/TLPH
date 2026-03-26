@@ -402,14 +402,27 @@
                     const seen = new Set();
                     const userId = data?.userId || data?.userID || data?.uid || '';
 
+                    const isApplicantAttachmentKey = (key) => {
+                        const k = String(key || '').toLowerCase();
+                        // Only keep fields that are intended as uploaded attachments from applicant forms.
+                        return /(file|files|photo|photos|image|images|document|documents|attachment|attachments|report|permit|certificate|proposal|plan|record|history|result|picture)/i.test(k);
+                    };
+
+                    const isApplicantUploadUrl = (url) => {
+                        const u = String(url || '').toLowerCase();
+                        return u.includes('/static/uploads/service_requests/') || u.includes('static/uploads/service_requests/');
+                    };
+
                     for (const [key, val] of Object.entries(data || {})) {
                         if (key.endsWith('Count')) continue;
+                        if (!isApplicantAttachmentKey(key)) continue;
                         const files = this.collectFileStrings(val, []);
                         if (!files.length) continue;
 
                         files.forEach(raw => {
                             const url = this.normalizeFileUrl(raw, userId);
                             if (!url) return;
+                            if (!isApplicantUploadUrl(url)) return;
                             const marker = `${key}|${url}`;
                             if (seen.has(marker)) return;
                             seen.add(marker);

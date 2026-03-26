@@ -7,6 +7,7 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -47,6 +48,13 @@
         td { padding: 6px 8px !important; border-bottom: 1px solid #f1f5f9 !important; vertical-align: middle !important; border-top: none !important; }
 
         .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; }
+
+        /* Action Buttons (Compact - match payroll) */
+        .btn-action { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #cbd5e1; background: white; color: #64748b; cursor: pointer; padding: 0; }
+        .btn-edit:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
+        .btn-draft:hover { color: white; background: #0f172a; border-color: #0f172a; }
+        .btn-delivery:hover { color: white; background: #15803d; border-color: #15803d; }
+        .btn-locked { background: #0f172a; border-color: #0f172a; color: #cbd5e1; cursor: not-allowed; }
 
         /* PRINT STYLES FOR CLEAN EXPORT */
         @media print {
@@ -145,8 +153,16 @@
                             <option value="farmer">Farmer</option>
                             <option value="region">Region</option>
                         </select>
+                        <select id="statusFilter" class="gov-input w-full sm:w-32 cursor-pointer h-7">
+                            <option value="">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="in-transit">In Transit</option>
+                            <option value="for-delivery">For Delivery</option>
+                            <option value="delivered">Delivered</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
                         <input type="date" id="dateFilter" class="gov-input w-full sm:w-32 h-7 cursor-pointer" title="Filter by Issue Date">
-                        <button onclick="document.getElementById('dateFilter').value=''; filterQuotes();" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 h-7 shadow-sm">
+                        <button onclick="document.getElementById('dateFilter').value=''; document.getElementById('statusFilter').value=''; document.getElementById('buyerTypeFilter').value=''; filterQuotes();" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 h-7 shadow-sm">
                             <i class="fa-solid fa-eraser"></i> Clear
                         </button>
                     </div>
@@ -157,11 +173,21 @@
                         <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th class="border-r border-slate-200">Quote ID</th>
+                                <th class="border-r border-slate-200 text-center">Issue Date</th>
                                 <th class="border-r border-slate-200">Buyer Entity</th>
+                                <th class="border-r border-slate-200">Title</th>
+                                <th class="border-r border-slate-200">Category</th>
+                                <th class="border-r border-slate-200">Supplier</th>
                                 <th class="border-r border-slate-200">Product</th>
                                 <th class="border-r border-slate-200 text-right">Quantity</th>
-                                <th class="border-r border-slate-200 text-right">Valuation</th>
-                                <th class="border-r border-slate-200 text-center">Issue Date</th>
+                                <th class="border-r border-slate-200 text-right">Unit Price</th>
+                                <th class="border-r border-slate-200 text-right">Subtotal</th>
+                                <th class="border-r border-slate-200">Other Charges Details</th>
+                                <th class="border-r border-slate-200 text-right">Other Charges</th>
+                                <th class="border-r border-slate-200 text-right">Total Amount</th>
+                                <th class="border-r border-slate-200">Deliver From</th>
+                                <th class="border-r border-slate-200">Deliver To</th>
+                                <th class="border-r border-slate-200 text-center">Status</th>
                                 <th class="text-center no-print">Action</th>
                             </tr>
                         </thead>
@@ -175,10 +201,11 @@
 
     <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[2040] hidden opacity-0 transition-opacity duration-300 no-print" onclick="closeQuoteDrawer()"></div>
     
-    <div id="quoteDrawer" class="fixed top-1/2 left-1/2 z-[2050] w-[90vw] max-w-xs -translate-x-1/2 -translate-y-1/2 scale-95 opacity-0 pointer-events-none bg-white shadow-2xl transition duration-300 flex flex-col border border-slate-400 no-print">
+    <div id="quoteDrawer" class="fixed top-1/2 left-1/2 z-[2050] w-[92vw] max-w-lg max-h-[90vh] -translate-x-1/2 -translate-y-1/2 scale-95 opacity-0 pointer-events-none bg-white shadow-2xl transition duration-300 flex flex-col border border-slate-400 no-print">
         <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
             <h2 class="text-[11px] font-black uppercase tracking-widest leading-none flex items-center gap-2 m-0">
-                <i class="fa-solid fa-file-invoice-dollar text-gov-blue"></i> Generate Quotation
+                <i class="fa-solid fa-file-invoice-dollar text-gov-blue"></i>
+                <span id="quoteDrawerTitle">Generate Quotation</span>
             </h2>
             <button onclick="closeQuoteDrawer()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
                 <span class="material-icons-round text-sm">close</span>
@@ -187,9 +214,54 @@
         
         <div class="flex-1 overflow-y-auto custom-scrollbar p-4 bg-slate-50">
             <form id="newQuoteForm" class="space-y-3">
+                <input type="hidden" id="editQuoteId" value="">
+                <div id="editMetaRow" class="grid grid-cols-1 sm:grid-cols-2 gap-3 hidden">
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Quote ID</label>
+                        <input type="text" id="editQuoteDisplay" class="gov-input w-full h-8 bg-slate-100 text-slate-500" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Issue Date</label>
+                        <input type="text" id="editIssueDate" class="gov-input w-full h-8 bg-slate-100 text-slate-500" readonly>
+                    </div>
+                </div>
                 <div>
                     <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Target Buyer Entity *</label>
                     <input type="text" id="newBuyer" placeholder="e.g. AgriCorp Inc." class="gov-input w-full h-8" required>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Title *</label>
+                        <input type="text" id="newTitle" placeholder="e.g. Q1 Seedling Supply" class="gov-input w-full h-8" required>
+                    </div>
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Category *</label>
+                        <input type="text" id="newCategory" placeholder="e.g. Agriculture" class="gov-input w-full h-8" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Supplier *</label>
+                    <input type="text" id="newSupplier" placeholder="e.g. GreenGrow Suppliers" class="gov-input w-full h-8" required>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Deliver From *</label>
+                        <input type="text" id="newDeliverFrom" placeholder="e.g. Davao Warehouse" class="gov-input w-full h-8" required>
+                    </div>
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Deliver To *</label>
+                        <input type="text" id="newDeliverTo" placeholder="e.g. Region IV-A Office" class="gov-input w-full h-8" required>
+                    </div>
+                </div>
+                <div id="newStatusRow" class="hidden">
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
+                    <select id="newStatus" class="gov-input w-full h-8 cursor-pointer" required>
+                        <option value="pending" selected>Pending</option>
+                        <option value="in-transit">In Transit</option>
+                        <option value="for-delivery">For Delivery</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
                 </div>
                 <div>
                     <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Entity Category *</label>
@@ -213,8 +285,16 @@
                         <input type="number" id="newPrice" placeholder="0.00" step="0.01" class="gov-input w-full h-8" required>
                     </div>
                 </div>
+                <div>
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Other Charges (&#8369;)</label>
+                    <input type="number" id="newOtherCharges" placeholder="0.00" step="0.01" class="gov-input w-full h-8" value="0">
+                </div>
+                <div>
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Other Charges Details</label>
+                    <input type="text" id="newOtherChargesNote" placeholder="e.g. Handling fee, delivery fee" class="gov-input w-full h-8">
+                </div>
                 <div class="pt-3 mt-2 border-t border-slate-200">
-                    <button type="submit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 w-full py-2">Draft Quotation</button>
+                    <button type="submit" id="quoteSubmitBtn" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 w-full py-2">Draft Quotation</button>
                 </div>
             </form>
         </div>
@@ -233,7 +313,7 @@
             </div>
             <div class="p-4 bg-slate-50">
                 <div class="border border-slate-300 bg-white p-3 text-[10px] text-slate-700">
-                    <div class="flex justify-between items-start border-b border-slate-200 pb-2 mb-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 border-b border-slate-200 pb-3 mb-3">
                         <div>
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Quote ID</p>
                             <p id="draftPrevId" class="font-black text-slate-900 m-0">—</p>
@@ -242,29 +322,71 @@
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Issue Date</p>
                             <p id="draftPrevDate" class="font-bold text-slate-700 m-0">—</p>
                         </div>
-                    </div>
-                    <div class="space-y-2">
-                        <div>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Buyer</p>
+                        <div class="sm:col-span-2">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Buyer Entity</p>
                             <p id="draftPrevBuyer" class="font-bold text-slate-800 m-0">—</p>
                         </div>
                         <div>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Category</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Title</p>
+                            <p id="draftPrevTitle" class="font-bold text-slate-800 m-0">—</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Buyer Category</p>
                             <p id="draftPrevType" class="font-bold text-slate-800 m-0">—</p>
                         </div>
                         <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Category</p>
+                            <p id="draftPrevCategory" class="font-bold text-slate-800 m-0">—</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Supplier</p>
+                            <p id="draftPrevSupplier" class="font-bold text-slate-800 m-0">—</p>
+                        </div>
+                        <div class="sm:col-span-2">
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Product</p>
                             <p id="draftPrevProduct" class="text-slate-700 m-0">—</p>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mt-3 pt-2 border-t border-slate-200">
+
+                    <div class="grid grid-cols-2 gap-3">
                         <div>
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Quantity</p>
                             <p id="draftPrevQty" class="font-mono font-bold text-slate-800 m-0">—</p>
                         </div>
                         <div class="text-right">
-                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Total</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Unit Price</p>
+                            <p id="draftPrevUnitPrice" class="font-mono font-bold text-slate-800 m-0">—</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Subtotal</p>
+                            <p id="draftPrevSubtotal" class="font-mono font-bold text-slate-800 m-0">—</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Other Charges Details</p>
+                            <p id="draftPrevOtherChargesNote" class="font-bold text-slate-800 m-0">—</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Other Charges</p>
+                            <p id="draftPrevOtherCharges" class="font-mono font-bold text-slate-800 m-0">—</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Total Amount</p>
                             <p id="draftPrevTotal" class="font-mono font-black text-emerald-700 m-0">—</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-200">
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Deliver From</p>
+                            <p id="draftPrevDeliverFrom" class="text-slate-700 m-0">—</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Deliver To</p>
+                            <p id="draftPrevDeliverTo" class="text-slate-700 m-0">—</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Status</p>
+                            <span id="draftPrevStatus" class="status-badge">—</span>
                         </div>
                     </div>
                 </div>
@@ -293,21 +415,33 @@
     <script>
         // 1. DATA
         let quoteData = [
-            {id:'QT-26-001', buyer:'AgriCorp Inc.', product:'Narra Seedlings', qty:1000, total:50000, date:'2026-02-05', type:'company'},
-            {id:'QT-26-002', buyer:'Davao Farmer Group', product:'Soil Analysis Kits', qty:250, total:18000, date:'2026-02-10', type:'farmer'},
-            {id:'QT-26-003', buyer:'Region IV-A', product:'Organic Fertilizer', qty:500, total:22500, date:'2026-02-14', type:'region'}
+            {id:'QT-26-001', title:'Q1 Seedling Supply', category:'Agriculture', supplier:'GreenGrow Suppliers', deliverFrom:'Davao Warehouse', deliverTo:'Region IV-A Office', status:'pending', buyer:'AgriCorp Inc.', product:'Narra Seedlings', qty:1000, unitPrice:50, otherCharges:1500, otherChargesNote:'Handling fee + local transport', total:51500, date:'2026-02-05', type:'company', proofUrl:''},
+            {id:'QT-26-002', title:'Soil Testing Batch 2', category:'Laboratory', supplier:'TerraLab PH', deliverFrom:'Davao Hub', deliverTo:'Davao Farmer Group', status:'in-transit', buyer:'Davao Farmer Group', product:'Soil Analysis Kits', qty:250, unitPrice:72, otherCharges:0, otherChargesNote:'—', total:18000, date:'2026-02-10', type:'farmer'},
+            {id:'QT-26-003', title:'Organic Fertilizer Run', category:'Agri Inputs', supplier:'BioHarvest Co.', deliverFrom:'Batangas Depot', deliverTo:'Region IV-A', status:'for-delivery', buyer:'Region IV-A', product:'Organic Fertilizer', qty:500, unitPrice:45, otherCharges:1200, otherChargesNote:'Storage + loading', total:23700, date:'2026-02-14', type:'region', proofUrl:''},
+            {id:'QT-26-004', title:'Seed Tray Replacements', category:'Supplies', supplier:'AgriBase PH', deliverFrom:'Manila Hub', deliverTo:'Region IV-A', status:'cancelled', buyer:'Region IV-A', product:'Seed Trays', qty:120, unitPrice:75, otherCharges:0, otherChargesNote:'—', total:9000, date:'2026-02-18', type:'region', proofUrl:''},
+            {id:'QT-26-005', title:'Organic Fertilizer Supply', category:'Agri Inputs', supplier:'BioHarvest Co.', deliverFrom:'Batangas Depot', deliverTo:'Region IV-A', status:'delivered', buyer:'Region IV-A', product:'Organic Fertilizer', qty:500, unitPrice:45, otherCharges:1200, otherChargesNote:'Storage + loading', total:23700, date:'2026-02-20', type:'region', proofUrl:'assets/proof-of-delivery/sample-proof.pdf'}
         ];
 
         function filterQuotes() {
             const query = document.getElementById('quotSearch').value.toLowerCase();
             const type = document.getElementById('buyerTypeFilter').value;
+            const status = document.getElementById('statusFilter').value;
             const date = document.getElementById('dateFilter').value;
 
             const filtered = quoteData.filter(q => {
-                const matchSearch = q.id.toLowerCase().includes(query) || q.buyer.toLowerCase().includes(query) || q.product.toLowerCase().includes(query);
+                const matchSearch = q.id.toLowerCase().includes(query)
+                    || q.buyer.toLowerCase().includes(query)
+                    || q.product.toLowerCase().includes(query)
+                    || q.title.toLowerCase().includes(query)
+                    || q.category.toLowerCase().includes(query)
+                    || q.supplier.toLowerCase().includes(query)
+                    || q.deliverFrom.toLowerCase().includes(query)
+                    || q.deliverTo.toLowerCase().includes(query)
+                    || q.otherChargesNote.toLowerCase().includes(query);
                 const matchType = !type || q.type === type;
                 const matchDate = !date || q.date === date;
-                return matchSearch && matchType && matchDate;
+                const matchStatus = !status || q.status === status;
+                return matchSearch && matchType && matchDate && matchStatus;
             });
 
             renderTable(filtered);
@@ -316,19 +450,64 @@
 
         function renderTable(data) {
             const tbody = document.getElementById('quotTable');
-            tbody.innerHTML = data.length ? data.map(q => `
+            tbody.innerHTML = data.length ? data.map(q => {
+                const statusLabel = q.status === 'delivered'
+                    ? 'Delivered'
+                    : (q.status === 'in-transit'
+                        ? 'In Transit'
+                        : (q.status === 'for-delivery'
+                            ? 'For Delivery'
+                            : (q.status === 'cancelled' ? 'Cancelled' : 'Pending')));
+                const statusClass = q.status === 'delivered'
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
+                    : (q.status === 'in-transit'
+                        ? 'border-blue-300 bg-blue-100 text-blue-700'
+                        : (q.status === 'for-delivery'
+                            ? 'border-indigo-300 bg-indigo-100 text-indigo-700'
+                            : (q.status === 'cancelled'
+                                ? 'border-rose-300 bg-rose-100 text-rose-700'
+                                : 'border-amber-300 bg-amber-100 text-amber-700')));
+                const subtotal = q.qty * q.unitPrice;
+                return `
                 <tr class="hover:bg-slate-50 transition-colors data-row">
                     <td class="px-3 py-1.5 font-mono font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight">${q.id}</td>
+                    <td class="px-3 py-1.5 text-slate-500 font-bold uppercase text-[9px] text-center border-r border-slate-100">${q.date}</td>
                     <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">${q.buyer}</td>
+                    <td class="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100">${q.title}</td>
+                    <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${q.category}</td>
+                    <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${q.supplier}</td>
                     <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${q.product}</td>
                     <td class="px-3 py-1.5 font-mono text-slate-700 text-right border-r border-slate-100">${q.qty.toLocaleString()}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-700 text-right border-r border-slate-100">&#8369;${q.unitPrice.toLocaleString()}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-700 text-right border-r border-slate-100">&#8369;${subtotal.toLocaleString()}</td>
+                    <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${q.otherChargesNote}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-700 text-right border-r border-slate-100">&#8369;${q.otherCharges.toLocaleString()}</td>
                     <td class="px-3 py-1.5 font-mono font-black text-emerald-700 text-right border-r border-slate-100">&#8369;${q.total.toLocaleString()}</td>
-                    <td class="px-3 py-1.5 text-slate-500 font-bold uppercase text-[9px] text-center border-r border-slate-100">${q.date}</td>
+                    <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${q.deliverFrom}</td>
+                    <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${q.deliverTo}</td>
+                    <td class="px-3 py-1.5 text-center border-r border-slate-100"><span class="status-badge ${statusClass}">${statusLabel}</span></td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <button type="button" class="text-[9px] font-bold uppercase text-gov-blue hover:underline tracking-widest cursor-pointer" onclick="openDraftPreview('${q.id}')">Draft</button>
+                        <div class="flex justify-center gap-1 flex-nowrap">
+                        ${q.status !== 'cancelled'
+                            ? `<button type="button" class="btn-action btn-edit" onclick="openEditDrawer('${q.id}')" title="Edit">
+                                <span class="material-icons-round text-[12px]">edit</span>
+                            </button>`
+                            : `<button type="button" class="btn-action btn-locked" title="Cancelled - Locked" disabled>
+                                <span class="material-icons-round text-[12px]">lock</span>
+                            </button>`}
+                        <button type="button" class="btn-action btn-draft" onclick="openDraftPreview('${q.id}')" title="Draft">
+                            <span class="material-icons-round text-[12px]">description</span>
+                        </button>
+                        ${q.status === 'delivered'
+                            ? `<button type="button" class="btn-action btn-delivery" onclick="downloadDeliveryDetails('${q.id}')" title="Delivery Details">
+                                <span class="material-icons-round text-[12px]">download</span>
+                            </button>`
+                            : ''}
+                        </div>
                     </td>
                 </tr>
-            `).join('') : '<tr><td colspan="7" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No quotation records found.</td></tr>';
+            `;
+            }).join('') : '<tr><td colspan="16" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No quotation records found.</td></tr>';
         }
 
         function updateStats(data) {
@@ -338,11 +517,111 @@
         // 3. UI CONTROLS
         document.getElementById('quotSearch').addEventListener('input', filterQuotes);
         document.getElementById('buyerTypeFilter').addEventListener('change', filterQuotes);
+        document.getElementById('statusFilter').addEventListener('change', filterQuotes);
         document.getElementById('dateFilter').addEventListener('change', filterQuotes);
+
+        function downloadDeliveryDetails(quoteId) {
+            const q = quoteData.find(item => item.id === quoteId);
+            if (!q) return;
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+
+            const left = 40;
+            const right = 555;
+            let y = 50;
+            const lineGap = 16;
+
+            const subtotal = q.qty * q.unitPrice;
+            const statusLabel = q.status === 'delivered'
+                ? 'Delivered'
+                : (q.status === 'in-transit'
+                    ? 'In Transit'
+                    : (q.status === 'for-delivery'
+                        ? 'For Delivery'
+                        : (q.status === 'cancelled' ? 'Cancelled' : 'Pending')));
+
+            // Header with logo placeholder
+            doc.setDrawColor(120);
+            doc.rect(left, y - 5, 56, 32);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.text('LOGO', left + 18, y + 14);
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text('Official Delivery Details', left + 70, y + 10);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text('Prepared for institutional processing', left + 70, y + 24);
+
+            y += 40;
+            doc.setDrawColor(180);
+            doc.line(left, y, right, y);
+            y += 18;
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+
+            const rows = [
+                ['Quote ID', q.id],
+                ['Issue Date', q.date],
+                ['Buyer Entity', q.buyer],
+                ['Title', q.title],
+                ['Category', q.category],
+                ['Supplier', q.supplier],
+                ['Product', q.product],
+                ['Quantity', q.qty.toLocaleString()],
+                ['Unit Price', 'PHP ' + q.unitPrice.toLocaleString()],
+                ['Subtotal', 'PHP ' + subtotal.toLocaleString()],
+                ['Other Charges Details', q.otherChargesNote || '—'],
+                ['Other Charges', 'PHP ' + q.otherCharges.toLocaleString()],
+                ['Total Valuation', 'PHP ' + q.total.toLocaleString()],
+                ['Deliver From', q.deliverFrom],
+                ['Deliver To', q.deliverTo],
+                ['Status', statusLabel]
+            ];
+
+            rows.forEach(([label, value]) => {
+                if (y > 720) {
+                    doc.addPage();
+                    y = 50;
+                }
+                doc.setFont('helvetica', 'bold');
+                doc.text(label + ':', left, y);
+                doc.setFont('helvetica', 'normal');
+                doc.text(String(value), left + 140, y);
+                y += lineGap;
+            });
+
+            // Footer signature lines
+            const footerY = 760;
+            doc.setDrawColor(160);
+            doc.line(left, footerY, left + 150, footerY);
+            doc.line(left + 190, footerY, left + 340, footerY);
+            doc.line(left + 380, footerY, left + 530, footerY);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text('Prepared By', left, footerY + 12);
+            doc.text('Received By', left + 190, footerY + 12);
+            doc.text('Approved By', left + 380, footerY + 12);
+
+            doc.save(q.id + '-delivery-details.pdf');
+        }
 
         function openQuoteDrawer() {
             const overlay = document.getElementById('drawerOverlay');
             const drawer = document.getElementById('quoteDrawer');
+            document.getElementById('quoteDrawerTitle').innerText = 'Generate Quotation';
+            document.getElementById('quoteSubmitBtn').innerText = 'Draft Quotation';
+            document.getElementById('editQuoteId').value = '';
+            document.getElementById('editMetaRow').classList.add('hidden');
+            document.getElementById('newStatusRow').classList.add('hidden');
+            document.getElementById('newStatus').value = 'pending';
+            document.getElementById('newBuyer').readOnly = false;
+            document.getElementById('newBuyer').classList.remove('bg-slate-100', 'text-slate-500');
+            document.getElementById('newBuyerType').disabled = false;
+            document.getElementById('newBuyerType').classList.remove('bg-slate-100', 'text-slate-500');
             overlay.classList.remove('hidden');
             setTimeout(() => overlay.classList.add('opacity-100'), 10);
             drawer.classList.remove('opacity-0', 'scale-95', 'pointer-events-none');
@@ -358,6 +637,41 @@
             setTimeout(() => overlay.classList.add('hidden'), 300);
         }
 
+        function openEditDrawer(quoteId) {
+            const q = quoteData.find(item => item.id === quoteId);
+            if (!q) return;
+            document.getElementById('quoteDrawerTitle').innerText = 'Edit Quotation';
+            document.getElementById('quoteSubmitBtn').innerText = 'Update Quotation';
+            document.getElementById('editQuoteId').value = q.id;
+            document.getElementById('editQuoteDisplay').value = q.id;
+            document.getElementById('editIssueDate').value = q.date;
+            document.getElementById('editMetaRow').classList.remove('hidden');
+            document.getElementById('newStatusRow').classList.remove('hidden');
+            document.getElementById('newBuyer').value = q.buyer;
+            document.getElementById('newBuyer').readOnly = true;
+            document.getElementById('newBuyer').classList.add('bg-slate-100', 'text-slate-500');
+            document.getElementById('newTitle').value = q.title;
+            document.getElementById('newCategory').value = q.category;
+            document.getElementById('newSupplier').value = q.supplier;
+            document.getElementById('newDeliverFrom').value = q.deliverFrom;
+            document.getElementById('newDeliverTo').value = q.deliverTo;
+            document.getElementById('newStatus').value = q.status;
+            document.getElementById('newBuyerType').value = q.type;
+            document.getElementById('newBuyerType').disabled = true;
+            document.getElementById('newBuyerType').classList.add('bg-slate-100', 'text-slate-500');
+            document.getElementById('newProd').value = q.product;
+            document.getElementById('newQty').value = q.qty;
+            document.getElementById('newPrice').value = q.unitPrice;
+            document.getElementById('newOtherCharges').value = q.otherCharges;
+            document.getElementById('newOtherChargesNote').value = q.otherChargesNote || '';
+            const overlay = document.getElementById('drawerOverlay');
+            const drawer = document.getElementById('quoteDrawer');
+            overlay.classList.remove('hidden');
+            setTimeout(() => overlay.classList.add('opacity-100'), 10);
+            drawer.classList.remove('opacity-0', 'scale-95', 'pointer-events-none');
+            drawer.classList.add('opacity-100', 'scale-100', 'pointer-events-auto');
+        }
+
         function openDraftPreview(quoteId) {
             const q = quoteData.find(item => item.id === quoteId);
             if (!q) return;
@@ -368,9 +682,38 @@
             document.getElementById('draftPrevDate').innerText = q.date;
             document.getElementById('draftPrevBuyer').innerText = q.buyer;
             document.getElementById('draftPrevType').innerText = typeLabel;
+            document.getElementById('draftPrevCategory').innerText = q.category;
+            document.getElementById('draftPrevTitle').innerText = q.title;
+            document.getElementById('draftPrevSupplier').innerText = q.supplier;
+            document.getElementById('draftPrevDeliverFrom').innerText = q.deliverFrom;
+            document.getElementById('draftPrevDeliverTo').innerText = q.deliverTo;
             document.getElementById('draftPrevProduct').innerText = q.product;
             document.getElementById('draftPrevQty').innerText = q.qty.toLocaleString();
+            const subtotal = q.qty * q.unitPrice;
+            document.getElementById('draftPrevUnitPrice').innerText = '\u20B1' + q.unitPrice.toLocaleString();
+            document.getElementById('draftPrevSubtotal').innerText = '\u20B1' + subtotal.toLocaleString();
+            document.getElementById('draftPrevOtherChargesNote').innerText = q.otherChargesNote || '—';
+            document.getElementById('draftPrevOtherCharges').innerText = '\u20B1' + q.otherCharges.toLocaleString();
             document.getElementById('draftPrevTotal').innerText = '\u20B1' + q.total.toLocaleString();
+            const statusLabel = q.status === 'delivered'
+                ? 'Delivered'
+                : (q.status === 'in-transit'
+                    ? 'In Transit'
+                    : (q.status === 'for-delivery'
+                        ? 'For Delivery'
+                        : (q.status === 'cancelled' ? 'Cancelled' : 'Pending')));
+            const statusClass = q.status === 'delivered'
+                ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
+                : (q.status === 'in-transit'
+                    ? 'border-blue-300 bg-blue-100 text-blue-700'
+                    : (q.status === 'for-delivery'
+                        ? 'border-indigo-300 bg-indigo-100 text-indigo-700'
+                        : (q.status === 'cancelled'
+                            ? 'border-rose-300 bg-rose-100 text-rose-700'
+                            : 'border-amber-300 bg-amber-100 text-amber-700')));
+            const statusEl = document.getElementById('draftPrevStatus');
+            statusEl.className = 'status-badge ' + statusClass;
+            statusEl.innerText = statusLabel;
 
             const m = document.getElementById('draftPreviewModal');
             const b = document.getElementById('draftPreviewBody');
@@ -388,19 +731,42 @@
 
         document.getElementById('newQuoteForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            const id = 'QT-26-' + (quoteData.length + 1).toString().padStart(3, '0');
+            const editId = document.getElementById('editQuoteId').value;
+            const id = editId || ('QT-26-' + (quoteData.length + 1).toString().padStart(3, '0'));
             const qty = parseInt(document.getElementById('newQty').value);
             const price = parseFloat(document.getElementById('newPrice').value);
-            
-            quoteData.unshift({
+            const otherCharges = parseFloat(document.getElementById('newOtherCharges').value || '0');
+            const otherChargesNote = document.getElementById('newOtherChargesNote').value || '—';
+
+            const payload = {
                 id: id,
+                title: document.getElementById('newTitle').value,
+                category: document.getElementById('newCategory').value,
+                supplier: document.getElementById('newSupplier').value,
+                deliverFrom: document.getElementById('newDeliverFrom').value,
+                deliverTo: document.getElementById('newDeliverTo').value,
+                status: document.getElementById('newStatus').value,
                 buyer: document.getElementById('newBuyer').value,
                 product: document.getElementById('newProd').value,
                 qty: qty,
-                total: qty * price,
+                unitPrice: price,
+                otherCharges: otherCharges,
+                otherChargesNote: otherChargesNote,
+                total: (qty * price) + otherCharges,
                 date: new Date().toISOString().split('T')[0],
                 type: document.getElementById('newBuyerType').value
-            });
+            };
+
+            if (editId) {
+                const idx = quoteData.findIndex(item => item.id === editId);
+                if (idx !== -1) {
+                    payload.date = quoteData[idx].date;
+                    payload.proofUrl = quoteData[idx].proofUrl || '';
+                    quoteData[idx] = payload;
+                }
+            } else {
+                quoteData.unshift(payload);
+            }
             filterQuotes();
             closeQuoteDrawer();
             document.getElementById('newQuoteForm').reset();
