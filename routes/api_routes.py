@@ -4,6 +4,10 @@ from flask_mail import Message, Mail
 from datetime import datetime
 import random
 import json
+import os
+import time
+import hashlib
+import requests
 from urllib.request import urlopen
 from urllib.parse import quote_plus
 from firebase_auth_middleware import firebase_auth_required
@@ -17,6 +21,62 @@ otp_storage = {}
 
 MIMAROPA_REGION_NAMES = {'MIMAROPA', 'MIMAROPA REGION', 'REGION IV-B', 'REGION-IV-B'}
 _MUNICIPALITY_CODE_CACHE = {}
+
+
+def _cloudinary_enabled() -> bool:
+    return all([
+        os.environ.get('CLOUDINARY_CLOUD_NAME'),
+        os.environ.get('CLOUDINARY_API_KEY'),
+        os.environ.get('CLOUDINARY_API_SECRET')
+    ])
+
+
+def _cloudinary_signature(params: dict, api_secret: str) -> str:
+    filtered = {k: v for k, v in params.items() if v is not None and v != ''}
+    base = '&'.join([f"{k}={filtered[k]}" for k in sorted(filtered.keys())])
+    return hashlib.sha1(f"{base}{api_secret}".encode('utf-8')).hexdigest()
+
+
+def _upload_to_cloudinary(file_obj, folder: str):
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '').strip()
+    api_key = os.environ.get('CLOUDINARY_API_KEY', '').strip()
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET', '').strip()
+
+    if not cloud_name or not api_key or not api_secret:
+        return None
+
+    timestamp = int(time.time())
+    params_to_sign = {
+        'folder': folder,
+        'timestamp': timestamp
+    }
+    signature = _cloudinary_signature(params_to_sign, api_secret)
+
+    endpoint = f"https://api.cloudinary.com/v1_1/{cloud_name}/auto/upload"
+    try:
+        file_obj.stream.seek(0)
+    except Exception:
+        pass
+
+    resp = requests.post(
+        endpoint,
+        data={
+            'api_key': api_key,
+            'timestamp': timestamp,
+            'folder': folder,
+            'signature': signature
+        },
+        files={
+            'file': (file_obj.filename, file_obj.stream, file_obj.mimetype or 'application/octet-stream')
+        },
+        timeout=45
+    )
+
+    if not resp.ok:
+        raise RuntimeError(f"Cloudinary upload failed: {resp.status_code} {resp.text[:300]}")
+
+    payload = resp.json() or {}
+    return payload.get('secure_url') or payload.get('url')
 
 
 def _normalize_muni_name(name: str) -> str:
@@ -737,7 +797,6 @@ def check_session():
 def upload_profile_photo():
     """Upload profile photo to server and return the URL"""
     try:
-        import os
         from werkzeug.utils import secure_filename
 
         user_id = session.get('user_id') or request.form.get('userId')
@@ -756,15 +815,20 @@ def upload_profile_photo():
         if ext not in allowed:
             return jsonify({'success': False, 'error': 'Invalid file type'}), 400
 
-        upload_dir = os.path.join('static', 'uploads', 'profiles')
-        os.makedirs(upload_dir, exist_ok=True)
+        photo_url = None
+        if _cloudinary_enabled():
+            photo_url = _upload_to_cloudinary(file, 'tlph/profiles')
 
-        # Use uid as filename so each user has one photo (overwrites old one)
-        filename = f"{user_id}.{ext}"
-        file_path = os.path.join(upload_dir, filename)
-        file.save(file_path)
+        if not photo_url:
+            upload_dir = os.path.join('static', 'uploads', 'profiles')
+            os.makedirs(upload_dir, exist_ok=True)
 
-        photo_url = f"/static/uploads/profiles/{filename}"
+            # Use uid as filename so each user has one photo (overwrites old one)
+            filename = f"{user_id}.{ext}"
+            file_path = os.path.join(upload_dir, filename)
+            file.save(file_path)
+            photo_url = f"/static/uploads/profiles/{filename}"
+
         return jsonify({'success': True, 'photoURL': photo_url})
 
     except Exception as e:
@@ -777,7 +841,6 @@ def upload_profile_photo():
 def upload_inventory_image():
     """Upload inventory image/permit to server filesystem (no Firebase Storage CORS issues)"""
     try:
-        import os
         from werkzeug.utils import secure_filename
 
         user_id = request.form.get('userId', 'unknown')
@@ -796,15 +859,19 @@ def upload_inventory_image():
         if ext not in allowed:
             return jsonify({'success': False, 'error': f'Invalid file type: {ext}'}), 400
 
-        upload_dir = os.path.join('static', 'uploads', 'inventory', user_id)
-        os.makedirs(upload_dir, exist_ok=True)
+        url = None
+        if _cloudinary_enabled():
+            url = _upload_to_cloudinary(file, f"tlph/inventory/{user_id}")
 
-        import time
-        filename = f"{file_type}_{int(time.time())}_{secure_filename(file.filename)}"
-        file_path = os.path.join(upload_dir, filename)
-        file.save(file_path)
+        if not url:
+            upload_dir = os.path.join('static', 'uploads', 'inventory', user_id)
+            os.makedirs(upload_dir, exist_ok=True)
 
-        url = f"/static/uploads/inventory/{user_id}/{filename}"
+            filename = f"{file_type}_{int(time.time())}_{secure_filename(file.filename)}"
+            file_path = os.path.join(upload_dir, filename)
+            file.save(file_path)
+            url = f"/static/uploads/inventory/{user_id}/{filename}"
+
         return jsonify({'success': True, 'url': url})
 
     except Exception as e:
@@ -818,7 +885,6 @@ def upload_inventory_image():
 def submit_application():
     """Handle application submission with file uploads"""
     try:
-        import os
         from werkzeug.utils import secure_filename
         
         # Get form data
@@ -835,10 +901,6 @@ def submit_application():
                 'message': 'Missing required fields'
             }), 400
         
-        # Create upload directory
-        upload_dir = os.path.join('static', 'uploads', 'applications', user_id)
-        os.makedirs(upload_dir, exist_ok=True)
-        
         # Process file uploads
         file_fields = ['titleFile', 'taxFile', 'blueprintFile', 'landFile', 'cropFile', 'planFile', 'brgyFile', 'productPictureFile']
         file_paths = {}
@@ -852,12 +914,18 @@ def submit_application():
                     timestamp = int(datetime.now().timestamp())
                     unique_filename = f"{timestamp}_{field}_{filename}"
                     
-                    # Save file
-                    file_path = os.path.join(upload_dir, unique_filename)
-                    file.save(file_path)
-                    
-                    # Store relative path for web access
-                    web_path = f"/static/uploads/applications/{user_id}/{unique_filename}"
+                    web_path = None
+                    if _cloudinary_enabled():
+                        web_path = _upload_to_cloudinary(file, f"tlph/applications/{user_id}")
+
+                    if not web_path:
+                        # Create upload directory only for local fallback
+                        upload_dir = os.path.join('static', 'uploads', 'applications', user_id)
+                        os.makedirs(upload_dir, exist_ok=True)
+                        file_path = os.path.join(upload_dir, unique_filename)
+                        file.save(file_path)
+                        web_path = f"/static/uploads/applications/{user_id}/{unique_filename}"
+
                     file_paths[field.replace('File', '')] = web_path
         
         return jsonify({
@@ -879,15 +947,11 @@ def submit_application():
 def upload_service_files():
     """Upload service request files and return web URLs grouped by field id/name."""
     try:
-        import os
         from werkzeug.utils import secure_filename
 
         user_id = (request.form.get('userId') or '').strip()
         if not user_id:
             return jsonify({'success': False, 'message': 'Missing userId'}), 400
-
-        upload_dir = os.path.join('static', 'uploads', 'service_requests', user_id)
-        os.makedirs(upload_dir, exist_ok=True)
 
         file_paths = {}
         timestamp = int(datetime.now().timestamp())
@@ -902,10 +966,17 @@ def upload_service_files():
 
                 filename = secure_filename(file.filename)
                 unique_filename = f"{timestamp}_{field}_{idx}_{filename}"
-                file_path = os.path.join(upload_dir, unique_filename)
-                file.save(file_path)
+                web_path = None
+                if _cloudinary_enabled():
+                    web_path = _upload_to_cloudinary(file, f"tlph/service_requests/{user_id}")
 
-                web_path = f"/static/uploads/service_requests/{user_id}/{unique_filename}"
+                if not web_path:
+                    upload_dir = os.path.join('static', 'uploads', 'service_requests', user_id)
+                    os.makedirs(upload_dir, exist_ok=True)
+                    file_path = os.path.join(upload_dir, unique_filename)
+                    file.save(file_path)
+                    web_path = f"/static/uploads/service_requests/{user_id}/{unique_filename}"
+
                 saved_urls.append(web_path)
 
             if saved_urls:
