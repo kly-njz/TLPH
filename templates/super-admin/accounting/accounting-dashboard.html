@@ -2,36 +2,33 @@
 <html lang="en">
                                 // New structure: regional_funds (with regional_total, municipal_total), municipal_funds (with total)
                                 const funds = [];
+                                // National fund
                                 if (data.national_fund && data.national_fund > 0) {
-                                    funds.push({ id: 'NATIONAL', type: 'national', label: 'NATIONAL', amount: data.national_fund });
+                                    funds.push({ id: 'NATIONAL', type: 'national', label: 'NATIONAL', amount: Number(data.national_fund), fund_type: 'national' });
                                 }
-                                // Regional cards: show both regional and municipal totals
-                                (data.regional_funds || []).forEach((r, i) => {
+                                // Regional funds
+                                (data.regional_funds || []).forEach((f, i) => {
                                     funds.push({
-                                        id: `REGION-${r.region || i}`,
+                                        id: f.region || `region-${i}`,
                                         type: 'region',
-                                        label: r.region || 'REGION',
-                                        regional_total: r.regional_total || 0,
-                                        municipal_total: r.municipal_total || 0
+                                        region: f.region,
+                                        amount: Number(f.amount),
+                                        fund_type: f.fund_type || 'regional'
                                     });
                                 });
-                                // Municipality cards: show total
-                                (data.municipal_funds || []).forEach((m, i) => {
+                                // Municipal funds
+                                (data.municipal_funds || []).forEach((f, i) => {
                                     funds.push({
-                                        id: `MUNI-${m.municipality || i}`,
+                                        id: f.municipality || `muni-${i}`,
                                         type: 'municipality',
-                                        label: m.municipality || 'MUNICIPALITY',
-                                        region: m.region || '',
-                                        amount: m.total || 0
+                                        municipality: f.municipality,
+                                        region: f.region,
+                                        amount: Number(f.amount),
+                                        fund_type: f.fund_type || 'municipal'
                                     });
                                 });
                                 this.funds = funds;
-                                // For totalFunds, sum all amounts (national + regional + municipal)
-                                this.totalFunds = funds.reduce((sum, fund) => {
-                                    if (fund.type === 'national' || fund.type === 'municipality') return sum + (fund.amount || 0);
-                                    if (fund.type === 'region') return sum + (fund.regional_total || 0) + (fund.municipal_total || 0);
-                                    return sum;
-                                }, 0);
+                                this.totalFunds = funds.reduce((sum, fund) => sum + (fund.amount || 0), 0);
                 extend: {
                     colors: {
                         'gov-blue': '#1e3a8a', 
@@ -147,7 +144,7 @@
                 </div>
                                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                                     <!-- Regional Fund Cards -->
-                                    <template x-for="fund in funds.filter(f => f.municipality === f.region && f.region && f.region !== 'NATIONAL')" :key="fund.id">
+                                    <template x-for="fund in funds.filter(f => f.type === 'region')" :key="fund.id">
                                         <div class="gov-card p-2 border-l-4 border-l-gov-blue bg-blue-50/20 shadow-none">
                                             <p class="text-[8px] font-black text-blue-800 uppercase tracking-widest m-0 truncate" x-text="fund.region"></p>
                                             <h3 class="text-[13px] font-black text-gov-blue leading-none mt-1 m-0 font-mono" x-text="formatCurrency(fund.amount)"></h3>
@@ -155,7 +152,7 @@
                                         </div>
                                     </template>
                                     <!-- Municipality Fund Cards -->
-                                    <template x-for="fund in funds.filter(f => f.municipality && f.municipality !== 'NATIONAL' && f.municipality !== f.region)" :key="fund.id">
+                                    <template x-for="fund in funds.filter(f => f.type === 'municipality')" :key="fund.id">
                                         <div class="gov-card p-2 border-l-4 border-l-denr-green bg-green-50/20 shadow-none">
                                             <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 truncate" x-text="fund.municipality"></p>
                                             <h3 class="text-[13px] font-black text-denr-green leading-none mt-1 m-0 font-mono" x-text="formatCurrency(fund.amount)"></h3>
