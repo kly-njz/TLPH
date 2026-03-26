@@ -728,6 +728,14 @@
       // Documents — scan all array/string fields with file extensions
       const fileExts = /\.(pdf|jpg|jpeg|png|gif|webp|bmp|svg|avif|doc|docx|xls|xlsx|csv|txt|zip)$/i;
       const docsEl = document.getElementById('mDocs');
+      const isApplicantAttachmentKey = (key) => {
+        const k = String(key || '').toLowerCase();
+        return /(file|files|photo|photos|image|images|document|documents|attachment|attachments|report|permit|certificate|proposal|plan|record|history|result|picture)/i.test(k);
+      };
+      const isApplicantUploadUrl = (url) => {
+        const u = String(url || '').toLowerCase();
+        return u.includes('/static/uploads/service_requests/') || u.includes('static/uploads/service_requests/');
+      };
       const normalizeFileUrl = (raw, userId) => {
         const str = String(raw || '').trim();
         if (!str) return '';
@@ -749,12 +757,18 @@
       };
       docsEl.innerHTML = '';
       let fileCount = 0;
+      const seenDocs = new Set();
       for (const [key, val] of Object.entries(d)) {
+        if (!isApplicantAttachmentKey(key)) continue;
         const items = Array.isArray(val) ? val : [val];
         items.forEach(item => {
           if (typeof item === 'string' && fileExts.test(item)) {
             const fileUrl = normalizeFileUrl(item, d.userId || d.userID || d.uid || '');
             if (!fileUrl) return;
+            if (!isApplicantUploadUrl(fileUrl)) return;
+            const marker = `${key}|${fileUrl}`;
+            if (seenDocs.has(marker)) return;
+            seenDocs.add(marker);
             fileCount++;
             const label = key.replace(/File$|Files$/i,'').replace(/([A-Z])/g,' $1').trim();
             const icon  = /\.(jpg|jpeg|png|gif)$/i.test(item) ? 'image' : /\.pdf$/i.test(item) ? 'picture_as_pdf' : 'attach_file';
