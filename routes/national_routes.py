@@ -1,16 +1,4 @@
-# --- Get Single Quotation (National) ---
-@bp.route('/api/quotation/<quotation_id>', methods=['GET'])
-@role_required('national', 'national_admin')
-def get_quotation_national(quotation_id):
-    from quotation_storage import get_quotation_by_id
-    try:
-        quotation = get_quotation_by_id(quotation_id)
-        if not quotation:
-            return jsonify({'success': False, 'error': 'Quotation not found'}), 404
-        return jsonify(quotation)
-    except Exception as e:
-        print(f"[ERROR] get_quotation_national failed: {e}")
-        return jsonify({'success': False, 'error': 'Failed to fetch quotation'}), 500
+
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -2742,3 +2730,19 @@ def quotations_national_create():
     except Exception as e:
         print(f"[ERROR] quotations_national_create failed: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+
+
+# --- Get Single Quotation (National) ---
+@bp.route('/api/quotation/<quotation_id>', methods=['GET'])
+@role_required('national', 'national_admin')
+def get_quotation_national(quotation_id):
+    from quotation_storage import get_quotation_by_id
+    try:
+        quotation = get_quotation_by_id(quotation_id)
+        if not quotation:
+            return jsonify({'success': False, 'error': 'Quotation not found'}), 404
+        return jsonify(quotation)
+    except Exception as e:
+        print(f"[ERROR] get_quotation_national failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to fetch quotation'}), 500
