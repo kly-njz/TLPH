@@ -599,6 +599,14 @@
     </div>
   </div>
 
+  <!-- Image Viewer Modal (for service photo attachments) -->
+  <div id="serviceImageViewerModal" style="display:none;" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+    <div class="relative w-full max-w-3xl">
+      <button onclick="closeServiceImageViewer()" class="absolute -top-3 -right-3 bg-white text-gray-700 hover:text-black rounded-full w-8 h-8 shadow font-bold">&times;</button>
+      <img id="serviceImageViewerImg" src="" alt="Attachment Preview" class="w-full max-h-[82vh] object-contain bg-white rounded-lg shadow-2xl" />
+    </div>
+  </div>
+
   <!-- License Detail Modal -->
   <div id="licenseDetailModal" style="display:none;" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -1584,31 +1592,29 @@
           if (items.length === 0) return 'N/A';
 
           const rows = items.map((item, idx) => {
-            const label = escapeHtml(getDisplayName(item, idx));
             if (!isFileUrl(item)) {
               return `<div class="flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                <span class="text-[10px] text-slate-700 break-all">${escapeHtml(item)}</span>
+                <span class="text-[10px] text-slate-700 font-bold">File ${idx + 1}</span>
+                <span class="text-[9px] text-slate-400 italic">No link</span>
               </div>`;
             }
 
             const safeUrl = escapeHtml(item);
-            const preview = isImagePath(item)
-              ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-emerald-700 font-bold underline">Preview</a>`
-              : `<span class="text-[10px] text-slate-400">File</span>`;
-
+            const encodedUrl = encodeURIComponent(item);
             const thumb = isImagePath(item)
-              ? `<img src="${safeUrl}" alt="${label}" class="h-10 w-10 rounded border border-slate-200 object-cover" loading="lazy">`
+              ? `<img src="${safeUrl}" alt="File ${idx + 1}" class="h-7 w-7 rounded border border-slate-200 object-cover" loading="lazy">`
               : `<span class="material-icons-round text-slate-500" style="font-size:16px;">description</span>`;
+
+            const actionBtn = isImagePath(item)
+              ? `<button type="button" onclick="openServiceImageViewerFromEncoded('${encodedUrl}')" class="text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase px-2 py-1 rounded">View</button>`
+              : `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase px-2 py-1 rounded">View</a>`;
 
             return `<div class="flex items-center justify-between gap-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1">
               <div class="min-w-0 flex items-center gap-2">
                 ${thumb}
-                <span class="text-[10px] text-slate-700 break-all">${label}</span>
+                <span class="text-[10px] text-slate-700 font-bold">File ${idx + 1}</span>
               </div>
-              <div class="shrink-0 flex items-center gap-2">
-                ${preview}
-                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase px-2 py-1 rounded">View</a>
-              </div>
+              ${actionBtn}
             </div>`;
           }).join('');
 
@@ -1760,38 +1766,6 @@
           </div>`;
         }
 
-        const isAttachmentKey = (key) => /(file|files|photo|photos|document|documents|permit|permits|report|result|proposal|budget|plan|certificate|history|evidence|attachment)/i.test(key || '');
-        const alwaysSkipKeys = new Set([
-          'id', 'userId', 'userEmail', 'serviceType', 'status', 'description', 'amount', 'paymentStatus',
-          'invoiceId', 'externalId', 'createdAt', 'updatedAt', 'municipality', 'province', 'barangay',
-          'approvedByLevel', 'rejectedByLevel', 'rejectionNote', 'rejectedByEmail', 'region'
-        ]);
-
-        const extraAttachmentRows = Object.entries(d || {})
-          .filter(([key, value]) => {
-            if (alwaysSkipKeys.has(key)) return false;
-            if (!isAttachmentKey(key)) return false;
-            const files = normalizeFiles(value);
-            return files.length > 0;
-          })
-          .map(([key, value]) => {
-            const label = key
-              .replace(/([a-z])([A-Z])/g, '$1 $2')
-              .replace(/[_-]+/g, ' ')
-              .replace(/\b\w/g, c => c.toUpperCase());
-            return `<div>
-              <p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-0.5">${escapeHtml(label)}</p>
-              <p class="font-semibold text-gray-800">${fmtFiles(value)}</p>
-            </div>`;
-          });
-
-        if (extraAttachmentRows.length) {
-          html += `<div class="mt-3 pt-3 border-t border-emerald-100 bg-emerald-50 rounded-lg p-3">
-            <p class="text-emerald-800 font-black uppercase tracking-widest text-[10px] mb-2"><i class="fa-solid fa-paperclip mr-1"></i> Attached Files</p>
-            <div class="grid grid-cols-1 gap-3 text-xs">${extraAttachmentRows.join('')}</div>
-          </div>`;
-        }
-
         document.getElementById('sdmBody').innerHTML = html;
       } catch (err) {
         console.error('Error loading service detail:', err);
@@ -1803,8 +1777,31 @@
       document.getElementById('serviceDetailModal').style.display = 'none';
     };
 
+    window.openServiceImageViewerFromEncoded = function(encodedUrl) {
+      try {
+        const url = decodeURIComponent(encodedUrl || '');
+        const modal = document.getElementById('serviceImageViewerModal');
+        const img = document.getElementById('serviceImageViewerImg');
+        img.src = url;
+        modal.style.display = 'flex';
+      } catch (e) {
+        console.error('Failed to open image preview:', e);
+      }
+    };
+
+    window.closeServiceImageViewer = function() {
+      const modal = document.getElementById('serviceImageViewerModal');
+      const img = document.getElementById('serviceImageViewerImg');
+      img.src = '';
+      modal.style.display = 'none';
+    };
+
     document.getElementById('serviceDetailModal').addEventListener('click', function(e) {
       if (e.target === this) closeServiceDetail();
+    });
+
+    document.getElementById('serviceImageViewerModal').addEventListener('click', function(e) {
+      if (e.target === this) closeServiceImageViewer();
     });
 
     window.openLicenseDetail = async function(licenseId) {
