@@ -749,23 +749,23 @@ def api_get_fund_distribution():
         except Exception:
             pass
 
-        # 2. Regional general funds
-        regional_funds = []
+        # 2. Regional funds aggregation (from regional_fund_distribution)
+        regional_totals = {}  # region: total_amount
         try:
-            docs = db.collection('finance').stream()
-            for doc in docs:
-                if doc.id == 'national':
-                    continue
+            reg_docs = db.collection('regional_fund_distribution').stream()
+            for doc in reg_docs:
                 data = doc.to_dict() or {}
                 region = data.get('region') or doc.id
-                general_fund = float(data.get('general_fund', 0) or 0)
-                if general_fund > 0:
-                    regional_funds.append({'region': region, 'general_fund': general_fund})
+                amount = float(data.get('amount', 0) or 0)
+                if region:
+                    regional_totals[region] = regional_totals.get(region, 0) + amount
         except Exception:
             pass
 
-        # 3. Municipal general funds
+        # 3. Municipal funds aggregation (from municipal_fund_distribution)
         municipal_funds = []
+        municipal_totals_by_region = {}  # region: total_amount
+        municipal_totals_by_muni = {}    # municipality: total_amount
         try:
             muni_docs = db.collection('municipal_fund_distribution').stream()
             for doc in muni_docs:
@@ -781,14 +781,38 @@ def api_get_fund_distribution():
                         'amount': amount,
                         'fund_type': fund_type
                     })
+                    if region:
+                        municipal_totals_by_region[region] = municipal_totals_by_region.get(region, 0) + amount
+                    municipal_totals_by_muni[municipality] = municipal_totals_by_muni.get(municipality, 0) + amount
         except Exception:
             pass
+
+        # 4. Compose regional fund summary (include both regional and municipal totals)
+        regional_funds = []
+        all_regions = set(list(regional_totals.keys()) + list(municipal_totals_by_region.keys()))
+        for region in all_regions:
+            regional_funds.append({
+                'region': region,
+                'regional_total': regional_totals.get(region, 0),
+                'municipal_total': municipal_totals_by_region.get(region, 0)
+            })
+
+        # 5. Compose municipal fund summary (municipality, region, total)
+        municipal_fund_summary = []
+        for muni in municipal_totals_by_muni:
+            # Find region for this municipality (from first matching entry in municipal_funds)
+            region = next((f['region'] for f in municipal_funds if f['municipality'] == muni), '')
+            municipal_fund_summary.append({
+                'municipality': muni,
+                'region': region,
+                'total': municipal_totals_by_muni[muni]
+            })
 
         return jsonify({
             'success': True,
             'national_fund': national_fund,
             'regional_funds': regional_funds,
-            'municipal_funds': municipal_funds
+            'municipal_funds': municipal_fund_summary
         })
     except Exception as e:
         print(f'[ERROR] Failed to aggregate fund distribution: {e}')
