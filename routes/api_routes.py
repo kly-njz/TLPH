@@ -1188,6 +1188,15 @@ def _sa_extract_application(doc, users_map):
         'status': status_payload['status'],
         'status_display': status_payload['status_display'],
         'status_origin': status_payload['status_origin'],
+        'applicant_photo': _sa_norm_text(
+            user_data.get('photoURL')
+            or user_data.get('profilePicture')
+            or user_data.get('profilePic')
+            or user_data.get('avatarUrl')
+            or data.get('photoURL')
+            or data.get('profilePicture'),
+            ''
+        ),
         'email': _sa_norm_text(data.get('email') or data.get('userEmail') or user_data.get('email')),
         'contact': _sa_norm_text(
             user_data.get('contactNumber')
