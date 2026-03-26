@@ -1,4 +1,45 @@
 // quotation-regional.js
+// --- View Quotation Modal Logic ---
+function viewQuotation(btn) {
+    const row = btn.closest('tr');
+    document.getElementById('vqNumber').textContent = row.getAttribute('data-number') || row.children[0]?.textContent || 'N/A';
+    document.getElementById('vqClient').textContent = row.getAttribute('data-client') || row.children[1]?.textContent || 'N/A';
+    document.getElementById('vqMunicipality').textContent = row.getAttribute('data-municipality') || row.children[2]?.textContent || 'N/A';
+    document.getElementById('vqStatus').textContent = row.getAttribute('data-status') || row.children[8]?.textContent || 'N/A';
+    document.getElementById('vqDate').textContent = row.getAttribute('data-date') || row.children[4]?.textContent || 'N/A';
+    let amt = row.getAttribute('data-amount') || row.children[3]?.textContent?.replace(/[^\d.]/g, '') || '0';
+    let formattedAmt = parseFloat(amt).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.getElementById('vqAmount').textContent = '₱ ' + formattedAmt;
+    const modal = document.getElementById('viewQuotationModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeViewModal() {
+    const modal = document.getElementById('viewQuotationModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+// --- Forward Modal Logic ---
+let currentForwardId = null;
+function openForwardModal(id, municipality) {
+    currentForwardId = id;
+    document.getElementById('forwardQuotationId').value = id;
+    document.getElementById('forwardMunicipality').value = municipality || '';
+    document.getElementById('forwardModal').classList.remove('hidden');
+    document.getElementById('forwardModal').classList.add('flex');
+}
+function closeForwardModal() {
+    document.getElementById('forwardModal').classList.add('hidden');
+    document.getElementById('forwardModal').classList.remove('flex');
+    currentForwardId = null;
+}
+
+function closeHistoryModal() {
+    document.getElementById('historyModal').classList.add('hidden');
+    document.getElementById('historyModal').classList.remove('flex');
+}
 // --- Change Status Modal Logic ---
 let currentStatusId = null;
 function openStatusModal(id, status) {
