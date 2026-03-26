@@ -165,6 +165,35 @@
         </div>
     </main>
 
+    <!-- Attachment Preview Modal -->
+    <div id="attachmentPreviewModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-[70] p-4">
+        <div class="relative w-full max-w-5xl bg-white rounded-xl shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+                <h3 id="attachmentPreviewTitle" class="text-[11px] font-black uppercase tracking-wider text-slate-700 m-0">Attachment Preview</h3>
+                <button type="button" id="attachmentPreviewCloseBtn" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-800">
+                    &times;
+                </button>
+            </div>
+
+            <div id="attachmentPreviewBody" class="p-3 bg-slate-100 max-h-[78vh] overflow-auto flex items-center justify-center">
+                <img id="attachmentPreviewImage" src="" alt="Attachment Preview" class="hidden max-w-full max-h-[70vh] object-contain rounded" />
+                <iframe id="attachmentPreviewFrame" src="" class="hidden w-full h-[70vh] bg-white rounded border border-slate-200"></iframe>
+                <div id="attachmentPreviewFallback" class="hidden text-center">
+                    <p class="text-xs text-slate-600 font-semibold mb-3">Preview not available for this file type.</p>
+                    <a id="attachmentPreviewOpenLink" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded text-[10px] font-black uppercase no-underline">
+                        <i class="fa-solid fa-up-right-from-square"></i> Open File
+                    </a>
+                </div>
+            </div>
+
+            <div class="px-4 py-3 border-t border-slate-200 bg-white flex justify-end">
+                <a id="attachmentPreviewDownloadLink" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 text-[10px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded no-underline hover:bg-emerald-100">
+                    <i class="fa-solid fa-download"></i> Open / Download
+                </a>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { auth, db } from '/static/js/firebase-config.js';
         import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
@@ -208,6 +237,109 @@
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         }
+
+        function escapeAttr(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function isImageFile(url) {
+            return /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(url || '');
+        }
+
+        function isPdfFile(url) {
+            return /\.pdf(\?.*)?$/i.test(url || '');
+        }
+
+        function normalizeFileUrl(url) {
+            const raw = String(url || '').trim();
+            if (!raw) return '';
+            if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+            if (raw.startsWith('/')) return raw;
+            return `/${raw}`;
+        }
+
+        function showAttachmentPreview(url, label) {
+            const safeUrl = normalizeFileUrl(url);
+            if (!safeUrl) return;
+
+            const modal = document.getElementById('attachmentPreviewModal');
+            const title = document.getElementById('attachmentPreviewTitle');
+            const image = document.getElementById('attachmentPreviewImage');
+            const frame = document.getElementById('attachmentPreviewFrame');
+            const fallback = document.getElementById('attachmentPreviewFallback');
+            const openLink = document.getElementById('attachmentPreviewOpenLink');
+            const downloadLink = document.getElementById('attachmentPreviewDownloadLink');
+
+            title.textContent = label || 'Attachment Preview';
+            image.classList.add('hidden');
+            frame.classList.add('hidden');
+            fallback.classList.add('hidden');
+            image.src = '';
+            frame.src = '';
+            image.onerror = null;
+
+            openLink.href = safeUrl;
+            downloadLink.href = safeUrl;
+
+            if (isImageFile(safeUrl)) {
+                image.src = safeUrl;
+                image.onerror = function() {
+                    image.classList.add('hidden');
+                    fallback.classList.remove('hidden');
+                };
+                image.classList.remove('hidden');
+            } else if (isPdfFile(safeUrl)) {
+                frame.src = safeUrl;
+                frame.classList.remove('hidden');
+            } else {
+                fallback.classList.remove('hidden');
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeAttachmentPreview() {
+            const modal = document.getElementById('attachmentPreviewModal');
+            const image = document.getElementById('attachmentPreviewImage');
+            const frame = document.getElementById('attachmentPreviewFrame');
+
+            image.src = '';
+            frame.src = '';
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        window.openApplicationAttachmentPreviewFromEncoded = function(encodedUrl, encodedLabel = '') {
+            try {
+                const url = decodeURIComponent(encodedUrl || '');
+                const label = decodeURIComponent(encodedLabel || 'Attachment Preview');
+                showAttachmentPreview(url, label);
+            } catch (err) {
+                console.error('Failed to open attachment preview:', err);
+            }
+        };
+
+        window.closeApplicationAttachmentPreview = closeAttachmentPreview;
+
+        document.getElementById('attachmentPreviewCloseBtn').addEventListener('click', closeAttachmentPreview);
+        document.getElementById('attachmentPreviewModal').addEventListener('click', function(e) {
+            if (e.target === this) closeAttachmentPreview();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('attachmentPreviewModal');
+                if (!modal.classList.contains('hidden')) {
+                    closeAttachmentPreview();
+                }
+            }
+        });
 
         function getRejectionReason(item) {
             return (
@@ -426,7 +558,7 @@
                     };
                     imgEl.style.cursor = 'pointer';
                     imgEl.title = 'Click to view full size';
-                    imgEl.onclick = () => window.open(imageUrl, '_blank');
+                    imgEl.onclick = () => showAttachmentPreview(imageUrl, 'Main Product Photo');
                 } else {
                     noPhoto.classList.remove('hidden');
                 }
@@ -564,11 +696,45 @@
                     const docIcons = { 'title': 'description', 'tax': 'receipt_long', 'blueprint': 'architecture', 'plan': 'business_center', 'brgy': 'location_city', 'land': 'landscape', 'crop': 'eco' };
                     const docLabels = { 'title': 'Title / Tax Dec', 'tax': 'Tax Receipt', 'blueprint': 'Blueprint', 'plan': 'Business Plan', 'brgy': 'Brgy Cert', 'land': 'Land Photo', 'crop': 'Crop Photo' };
                     if (app.files) {
-                        documentsList.innerHTML = Object.entries(app.files).map(([key, url]) => `
-                            <a href="${url}" target="_blank" class="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg hover:border-emerald-600 transition-all group no-underline">
-                                <span class="material-icons-round text-slate-300 group-hover:text-emerald-600 text-sm">${docIcons[key] || 'description'}</span>
-                                <span class="text-[8px] font-black text-slate-500 group-hover:text-emerald-700 uppercase truncate">${docLabels[key] || key}</span>
-                            </a>`).join('');
+                        const fileItems = [];
+                        Object.entries(app.files).forEach(([key, value]) => {
+                            const values = Array.isArray(value) ? value : [value];
+                            values.filter(Boolean).forEach((rawUrl, idx) => {
+                                const cleanUrl = normalizeFileUrl(rawUrl);
+                                if (!cleanUrl) return;
+                                const baseLabel = docLabels[key] || key;
+                                const label = values.length > 1 ? `${baseLabel} ${idx + 1}` : baseLabel;
+                                fileItems.push({ key, label, url: cleanUrl });
+                            });
+                        });
+
+                        documentsList.innerHTML = fileItems
+                            .map(({ key, label, url }) => {
+                                const encodedUrl = encodeURIComponent(url);
+                                const encodedLabel = encodeURIComponent(label);
+                                return `
+                                    <div class="p-2 bg-white border border-gray-200 rounded-lg hover:border-emerald-500 transition-all">
+                                        <div class="flex items-center gap-2 mb-2 min-w-0">
+                                            <span class="material-icons-round text-slate-400 text-sm">${docIcons[key] || 'description'}</span>
+                                            <span class="text-[8px] font-black text-slate-600 uppercase truncate">${escapeHtml(label)}</span>
+                                        </div>
+                                        <div class="flex items-center gap-1.5">
+                                            <button type="button"
+                                                onclick="openApplicationAttachmentPreviewFromEncoded('${encodedUrl}','${encodedLabel}')"
+                                                class="flex-1 inline-flex items-center justify-center gap-1 text-[9px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded">
+                                                <i class="fa-solid fa-eye"></i> View
+                                            </button>
+                                            <a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer"
+                                                class="inline-flex items-center justify-center gap-1 text-[9px] font-black uppercase bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded no-underline">
+                                                <i class="fa-solid fa-up-right-from-square"></i>
+                                            </a>
+                                        </div>
+                                    </div>`;
+                            }).join('');
+
+                        if (!documentsList.innerHTML.trim()) {
+                            documentsList.innerHTML = '<p class="col-span-full text-center text-xs text-gray-400">No documents available</p>';
+                        }
                     } else if (app.fileReferences) {
                         documentsList.innerHTML = Object.entries(app.fileReferences).map(([key, fileName]) => `
                             <div class="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg">

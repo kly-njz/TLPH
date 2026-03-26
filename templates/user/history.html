@@ -898,9 +898,45 @@
 
     // Resolve application status with level context (approved by, rejected by, forwarded to)
     function resolveApplicationStatus(item) {
-      const rawStatus = (item.nationalStatus === 'approved' || item.nationalStatus === 'rejected')
-        ? item.nationalStatus
-        : (item.regionalStatus || item.status || 'pending');
+      const normalizeStatus = (value) => (value || '').toLowerCase().trim().replace(/\s+/g, '-');
+      const mainStatus = normalizeStatus(item.status);
+      const regionalStatus = normalizeStatus(item.regionalStatus);
+      const nationalStatus = normalizeStatus(item.nationalStatus);
+
+      let rawStatus = 'pending';
+
+      // Final decision at national level wins.
+      if (nationalStatus === 'approved' || nationalStatus === 'rejected') {
+        rawStatus = nationalStatus;
+      }
+      // Preserve explicit workflow from main status (important when regionalStatus is still "pending").
+      else if (
+        mainStatus === 'approved' ||
+        mainStatus === 'rejected' ||
+        mainStatus === 'to-review' ||
+        mainStatus === 'under-review' ||
+        mainStatus === 'forwarded-to-national' ||
+        mainStatus === 'forwarded-national' ||
+        mainStatus.includes('forward')
+      ) {
+        rawStatus = mainStatus;
+      }
+      // Otherwise use regional explicit states.
+      else if (
+        regionalStatus === 'approved' ||
+        regionalStatus === 'rejected' ||
+        regionalStatus === 'to-review' ||
+        regionalStatus === 'under-review' ||
+        regionalStatus === 'forwarded-to-national' ||
+        regionalStatus === 'forwarded-national' ||
+        regionalStatus.includes('forward')
+      ) {
+        rawStatus = regionalStatus;
+      }
+      // Fallback for untouched records.
+      else {
+        rawStatus = mainStatus || regionalStatus || 'pending';
+      }
 
       const status = (rawStatus || '').toLowerCase().replace(/\s+/g, '-');
       const approvedLevel = item.approvedByLevel || '';
@@ -932,6 +968,13 @@
         if (lvl === 'NATIONAL') return { status: 'forwarded-to-national', label: 'FWD → NATIONAL' };
         if (lvl === 'REGIONAL') return { status, label: 'FWD → REGIONAL' };
         return { status, label: 'FORWARDED FOR REVIEW' };
+      }
+
+      if (status === 'pending' && forwardedToLevel) {
+        const lvl = forwardedToLevel.toUpperCase();
+        if (lvl === 'NATIONAL') return { status: 'forwarded-to-national', label: 'FWD → NATIONAL' };
+        if (lvl === 'REGIONAL') return { status: 'to-review', label: 'FWD → REGIONAL' };
+        return { status: 'to-review', label: `FORWARDED TO ${lvl}` };
       }
 
       return { status, label: getStatusLabel(status) };
