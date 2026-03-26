@@ -377,6 +377,53 @@
                     return /\.pdf(\?|$)/i.test(String(value || ''));
                 },
 
+                isLikelyFilePath(value) {
+                    return /\.[a-z0-9]{2,8}(\?|$)/i.test(String(value || '').trim());
+                },
+
+                collectFileStrings(value, acc = []) {
+                    if (value == null) return acc;
+                    if (Array.isArray(value)) {
+                        value.forEach(item => this.collectFileStrings(item, acc));
+                        return acc;
+                    }
+                    if (typeof value === 'object') {
+                        Object.values(value).forEach(item => this.collectFileStrings(item, acc));
+                        return acc;
+                    }
+                    if (typeof value === 'string' && this.isLikelyFilePath(value)) {
+                        acc.push(value);
+                    }
+                    return acc;
+                },
+
+                buildDocFiles(data) {
+                    const result = [];
+                    const seen = new Set();
+                    const userId = data?.userId || data?.userID || data?.uid || '';
+
+                    for (const [key, val] of Object.entries(data || {})) {
+                        if (key.endsWith('Count')) continue;
+                        const files = this.collectFileStrings(val, []);
+                        if (!files.length) continue;
+
+                        files.forEach(raw => {
+                            const url = this.normalizeFileUrl(raw, userId);
+                            if (!url) return;
+                            const marker = `${key}|${url}`;
+                            if (seen.has(marker)) return;
+                            seen.add(marker);
+                            result.push({
+                                name: this.getDisplayFileName(raw, 'Attachment'),
+                                fieldKey: key,
+                                url,
+                            });
+                        });
+                    }
+
+                    return result;
+                },
+
                 normalizeFileUrl(raw, userId) {
                     const str = String(raw || '').trim();
                     if (!str) return '';
@@ -619,37 +666,7 @@
                             }
 
                             // documents — scan all array-valued fields (file inputs stored as filenames)
-                            const FILE_EXT = /\.(pdf|jpg|jpeg|png|gif|webp|bmp|svg|avif|doc|docx|xlsx|xls|csv|txt|zip)$/i;
-                            this.docFiles = [];
-                            const seen = new Set();
-                            for (const [key, val] of Object.entries(d)) {
-                                if (key.endsWith('Count')) continue;
-                                if (Array.isArray(val) && val.length > 0 && val.every(v => typeof v === 'string' && FILE_EXT.test(v))) {
-                                    val.forEach(filename => {
-                                        const url = this.normalizeFileUrl(filename, d.userId || d.userID || d.uid || '');
-                                        if (!url) return;
-                                        const marker = `${key}|${url}`;
-                                        if (seen.has(marker)) return;
-                                        seen.add(marker);
-                                        this.docFiles.push({
-                                            name: this.getDisplayFileName(filename, 'Attachment'),
-                                            fieldKey: key,
-                                            url,
-                                        });
-                                    });
-                                } else if (typeof val === 'string' && FILE_EXT.test(val)) {
-                                    const url = this.normalizeFileUrl(val, d.userId || d.userID || d.uid || '');
-                                    if (!url) continue;
-                                    const marker = `${key}|${url}`;
-                                    if (seen.has(marker)) continue;
-                                    seen.add(marker);
-                                    this.docFiles.push({
-                                        name: this.getDisplayFileName(val, 'Attachment'),
-                                        fieldKey: key,
-                                        url,
-                                    });
-                                }
-                            }
+                            this.docFiles = this.buildDocFiles(d);
 
                             // forwarded banner
                             if (d.status === 'to-review') {
