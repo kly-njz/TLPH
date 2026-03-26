@@ -2,6 +2,7 @@
 // --- View Quotation Modal Logic ---
 function viewQuotation(btn) {
     const row = btn.closest('tr');
+    // Try to get values from data attributes, fallback to cell text
     document.getElementById('vqNumber').textContent = row.getAttribute('data-number') || row.children[0]?.textContent || 'N/A';
     document.getElementById('vqClient').textContent = row.getAttribute('data-client') || row.children[1]?.textContent || 'N/A';
     document.getElementById('vqMunicipality').textContent = row.getAttribute('data-municipality') || row.children[2]?.textContent || 'N/A';
@@ -27,18 +28,40 @@ function openForwardModal(id, municipality) {
     currentForwardId = id;
     document.getElementById('forwardQuotationId').value = id;
     document.getElementById('forwardMunicipality').value = municipality || '';
-    document.getElementById('forwardModal').classList.remove('hidden');
-    document.getElementById('forwardModal').classList.add('flex');
+    const modal = document.getElementById('forwardModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 }
 function closeForwardModal() {
-    document.getElementById('forwardModal').classList.add('hidden');
-    document.getElementById('forwardModal').classList.remove('flex');
+    const modal = document.getElementById('forwardModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
     currentForwardId = null;
+}
+// Forward form submit stub
+function submitForward(e) {
+    e.preventDefault();
+    alert('Forwarding quotation (stub). Implement backend logic.');
+    closeForwardModal();
 }
 
 function closeHistoryModal() {
-    document.getElementById('historyModal').classList.add('hidden');
-    document.getElementById('historyModal').classList.remove('flex');
+    const modal = document.getElementById('historyModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+// Show history modal and load content stub
+function showHistoryModal(quoteId) {
+    document.getElementById('historyContent').textContent = 'History for Quotation ID: ' + quoteId + ' (stub, implement backend fetch)';
+    const modal = document.getElementById('historyModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+// Status form submit stub
+function submitStatus(e) {
+    e.preventDefault();
+    alert('Status update (stub). Implement backend logic.');
+    closeStatusModal();
 }
 // --- Change Status Modal Logic ---
 let currentStatusId = null;
