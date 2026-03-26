@@ -4257,6 +4257,9 @@ def quotation_regional():
     user_region = session.get('user_region', '').strip()
     # Only show quotations allocated to this region
     quotations = get_quotations(deliver_to=user_region, deliver_to_type='region')
+    print(f"[DEBUG] Regional Quotation View: user_region={user_region}")
+    for q in quotations:
+        print(f"[DEBUG] Quotation: id={q.get('id')} deliver_to={q.get('deliver_to')} deliver_to_type={q.get('deliver_to_type')}")
     def to_float(value):
         try:
             return float(value)

@@ -73,38 +73,39 @@ def seed_quotations():
                 ]
             }
             quotations.append(q)
-    # 2 for REGION-IV-B (regional only)
+    # 2 for REGION-IV-B (regional only, both REGION-IV-B and MIMAROPA as deliver_to)
     for i in range(2):
         client = random.choice(CLIENTS)
         desc = random.choice(DESCRIPTIONS)
         amount = random.randint(20000, 120000)
-        q = {
-            "number": f"Q-REG-{i+1:02d}",
-            "client": client,
-            "amount": amount,
-            "date": now,
-            "status": "PENDING",
-            "region": REGION,
-            "municipality": "",
-            "description": desc,
-            "scope": "regional",
-            "created_by": "regional_admin@demo.com",
-            "created_by_role": "regional_admin",
-            "created_at": now,
-            "updated_at": now,
-            "deliver_from": "REGIONAL",
-            "deliver_to": REGION,
-            "deliver_to_type": "region",
-            "history": [
-                {
-                    "action": "created",
-                    "by": "regional_admin@demo.com",
-                    "timestamp": now,
-                    "notes": "Initial creation"
-                }
-            ]
-        }
-        quotations.append(q)
+        for region_name in [REGION, "MIMAROPA"]:
+            q = {
+                "number": f"Q-REG-{i+1:02d}-{region_name[:6]}",
+                "client": client,
+                "amount": amount,
+                "date": now,
+                "status": "PENDING",
+                "region": REGION,
+                "municipality": "",
+                "description": desc,
+                "scope": "regional",
+                "created_by": "regional_admin@demo.com",
+                "created_by_role": "regional_admin",
+                "created_at": now,
+                "updated_at": now,
+                "deliver_from": "REGIONAL",
+                "deliver_to": region_name,
+                "deliver_to_type": "region",
+                "history": [
+                    {
+                        "action": "created",
+                        "by": "regional_admin@demo.com",
+                        "timestamp": now,
+                        "notes": "Initial creation"
+                    }
+                ]
+            }
+            quotations.append(q)
     # Insert all
     for q in quotations:
         ref = db.collection("quotations").document()
