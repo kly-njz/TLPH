@@ -1,3 +1,13 @@
+# Fetch a single quotation by ID
+def get_quotation_by_id(quotation_id):
+    db = get_firestore_db()
+    ref = db.collection('quotations').document(quotation_id)
+    doc = ref.get()
+    if not doc.exists:
+        return None
+    data = doc.to_dict()
+    data['id'] = doc.id
+    return data
 def get_all_quotations():
     db = get_firestore_db()
     q = db.collection('quotations')
