@@ -485,13 +485,39 @@
         function normalizeAttachmentUrl(raw, rowData) {
             const str = String(raw || '').trim();
             if (!str) return '';
-            if (/^(https?:\/\/|\/static\/|static\/)/i.test(str)) {
-                return str.startsWith('static/') ? `/${str}` : str;
+
+            // Normalize common malformed path formats from stored payloads.
+            const unified = str.replace(/\\/g, '/').replace(/^\.\//, '');
+
+            if (/^https?:\/\//i.test(unified)) return encodeURI(unified);
+            if (/^\/\//.test(unified)) return `https:${encodeURI(unified)}`;
+            if (/^www\./i.test(unified)) return `https://${encodeURI(unified)}`;
+
+            // Support Firebase Storage URIs (gs://bucket/path/to/file)
+            if (/^gs:\/\//i.test(unified)) {
+                const noScheme = unified.replace(/^gs:\/\//i, '');
+                const slashIdx = noScheme.indexOf('/');
+                if (slashIdx > 0) {
+                    const bucket = noScheme.slice(0, slashIdx);
+                    const objectPath = noScheme.slice(slashIdx + 1).split('/').map(seg => encodeURIComponent(seg)).join('/');
+                    return `https://storage.googleapis.com/${bucket}/${objectPath}`;
+                }
+                return '';
             }
-            if (!isFilePath(str)) return '';
+
+            if (/^(\/static\/|static\/)/i.test(unified)) {
+                const localPath = unified.startsWith('static/') ? `/${unified}` : unified;
+                return encodeURI(localPath);
+            }
+
+            if (/^(uploads\/|\/uploads\/)/i.test(unified)) {
+                return encodeURI(unified.startsWith('/') ? `/static${unified}` : `/static/${unified}`);
+            }
+
+            if (!isFilePath(unified)) return '';
             const userId = rowData?.raw?.userId || rowData?.raw?.userID || rowData?.raw?.uid || '';
             if (!userId) return '';
-            const encoded = str.split('/').map(p => encodeURIComponent(p)).join('/');
+            const encoded = unified.split('/').map(p => encodeURIComponent(p)).join('/');
             return `/static/uploads/service_requests/${encodeURIComponent(userId)}/${encoded}`;
         }
 
@@ -614,7 +640,17 @@
 
         window.openSuperAdminAttachmentViewer = function(encodedUrl, encodedName) {
             try {
-                const url = decodeURIComponent(encodedUrl || '');
+                let url = String(encodedUrl || '').trim();
+                try {
+                    url = decodeURIComponent(url);
+                } catch (_) {
+                    // Keep raw value when the input is already decoded or malformed.
+                }
+                url = normalizeAttachmentUrl(url, null) || url.replace(/\\/g, '/');
+                if (!url) {
+                    alert('Attachment URL is missing or invalid.');
+                    return;
+                }
                 const name = decodeURIComponent(encodedName || 'Attachment');
                 const modal = document.getElementById('superAdminAttachmentViewerModal');
                 const title = document.getElementById('saViewerTitle');
