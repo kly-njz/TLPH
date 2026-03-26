@@ -45,13 +45,33 @@ def seed_quotations():
         for i in range(4):
             client = random.choice(CLIENTS)
             desc = random.choice(DESCRIPTIONS)
-            amount = random.randint(10000, 100000)
+            title = f"{desc} for {client}"
+            category = random.choice(["Agriculture", "Laboratory", "Agri Inputs", "Supplies"])
+            supplier = random.choice(["GreenGrow Suppliers", "TerraLab PH", "BioHarvest Co.", "AgriBase PH"])
+            product = random.choice(["Narra Seedlings", "Soil Analysis Kits", "Organic Fertilizer", "Seed Trays"])
+            qty = random.randint(50, 2000)
+            unit_price = random.randint(30, 100)
+            other_charges = random.choice([0, 500, 1200, 1500])
+            other_charges_note = random.choice(["Handling fee", "Storage + loading", "Local transport", "—"])
+            subtotal = qty * unit_price
+            total = subtotal + other_charges
             q = {
                 "number": f"Q-{m[:3].upper()}-{i+1:02d}",
                 "client": client,
-                "amount": amount,
+                "buyer": client,
+                "title": title,
+                "category": category,
+                "supplier": supplier,
+                "product": product,
+                "qty": qty,
+                "unitPrice": unit_price,
+                "otherCharges": other_charges,
+                "otherChargesNote": other_charges_note,
+                "subtotal": subtotal,
+                "total": total,
+                "amount": total,
                 "date": now,
-                "status": "PENDING",
+                "status": "pending",
                 "region": REGION,
                 "municipality": m,
                 "description": desc,
@@ -77,14 +97,34 @@ def seed_quotations():
     for i in range(2):
         client = random.choice(CLIENTS)
         desc = random.choice(DESCRIPTIONS)
-        amount = random.randint(20000, 120000)
+        title = f"{desc} for {client}"
+        category = random.choice(["Agriculture", "Laboratory", "Agri Inputs", "Supplies"])
+        supplier = random.choice(["GreenGrow Suppliers", "TerraLab PH", "BioHarvest Co.", "AgriBase PH"])
+        product = random.choice(["Narra Seedlings", "Soil Analysis Kits", "Organic Fertilizer", "Seed Trays"])
+        qty = random.randint(50, 2000)
+        unit_price = random.randint(30, 100)
+        other_charges = random.choice([0, 500, 1200, 1500])
+        other_charges_note = random.choice(["Handling fee", "Storage + loading", "Local transport", "—"])
+        subtotal = qty * unit_price
+        total = subtotal + other_charges
         for region_name in [REGION, "MIMAROPA"]:
             q = {
                 "number": f"Q-REG-{i+1:02d}-{region_name[:6]}",
                 "client": client,
-                "amount": amount,
+                "buyer": client,
+                "title": title,
+                "category": category,
+                "supplier": supplier,
+                "product": product,
+                "qty": qty,
+                "unitPrice": unit_price,
+                "otherCharges": other_charges,
+                "otherChargesNote": other_charges_note,
+                "subtotal": subtotal,
+                "total": total,
+                "amount": total,
                 "date": now,
-                "status": "PENDING",
+                "status": "pending",
                 "region": REGION,
                 "municipality": "",
                 "description": desc,
