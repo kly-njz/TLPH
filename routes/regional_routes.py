@@ -1,4 +1,5 @@
 
+
 from flask import Blueprint, render_template, jsonify, request, session
 from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required
@@ -4833,3 +4834,19 @@ def api_get_regional_expense_categories():
     except Exception as e:
         print(f"[ERROR] Regional: Failed to get expense categories: {e}")
         return jsonify({'error': str(e)}), 500
+    
+
+
+# API: Get single quotation (regional)
+@bp.route('/api/quotation/<quotation_id>', methods=['GET'])
+@role_required('regional', 'regional_admin')
+def api_get_quotation_regional(quotation_id):
+    from quotation_storage import get_quotation_by_id
+    try:
+        quotation = get_quotation_by_id(quotation_id)
+        if not quotation:
+            return jsonify({'success': False, 'error': 'Quotation not found'}), 404
+        return jsonify(quotation)
+    except Exception as e:
+        print(f"[ERROR] api_get_quotation_regional failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to fetch quotation'}), 500
