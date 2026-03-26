@@ -1189,7 +1189,17 @@ def _sa_extract_application(doc, users_map):
         'status_display': status_payload['status_display'],
         'status_origin': status_payload['status_origin'],
         'email': _sa_norm_text(data.get('email') or data.get('userEmail') or user_data.get('email')),
-        'contact': _sa_norm_text(data.get('contact') or data.get('contactNumber') or user_data.get('contactNumber')),
+        'contact': _sa_norm_text(
+            user_data.get('contactNumber')
+            or user_data.get('phone')
+            or user_data.get('phoneNumber')
+            or user_data.get('mobile')
+            or user_data.get('mobileNumber')
+            or data.get('contact')
+            or data.get('contactNumber')
+            or form_data.get('contact')
+            or form_data.get('contactNumber')
+        ),
         'description': _sa_norm_text(data.get('description') or data.get('notes') or form_data.get('description') or form_data.get('purpose')),
         'form_data': form_data,
         'raw': data

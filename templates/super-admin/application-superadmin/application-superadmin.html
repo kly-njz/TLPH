@@ -289,6 +289,21 @@
         </div>
     </div>
 
+    <div id="applicationAttachmentPreviewModal" class="gov-modal no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeApplicationAttachmentPreview(event)"></div>
+        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-5xl overflow-hidden relative z-10 flex flex-col max-h-[88vh]">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
+                <h3 id="applicationAttachmentPreviewTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-file text-slate-400"></i> Attachment Preview
+                </h3>
+                <button onclick="closeApplicationAttachmentPreview()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div id="applicationAttachmentPreviewBody" class="p-3 bg-slate-50 overflow-auto custom-scrollbar text-[10px] min-h-[320px]"></div>
+        </div>
+    </div>
+
     <script>
         function showToast(msg, type = 'error') {
             const container = document.getElementById('toastContainer');
@@ -312,6 +327,13 @@
         let ALL_DATA = [];
         let myTrendChart, myRegionalChart, myCategoryChart, modalChartInstance = null;
 
+        function toDateTimestamp(value) {
+            const raw = String(value || '').trim();
+            if (!raw || raw.toUpperCase() === 'N/A') return 0;
+            const ts = new Date(raw).getTime();
+            return Number.isNaN(ts) ? 0 : ts;
+        }
+
         // ---- DATA FETCH ----
         async function loadApplications() {
             const body = document.getElementById('appTableBody');
@@ -322,7 +344,7 @@
                 const res = await fetch('/api/superadmin/applications');
                 const json = await res.json();
                 if (json.success) {
-                    ALL_DATA = json.data;
+                    ALL_DATA = (json.data || []).sort((a, b) => toDateTimestamp(b.date) - toDateTimestamp(a.date));
                     renderTable();
                     const ts = document.getElementById('lastSyncedTime');
                     if (ts) ts.textContent = new Date().toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false });
@@ -368,6 +390,8 @@
                 const matchTo = !dateTo || item.date <= dateTo;
                 return matchSearch && matchCat && matchReg && matchStatus && matchFrom && matchTo;
             });
+
+            filtered.sort((a, b) => toDateTimestamp(b.date) - toDateTimestamp(a.date));
 
             body.innerHTML = '';
             document.getElementById('resCount').textContent = filtered.length;
@@ -561,6 +585,122 @@
                 .join('');
         }
 
+        function _titleCaseKey(key) {
+            return String(key || '')
+                .replace(/([a-z])([A-Z])/g, '$1 $2')
+                .replace(/[_.-]+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function _normalizeAttachmentUrl(url) {
+            const raw = String(url || '').trim();
+            if (!raw) return '';
+            if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('/')) return raw;
+            return `/${raw}`;
+        }
+
+        function _collectAttachments(raw) {
+            const files = [];
+            const addFile = (label, url) => {
+                const normalized = _normalizeAttachmentUrl(url);
+                if (!normalized) return;
+                files.push({ label: label || 'Attachment', url: normalized });
+            };
+
+            const directFiles = raw?.files || {};
+            Object.entries(directFiles).forEach(([key, value]) => {
+                const values = Array.isArray(value) ? value : [value];
+                values.forEach((v, idx) => addFile(values.length > 1 ? `${_titleCaseKey(key)} ${idx + 1}` : _titleCaseKey(key), v));
+            });
+
+            const uploadedFiles = raw?.uploadedFiles || {};
+            Object.entries(uploadedFiles).forEach(([key, value]) => {
+                const values = Array.isArray(value) ? value : [value];
+                values.forEach((entry, idx) => {
+                    if (!entry) return;
+                    if (typeof entry === 'string') {
+                        addFile(values.length > 1 ? `${_titleCaseKey(key)} ${idx + 1}` : _titleCaseKey(key), entry);
+                        return;
+                    }
+                    addFile(values.length > 1 ? `${_titleCaseKey(key)} ${idx + 1}` : _titleCaseKey(key), entry.downloadUrl || entry.url || entry.path || '');
+                });
+            });
+
+            addFile('Product Picture', raw?.imageUrl || '');
+
+            const uniq = new Set();
+            return files.filter(f => {
+                const key = `${f.label}|${f.url}`;
+                if (uniq.has(key)) return false;
+                uniq.add(key);
+                return true;
+            });
+        }
+
+        function _renderFormDataCards(formData) {
+            const entries = Object.entries(formData || {})
+                .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '' && typeof value !== 'object');
+
+            if (!entries.length) {
+                return '<p class="text-slate-400 font-bold uppercase tracking-widest text-[9px] m-0">No submitted field data found.</p>';
+            }
+
+            return `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    ${entries.map(([key, value]) => `
+                        <div class="bg-slate-50 border border-slate-200 p-2">
+                            <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">${_safeHtml(_titleCaseKey(key))}</p>
+                            <p class="text-[10px] font-bold text-slate-800 m-0 mt-1 break-words">${_safeHtml(value)}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function openApplicationAttachmentPreview(url, label) {
+            const modal = document.getElementById('applicationAttachmentPreviewModal');
+            const body = document.getElementById('applicationAttachmentPreviewBody');
+            const title = document.getElementById('applicationAttachmentPreviewTitle');
+
+            const cleanUrl = _normalizeAttachmentUrl(url);
+            if (!cleanUrl) return;
+
+            const isImage = /\.(png|jpg|jpeg|gif|webp|bmp|svg|avif)(\?.*)?$/i.test(cleanUrl);
+            const isPdf = /\.pdf(\?.*)?$/i.test(cleanUrl);
+            title.innerHTML = `<i class="fa-solid fa-file text-slate-400"></i> ${_safeHtml(label || 'Attachment Preview')}`;
+
+            if (isImage) {
+                body.innerHTML = `<img src="${cleanUrl}" alt="Attachment" class="block max-w-full max-h-[74vh] mx-auto border border-slate-300 bg-white" />`;
+            } else if (isPdf) {
+                body.innerHTML = `<iframe src="${cleanUrl}#toolbar=0&navpanes=0&scrollbar=1" class="w-full h-[74vh] border border-slate-300 bg-white"></iframe>`;
+            } else {
+                body.innerHTML = `
+                    <div class="bg-white border border-slate-200 p-6 text-center">
+                        <p class="text-[10px] font-black uppercase text-slate-600 mb-2">Preview not supported for this file type.</p>
+                        <a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 bg-gov-blue text-white px-3 py-1.5 text-[9px] font-black uppercase tracking-widest no-underline">
+                            <i class="fa-solid fa-up-right-from-square"></i> Open File
+                        </a>
+                    </div>
+                `;
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeApplicationAttachmentPreview(event) {
+            if (event && event.target && event.target.id !== 'applicationAttachmentPreviewModal') return;
+            const modal = document.getElementById('applicationAttachmentPreviewModal');
+            const body = document.getElementById('applicationAttachmentPreviewBody');
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+            body.innerHTML = '';
+        }
+
+        window.openApplicationAttachmentPreview = openApplicationAttachmentPreview;
+        window.closeApplicationAttachmentPreview = closeApplicationAttachmentPreview;
+
         async function openApplicationView(appId) {
             const modal = document.getElementById('applicationViewModal');
             const body = document.getElementById('applicationViewBody');
@@ -577,6 +717,25 @@
                 const statusOrigin = d.status_origin || {};
                 const formData = d.form_data || {};
                 const raw = d.raw || {};
+                const attachments = _collectAttachments(raw);
+
+                const attachmentHtml = attachments.length
+                    ? `
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            ${attachments.map(file => `
+                                <div class="bg-slate-50 border border-slate-200 p-2 flex items-center justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">${_safeHtml(file.label)}</p>
+                                        <p class="text-[10px] font-bold text-slate-700 truncate m-0 mt-0.5">${_safeHtml(file.url.split('/').pop() || file.url)}</p>
+                                    </div>
+                                    <button onclick="openApplicationAttachmentPreview('${_safeHtml(file.url)}', '${_safeHtml(file.label)}')" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 px-2 py-1 text-[8px]">
+                                        <i class="fa-solid fa-eye"></i> View
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `
+                    : '<p class="text-slate-400 font-bold uppercase tracking-widest text-[9px] m-0">No uploaded documents/photos found.</p>';
 
                 body.innerHTML = `
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -588,6 +747,7 @@
                                 'Applicant': d.name,
                                 'Email': d.email,
                                 'Contact': d.contact,
+                                'Product Name': (raw.productName || raw.resourceName || raw.item_name || raw.itemName || 'N/A'),
                                 'Sector': d.sector,
                                 'Application Type': d.application_type,
                                 'Status': d.status,
@@ -605,11 +765,11 @@
                     </div>
                     <div class="mt-3 bg-white border border-slate-200 p-3">
                         <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Form Data (Submitted Fields)</div>
-                        <div class="max-h-44 overflow-auto custom-scrollbar">${_renderPairs(formData) || '<span class="text-slate-400">No form data available.</span>'}</div>
+                        <div class="max-h-56 overflow-auto custom-scrollbar">${_renderFormDataCards(formData)}</div>
                     </div>
                     <div class="mt-3 bg-white border border-slate-200 p-3">
-                        <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Raw Document Snapshot</div>
-                        <pre class="m-0 text-[9px] text-slate-700 bg-slate-50 p-2 border border-slate-200 overflow-auto custom-scrollbar max-h-56">${_safeHtml(JSON.stringify(raw, null, 2))}</pre>
+                        <div class="text-[9px] font-black uppercase text-slate-500 mb-2">Uploaded Documents & Pictures</div>
+                        ${attachmentHtml}
                     </div>
                 `;
             } catch (e) {
