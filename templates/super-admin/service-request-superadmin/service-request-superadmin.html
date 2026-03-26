@@ -59,6 +59,34 @@
     .detail-label { font-size: 8px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em; margin-bottom: 2px; }
     .detail-value { font-size: 11px; font-weight: 700; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; margin-bottom: 8px; }
 
+    .viewer-loading-wrap {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: #334155;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      font-size: 10px;
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.95);
+      z-index: 10;
+    }
+    .viewer-spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #cbd5e1;
+      border-top-color: #2563eb;
+      border-radius: 9999px;
+      animation: viewerSpin .8s linear infinite;
+    }
+    @keyframes viewerSpin { to { transform: rotate(360deg); } }
+
     @media print { 
         .no-print { display: none !important; } 
         main { margin-left: 0 !important; padding-top: 0 !important; position: static !important; overflow: visible !important; } 
@@ -237,8 +265,14 @@
                     </div>
                     
                     <div>
-                        <p class="detail-label">Applicant Name</p>
-                        <p id="detName" class="detail-value uppercase"></p>
+                        <p class="detail-label">Applicant</p>
+                        <div class="flex items-start gap-3 border-b border-slate-100 pb-2 mb-2">
+                            <img id="detApplicantPhoto" src="https://ui-avatars.com/api/?name=Applicant&background=1e3a8a&color=fff&size=72" alt="Applicant Profile" class="w-14 h-14 object-cover border border-slate-200 rounded-[2px] shrink-0">
+                            <div class="min-w-0">
+                                <p id="detName" class="detail-value uppercase border-0 mb-1 pb-0"></p>
+                                <p id="detEmail" class="text-[10px] font-bold text-gov-blue m-0 break-all"></p>
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <p class="detail-label">Filing Date</p>
@@ -395,9 +429,17 @@
 
             document.getElementById('detRef').innerText = rowData.ref || 'N/A';
             document.getElementById('detName').innerText = rowData.name || 'N/A';
+            document.getElementById('detEmail').innerText = rowData.email || '';
             document.getElementById('detDate').innerText = rowData.date || '-';
             document.getElementById('detCat').innerText = rowData.category || 'General';
             document.getElementById('detLoc').innerText = `Region ${rowData.region || 'N/A'} | ${rowData.municipality || '-'}`;
+
+            const photo = rowData.applicant_photo || rowData.raw?.photoURL || rowData.raw?.photoUrl || rowData.raw?.profilePhoto || rowData.raw?.photo || '';
+            const safeName = encodeURIComponent(rowData.name || 'Applicant');
+            const fallback = `https://ui-avatars.com/api/?name=${safeName}&background=1e3a8a&color=fff&size=72`;
+            const photoEl = document.getElementById('detApplicantPhoto');
+            photoEl.src = photo || fallback;
+            photoEl.onerror = function() { this.src = fallback; this.onerror = null; };
 
             const statusClass = getStatusClass(rowData.status);
             const statusLabel = rowData.status_display || rowData.status || 'Pending';
@@ -419,14 +461,94 @@
 
         function formatFieldValue(value) {
             if (value === null || value === undefined) return '';
+            if (Array.isArray(value)) return value.filter(v => v !== null && v !== undefined && String(v).trim() !== '');
             if (typeof value === 'object') {
-                try {
-                    return JSON.stringify(value);
-                } catch (_) {
-                    return String(value);
+                if (typeof value.toDate === 'function') {
+                    try { return value.toDate().toLocaleString('en-PH'); } catch (_) {}
                 }
+                if (typeof value.seconds === 'number') {
+                    try { return new Date(value.seconds * 1000).toLocaleString('en-PH'); } catch (_) {}
+                }
+                return '';
             }
             return String(value).trim();
+        }
+
+        function isFilePath(value) {
+            return /\.(pdf|jpg|jpeg|png|gif|webp|bmp|svg|avif|doc|docx|xls|xlsx|csv|txt|zip)(\?|$)/i.test(String(value || '').trim());
+        }
+
+        function isImagePath(value) {
+            return /\.(jpg|jpeg|png|gif|webp|bmp|svg|avif)(\?|$)/i.test(String(value || '').trim());
+        }
+
+        function normalizeAttachmentUrl(raw, rowData) {
+            const str = String(raw || '').trim();
+            if (!str) return '';
+            if (/^(https?:\/\/|\/static\/|static\/)/i.test(str)) {
+                return str.startsWith('static/') ? `/${str}` : str;
+            }
+            if (!isFilePath(str)) return '';
+            const userId = rowData?.raw?.userId || rowData?.raw?.userID || rowData?.raw?.uid || '';
+            if (!userId) return '';
+            const encoded = str.split('/').map(p => encodeURIComponent(p)).join('/');
+            return `/static/uploads/service_requests/${encodeURIComponent(userId)}/${encoded}`;
+        }
+
+        function displayFileName(value) {
+            try {
+                const clean = String(value || '').split('?')[0];
+                const base = clean.split('/').filter(Boolean).pop() || 'Attachment';
+                return decodeURIComponent(base);
+            } catch (_) {
+                return 'Attachment';
+            }
+        }
+
+        function renderDetailValue(label, value, rowData) {
+            const normalized = formatFieldValue(value);
+            if (normalized === '') return '';
+
+            if (Array.isArray(normalized)) {
+                const fileItems = normalized.filter(v => isFilePath(v));
+                if (fileItems.length) {
+                    return fileItems.map(item => {
+                        const url = normalizeAttachmentUrl(item, rowData);
+                        if (!url) return '';
+                        const encodedUrl = encodeURIComponent(url);
+                        const name = displayFileName(item);
+                        const encodedName = encodeURIComponent(name);
+                        const icon = isImagePath(item) ? 'image' : /\.pdf(\?|$)/i.test(item) ? 'picture_as_pdf' : 'attach_file';
+                        return `<div class="flex items-center justify-between gap-2 border border-slate-200 bg-slate-50 px-2 py-1 rounded-[1px] mb-1">
+                            <div class="min-w-0 flex items-center gap-1.5">
+                                <span class="material-icons-round text-[13px] text-gov-navy">${icon}</span>
+                                <span class="text-[9px] font-bold text-slate-700 truncate">${escapeHtml(name)}</span>
+                            </div>
+                            <button type="button" onclick="openSuperAdminAttachmentViewer('${encodedUrl}', '${encodedName}')" class="text-[8px] font-black uppercase tracking-widest text-gov-blue border border-blue-300 bg-white px-2 py-0.5 rounded-[1px] hover:bg-blue-600 hover:text-white">View</button>
+                        </div>`;
+                    }).join('');
+                }
+                return escapeHtml(normalized.map(v => String(v)).join(', '));
+            }
+
+            if (typeof normalized === 'string' && isFilePath(normalized)) {
+                const url = normalizeAttachmentUrl(normalized, rowData);
+                if (url) {
+                    const encodedUrl = encodeURIComponent(url);
+                    const name = displayFileName(normalized);
+                    const encodedName = encodeURIComponent(name);
+                    const icon = isImagePath(normalized) ? 'image' : /\.pdf(\?|$)/i.test(normalized) ? 'picture_as_pdf' : 'attach_file';
+                    return `<div class="flex items-center justify-between gap-2 border border-slate-200 bg-slate-50 px-2 py-1 rounded-[1px]">
+                        <div class="min-w-0 flex items-center gap-1.5">
+                            <span class="material-icons-round text-[13px] text-gov-navy">${icon}</span>
+                            <span class="text-[9px] font-bold text-slate-700 truncate">${escapeHtml(name)}</span>
+                        </div>
+                        <button type="button" onclick="openSuperAdminAttachmentViewer('${encodedUrl}', '${encodedName}')" class="text-[8px] font-black uppercase tracking-widest text-gov-blue border border-blue-300 bg-white px-2 py-0.5 rounded-[1px] hover:bg-blue-600 hover:text-white">View</button>
+                    </div>`;
+                }
+            }
+
+            return escapeHtml(String(normalized));
         }
 
         function renderDynamicDetails(rowData) {
@@ -458,22 +580,22 @@
             const detailMap = new Map();
             corePairs.forEach(([k, v]) => {
                 const val = formatFieldValue(v);
-                if (val) detailMap.set(k, val);
+                if (val !== '' && !(Array.isArray(val) && !val.length)) detailMap.set(k, v);
             });
 
             Object.entries(rawData).forEach(([key, value]) => {
                 if (skipKeys.has(key) || (typeof value === 'object' && !Array.isArray(value))) return;
                 const val = formatFieldValue(value);
-                if (!val) return;
+                if (val === '' || (Array.isArray(val) && !val.length)) return;
                 const label = toReadableLabel(key);
                 if (!detailMap.has(label)) detailMap.set(label, val);
             });
 
             Object.entries(formData).forEach(([key, value]) => {
                 const val = formatFieldValue(value);
-                if (!val) return;
+                if (val === '' || (Array.isArray(val) && !val.length)) return;
                 const label = toReadableLabel(key);
-                detailMap.set(label, val);
+                detailMap.set(label, value);
             });
 
             const entries = [...detailMap.entries()];
@@ -485,9 +607,88 @@
             container.innerHTML = entries.map(([label, value]) => `
                 <div class="border-b border-slate-200 pb-1">
                     <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0 mb-0.5">${escapeHtml(label)}</p>
-                    <p class="text-[10px] font-bold text-slate-800 m-0 break-words">${escapeHtml(value)}</p>
+                    <div class="text-[10px] font-bold text-slate-800 m-0 break-words">${renderDetailValue(label, value, rowData)}</div>
                 </div>
             `).join('');
+        }
+
+        window.openSuperAdminAttachmentViewer = function(encodedUrl, encodedName) {
+            try {
+                const url = decodeURIComponent(encodedUrl || '');
+                const name = decodeURIComponent(encodedName || 'Attachment');
+                const modal = document.getElementById('superAdminAttachmentViewerModal');
+                const title = document.getElementById('saViewerTitle');
+                const image = document.getElementById('saViewerImage');
+                const frame = document.getElementById('saViewerFrame');
+                const fallback = document.getElementById('saViewerFallback');
+                const loading = document.getElementById('saViewerLoading');
+                const openNewTab = document.getElementById('saViewerOpenNewTab');
+
+                title.textContent = name;
+                if (openNewTab) openNewTab.href = url;
+                image.style.display = 'none';
+                frame.style.display = 'none';
+                fallback.style.display = 'none';
+                if (loading) loading.style.display = 'flex';
+
+                image.onerror = function() {
+                    image.style.display = 'none';
+                    // fallback to iframe when image decode fails
+                    frame.src = url;
+                    frame.style.display = 'block';
+                    if (loading) loading.style.display = 'none';
+                };
+
+                frame.onload = function() {
+                    if (loading) loading.style.display = 'none';
+                };
+                frame.onerror = function() {
+                    frame.style.display = 'none';
+                    if (loading) loading.style.display = 'none';
+                    fallback.style.display = 'block';
+                };
+
+                if (isImagePath(url)) {
+                    image.src = url;
+                    image.style.display = 'block';
+                    if (loading) loading.style.display = 'none';
+                } else if (/\.pdf(\?|$)/i.test(url)) {
+                    frame.src = `${url}#toolbar=0&navpanes=0&scrollbar=1`;
+                    frame.style.display = 'block';
+                } else {
+                    // Try iframe for any file type first; if browser can't render, show fallback text.
+                    frame.src = url;
+                    frame.style.display = 'block';
+                    setTimeout(() => {
+                        if (loading && loading.style.display !== 'none') {
+                            loading.style.display = 'none';
+                            fallback.style.display = 'block';
+                        }
+                    }, 2000);
+                }
+
+                modal.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            } catch (err) {
+                console.error('Failed to open attachment viewer:', err);
+            }
+        }
+
+        window.closeSuperAdminAttachmentViewer = function() {
+            const modal = document.getElementById('superAdminAttachmentViewerModal');
+            const image = document.getElementById('saViewerImage');
+            const frame = document.getElementById('saViewerFrame');
+            const fallback = document.getElementById('saViewerFallback');
+            const loading = document.getElementById('saViewerLoading');
+            image.src = '';
+            frame.src = '';
+            image.onerror = null;
+            frame.onload = null;
+            frame.onerror = null;
+            if (fallback) fallback.style.display = 'none';
+            if (loading) loading.style.display = 'none';
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
         }
 
         function closeDetailsModal() {
@@ -593,6 +794,19 @@
                 document.getElementById('kpiReview').textContent = Number(stats.for_review || 0).toLocaleString();
                 document.getElementById('kpiApproved').textContent = Number(stats.approved || 0).toLocaleString();
                 document.getElementById('kpiCancelled').textContent = Number(stats.cancelled || 0).toLocaleString();
+
+                // Update notification badge to show pending count
+                const pendingCount = Number(stats.pending || 0);
+                localStorage.setItem('superadmin_unread_notifs', pendingCount);
+                const badge = document.getElementById('notif-badge');
+                if (badge) {
+                    if (pendingCount > 0) {
+                        badge.textContent = pendingCount > 9 ? '9+' : pendingCount;
+                        badge.style.display = 'flex';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
             } catch (e) {
                 console.warn('Failed to load service request stats:', e);
             }
@@ -703,6 +917,9 @@
 
         window.onload = async () => {
             initCharts();
+            
+            // Clear stale notification badge value and reset to 0
+            localStorage.setItem('superadmin_unread_notifs', '0');
 
             try {
                 await fetchRegistry();
@@ -717,5 +934,28 @@
             ]);
         };
     </script>
+
+    <div id="superAdminAttachmentViewerModal" class="gov-modal no-print" onclick="closeSuperAdminAttachmentViewer()">
+        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-[95vw] max-w-5xl max-h-[90vh] overflow-hidden flex flex-col relative z-10" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-2 bg-slate-900 text-white shrink-0">
+                <p id="saViewerTitle" class="text-[10px] font-black uppercase tracking-widest m-0 truncate pr-3">Attachment</p>
+                <div class="flex items-center gap-2">
+                    <a id="saViewerOpenNewTab" href="#" target="_blank" rel="noopener noreferrer" class="text-[9px] font-black uppercase tracking-widest text-white/90 hover:text-white no-underline border border-white/30 px-2 py-1 rounded-[1px]">Open Tab</a>
+                    <button onclick="closeSuperAdminAttachmentViewer()" class="text-slate-300 hover:text-white bg-transparent border-none cursor-pointer">
+                        <span class="material-icons-round text-sm">close</span>
+                    </button>
+                </div>
+            </div>
+            <div class="p-3 bg-slate-100 flex-1 overflow-auto flex items-center justify-center relative">
+                <div id="saViewerLoading" class="viewer-loading-wrap">
+                    <div class="viewer-spinner"></div>
+                    <p class="m-0">Loading attachment preview...</p>
+                </div>
+                <img id="saViewerImage" src="" alt="Attachment Preview" class="max-w-full max-h-[75vh] object-contain border border-slate-200 bg-white" style="display:none;" />
+                <iframe id="saViewerFrame" src="" title="Attachment Preview" class="w-full h-[75vh] border border-slate-200 bg-white" style="display:none;"></iframe>
+                <p id="saViewerFallback" class="text-[11px] font-bold text-slate-500 m-0" style="display:none;">Preview unavailable in modal. Click OPEN TAB to view this file.</p>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

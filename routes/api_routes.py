@@ -1575,6 +1575,22 @@ def _sa_extract_service_request(doc, users_map):
     form_data = data.get('formData') or {}
     user_data = users_map.get(data.get('userId', ''), {})
 
+    applicant_photo = (
+        data.get('photoURL')
+        or data.get('photoUrl')
+        or data.get('profilePhoto')
+        or data.get('profile_photo')
+        or data.get('photo')
+        or form_data.get('photoURL')
+        or form_data.get('photoUrl')
+        or user_data.get('photoURL')
+        or user_data.get('photoUrl')
+        or user_data.get('profilePhoto')
+        or user_data.get('profile_photo')
+        or user_data.get('photo')
+        or ''
+    )
+
     created_dt = _sa_to_datetime(data.get('createdAt') or data.get('submittedAt') or data.get('dateFiled') or data.get('date_filed'))
     date_filed = created_dt.strftime('%Y-%m-%d') if created_dt else _sa_norm_text(data.get('dateFiled') or data.get('date_filed'), '')
 
@@ -1653,6 +1669,7 @@ def _sa_extract_service_request(doc, users_map):
         'status_origin': status_payload['status_origin'],
         'email': _sa_norm_text(data.get('email') or data.get('userEmail') or user_data.get('email')),
         'contact': _sa_norm_text(data.get('contact') or data.get('contactNumber') or user_data.get('contactNumber')),
+        'applicant_photo': _sa_norm_text(applicant_photo, ''),
         'description': _sa_norm_text(data.get('description') or data.get('notes') or form_data.get('description') or form_data.get('purpose')),
         'form_data': form_data,
         'raw': data,
