@@ -177,46 +177,115 @@
                   <th class="border-r border-slate-200 text-right">Total Amount</th>
                   <th class="border-r border-slate-200 whitespace-nowrap text-center">Filing Date</th>
                   <th class="text-center border-r border-slate-200">Status</th>
-                  <th class="text-center w-[120px]">Actions</th>
+                  <th class="text-center">Deliver From</th>
+                  <th class="text-center">Deliver To</th>
+                  <th class="text-center">Deliver To Type</th>
+                  <th class="text-center w-[180px]">Workflow Actions</th>
                 </tr>
               </thead>
               <tbody id="quoteTable" class="text-[10px] divide-y divide-slate-100">
                 {% for q in quotations %}
-                <tr class="hover:bg-emerald-50 transition quote-row" 
-                    data-id="{{ q.id }}" 
-                    data-number="{{ q.number }}"
-                    data-client="{{ q.client }}"
-                    data-amount="{{ q.amount }}"
-                    data-date="{{ q.date }}"
-                    data-status="{{ q.status|upper }}" 
-                    data-municipality="{{ q.municipality|upper }}" 
-                    data-fy="{{ q.fy|upper }}">
-                  <td class="font-black text-slate-900 border-r border-slate-100 uppercase">{{ q.number }}</td>
-                  <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ q.client }}</td>
-                  <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ q.municipality }}</td>
-                  <td class="font-mono font-bold text-emerald-800 border-r border-slate-100 text-right text-[11px]">₱{{ '{:,.2f}'.format(q.amount|float) }}</td>
-                  <td class="font-mono text-slate-500 border-r border-slate-100 text-center">{{ q.date }}</td>
+                <tr class="hover:bg-emerald-50 transition quote-row" data-id="{{ q.id }}">
+                  <td class="font-black text-slate-900 border-r border-slate-100 uppercase">{{ q.number or q.id }}</td>
+                  <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ q.client or q.buyer or '' }}</td>
+                  <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ q.municipality or '' }}</td>
+                  <td class="font-mono font-bold text-emerald-800 border-r border-slate-100 text-right text-[11px]">₱{{ '{:,.2f}'.format(q.amount|float if q.amount is defined else 0) }}</td>
+                  <td class="font-mono text-slate-500 border-r border-slate-100 text-center">{{ q.date or q.created_at or '' }}</td>
+                  <td class="text-center border-r border-slate-100">{{ q.deliver_from }}</td>
+                  <td class="text-center border-r border-slate-100">{{ q.deliver_to }}</td>
+                  <td class="text-center border-r border-slate-100">{{ q.deliver_to_type }}</td>
                   <td class="text-center border-r border-slate-100">
-                    <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border w-20 text-center
-                      {% if q.status|upper == 'PENDING' %} bg-amber-50 text-amber-700 border-amber-200
-                      {% elif q.status|upper == 'APPROVED' %} bg-emerald-50 text-emerald-700 border-emerald-200
-                      {% elif q.status|upper == 'REJECTED' %} bg-rose-50 text-rose-700 border-rose-200
-                      {% else %} bg-slate-100 text-slate-600 border-slate-200 {% endif %}">
-                      {{ q.status }}
-                    </span>
-                  </td>
-                  <td class="text-center">
-                    <div class="flex justify-center gap-2">
-                      <button class="text-slate-600 font-bold hover:text-emerald-800 hover:underline uppercase text-[9px]" onclick="viewQuotation(this)">View</button>
-                      {% if q.status == 'Pending' %}
-                      <button class="text-emerald-700 font-bold hover:underline uppercase text-[9px]" onclick="approveQuotation(this)">Approve</button>
+                    <div class="flex flex-wrap gap-1 justify-center">
+                      <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-slate-100 px-1 py-0.5" title="View" onclick="viewQuotation(this)"><span class="material-icons-round text-[12px]">visibility</span></button>
+                      <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-blue-100 px-1 py-0.5" title="History" onclick="showHistoryModal('{{ q.id }}')"><span class="material-icons-round text-[12px]">history</span></button>
+                      {% if q.status|upper == 'PENDING' %}
+                        <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-blue-100 px-1 py-0.5" title="Forward" onclick="openForwardModal('{{ q.id }}', '{{ q.municipality }}')"><span class="material-icons-round text-[12px]">forward_to_inbox</span></button>
+                        <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-emerald-100 px-1 py-0.5" title="Change Status" onclick="openStatusModal('{{ q.id }}', '{{ q.status }}')"><span class="material-icons-round text-[12px]">sync_alt</span></button>
+                        <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-yellow-100 px-1 py-0.5" title="Edit" onclick="editQuotation('{{ q.id }}')"><span class="material-icons-round text-[12px]">edit</span></button>
+                        <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-slate-200 px-1 py-0.5" title="Draft" onclick="draftQuotation('{{ q.id }}')"><span class="material-icons-round text-[12px]">description</span></button>
                       {% endif %}
                     </div>
                   </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="7" class="text-center text-slate-400 py-8 font-bold uppercase tracking-widest text-[9px]">No quotations found.</td></tr>
+                <tr><td colspan="12" class="text-center text-slate-400 py-8 font-bold uppercase tracking-widest text-[9px]">No quotations found.</td></tr>
                 {% endfor %}
+
+              <!-- Move all modals and scripts outside the table and after the table -->
+              <!-- Forward Modal -->
+              <div id="forwardModal" class="gov-modal no-print">
+                <div class="absolute inset-0 cursor-pointer" onclick="closeForwardModal()"></div>
+                <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-xs flex flex-col max-h-[90vh] relative z-10" onclick="event.stopPropagation()">
+                  <div class="bg-blue-900 text-white px-4 py-3 flex justify-between items-center shrink-0 border-b border-blue-800">
+                    <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                        <span class="material-icons-round text-blue-200">forward_to_inbox</span> Forward Quotation
+                    </h3>
+                    <button onclick="closeForwardModal()" class="text-slate-300 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                        <span class="material-icons-round text-sm">close</span>
+                    </button>
+                  </div>
+                  <div class="p-4 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar">
+                    <form id="forwardForm" onsubmit="submitForward(event)">
+                      <input type="hidden" id="forwardQuotationId" />
+                      <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Forward to Municipality</label>
+                      <select id="forwardMunicipality" class="gov-input w-full mb-3" required>
+                        <option value="">Select Municipality</option>
+                        {% for m in municipalities %}
+                          <option value="{{ m }}">{{ m }}</option>
+                        {% endfor %}
+                      </select>
+                      <button type="submit" class="gov-btn bg-blue-800 text-white hover:bg-blue-900 w-full py-2 mt-2">Forward</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Status Modal -->
+              <div id="statusModal" class="gov-modal no-print">
+                <div class="absolute inset-0 cursor-pointer" onclick="closeStatusModal()"></div>
+                <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-xs flex flex-col max-h-[90vh] relative z-10" onclick="event.stopPropagation()">
+                  <div class="bg-emerald-900 text-white px-4 py-3 flex justify-between items-center shrink-0 border-b border-emerald-800">
+                    <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                        <span class="material-icons-round text-emerald-200">sync_alt</span> Change Status
+                    </h3>
+                    <button onclick="closeStatusModal()" class="text-slate-300 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                        <span class="material-icons-round text-sm">close</span>
+                    </button>
+                  </div>
+                  <div class="p-4 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar">
+                    <form id="statusForm" onsubmit="submitStatus(event)">
+                      <input type="hidden" id="statusQuotationId" />
+                      <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Status</label>
+                      <select id="statusSelect" class="gov-input w-full mb-3" required>
+                        <option value="PENDING">Pending</option>
+                        <option value="APPROVED">Approved</option>
+                        <option value="REJECTED">Rejected</option>
+                      </select>
+                      <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Notes (optional)</label>
+                      <textarea id="statusNotes" class="gov-input w-full mb-2" rows="2"></textarea>
+                      <button type="submit" class="gov-btn bg-emerald-800 text-white hover:bg-emerald-900 w-full py-2 mt-2">Update Status</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              <!-- History Modal -->
+              <div id="historyModal" class="gov-modal no-print">
+                <div class="absolute inset-0 cursor-pointer" onclick="closeHistoryModal()"></div>
+                <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] relative z-10" onclick="event.stopPropagation()">
+                  <div class="bg-slate-900 text-white px-4 py-3 flex justify-between items-center shrink-0 border-b border-slate-800">
+                    <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                        <span class="material-icons-round text-slate-200">history</span> Quotation History
+                    </h3>
+                    <button onclick="closeHistoryModal()" class="text-slate-300 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                        <span class="material-icons-round text-sm">close</span>
+                    </button>
+                  </div>
+                  <div class="p-4 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar">
+                    <div id="historyContent" class="text-[10px] font-mono"></div>
+                  </div>
+                </div>
+              </div>
               </tbody>
             </table>
           </div>
@@ -274,32 +343,30 @@
               <label class="block text-[8px] font-black uppercase tracking-widest text-emerald-700 mb-1 ml-0.5">Total Amount (₱) *</label>
               <input type="number" id="qAmount" name="qAmount" placeholder="0.00" step="0.01" min="0" class="gov-input w-full h-8 font-mono text-right text-emerald-800 border-emerald-300" required />
             </div>
-          </div>
-<<<<<<< HEAD
-          
-          <div class="pt-3 border-t border-slate-200 mt-2 flex gap-2">
-            <button type="submit" class="gov-btn bg-emerald-800 text-white hover:bg-emerald-900 flex-1 py-2">Save Quotation</button>
-            <button type="button" onclick="closeCreateModal()" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex-1 py-2">Cancel</button>
-=======
-          <div class="grid grid-cols-2 gap-3">
-            <div class="flex flex-col gap-1">
-              <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Region</label>
-              <input type="text" class="gov-input w-full bg-slate-100" value="{{ user_region|default('') }}" readonly>
+            <div class="col-span-2 sm:col-span-1">
+              <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Deliver From *</label>
+              <input type="text" id="qDeliverFrom" name="qDeliverFrom" class="gov-input w-full h-8" required />
             </div>
-            <div class="flex flex-col gap-1">
-              <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Municipality</label>
-              <select id="qMunicipality" name="qMunicipality" class="gov-input w-full" required>
-                <option value="">Select Municipality</option>
-                {% for m in municipalities %}
-                  <option value="{{ m }}">{{ m }}</option>
-                {% endfor %}
+            <div class="col-span-2 sm:col-span-1">
+              <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Deliver To *</label>
+              <input type="text" id="qDeliverTo" name="qDeliverTo" class="gov-input w-full h-8" required />
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+              <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Deliver To Type *</label>
+              <select id="qDeliverToType" name="qDeliverToType" class="gov-input w-full h-8 cursor-pointer" required>
+                <option value="municipal">Municipal</option>
+                <option value="regional">Regional</option>
+                <option value="national">National</option>
               </select>
             </div>
-          </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Amount (₱)</label>
-            <input type="number" id="qAmount" name="qAmount" placeholder="0.00" step="0.01" min="0" class="gov-input w-full" required />
->>>>>>> 76b74afc36222dce0e34f8af26be94021ad9156a
+            <div class="col-span-2 sm:col-span-1">
+              <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
+              <select id="qStatus" name="qStatus" class="gov-input w-full h-8 cursor-pointer" required>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
           </div>
         </form>
       </div>

@@ -4,53 +4,50 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Accounting Dashboard</title>
-                                // New structure: regional_funds (with regional_total, municipal_total), municipal_funds (with total)
-                                // --- PATCHED: Ensure correct mapping and type assignment after API call ---
-                                this.funds = [];
-                                if (data.national_fund && Number(data.national_fund) > 0) {
-                                    this.funds.push({
-                                        id: 'NATIONAL',
-                                        type: 'national',
-                                        label: 'NATIONAL',
-                                        amount: Number(data.national_fund),
-                                        fund_type: 'national'
-                                    });
-                                }
-                                // Collect all municipality names for exclusion
-                                const municipalityNames = new Set((data.municipal_funds || []).map(f => f.municipality));
-                                (data.regional_funds || []).forEach((f, i) => {
-                                    const regionName = f.region || f.municipality;
-                                    if (!municipalityNames.has(regionName)) {
-                                        this.funds.push({
-                                            id: regionName || `region-${i}`,
-                                            type: 'region',
-                                            region: regionName,
-                                            amount: Number(f.amount) || 0,
-                                            fund_type: f.fund_type || 'GENERAL'
-                                        });
-                                    }
-                                });
-                                (data.municipal_funds || []).forEach((f, i) => {
-                                    this.funds.push({
-                                        id: f.municipality || `muni-${i}`,
-                                        type: 'municipality',
-                                        municipality: f.municipality,
-                                        region: f.region,
-                                        amount: Number(f.amount),
-                                        fund_type: f.fund_type || 'GENERAL'
-                                    });
-                                });
-                                this.totalFunds = this.funds.reduce((sum, fund) => sum + (fund.amount || 0), 0);
-                extend: {
-                    colors: {
-                        'gov-blue': '#1e3a8a', 
-                        'gov-red': '#be123c',  
-                        'denr-dark': '#14532d', 
-                        'denr-green': '#15803d', 
+    <script>
+    function accountingDashboard() {
+        return {
+            funds: [],
+            totalFunds: 0,
+            loadingFunds: false,
+            errorFunds: '',
+            formatCurrency(value) {
+                if (!value) return '₱ 0.00';
+                return '₱ ' + parseFloat(value).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            },
+            async loadData() {
+                this.loadingFunds = true;
+                this.errorFunds = '';
+                try {
+                    const resp = await fetch('/superadmin/api/accounting/funds');
+                    if (!resp.ok) throw new Error('Failed to fetch funds');
+                    const data = await resp.json();
+                    if (!data.success) throw new Error(data.error || 'Unknown error');
+                    // Merge all funds: national, regional, municipal
+                    const funds = [];
+                    if (data.national_fund && data.national_fund > 0) {
+                        funds.push({ id: 'NATIONAL', type: 'national', municipality: 'NATIONAL', amount: data.national_fund, fund_type: 'GENERAL' });
                     }
+                    (data.regional_funds || []).forEach((r, i) => {
+                        funds.push({ id: `REGION-${r.region || i}`, type: 'region', region: r.region || 'REGION', amount: r.amount, fund_type: r.fund_type || 'GENERAL' });
+                    });
+                    (data.municipal_funds || []).forEach((m, i) => {
+                        funds.push({ id: `MUNI-${m.municipality || i}`, type: 'municipality', municipality: m.municipality || 'MUNICIPALITY', amount: m.amount, fund_type: m.fund_type || 'GENERAL', region: m.region });
+                    });
+                    // Sort by amount descending
+                    funds.sort((a, b) => (b.amount || 0) - (a.amount || 0));
+                    this.funds = funds;
+                    this.totalFunds = funds.reduce((sum, fund) => sum + (fund.amount || 0), 0);
+                } catch (e) {
+                    this.errorFunds = e.message || 'Error loading funds';
+                    this.funds = [];
+                    this.totalFunds = 0;
+                } finally {
+                    this.loadingFunds = false;
                 }
             }
         }
+    }
     </script>
     <style>
         /* Government Standard Typography & Layout */
@@ -163,12 +160,11 @@
                                             <p class="text-[7px] font-bold text-blue-500 uppercase mt-1 m-0" x-text="(fund.fund_type || 'General').toUpperCase() + ' FUND'"></p>
                                         </div>
                                     </template>
-                                    <!-- Municipality Fund Cards -->
-                                    <template x-for="fund in funds.filter(f => f.type === 'municipality')" :key="fund.id">
+                                    <!-- Municipality Fund Cards: Only show if municipality and amount exist and amount > 0 -->
+                                    <template x-for="fund in funds.filter(f => f.municipality && f.amount && f.amount > 0)" :key="fund.id">
                                         <div class="gov-card p-2 border-l-4 border-l-denr-green bg-green-50/20 shadow-none">
                                             <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest m-0 truncate" x-text="fund.municipality"></p>
                                             <h3 class="text-[13px] font-black text-denr-green leading-none mt-1 m-0 font-mono" x-text="formatCurrency(fund.amount)"></h3>
-                                            <p class="text-[7px] font-bold text-slate-400 uppercase mt-1 m-0" x-text="(fund.fund_type || 'General').toUpperCase() + ' FUND'"></p>
                                         </div>
                                     </template>
                                     <!-- National Fund Card -->
