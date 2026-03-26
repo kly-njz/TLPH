@@ -433,14 +433,94 @@
 
         function formatFieldValue(value) {
             if (value === null || value === undefined) return '';
+            if (Array.isArray(value)) return value.filter(v => v !== null && v !== undefined && String(v).trim() !== '');
             if (typeof value === 'object') {
-                try {
-                    return JSON.stringify(value);
-                } catch (_) {
-                    return String(value);
+                if (typeof value.toDate === 'function') {
+                    try { return value.toDate().toLocaleString('en-PH'); } catch (_) {}
                 }
+                if (typeof value.seconds === 'number') {
+                    try { return new Date(value.seconds * 1000).toLocaleString('en-PH'); } catch (_) {}
+                }
+                return '';
             }
             return String(value).trim();
+        }
+
+        function isFilePath(value) {
+            return /\.(pdf|jpg|jpeg|png|gif|webp|bmp|svg|avif|doc|docx|xls|xlsx|csv|txt|zip)(\?|$)/i.test(String(value || '').trim());
+        }
+
+        function isImagePath(value) {
+            return /\.(jpg|jpeg|png|gif|webp|bmp|svg|avif)(\?|$)/i.test(String(value || '').trim());
+        }
+
+        function normalizeAttachmentUrl(raw, rowData) {
+            const str = String(raw || '').trim();
+            if (!str) return '';
+            if (/^(https?:\/\/|\/static\/|static\/)/i.test(str)) {
+                return str.startsWith('static/') ? `/${str}` : str;
+            }
+            if (!isFilePath(str)) return '';
+            const userId = rowData?.raw?.userId || rowData?.raw?.userID || rowData?.raw?.uid || '';
+            if (!userId) return '';
+            const encoded = str.split('/').map(p => encodeURIComponent(p)).join('/');
+            return `/static/uploads/service_requests/${encodeURIComponent(userId)}/${encoded}`;
+        }
+
+        function displayFileName(value) {
+            try {
+                const clean = String(value || '').split('?')[0];
+                const base = clean.split('/').filter(Boolean).pop() || 'Attachment';
+                return decodeURIComponent(base);
+            } catch (_) {
+                return 'Attachment';
+            }
+        }
+
+        function renderDetailValue(label, value, rowData) {
+            const normalized = formatFieldValue(value);
+            if (normalized === '') return '';
+
+            if (Array.isArray(normalized)) {
+                const fileItems = normalized.filter(v => isFilePath(v));
+                if (fileItems.length) {
+                    return fileItems.map(item => {
+                        const url = normalizeAttachmentUrl(item, rowData);
+                        if (!url) return '';
+                        const encodedUrl = encodeURIComponent(url);
+                        const name = displayFileName(item);
+                        const encodedName = encodeURIComponent(name);
+                        const icon = isImagePath(item) ? 'image' : /\.pdf(\?|$)/i.test(item) ? 'picture_as_pdf' : 'attach_file';
+                        return `<div class="flex items-center justify-between gap-2 border border-slate-200 bg-slate-50 px-2 py-1 rounded-[1px] mb-1">
+                            <div class="min-w-0 flex items-center gap-1.5">
+                                <span class="material-icons-round text-[13px] text-gov-navy">${icon}</span>
+                                <span class="text-[9px] font-bold text-slate-700 truncate">${escapeHtml(name)}</span>
+                            </div>
+                            <button type="button" onclick="openSuperAdminAttachmentViewer('${encodedUrl}', '${encodedName}')" class="text-[8px] font-black uppercase tracking-widest text-gov-blue border border-blue-300 bg-white px-2 py-0.5 rounded-[1px] hover:bg-blue-600 hover:text-white">View</button>
+                        </div>`;
+                    }).join('');
+                }
+                return escapeHtml(normalized.map(v => String(v)).join(', '));
+            }
+
+            if (typeof normalized === 'string' && isFilePath(normalized)) {
+                const url = normalizeAttachmentUrl(normalized, rowData);
+                if (url) {
+                    const encodedUrl = encodeURIComponent(url);
+                    const name = displayFileName(normalized);
+                    const encodedName = encodeURIComponent(name);
+                    const icon = isImagePath(normalized) ? 'image' : /\.pdf(\?|$)/i.test(normalized) ? 'picture_as_pdf' : 'attach_file';
+                    return `<div class="flex items-center justify-between gap-2 border border-slate-200 bg-slate-50 px-2 py-1 rounded-[1px]">
+                        <div class="min-w-0 flex items-center gap-1.5">
+                            <span class="material-icons-round text-[13px] text-gov-navy">${icon}</span>
+                            <span class="text-[9px] font-bold text-slate-700 truncate">${escapeHtml(name)}</span>
+                        </div>
+                        <button type="button" onclick="openSuperAdminAttachmentViewer('${encodedUrl}', '${encodedName}')" class="text-[8px] font-black uppercase tracking-widest text-gov-blue border border-blue-300 bg-white px-2 py-0.5 rounded-[1px] hover:bg-blue-600 hover:text-white">View</button>
+                    </div>`;
+                }
+            }
+
+            return escapeHtml(String(normalized));
         }
 
         function renderDynamicDetails(rowData) {
@@ -472,22 +552,22 @@
             const detailMap = new Map();
             corePairs.forEach(([k, v]) => {
                 const val = formatFieldValue(v);
-                if (val) detailMap.set(k, val);
+                if (val !== '' && !(Array.isArray(val) && !val.length)) detailMap.set(k, v);
             });
 
             Object.entries(rawData).forEach(([key, value]) => {
                 if (skipKeys.has(key) || (typeof value === 'object' && !Array.isArray(value))) return;
                 const val = formatFieldValue(value);
-                if (!val) return;
+                if (val === '' || (Array.isArray(val) && !val.length)) return;
                 const label = toReadableLabel(key);
                 if (!detailMap.has(label)) detailMap.set(label, val);
             });
 
             Object.entries(formData).forEach(([key, value]) => {
                 const val = formatFieldValue(value);
-                if (!val) return;
+                if (val === '' || (Array.isArray(val) && !val.length)) return;
                 const label = toReadableLabel(key);
-                detailMap.set(label, val);
+                detailMap.set(label, value);
             });
 
             const entries = [...detailMap.entries()];
@@ -499,9 +579,51 @@
             container.innerHTML = entries.map(([label, value]) => `
                 <div class="border-b border-slate-200 pb-1">
                     <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0 mb-0.5">${escapeHtml(label)}</p>
-                    <p class="text-[10px] font-bold text-slate-800 m-0 break-words">${escapeHtml(value)}</p>
+                    <div class="text-[10px] font-bold text-slate-800 m-0 break-words">${renderDetailValue(label, value, rowData)}</div>
                 </div>
             `).join('');
+        }
+
+        window.openSuperAdminAttachmentViewer = function(encodedUrl, encodedName) {
+            try {
+                const url = decodeURIComponent(encodedUrl || '');
+                const name = decodeURIComponent(encodedName || 'Attachment');
+                const modal = document.getElementById('superAdminAttachmentViewerModal');
+                const title = document.getElementById('saViewerTitle');
+                const image = document.getElementById('saViewerImage');
+                const frame = document.getElementById('saViewerFrame');
+                const fallback = document.getElementById('saViewerFallback');
+
+                title.textContent = name;
+                image.style.display = 'none';
+                frame.style.display = 'none';
+                fallback.style.display = 'none';
+
+                if (isImagePath(url)) {
+                    image.src = url;
+                    image.style.display = 'block';
+                } else if (/\.pdf(\?|$)/i.test(url)) {
+                    frame.src = `${url}#toolbar=0&navpanes=0&scrollbar=1`;
+                    frame.style.display = 'block';
+                } else {
+                    fallback.style.display = 'block';
+                }
+
+                modal.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            } catch (err) {
+                console.error('Failed to open attachment viewer:', err);
+            }
+        }
+
+        window.closeSuperAdminAttachmentViewer = function() {
+            const modal = document.getElementById('superAdminAttachmentViewerModal');
+            const image = document.getElementById('saViewerImage');
+            const frame = document.getElementById('saViewerFrame');
+            image.src = '';
+            frame.src = '';
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
         }
 
         function closeDetailsModal() {
@@ -731,5 +853,21 @@
             ]);
         };
     </script>
+
+    <div id="superAdminAttachmentViewerModal" class="gov-modal no-print" onclick="closeSuperAdminAttachmentViewer()">
+        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-[95vw] max-w-5xl max-h-[90vh] overflow-hidden flex flex-col relative z-10" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-2 bg-slate-900 text-white shrink-0">
+                <p id="saViewerTitle" class="text-[10px] font-black uppercase tracking-widest m-0 truncate pr-3">Attachment</p>
+                <button onclick="closeSuperAdminAttachmentViewer()" class="text-slate-300 hover:text-white bg-transparent border-none cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-3 bg-slate-100 flex-1 overflow-auto flex items-center justify-center">
+                <img id="saViewerImage" src="" alt="Attachment Preview" class="max-w-full max-h-[75vh] object-contain border border-slate-200 bg-white" style="display:none;" />
+                <iframe id="saViewerFrame" src="" title="Attachment Preview" class="w-full h-[75vh] border border-slate-200 bg-white" style="display:none;"></iframe>
+                <p id="saViewerFallback" class="text-[11px] font-bold text-slate-500 m-0" style="display:none;">Preview is available for images and PDF files only.</p>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
