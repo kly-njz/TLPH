@@ -1,6 +1,6 @@
 // quotation-regional.js
 // --- View Quotation Modal Logic ---
-function viewQuotation(btn) {
+window.viewQuotation = function(btn) {
     const row = btn.closest('tr');
     document.getElementById('vqNumber').textContent = row.getAttribute('data-number') || 'N/A';
     document.getElementById('vqClient').textContent = row.getAttribute('data-client') || 'N/A';
@@ -22,9 +22,12 @@ function closeViewModal() {
     modal.classList.remove('flex');
 }
 
+window.closeViewModal = closeViewModal;
+}
+
 // --- Forward Modal Logic ---
 let currentForwardId = null;
-function openForwardModal(btn) {
+window.openForwardModal = function(btn) {
     const row = btn.closest('tr');
     const id = row.getAttribute('data-id');
     const municipality = row.getAttribute('data-municipality') || '';
@@ -41,6 +44,9 @@ function closeForwardModal() {
     modal.classList.remove('flex');
     currentForwardId = null;
 }
+
+window.closeForwardModal = closeForwardModal;
+}
 // Forward form submit stub
 function submitForward(e) {
     e.preventDefault();
@@ -48,10 +54,16 @@ function submitForward(e) {
     closeForwardModal();
 }
 
+window.submitForward = submitForward;
+}
+
 function closeHistoryModal() {
     const modal = document.getElementById('historyModal');
     modal.classList.add('hidden');
     modal.classList.remove('flex');
+}
+
+window.closeHistoryModal = closeHistoryModal;
 }
 // Show history modal and load content stub
 function showHistoryModal(quoteId) {
@@ -60,15 +72,21 @@ function showHistoryModal(quoteId) {
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 }
+
+window.showHistoryModal = showHistoryModal;
+}
 // Status form submit stub
 function submitStatus(e) {
     e.preventDefault();
     alert('Status update (stub). Implement backend logic.');
     closeStatusModal();
 }
+
+window.submitStatus = submitStatus;
+}
 // --- Change Status Modal Logic ---
 let currentStatusId = null;
-function openStatusModal(btn) {
+window.openStatusModal = function(btn) {
     const row = btn.closest('tr');
     const id = row.getAttribute('data-id');
     const status = row.getAttribute('data-status') || 'PENDING';
@@ -84,9 +102,12 @@ function closeStatusModal() {
     document.getElementById('statusModal').classList.remove('flex');
     currentStatusId = null;
 }
+
+window.closeStatusModal = closeStatusModal;
+}
 // Handles modal logic and workflow actions for regional quotation page
 
-async function editQuotation(btn) {
+window.editQuotation = async function(btn) {
     const row = btn.closest('tr');
     // Use row data attributes for instant modal population
     document.getElementById('editMetaRow').classList.remove('hidden');
@@ -125,9 +146,12 @@ function closeQuoteDrawer() {
     modal.classList.add('pointer-events-none');
     // Optionally, after transition, you could reset fields if needed
 }
+
+window.closeQuoteDrawer = closeQuoteDrawer;
+}
 }
 
-function draftQuotation(btn) {
+window.draftQuotation = function(btn) {
     const row = btn.closest('tr');
     document.getElementById('draftPrevId').textContent = row.getAttribute('data-id') || '—';
     document.getElementById('draftPrevDate').textContent = row.getAttribute('data-date') || '';
