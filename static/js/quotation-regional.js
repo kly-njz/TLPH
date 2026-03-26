@@ -1,4 +1,19 @@
 // quotation-regional.js
+// --- Change Status Modal Logic ---
+let currentStatusId = null;
+function openStatusModal(id, status) {
+    currentStatusId = id;
+    document.getElementById('statusModal').classList.remove('hidden');
+    document.getElementById('statusModal').classList.add('flex');
+    document.getElementById('statusQuotationId').value = id;
+    document.getElementById('statusSelect').value = status ? status.toUpperCase() : 'PENDING';
+    document.getElementById('statusNotes').value = '';
+}
+function closeStatusModal() {
+    document.getElementById('statusModal').classList.add('hidden');
+    document.getElementById('statusModal').classList.remove('flex');
+    currentStatusId = null;
+}
 // Handles modal logic and workflow actions for regional quotation page
 
 async function editQuotation(quoteId) {
