@@ -628,3 +628,7 @@ def distribute_fund_to_region():
 @role_required('user')
 def announcement_main():
     return render_template('user/announcement.html')
+
+@bp.route('/news')
+def news_main():
+    return render_template('news.html')
