@@ -455,10 +455,43 @@ def damage_products_view():
 def transfer_products_view():
     return render_template('super-admin/products/transfer-products.html')
 
+
+# --- SUPERADMIN QUOTATION REGISTRY & WORKFLOW ---
 @bp.route('/quotation')
 @role_required('super-admin','superadmin')
 def quotation_view():
-    return render_template('super-admin/finance/quotation.html')
+    from quotation_storage import get_all_quotations
+    try:
+        quotations = get_all_quotations()
+        # Sort by created_at descending
+        quotations.sort(key=lambda q: q.get('created_at', ''), reverse=True)
+    except Exception as e:
+        print(f'[ERROR] superadmin quotation_view: {e}')
+        quotations = []
+    return render_template(
+        'super-admin/finance/quotation.html',
+        quotations=quotations
+    )
+
+# API: Allocate/forward quotation to region/municipality or update status
+@bp.route('/api/quotation/<quotation_id>/update', methods=['POST'])
+@role_required('super-admin','superadmin')
+def api_update_quotation_superadmin(quotation_id):
+    from quotation_storage import update_quotation, update_quotation_status
+    data = request.get_json() or {}
+    updates = {}
+    # Allow updating deliver_to, deliver_to_type, status, and notes
+    if 'deliver_to' in data:
+        updates['deliver_to'] = data['deliver_to']
+    if 'deliver_to_type' in data:
+        updates['deliver_to_type'] = data['deliver_to_type']
+    if updates:
+        update_quotation(quotation_id, updates)
+    if 'status' in data:
+        user_email = data.get('user_email', 'superadmin')
+        notes = data.get('notes', '')
+        update_quotation_status(quotation_id, data['status'], user_email, notes)
+    return jsonify({'success': True})
 
 @bp.route('/projects')
 @role_required('super-admin','superadmin')
