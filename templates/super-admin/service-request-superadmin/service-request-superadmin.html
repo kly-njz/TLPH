@@ -593,20 +593,50 @@
                 const image = document.getElementById('saViewerImage');
                 const frame = document.getElementById('saViewerFrame');
                 const fallback = document.getElementById('saViewerFallback');
+                const loading = document.getElementById('saViewerLoading');
+                const openNewTab = document.getElementById('saViewerOpenNewTab');
 
                 title.textContent = name;
+                if (openNewTab) openNewTab.href = url;
                 image.style.display = 'none';
                 frame.style.display = 'none';
                 fallback.style.display = 'none';
+                if (loading) loading.style.display = 'block';
+
+                image.onerror = function() {
+                    image.style.display = 'none';
+                    // fallback to iframe when image decode fails
+                    frame.src = url;
+                    frame.style.display = 'block';
+                    if (loading) loading.style.display = 'none';
+                };
+
+                frame.onload = function() {
+                    if (loading) loading.style.display = 'none';
+                };
+                frame.onerror = function() {
+                    frame.style.display = 'none';
+                    if (loading) loading.style.display = 'none';
+                    fallback.style.display = 'block';
+                };
 
                 if (isImagePath(url)) {
                     image.src = url;
                     image.style.display = 'block';
+                    if (loading) loading.style.display = 'none';
                 } else if (/\.pdf(\?|$)/i.test(url)) {
                     frame.src = `${url}#toolbar=0&navpanes=0&scrollbar=1`;
                     frame.style.display = 'block';
                 } else {
-                    fallback.style.display = 'block';
+                    // Try iframe for any file type first; if browser can't render, show fallback text.
+                    frame.src = url;
+                    frame.style.display = 'block';
+                    setTimeout(() => {
+                        if (loading && loading.style.display !== 'none') {
+                            loading.style.display = 'none';
+                            fallback.style.display = 'block';
+                        }
+                    }, 2000);
                 }
 
                 modal.classList.add('active');
@@ -620,8 +650,15 @@
             const modal = document.getElementById('superAdminAttachmentViewerModal');
             const image = document.getElementById('saViewerImage');
             const frame = document.getElementById('saViewerFrame');
+            const fallback = document.getElementById('saViewerFallback');
+            const loading = document.getElementById('saViewerLoading');
             image.src = '';
             frame.src = '';
+            image.onerror = null;
+            frame.onload = null;
+            frame.onerror = null;
+            if (fallback) fallback.style.display = 'none';
+            if (loading) loading.style.display = 'none';
             modal.classList.remove('active');
             document.body.style.overflow = '';
         }
@@ -858,14 +895,18 @@
         <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-[95vw] max-w-5xl max-h-[90vh] overflow-hidden flex flex-col relative z-10" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center border-b border-slate-800 px-4 py-2 bg-slate-900 text-white shrink-0">
                 <p id="saViewerTitle" class="text-[10px] font-black uppercase tracking-widest m-0 truncate pr-3">Attachment</p>
-                <button onclick="closeSuperAdminAttachmentViewer()" class="text-slate-300 hover:text-white bg-transparent border-none cursor-pointer">
-                    <span class="material-icons-round text-sm">close</span>
-                </button>
+                <div class="flex items-center gap-2">
+                    <a id="saViewerOpenNewTab" href="#" target="_blank" rel="noopener noreferrer" class="text-[9px] font-black uppercase tracking-widest text-white/90 hover:text-white no-underline border border-white/30 px-2 py-1 rounded-[1px]">Open Tab</a>
+                    <button onclick="closeSuperAdminAttachmentViewer()" class="text-slate-300 hover:text-white bg-transparent border-none cursor-pointer">
+                        <span class="material-icons-round text-sm">close</span>
+                    </button>
+                </div>
             </div>
             <div class="p-3 bg-slate-100 flex-1 overflow-auto flex items-center justify-center">
+                <p id="saViewerLoading" class="text-[11px] font-bold text-slate-500 m-0" style="display:none;">Loading preview...</p>
                 <img id="saViewerImage" src="" alt="Attachment Preview" class="max-w-full max-h-[75vh] object-contain border border-slate-200 bg-white" style="display:none;" />
                 <iframe id="saViewerFrame" src="" title="Attachment Preview" class="w-full h-[75vh] border border-slate-200 bg-white" style="display:none;"></iframe>
-                <p id="saViewerFallback" class="text-[11px] font-bold text-slate-500 m-0" style="display:none;">Preview is available for images and PDF files only.</p>
+                <p id="saViewerFallback" class="text-[11px] font-bold text-slate-500 m-0" style="display:none;">Preview unavailable in modal. Click OPEN TAB to view this file.</p>
             </div>
         </div>
     </div>
