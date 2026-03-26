@@ -1,3 +1,63 @@
+# --- SUPERADMIN ACCOUNTING FUND DISTRIBUTION API ---
+@bp.route('/api/accounting/funds', methods=['GET'])
+@role_required('super-admin','superadmin')
+def api_get_fund_distribution():
+    """Aggregate general fund distribution from national, regional, and municipal levels."""
+    try:
+        db = get_firestore_db()
+        # 1. National general fund
+        national_fund = 0
+        try:
+            doc = db.collection('finance').document('national').get()
+            if doc.exists:
+                national_fund = float(doc.to_dict().get('general_fund', 0) or 0)
+        except Exception:
+            pass
+
+        # 2. Regional general funds
+        regional_funds = []
+        try:
+            docs = db.collection('finance').stream()
+            for doc in docs:
+                if doc.id == 'national':
+                    continue
+                data = doc.to_dict() or {}
+                region = data.get('region') or doc.id
+                general_fund = float(data.get('general_fund', 0) or 0)
+                if general_fund > 0:
+                    regional_funds.append({'region': region, 'general_fund': general_fund})
+        except Exception:
+            pass
+
+        # 3. Municipal general funds
+        municipal_funds = []
+        try:
+            muni_docs = db.collection('municipal_fund_distribution').stream()
+            for doc in muni_docs:
+                data = doc.to_dict() or {}
+                municipality = data.get('municipality') or data.get('muni') or ''
+                region = data.get('region') or ''
+                amount = float(data.get('amount', 0) or 0)
+                fund_type = data.get('fund_type', 'GENERAL')
+                if municipality and amount > 0:
+                    municipal_funds.append({
+                        'municipality': municipality,
+                        'region': region,
+                        'amount': amount,
+                        'fund_type': fund_type
+                    })
+        except Exception:
+            pass
+
+        return jsonify({
+            'success': True,
+            'national_fund': national_fund,
+            'regional_funds': regional_funds,
+            'municipal_funds': municipal_funds
+        })
+    except Exception as e:
+        print(f'[ERROR] Failed to aggregate fund distribution: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
 from flask import Blueprint, render_template, request, jsonify
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
