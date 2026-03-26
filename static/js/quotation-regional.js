@@ -24,10 +24,13 @@ function closeViewModal() {
 
 // --- Forward Modal Logic ---
 let currentForwardId = null;
-function openForwardModal(id, municipality) {
+function openForwardModal(btn) {
+    const row = btn.closest('tr');
+    const id = row.getAttribute('data-id');
+    const municipality = row.getAttribute('data-municipality') || '';
     currentForwardId = id;
     document.getElementById('forwardQuotationId').value = id;
-    document.getElementById('forwardMunicipality').value = municipality || '';
+    document.getElementById('forwardMunicipality').value = municipality;
     const modal = document.getElementById('forwardModal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -65,12 +68,15 @@ function submitStatus(e) {
 }
 // --- Change Status Modal Logic ---
 let currentStatusId = null;
-function openStatusModal(id, status) {
+function openStatusModal(btn) {
+    const row = btn.closest('tr');
+    const id = row.getAttribute('data-id');
+    const status = row.getAttribute('data-status') || 'PENDING';
     currentStatusId = id;
     document.getElementById('statusModal').classList.remove('hidden');
     document.getElementById('statusModal').classList.add('flex');
     document.getElementById('statusQuotationId').value = id;
-    document.getElementById('statusSelect').value = status ? status.toUpperCase() : 'PENDING';
+    document.getElementById('statusSelect').value = status;
     document.getElementById('statusNotes').value = '';
 }
 function closeStatusModal() {
@@ -80,37 +86,29 @@ function closeStatusModal() {
 }
 // Handles modal logic and workflow actions for regional quotation page
 
-async function editQuotation(quoteId) {
-    const modal = document.getElementById('quoteDrawer');
-    document.getElementById('editQuoteId').value = quoteId;
-    // Fetch quotation data from backend
-    const res = await fetch(`/regional/api/quotation/${quoteId}`);
-    if (!res.ok) {
-        alert('Failed to fetch quotation data.');
-        return;
-    }
-    const data = await res.json();
-    // Populate modal fields (full parity with backend schema)
+async function editQuotation(btn) {
+    const row = btn.closest('tr');
+    // Use row data attributes for instant modal population
     document.getElementById('editMetaRow').classList.remove('hidden');
-    document.getElementById('editQuoteDisplay').value = data.number || data.id || '';
-    document.getElementById('editQuoteId').value = data.id || '';
-    document.getElementById('editIssueDate').value = data.date || data.issue_date || data.created_at || '';
-    document.getElementById('newBuyer').value = data.client || data.buyer || '';
-    document.getElementById('newTitle').value = data.title || '';
-    document.getElementById('newCategory').value = data.category || '';
-    document.getElementById('newSupplier').value = data.supplier || '';
-    document.getElementById('newDeliverFrom').value = data.deliver_from || '';
-    document.getElementById('newDeliverTo').value = data.municipality || data.deliver_to || '';
+    document.getElementById('editQuoteDisplay').value = row.getAttribute('data-number') || row.getAttribute('data-id') || '';
+    document.getElementById('editQuoteId').value = row.getAttribute('data-id') || '';
+    document.getElementById('editIssueDate').value = row.getAttribute('data-date') || '';
+    document.getElementById('newBuyer').value = row.getAttribute('data-client') || '';
+    document.getElementById('newTitle').value = row.getAttribute('data-title') || '';
+    document.getElementById('newCategory').value = row.getAttribute('data-category') || '';
+    document.getElementById('newSupplier').value = row.getAttribute('data-supplier') || '';
+    document.getElementById('newDeliverFrom').value = row.getAttribute('data-deliver_from') || '';
+    document.getElementById('newDeliverTo').value = row.getAttribute('data-deliver_to') || '';
     document.getElementById('newStatusRow').classList.remove('hidden');
-    document.getElementById('newStatus').value = (data.status || 'pending').toLowerCase();
-    document.getElementById('newBuyerType').value = data.buyer_type || 'company';
-    document.getElementById('newProd').value = data.product || '';
-    document.getElementById('newQty').value = data.quantity || 0;
-    document.getElementById('newPrice').value = data.unit_price || 0;
-    document.getElementById('newOtherCharges').value = data.other_charges || 0;
-    document.getElementById('newOtherChargesNote').value = data.other_charges_note || '';
-    // Add missing fields for full parity
+    document.getElementById('newStatus').value = (row.getAttribute('data-status') || 'pending').toLowerCase();
+    document.getElementById('newBuyerType').value = row.getAttribute('data-buyer_type') || 'company';
+    document.getElementById('newProd').value = row.getAttribute('data-product') || '';
+    document.getElementById('newQty').value = row.getAttribute('data-quantity') || 0;
+    document.getElementById('newPrice').value = row.getAttribute('data-unit_price') || 0;
+    document.getElementById('newOtherCharges').value = row.getAttribute('data-other_charges') || 0;
+    document.getElementById('newOtherChargesNote').value = row.getAttribute('data-other_charges_note') || '';
     // Show modal
+    const modal = document.getElementById('quoteDrawer');
     modal.classList.remove('opacity-0', 'pointer-events-none');
     modal.classList.add('opacity-100');
 }
@@ -123,30 +121,28 @@ function closeQuoteDrawer() {
     }, 300);
 }
 
-async function draftQuotation(quoteId) {
-    const res = await fetch(`/regional/api/quotation/${quoteId}`);
-    if (!res.ok) {
-        alert('Failed to fetch quotation data.');
-        return;
-    }
-    const data = await res.json();
-    document.getElementById('draftPrevId').textContent = data.id || '—';
-    document.getElementById('draftPrevDate').textContent = data.issue_date || '';
-    document.getElementById('draftPrevBuyer').textContent = data.buyer || data.client || '—';
-    document.getElementById('draftPrevTitle').textContent = data.title || '—';
-    document.getElementById('draftPrevType').textContent = data.buyer_type || '—';
-    document.getElementById('draftPrevCategory').textContent = data.category || '—';
-    document.getElementById('draftPrevSupplier').textContent = data.supplier || '—';
-    document.getElementById('draftPrevProduct').textContent = data.product || '—';
-    document.getElementById('draftPrevQty').textContent = data.quantity || '—';
-    document.getElementById('draftPrevUnitPrice').textContent = data.unit_price || '—';
-    document.getElementById('draftPrevSubtotal').textContent = (data.quantity && data.unit_price) ? (data.quantity * data.unit_price).toFixed(2) : '—';
-    document.getElementById('draftPrevOtherCharges').textContent = data.other_charges || '—';
-    document.getElementById('draftPrevOtherChargesNote').textContent = data.other_charges_note || '—';
-    document.getElementById('draftPrevTotal').textContent = (data.quantity && data.unit_price ? (data.quantity * data.unit_price) : 0) + (parseFloat(data.other_charges) || 0);
-    document.getElementById('draftPrevDeliverFrom').textContent = data.deliver_from || '—';
-    document.getElementById('draftPrevDeliverTo').textContent = data.deliver_to || '—';
-    document.getElementById('draftPrevStatus').textContent = data.status || '—';
+function draftQuotation(btn) {
+    const row = btn.closest('tr');
+    document.getElementById('draftPrevId').textContent = row.getAttribute('data-id') || '—';
+    document.getElementById('draftPrevDate').textContent = row.getAttribute('data-date') || '';
+    document.getElementById('draftPrevBuyer').textContent = row.getAttribute('data-client') || '—';
+    document.getElementById('draftPrevTitle').textContent = row.getAttribute('data-title') || '—';
+    document.getElementById('draftPrevType').textContent = row.getAttribute('data-buyer_type') || '—';
+    document.getElementById('draftPrevCategory').textContent = row.getAttribute('data-category') || '—';
+    document.getElementById('draftPrevSupplier').textContent = row.getAttribute('data-supplier') || '—';
+    document.getElementById('draftPrevProduct').textContent = row.getAttribute('data-product') || '—';
+    document.getElementById('draftPrevQty').textContent = row.getAttribute('data-quantity') || '—';
+    document.getElementById('draftPrevUnitPrice').textContent = row.getAttribute('data-unit_price') || '—';
+    const qty = parseFloat(row.getAttribute('data-quantity')) || 0;
+    const price = parseFloat(row.getAttribute('data-unit_price')) || 0;
+    document.getElementById('draftPrevSubtotal').textContent = (qty && price) ? (qty * price).toFixed(2) : '—';
+    document.getElementById('draftPrevOtherCharges').textContent = row.getAttribute('data-other_charges') || '—';
+    document.getElementById('draftPrevOtherChargesNote').textContent = row.getAttribute('data-other_charges_note') || '—';
+    const total = (qty * price) + (parseFloat(row.getAttribute('data-other_charges')) || 0);
+    document.getElementById('draftPrevTotal').textContent = total.toFixed(2);
+    document.getElementById('draftPrevDeliverFrom').textContent = row.getAttribute('data-deliver_from') || '—';
+    document.getElementById('draftPrevDeliverTo').textContent = row.getAttribute('data-deliver_to') || '—';
+    document.getElementById('draftPrevStatus').textContent = row.getAttribute('data-status') || '—';
     // Show modal
     const modal = document.getElementById('draftPreviewModal');
     modal.classList.remove('hidden');
