@@ -1,3 +1,4 @@
+
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -2278,24 +2279,6 @@ def quotations_national_delete(quotation_id):
         print(f"[ERROR] quotations_national_delete failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to delete quotation'}), 500
     
-
-# --- Create Quotation (National) ---
-@bp.route('/operations/quotation/api/create', methods=['POST'])
-@role_required('national', 'national_admin')
-def quotations_national_create():
-    from quotation_storage import add_quotation
-    data = request.get_json(silent=True) or {}
-    try:
-        # Validate required fields
-        required = ['number', 'client', 'amount', 'date', 'status', 'region', 'municipality', 'description', 'scope']
-        for field in required:
-            if not data.get(field):
-                return jsonify({'success': False, 'error': f'Missing required field: {field}'}), 400
-        quotation = add_quotation(data)
-        return jsonify({'success': True, 'quotation': quotation})
-    except Exception as e:
-        print(f"[ERROR] quotations_national_create failed: {e}")
-        return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
     
 
 # Endpoint: Update permissions for a specific admin
@@ -2721,3 +2704,45 @@ def api_get_national_leave_requests():
 
 
 
+@bp.route('/operations/quotation/api/create', methods=['POST'])
+@role_required('national', 'national_admin')
+def quotations_national_create():
+    from quotation_storage import create_quotation
+    data = request.get_json(silent=True) or {}
+    try:
+        # Map form fields to Firestore schema
+        payload = {
+            'number': data.get('number'),
+            'client': data.get('client'),
+            'amount_value': data.get('amount'),
+            'date': data.get('date'),
+            'status': data.get('status'),
+            'region': data.get('region'),
+            'municipality': data.get('municipality'),
+            'description': data.get('description'),
+            'scope': 'national',
+            'created_by_role': 'national_admin',
+        }
+        result = create_quotation(payload)
+        if not result:
+            return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
+        return jsonify({'success': True, 'id': result})
+    except Exception as e:
+        print(f"[ERROR] quotations_national_create failed: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
+
+
+# --- Get Single Quotation (National) ---
+@bp.route('/api/quotation/<quotation_id>', methods=['GET'])
+@role_required('national', 'national_admin')
+def get_quotation_national(quotation_id):
+    from quotation_storage import get_quotation_by_id
+    try:
+        quotation = get_quotation_by_id(quotation_id)
+        if not quotation:
+            return jsonify({'success': False, 'error': 'Quotation not found'}), 404
+        return jsonify(quotation)
+    except Exception as e:
+        print(f"[ERROR] get_quotation_national failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to fetch quotation'}), 500

@@ -868,3 +868,17 @@ def api_get_fund_distribution():
     except Exception as e:
         print(f'[ERROR] Failed to aggregate fund distribution: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+
+# API: Get single quotation by ID (for modal fetch)
+@bp.route('/api/quotation/<quotation_id>', methods=['GET'])
+@role_required('super-admin','superadmin')
+def api_get_quotation_superadmin(quotation_id):
+    from quotation_storage import get_quotation_by_id
+    try:
+        quotation = get_quotation_by_id(quotation_id)
+        if not quotation:
+            return jsonify({'success': False, 'error': 'Quotation not found'}), 404
+        return jsonify(quotation)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
