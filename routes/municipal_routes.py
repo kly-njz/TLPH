@@ -679,6 +679,7 @@ def quotations_municipal():
     if not trend_labels:
         trend_labels = ['No Data']
         trend_values = [0]
+    barangay_options = []
     return render_template(
         'municipal/operations/quotations-municipal.html',
         quotations=quotations,
@@ -686,30 +687,32 @@ def quotations_municipal():
         approved_quotes=approved_quotes,
         pending_quotes=pending_quotes,
         rejected_quotes=rejected_quotes,
-        # API: Update quotation status/history (municipal)
-        @bp.route('/api/quotation/<quotation_id>/update', methods=['POST'])
-        @role_required('municipal','municipal_admin')
-        def api_update_quotation_municipal(quotation_id):
-            from quotation_storage import update_quotation, update_quotation_status
-            data = request.get_json() or {}
-            updates = {}
-            if 'deliver_to' in data:
-                updates['deliver_to'] = data['deliver_to']
-            if 'deliver_to_type' in data:
-                updates['deliver_to_type'] = data['deliver_to_type']
-            if updates:
-                update_quotation(quotation_id, updates)
-            if 'status' in data:
-                user_email = data.get('user_email', 'municipal_admin')
-                notes = data.get('notes', '')
-                update_quotation_status(quotation_id, data['status'], user_email, notes)
-            return jsonify({'success': True})
         total_value=total_value,
         barangay_options=barangay_options,
         user_municipality=user_municipality,
         trend_labels_json=json.dumps(trend_labels),
         trend_values_json=json.dumps(trend_values)
     )
+
+
+# API: Update quotation status/history (municipal)
+@bp.route('/api/quotation/<quotation_id>/update', methods=['POST'])
+@role_required('municipal','municipal_admin')
+def api_update_quotation_municipal(quotation_id):
+    from quotation_storage import update_quotation, update_quotation_status
+    data = request.get_json() or {}
+    updates = {}
+    if 'deliver_to' in data:
+        updates['deliver_to'] = data['deliver_to']
+    if 'deliver_to_type' in data:
+        updates['deliver_to_type'] = data['deliver_to_type']
+    if updates:
+        update_quotation(quotation_id, updates)
+    if 'status' in data:
+        user_email = data.get('user_email', 'municipal_admin')
+        notes = data.get('notes', '')
+        update_quotation_status(quotation_id, data['status'], user_email, notes)
+    return jsonify({'success': True})
 
 
 
