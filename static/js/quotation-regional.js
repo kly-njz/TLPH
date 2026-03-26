@@ -92,7 +92,9 @@ async function editQuotation(btn) {
     document.getElementById('editMetaRow').classList.remove('hidden');
     document.getElementById('editQuoteDisplay').value = row.getAttribute('data-number') || row.getAttribute('data-id') || '';
     document.getElementById('editQuoteId').value = row.getAttribute('data-id') || '';
-    document.getElementById('editIssueDate').value = row.getAttribute('data-date') || '';
+    let rawDate = row.getAttribute('data-date') || '';
+    let formattedDate = rawDate.includes('T') ? rawDate.substring(0, 10) : rawDate;
+    document.getElementById('editIssueDate').value = formattedDate;
     document.getElementById('newBuyer').value = row.getAttribute('data-client') || '';
     document.getElementById('newTitle').value = row.getAttribute('data-title') || '';
     document.getElementById('newCategory').value = row.getAttribute('data-category') || '';
