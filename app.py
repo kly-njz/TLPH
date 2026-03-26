@@ -4,6 +4,7 @@ from config import Config
 import firebase_admin
 from firebase_admin import credentials
 from datetime import timedelta
+import os
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -73,4 +74,4 @@ def account_disabled():
     return render_template('account-disabled.html')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
