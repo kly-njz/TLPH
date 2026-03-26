@@ -61,8 +61,8 @@ def seed_quotations():
                 "created_at": now,
                 "updated_at": now,
                 "deliver_from": "MUNICIPAL",
-                "deliver_to": REGION,
-                "deliver_to_type": "regional",
+                "deliver_to": m,
+                "deliver_to_type": "municipality",
                 "history": [
                     {
                         "action": "created",
@@ -93,8 +93,8 @@ def seed_quotations():
             "created_at": now,
             "updated_at": now,
             "deliver_from": "REGIONAL",
-            "deliver_to": "NATIONAL",
-            "deliver_to_type": "national",
+            "deliver_to": REGION,
+            "deliver_to_type": "region",
             "history": [
                 {
                     "action": "created",
