@@ -1,3 +1,64 @@
+// Show draft preview modal for a quotation
+async function openDraftPreview(quoteId) {
+    const res = await fetch(`/superadmin/api/quotation/${quoteId}`);
+    if (!res.ok) {
+        alert('Failed to fetch quotation data.');
+        return;
+    }
+    const data = await res.json();
+    // Populate preview modal fields
+    document.getElementById('draftPrevId').textContent = data.id || '—';
+    document.getElementById('draftPrevDate').textContent = data.issue_date || '—';
+    document.getElementById('draftPrevBuyer').textContent = data.buyer || '—';
+    document.getElementById('draftPrevTitle').textContent = data.title || '—';
+    document.getElementById('draftPrevType').textContent = data.buyer_type || '—';
+    document.getElementById('draftPrevCategory').textContent = data.category || '—';
+    document.getElementById('draftPrevSupplier').textContent = data.supplier || '—';
+    document.getElementById('draftPrevProduct').textContent = data.product || '—';
+    document.getElementById('draftPrevQty').textContent = data.quantity || '—';
+    document.getElementById('draftPrevUnitPrice').textContent = data.unit_price || '—';
+    document.getElementById('draftPrevSubtotal').textContent = (data.quantity && data.unit_price) ? (data.quantity * data.unit_price).toFixed(2) : '—';
+    document.getElementById('draftPrevOtherCharges').textContent = data.other_charges || '—';
+    document.getElementById('draftPrevOtherChargesNote').textContent = data.other_charges_note || '—';
+    document.getElementById('draftPrevTotal').textContent = (data.quantity && data.unit_price ? (data.quantity * data.unit_price) : 0) + (parseFloat(data.other_charges) || 0);
+    document.getElementById('draftPrevDeliverFrom').textContent = data.deliver_from || '—';
+    document.getElementById('draftPrevDeliverTo').textContent = data.deliver_to || '—';
+    document.getElementById('draftPrevStatus').textContent = data.status || '—';
+    // Show modal
+    const modal = document.getElementById('draftPreviewModal');
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.add('opacity-100'), 10);
+}
+
+function closeDraftPreview() {
+    const modal = document.getElementById('draftPreviewModal');
+    modal.classList.remove('opacity-100');
+    setTimeout(() => modal.classList.add('hidden'), 300);
+}
+
+// Download delivery details as PDF (simple implementation)
+async function downloadDeliveryDetails(quoteId) {
+    const res = await fetch(`/superadmin/api/quotation/${quoteId}`);
+    if (!res.ok) {
+        alert('Failed to fetch quotation data.');
+        return;
+    }
+    const data = await res.json();
+    // Use jsPDF to generate a simple PDF
+    const doc = new window.jspdf.jsPDF();
+    doc.setFontSize(12);
+    doc.text('Delivery Details', 10, 10);
+    doc.setFontSize(10);
+    doc.text(`Quotation ID: ${data.id || ''}`, 10, 20);
+    doc.text(`Buyer: ${data.buyer || ''}`, 10, 28);
+    doc.text(`Supplier: ${data.supplier || ''}`, 10, 36);
+    doc.text(`Deliver From: ${data.deliver_from || ''}`, 10, 44);
+    doc.text(`Deliver To: ${data.deliver_to || ''}`, 10, 52);
+    doc.text(`Product: ${data.product || ''}`, 10, 60);
+    doc.text(`Quantity: ${data.quantity || ''}`, 10, 68);
+    doc.text(`Status: ${data.status || ''}`, 10, 76);
+    doc.save(`delivery-details-${data.id || quoteId}.pdf`);
+}
 // quotation-superadmin.js
 // Handles modal logic and workflow actions for superadmin quotation page
 
