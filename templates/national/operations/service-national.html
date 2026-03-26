@@ -74,6 +74,65 @@
     @media (min-width: 1024px) {
       main { margin-left: 260px; }
     }
+
+    /* National reject-note modal (high contrast and reliable visibility) */
+    .nat-reject-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.66);
+      z-index: 10020;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .nat-reject-card {
+      width: 100%;
+      max-width: 520px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 20px 38px rgba(15, 23, 42, 0.35);
+      border-radius: 2px;
+      color: #0f172a;
+    }
+    .nat-reject-title {
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #b91c1c;
+    }
+    .nat-reject-help {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+    .nat-reject-textarea {
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      border: 1px solid #cbd5e1;
+      border-radius: 2px;
+      padding: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #0f172a;
+      background: #ffffff;
+    }
+    .nat-reject-textarea:focus {
+      outline: none;
+      border-color: #ef4444;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
+    }
+    .nat-reject-error {
+      display: none;
+      margin-top: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #b91c1c;
+    }
   </style>
 </head>
 
@@ -326,22 +385,25 @@
               <div class="col-md-6">
                 <div class="border p-2" style="border-radius:2px;">
                   <div class="text-muted fw-bold text-uppercase mb-2" style="font-size:0.55rem; letter-spacing:1px;">Applicant Information</div>
-                  <div class="row g-2">
-                    <div class="col-6">
-                      <div class="text-muted" style="font-size:0.55rem;">Full Name</div>
-                      <div id="mApplicantName" class="fw-bold" style="font-size:0.7rem;"></div>
-                    </div>
-                    <div class="col-6">
-                      <div class="text-muted" style="font-size:0.55rem;">Email</div>
-                      <div id="mApplicantEmail" class="fw-bold text-primary" style="font-size:0.65rem; word-break:break-all;"></div>
-                    </div>
-                    <div class="col-6">
-                      <div class="text-muted" style="font-size:0.55rem;">Contact</div>
-                      <div id="mApplicantContact" class="fw-bold" style="font-size:0.7rem;"></div>
-                    </div>
-                    <div class="col-6">
-                      <div class="text-muted" style="font-size:0.55rem;">User ID</div>
-                      <div id="mUserId" class="fw-bold text-muted" style="font-size:0.6rem; word-break:break-all;"></div>
+                  <div class="d-flex align-items-start gap-3 mb-2">
+                    <img id="mApplicantPhoto" src="https://ui-avatars.com/api/?name=Applicant&background=0f172a&color=fff&size=64" alt="Applicant Photo" class="border" style="width:56px;height:56px;object-fit:cover;border-radius:2px;">
+                    <div class="row g-2 flex-grow-1">
+                      <div class="col-6">
+                        <div class="text-muted" style="font-size:0.55rem;">Full Name</div>
+                        <div id="mApplicantName" class="fw-bold" style="font-size:0.7rem;"></div>
+                      </div>
+                      <div class="col-6">
+                        <div class="text-muted" style="font-size:0.55rem;">Email</div>
+                        <div id="mApplicantEmail" class="fw-bold text-primary" style="font-size:0.65rem; word-break:break-all;"></div>
+                      </div>
+                      <div class="col-6">
+                        <div class="text-muted" style="font-size:0.55rem;">Contact</div>
+                        <div id="mApplicantContact" class="fw-bold" style="font-size:0.7rem;"></div>
+                      </div>
+                      <div class="col-6">
+                        <div class="text-muted" style="font-size:0.55rem;">User ID</div>
+                        <div id="mUserId" class="fw-bold text-muted" style="font-size:0.6rem; word-break:break-all;"></div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -379,6 +441,12 @@
             <div class="border p-2 mb-3" id="mDescBlock" style="display:none; border-radius:2px;">
               <div class="text-muted fw-bold text-uppercase mb-1" style="font-size:0.55rem; letter-spacing:1px;">Description / Notes</div>
               <div id="mDescription" style="font-size:0.7rem; color:#334155; line-height:1.5;"></div>
+            </div>
+
+            <!-- Applicant Submitted Information -->
+            <div class="border p-2 mb-3" id="mSubmittedBlock" style="display:none; border-radius:2px;">
+              <div class="text-muted fw-bold text-uppercase mb-2" style="font-size:0.55rem; letter-spacing:1px;">Submitted Information</div>
+              <div id="mSubmittedFields" class="row g-2"></div>
             </div>
 
             <!-- Documents -->
@@ -558,6 +626,25 @@
       if (!snap.exists()) { document.getElementById('modalLoading').textContent = 'Record not found.'; return; }
 
       const d = snap.data();
+      const parseDate = (value) => {
+        if (!value) return null;
+        if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+        if (typeof value?.toDate === 'function') {
+          const t = value.toDate();
+          return isNaN(t?.getTime?.()) ? null : t;
+        }
+        if (typeof value === 'object' && typeof value.seconds === 'number') {
+          const t = new Date(value.seconds * 1000);
+          return isNaN(t.getTime()) ? null : t;
+        }
+        const t = new Date(value);
+        return isNaN(t.getTime()) ? null : t;
+      };
+      const prettyLabel = (key) => String(key || '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/[_-]+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, c => c.toUpperCase());
 
       // Status banner
       const status = (d.status || 'pending').toLowerCase();
@@ -586,6 +673,7 @@
       let municipality = d.municipality || '';
       let province     = d.province     || '';
       let barangay     = d.barangay     || '';
+      let applicantPhoto = d.photoURL || d.photoUrl || d.profilePhoto || d.profile_photo || d.photo || '';
 
       if (d.userId) {
         try {
@@ -601,6 +689,7 @@
             municipality = municipality || u.municipality || '';
             province     = province     || u.province     || '';
             barangay     = barangay     || u.barangay     || u.address || '';
+            applicantPhoto = applicantPhoto || u.photoURL || u.photoUrl || u.profilePhoto || u.profile_photo || u.photo || '';
           }
         } catch(_) {}
       }
@@ -611,6 +700,7 @@
       document.getElementById('mApplicantEmail').textContent   = email || 'N/A';
       document.getElementById('mApplicantContact').textContent = contact;
       document.getElementById('mUserId').textContent           = d.userId || 'N/A';
+      document.getElementById('mApplicantPhoto').src           = applicantPhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName || 'Applicant')}&background=0f172a&color=fff&size=64`;
 
       // Service details
       document.getElementById('mServiceType').textContent  = d.serviceType || 'N/A';
@@ -637,26 +727,121 @@
         descBlock.style.display = 'none';
       }
 
+      // Submitted Information (all applicant-filled non-file, non-system fields)
+      const submittedBlock = document.getElementById('mSubmittedBlock');
+      const submittedEl = document.getElementById('mSubmittedFields');
+      submittedEl.innerHTML = '';
+      const excluded = new Set([
+        'userId', 'uid', 'userID', 'userEmail', 'email', 'userName',
+        'serviceType', 'status', 'paymentStatus',
+        'createdAt', 'submittedAt', 'updatedAt',
+        'reviewedBy', 'reviewedByEmail', 'reviewedAt',
+        'approvedByLevel', 'approvedByEmail', 'approvedAt',
+        'rejectedByLevel', 'rejectedByEmail', 'rejectedAt',
+        'forwardedAt', 'forwardedBy', 'forwardedByEmail',
+        'forwardedToNationalAt', 'forwardedToNationalBy',
+        'amount', 'invoiceId', 'externalId', 'paymentUrl',
+        'province', 'municipality', 'barangay', 'region',
+        'photoURL', 'photoUrl', 'profilePhoto', 'profile_photo', 'photo'
+      ]);
+
+      let submittedCount = 0;
+      for (const [key, val] of Object.entries(d || {})) {
+        if (excluded.has(key) || key.endsWith('Count')) continue;
+        if (Array.isArray(val)) {
+          const isFileArray = val.length && val.every(v => typeof v === 'string' && /\.[a-z0-9]{2,8}(\?|$)/i.test(v));
+          if (isFileArray) continue;
+          if (!val.length) continue;
+          submittedEl.innerHTML += `
+            <div class="col-md-6">
+              <div class="text-muted" style="font-size:0.55rem;">${prettyLabel(key)}</div>
+              <div class="fw-bold" style="font-size:0.68rem; line-height:1.35;">${val.map(v => String(v)).join(', ')}</div>
+            </div>`;
+          submittedCount++;
+          continue;
+        }
+        if (val && typeof val === 'object') {
+          const dt = parseDate(val);
+          if (!dt) continue;
+          submittedEl.innerHTML += `
+            <div class="col-md-6">
+              <div class="text-muted" style="font-size:0.55rem;">${prettyLabel(key)}</div>
+              <div class="fw-bold" style="font-size:0.68rem; line-height:1.35;">${dt.toLocaleString('en-PH')}</div>
+            </div>`;
+          submittedCount++;
+          continue;
+        }
+        if (typeof val === 'string' && /\.[a-z0-9]{2,8}(\?|$)/i.test(val)) continue;
+        if (val === null || val === undefined || String(val).trim() === '') continue;
+
+        const shown = typeof val === 'boolean' ? (val ? 'Yes' : 'No') : String(val);
+        submittedEl.innerHTML += `
+          <div class="col-md-6">
+            <div class="text-muted" style="font-size:0.55rem;">${prettyLabel(key)}</div>
+            <div class="fw-bold" style="font-size:0.68rem; line-height:1.35;">${shown}</div>
+          </div>`;
+        submittedCount++;
+      }
+      submittedBlock.style.display = submittedCount > 0 ? '' : 'none';
+
       // Documents — scan all array/string fields with file extensions
-      const fileExts = /\.(pdf|jpg|jpeg|png|gif|doc|docx)$/i;
+      const fileExts = /\.(pdf|jpg|jpeg|png|gif|webp|bmp|svg|avif|doc|docx|xls|xlsx|csv|txt|zip)$/i;
       const docsEl = document.getElementById('mDocs');
+      const isApplicantAttachmentKey = (key) => {
+        const k = String(key || '').toLowerCase();
+        return /(file|files|photo|photos|image|images|document|documents|attachment|attachments|report|permit|certificate|proposal|plan|record|history|result|picture)/i.test(k);
+      };
+      const isApplicantUploadUrl = (url) => {
+        const u = String(url || '').toLowerCase();
+        return u.includes('/static/uploads/service_requests/') || u.includes('static/uploads/service_requests/');
+      };
+      const normalizeFileUrl = (raw, userId) => {
+        const str = String(raw || '').trim();
+        if (!str) return '';
+        if (/^(https?:\/\/|\/static\/|static\/)/i.test(str)) {
+          return str.startsWith('static/') ? `/${str}` : str;
+        }
+        if (!fileExts.test(str) || !userId) return '';
+        const encoded = str.split('/').map(part => encodeURIComponent(part)).join('/');
+        return `/static/uploads/service_requests/${encodeURIComponent(userId)}/${encoded}`;
+      };
+      const displayFileName = (value) => {
+        try {
+          const clean = String(value || '').split('?')[0];
+          const base = clean.split('/').filter(Boolean).pop() || 'Attachment';
+          return decodeURIComponent(base);
+        } catch (_) {
+          return 'Attachment';
+        }
+      };
       docsEl.innerHTML = '';
       let fileCount = 0;
+      const seenDocs = new Set();
       for (const [key, val] of Object.entries(d)) {
+        if (!isApplicantAttachmentKey(key)) continue;
         const items = Array.isArray(val) ? val : [val];
         items.forEach(item => {
           if (typeof item === 'string' && fileExts.test(item)) {
+            const fileUrl = normalizeFileUrl(item, d.userId || d.userID || d.uid || '');
+            if (!fileUrl) return;
+            if (!isApplicantUploadUrl(fileUrl)) return;
+            const marker = `${key}|${fileUrl}`;
+            if (seenDocs.has(marker)) return;
+            seenDocs.add(marker);
             fileCount++;
             const label = key.replace(/File$|Files$/i,'').replace(/([A-Z])/g,' $1').trim();
             const icon  = /\.(jpg|jpeg|png|gif)$/i.test(item) ? 'image' : /\.pdf$/i.test(item) ? 'picture_as_pdf' : 'attach_file';
+            const encodedUrl = encodeURIComponent(fileUrl);
+            const fileName = displayFileName(item);
             docsEl.innerHTML += `
               <div class="col-md-6">
                 <div class="d-flex align-items-center gap-2 border p-2" style="border-radius:2px; background:#f8fafc;">
                   <span class="material-icons-round text-primary" style="font-size:18px;">${icon}</span>
                   <div class="min-w-0 flex-fill">
-                    <div class="fw-bold text-uppercase" style="font-size:0.6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item}</div>
+                    <div class="fw-bold text-uppercase" style="font-size:0.6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${fileName}</div>
                     <div class="text-muted" style="font-size:0.55rem;">${label}</div>
                   </div>
+                  <button type="button" class="btn btn-sm btn-outline-primary fw-bold py-0 px-2" style="font-size:0.58rem;border-radius:2px;" onclick="openNationalAttachmentPreview('${encodedUrl}', '${encodeURIComponent(fileName)}')">VIEW</button>
                 </div>
               </div>`;
           }
@@ -701,8 +886,17 @@
   window.handleNationalAction = async function(reqId, action, btn) {
     if (action === 'rejected') {
       const modal = document.getElementById('natRejectModal');
+      const input = document.getElementById('natRejectNoteInput');
+      const err = document.getElementById('natRejectError');
       modal.style.display = 'flex';
       modal.dataset.reqId = reqId;
+      document.body.style.overflow = 'hidden';
+      if (input) input.value = '';
+      if (err) err.style.display = 'none';
+      if (input) {
+        setTimeout(() => input.focus(), 10);
+      }
+      window.updateNatRejectState();
       return;
     }
     if (!confirm(`Confirm: approve this service request?`)) return;
@@ -755,9 +949,23 @@
   window.confirmNatRejection = async function() {
     const modal = document.getElementById('natRejectModal');
     const reqId = modal.dataset.reqId;
-    const note = document.getElementById('natRejectNoteInput').value.trim();
+    const input = document.getElementById('natRejectNoteInput');
+    const err = document.getElementById('natRejectError');
+    const note = (input?.value || '').trim();
+
+    if (!note || note.length < 5) {
+      if (err) {
+        err.textContent = 'Please provide a clear rejection note (at least 5 characters).';
+        err.style.display = 'block';
+      }
+      if (input) input.focus();
+      return;
+    }
+
     modal.style.display = 'none';
-    document.getElementById('natRejectNoteInput').value = '';
+    document.body.style.overflow = '';
+    if (input) input.value = '';
+    if (err) err.style.display = 'none';
     const row = document.getElementById('row-' + reqId);
     const badge = document.getElementById('badge-' + reqId);
     const btns = row ? row.querySelectorAll('button[title="Approve"], button[title="Reject"]') : [];
@@ -788,26 +996,103 @@
   };
 
   window.cancelNatRejection = function() {
-    document.getElementById('natRejectModal').style.display = 'none';
-    document.getElementById('natRejectNoteInput').value = '';
+    const modal = document.getElementById('natRejectModal');
+    const input = document.getElementById('natRejectNoteInput');
+    const err = document.getElementById('natRejectError');
+    const btn = document.getElementById('natRejectConfirmBtn');
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+    if (input) input.value = '';
+    if (err) err.style.display = 'none';
+    if (btn) btn.disabled = true;
+  };
+
+  window.updateNatRejectState = function() {
+    const input = document.getElementById('natRejectNoteInput');
+    const btn = document.getElementById('natRejectConfirmBtn');
+    const err = document.getElementById('natRejectError');
+    const ok = !!(input && input.value.trim().length >= 5);
+    if (btn) btn.disabled = !ok;
+    if (ok && err) err.style.display = 'none';
+  };
+
+  window.openNationalAttachmentPreview = function(encodedUrl, encodedName) {
+    try {
+      const url = decodeURIComponent(encodedUrl || '');
+      const name = decodeURIComponent(encodedName || 'Attachment');
+      const ext = String(url).toLowerCase();
+      const isImg = /\.(png|jpe?g|gif|webp|bmp|svg|avif)(\?|$)/i.test(ext);
+      const isPdf = /\.pdf(\?|$)/i.test(ext);
+
+      const modal = document.getElementById('nationalAttachmentPreviewModal');
+      const title = document.getElementById('napTitle');
+      const img = document.getElementById('napImage');
+      const frame = document.getElementById('napFrame');
+      const fallback = document.getElementById('napFallback');
+
+      title.textContent = name;
+      img.style.display = 'none';
+      frame.style.display = 'none';
+      fallback.style.display = 'none';
+
+      if (isImg) {
+        img.src = url;
+        img.style.display = 'block';
+      } else if (isPdf) {
+        frame.src = `${url}#toolbar=0&navpanes=0&scrollbar=1`;
+        frame.style.display = 'block';
+      } else {
+        fallback.style.display = 'block';
+      }
+
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    } catch (err) {
+      console.error('Failed to preview attachment:', err);
+    }
+  };
+
+  window.closeNationalAttachmentPreview = function() {
+    const modal = document.getElementById('nationalAttachmentPreviewModal');
+    const img = document.getElementById('napImage');
+    const frame = document.getElementById('napFrame');
+    img.src = '';
+    frame.src = '';
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
   };
 </script>
 
 <!-- National Rejection Note Modal -->
-<div id="natRejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;padding:1rem;">
-  <div class="modal-dialog" style="max-width:480px;width:100%;">
-    <div class="modal-content shadow-lg">
-      <div class="modal-header border-bottom">
-        <h5 class="modal-title fw-black text-uppercase text-danger" style="font-size:12px;"><i class="bi bi-x-circle-fill me-2"></i> Rejection Reason</h5>
-      </div>
-      <div class="modal-body">
-        <p class="text-muted fw-semibold text-uppercase mb-2" style="font-size:10px;">This reason will be visible to the applicant.</p>
-        <textarea id="natRejectNoteInput" class="form-control" rows="4" style="font-size:11px;font-weight:600;" placeholder="e.g. Incomplete requirements, invalid location, non-compliance with DENR regulations..."></textarea>
-      </div>
-      <div class="modal-footer border-top d-flex gap-2">
-        <button onclick="cancelNatRejection()" class="btn btn-outline-secondary btn-sm fw-bold text-uppercase flex-fill" style="font-size:10px;">Cancel</button>
-        <button onclick="confirmNatRejection()" class="btn btn-danger btn-sm fw-bold text-uppercase flex-fill" style="font-size:10px;"><i class="bi bi-x-circle-fill me-1"></i> Confirm Rejection</button>
-      </div>
+<div id="natRejectModal" class="nat-reject-overlay" onclick="cancelNatRejection()">
+  <div class="nat-reject-card" onclick="event.stopPropagation()">
+    <div class="d-flex align-items-center justify-content-between border-bottom px-3 py-2 bg-white">
+      <h5 class="m-0 nat-reject-title"><span class="material-icons-round align-middle me-1" style="font-size:16px;">cancel</span>Rejection Reason</h5>
+      <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:10px;" onclick="cancelNatRejection()">Close</button>
+    </div>
+    <div class="p-3 bg-white">
+      <p class="nat-reject-help">This reason will be visible to the applicant.</p>
+      <textarea id="natRejectNoteInput" class="nat-reject-textarea" oninput="updateNatRejectState()" placeholder="e.g. Incomplete requirements, invalid location, non-compliance with DENR regulations..."></textarea>
+      <div id="natRejectError" class="nat-reject-error"></div>
+    </div>
+    <div class="border-top px-3 py-2 d-flex gap-2 bg-slate-50">
+      <button onclick="cancelNatRejection()" class="btn btn-light btn-sm fw-bold text-uppercase flex-fill border" style="font-size:10px;">Cancel</button>
+      <button id="natRejectConfirmBtn" onclick="confirmNatRejection()" class="btn btn-danger btn-sm fw-bold text-uppercase flex-fill" style="font-size:10px;" disabled>Confirm Rejection</button>
+    </div>
+  </div>
+</div>
+
+<!-- National Attachment Preview Modal (View Only) -->
+<div id="nationalAttachmentPreviewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;align-items:center;justify-content:center;padding:1rem;" onclick="closeNationalAttachmentPreview()">
+  <div style="width:100%;max-width:1000px;background:#fff;border:1px solid #cbd5e1;" onclick="event.stopPropagation()">
+    <div class="d-flex align-items-center justify-content-between border-bottom px-3 py-2 bg-slate-50">
+      <div id="napTitle" class="fw-bold text-uppercase text-truncate" style="font-size:0.62rem;max-width:85%;"></div>
+      <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.6rem;" onclick="closeNationalAttachmentPreview()">Close</button>
+    </div>
+    <div class="p-2 bg-slate-100 d-flex align-items-center justify-content-center" style="min-height:65vh;max-height:75vh;overflow:auto;">
+      <img id="napImage" src="" alt="Attachment Preview" style="display:none;max-width:100%;max-height:70vh;object-fit:contain;border:1px solid #e2e8f0;background:#fff;" />
+      <iframe id="napFrame" src="" title="Document Preview" style="display:none;width:100%;height:70vh;border:1px solid #e2e8f0;background:#fff;"></iframe>
+      <div id="napFallback" style="display:none;font-size:0.7rem;color:#64748b;font-weight:700;">Preview is available for images and PDF only.</div>
     </div>
   </div>
 </div>
