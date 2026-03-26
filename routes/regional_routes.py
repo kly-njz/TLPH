@@ -4287,6 +4287,7 @@ def quotation_regional():
     if not trend_labels:
         trend_labels = ['No Data']
         trend_values = [0]
+    municipalities = []
     return render_template(
         'regional/operations/quotation-regional.html',
         quotations=quotations,
