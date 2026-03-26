@@ -547,6 +547,11 @@ def superadmin_payroll_audit_log(payroll_id):
 def hr_payroll_view():
     return render_template('super-admin/human-resource-superadmin/payroll-superadmin.html')
 
+@bp.route('/announcements')
+@role_required('super-admin','superadmin')
+def announcement_view():
+    return render_template('super-admin/announcement-superadmin.html')
+
 
 @bp.route('/api/hrm/payroll', methods=['GET'])
 @role_required('super-admin','superadmin')
