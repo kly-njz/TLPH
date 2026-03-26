@@ -384,6 +384,12 @@
               <div id="mDescription" style="font-size:0.7rem; color:#334155; line-height:1.5;"></div>
             </div>
 
+            <!-- Applicant Submitted Information -->
+            <div class="border p-2 mb-3" id="mSubmittedBlock" style="display:none; border-radius:2px;">
+              <div class="text-muted fw-bold text-uppercase mb-2" style="font-size:0.55rem; letter-spacing:1px;">Submitted Information</div>
+              <div id="mSubmittedFields" class="row g-2"></div>
+            </div>
+
             <!-- Documents -->
             <div class="border p-2 mb-3" style="border-radius:2px;">
               <div class="text-muted fw-bold text-uppercase mb-2" style="font-size:0.55rem; letter-spacing:1px;">Attached Documents</div>
@@ -561,6 +567,25 @@
       if (!snap.exists()) { document.getElementById('modalLoading').textContent = 'Record not found.'; return; }
 
       const d = snap.data();
+      const parseDate = (value) => {
+        if (!value) return null;
+        if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+        if (typeof value?.toDate === 'function') {
+          const t = value.toDate();
+          return isNaN(t?.getTime?.()) ? null : t;
+        }
+        if (typeof value === 'object' && typeof value.seconds === 'number') {
+          const t = new Date(value.seconds * 1000);
+          return isNaN(t.getTime()) ? null : t;
+        }
+        const t = new Date(value);
+        return isNaN(t.getTime()) ? null : t;
+      };
+      const prettyLabel = (key) => String(key || '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/[_-]+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, c => c.toUpperCase());
 
       // Status banner
       const status = (d.status || 'pending').toLowerCase();
@@ -642,6 +667,63 @@
       } else {
         descBlock.style.display = 'none';
       }
+
+      // Submitted Information (all applicant-filled non-file, non-system fields)
+      const submittedBlock = document.getElementById('mSubmittedBlock');
+      const submittedEl = document.getElementById('mSubmittedFields');
+      submittedEl.innerHTML = '';
+      const excluded = new Set([
+        'userId', 'uid', 'userID', 'userEmail', 'email', 'userName',
+        'serviceType', 'status', 'paymentStatus',
+        'createdAt', 'submittedAt', 'updatedAt',
+        'reviewedBy', 'reviewedByEmail', 'reviewedAt',
+        'approvedByLevel', 'approvedByEmail', 'approvedAt',
+        'rejectedByLevel', 'rejectedByEmail', 'rejectedAt',
+        'forwardedAt', 'forwardedBy', 'forwardedByEmail',
+        'forwardedToNationalAt', 'forwardedToNationalBy',
+        'amount', 'invoiceId', 'externalId', 'paymentUrl',
+        'province', 'municipality', 'barangay', 'region',
+        'photoURL', 'photoUrl', 'profilePhoto', 'profile_photo', 'photo'
+      ]);
+
+      let submittedCount = 0;
+      for (const [key, val] of Object.entries(d || {})) {
+        if (excluded.has(key) || key.endsWith('Count')) continue;
+        if (Array.isArray(val)) {
+          const isFileArray = val.length && val.every(v => typeof v === 'string' && /\.[a-z0-9]{2,8}(\?|$)/i.test(v));
+          if (isFileArray) continue;
+          if (!val.length) continue;
+          submittedEl.innerHTML += `
+            <div class="col-md-6">
+              <div class="text-muted" style="font-size:0.55rem;">${prettyLabel(key)}</div>
+              <div class="fw-bold" style="font-size:0.68rem; line-height:1.35;">${val.map(v => String(v)).join(', ')}</div>
+            </div>`;
+          submittedCount++;
+          continue;
+        }
+        if (val && typeof val === 'object') {
+          const dt = parseDate(val);
+          if (!dt) continue;
+          submittedEl.innerHTML += `
+            <div class="col-md-6">
+              <div class="text-muted" style="font-size:0.55rem;">${prettyLabel(key)}</div>
+              <div class="fw-bold" style="font-size:0.68rem; line-height:1.35;">${dt.toLocaleString('en-PH')}</div>
+            </div>`;
+          submittedCount++;
+          continue;
+        }
+        if (typeof val === 'string' && /\.[a-z0-9]{2,8}(\?|$)/i.test(val)) continue;
+        if (val === null || val === undefined || String(val).trim() === '') continue;
+
+        const shown = typeof val === 'boolean' ? (val ? 'Yes' : 'No') : String(val);
+        submittedEl.innerHTML += `
+          <div class="col-md-6">
+            <div class="text-muted" style="font-size:0.55rem;">${prettyLabel(key)}</div>
+            <div class="fw-bold" style="font-size:0.68rem; line-height:1.35;">${shown}</div>
+          </div>`;
+        submittedCount++;
+      }
+      submittedBlock.style.display = submittedCount > 0 ? '' : 'none';
 
       // Documents — scan all array/string fields with file extensions
       const fileExts = /\.(pdf|jpg|jpeg|png|gif|webp|bmp|svg|avif|doc|docx|xls|xlsx|csv|txt|zip)$/i;
