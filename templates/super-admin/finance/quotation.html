@@ -49,6 +49,13 @@
 
         .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; }
 
+        /* Action Buttons (Compact - match payroll) */
+        .btn-action { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #cbd5e1; background: white; color: #64748b; cursor: pointer; padding: 0; }
+        .btn-edit:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
+        .btn-draft:hover { color: white; background: #0f172a; border-color: #0f172a; }
+        .btn-delivery:hover { color: white; background: #15803d; border-color: #15803d; }
+        .btn-locked { background: #0f172a; border-color: #0f172a; color: #cbd5e1; cursor: not-allowed; }
+
         /* PRINT STYLES FOR CLEAN EXPORT */
         @media print {
             .no-print { display: none !important; }
@@ -173,10 +180,11 @@
                                 <th class="border-r border-slate-200">Supplier</th>
                                 <th class="border-r border-slate-200">Product</th>
                                 <th class="border-r border-slate-200 text-right">Quantity</th>
+                                <th class="border-r border-slate-200 text-right">Unit Price</th>
                                 <th class="border-r border-slate-200 text-right">Subtotal</th>
                                 <th class="border-r border-slate-200">Other Charges Details</th>
                                 <th class="border-r border-slate-200 text-right">Other Charges</th>
-                                <th class="border-r border-slate-200 text-right">Valuation</th>
+                                <th class="border-r border-slate-200 text-right">Total Amount</th>
                                 <th class="border-r border-slate-200">Deliver From</th>
                                 <th class="border-r border-slate-200">Deliver To</th>
                                 <th class="border-r border-slate-200 text-center">Status</th>
@@ -193,10 +201,11 @@
 
     <div id="drawerOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[2040] hidden opacity-0 transition-opacity duration-300 no-print" onclick="closeQuoteDrawer()"></div>
     
-    <div id="quoteDrawer" class="fixed top-1/2 left-1/2 z-[2050] w-[90vw] max-w-xs -translate-x-1/2 -translate-y-1/2 scale-95 opacity-0 pointer-events-none bg-white shadow-2xl transition duration-300 flex flex-col border border-slate-400 no-print">
+    <div id="quoteDrawer" class="fixed top-1/2 left-1/2 z-[2050] w-[92vw] max-w-lg max-h-[90vh] -translate-x-1/2 -translate-y-1/2 scale-95 opacity-0 pointer-events-none bg-white shadow-2xl transition duration-300 flex flex-col border border-slate-400 no-print">
         <div class="bg-slate-900 px-4 py-3 flex justify-between items-center text-white shrink-0 border-b border-slate-800">
             <h2 class="text-[11px] font-black uppercase tracking-widest leading-none flex items-center gap-2 m-0">
-                <i class="fa-solid fa-file-invoice-dollar text-gov-blue"></i> Generate Quotation
+                <i class="fa-solid fa-file-invoice-dollar text-gov-blue"></i>
+                <span id="quoteDrawerTitle">Generate Quotation</span>
             </h2>
             <button onclick="closeQuoteDrawer()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
                 <span class="material-icons-round text-sm">close</span>
@@ -205,6 +214,17 @@
         
         <div class="flex-1 overflow-y-auto custom-scrollbar p-4 bg-slate-50">
             <form id="newQuoteForm" class="space-y-3">
+                <input type="hidden" id="editQuoteId" value="">
+                <div id="editMetaRow" class="grid grid-cols-1 sm:grid-cols-2 gap-3 hidden">
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Quote ID</label>
+                        <input type="text" id="editQuoteDisplay" class="gov-input w-full h-8 bg-slate-100 text-slate-500" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Issue Date</label>
+                        <input type="text" id="editIssueDate" class="gov-input w-full h-8 bg-slate-100 text-slate-500" readonly>
+                    </div>
+                </div>
                 <div>
                     <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Target Buyer Entity *</label>
                     <input type="text" id="newBuyer" placeholder="e.g. AgriCorp Inc." class="gov-input w-full h-8" required>
@@ -233,10 +253,10 @@
                         <input type="text" id="newDeliverTo" placeholder="e.g. Region IV-A Office" class="gov-input w-full h-8" required>
                     </div>
                 </div>
-                <div>
+                <div id="newStatusRow" class="hidden">
                     <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
                     <select id="newStatus" class="gov-input w-full h-8 cursor-pointer" required>
-                        <option value="pending">Pending</option>
+                        <option value="pending" selected>Pending</option>
                         <option value="in-transit">In Transit</option>
                         <option value="for-delivery">For Delivery</option>
                         <option value="delivered">Delivered</option>
@@ -274,7 +294,7 @@
                     <input type="text" id="newOtherChargesNote" placeholder="e.g. Handling fee, delivery fee" class="gov-input w-full h-8">
                 </div>
                 <div class="pt-3 mt-2 border-t border-slate-200">
-                    <button type="submit" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 w-full py-2">Draft Quotation</button>
+                    <button type="submit" id="quoteSubmitBtn" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 w-full py-2">Draft Quotation</button>
                 </div>
             </form>
         </div>
@@ -293,7 +313,7 @@
             </div>
             <div class="p-4 bg-slate-50">
                 <div class="border border-slate-300 bg-white p-3 text-[10px] text-slate-700">
-                    <div class="flex justify-between items-start border-b border-slate-200 pb-2 mb-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 border-b border-slate-200 pb-3 mb-3">
                         <div>
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Quote ID</p>
                             <p id="draftPrevId" class="font-black text-slate-900 m-0">—</p>
@@ -302,10 +322,8 @@
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Issue Date</p>
                             <p id="draftPrevDate" class="font-bold text-slate-700 m-0">—</p>
                         </div>
-                    </div>
-                    <div class="space-y-2">
-                        <div>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Buyer</p>
+                        <div class="sm:col-span-2">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Buyer Entity</p>
                             <p id="draftPrevBuyer" class="font-bold text-slate-800 m-0">—</p>
                         </div>
                         <div>
@@ -324,45 +342,51 @@
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Supplier</p>
                             <p id="draftPrevSupplier" class="font-bold text-slate-800 m-0">—</p>
                         </div>
-                        <div>
+                        <div class="sm:col-span-2">
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Product</p>
                             <p id="draftPrevProduct" class="text-slate-700 m-0">—</p>
                         </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div>
-                                <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Deliver From</p>
-                                <p id="draftPrevDeliverFrom" class="text-slate-700 m-0">—</p>
-                            </div>
-                            <div>
-                                <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Deliver To</p>
-                                <p id="draftPrevDeliverTo" class="text-slate-700 m-0">—</p>
-                            </div>
-                        </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mt-3 pt-2 border-t border-slate-200">
+
+                    <div class="grid grid-cols-2 gap-3">
                         <div>
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Quantity</p>
                             <p id="draftPrevQty" class="font-mono font-bold text-slate-800 m-0">—</p>
                         </div>
                         <div class="text-right">
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Unit Price</p>
+                            <p id="draftPrevUnitPrice" class="font-mono font-bold text-slate-800 m-0">—</p>
+                        </div>
+                        <div class="text-right">
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Subtotal</p>
                             <p id="draftPrevSubtotal" class="font-mono font-bold text-slate-800 m-0">—</p>
                         </div>
-                        <div class="col-span-2">
+                        <div>
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Other Charges Details</p>
                             <p id="draftPrevOtherChargesNote" class="font-bold text-slate-800 m-0">—</p>
                         </div>
-                        <div class="text-right">
+                        <div>
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Other Charges</p>
                             <p id="draftPrevOtherCharges" class="font-mono font-bold text-slate-800 m-0">—</p>
                         </div>
                         <div class="text-right">
-                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Total</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Total Amount</p>
                             <p id="draftPrevTotal" class="font-mono font-black text-emerald-700 m-0">—</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-200">
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Deliver From</p>
+                            <p id="draftPrevDeliverFrom" class="text-slate-700 m-0">—</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Deliver To</p>
+                            <p id="draftPrevDeliverTo" class="text-slate-700 m-0">—</p>
                         </div>
                         <div>
                             <p class="text-[9px] font-black uppercase tracking-widest text-slate-400 m-0">Status</p>
-                            <p id="draftPrevStatus" class="font-bold text-slate-800 m-0">—</p>
+                            <span id="draftPrevStatus" class="status-badge">—</span>
                         </div>
                     </div>
                 </div>
@@ -395,7 +419,7 @@
             {id:'QT-26-002', title:'Soil Testing Batch 2', category:'Laboratory', supplier:'TerraLab PH', deliverFrom:'Davao Hub', deliverTo:'Davao Farmer Group', status:'in-transit', buyer:'Davao Farmer Group', product:'Soil Analysis Kits', qty:250, unitPrice:72, otherCharges:0, otherChargesNote:'—', total:18000, date:'2026-02-10', type:'farmer'},
             {id:'QT-26-003', title:'Organic Fertilizer Run', category:'Agri Inputs', supplier:'BioHarvest Co.', deliverFrom:'Batangas Depot', deliverTo:'Region IV-A', status:'for-delivery', buyer:'Region IV-A', product:'Organic Fertilizer', qty:500, unitPrice:45, otherCharges:1200, otherChargesNote:'Storage + loading', total:23700, date:'2026-02-14', type:'region', proofUrl:''},
             {id:'QT-26-004', title:'Seed Tray Replacements', category:'Supplies', supplier:'AgriBase PH', deliverFrom:'Manila Hub', deliverTo:'Region IV-A', status:'cancelled', buyer:'Region IV-A', product:'Seed Trays', qty:120, unitPrice:75, otherCharges:0, otherChargesNote:'—', total:9000, date:'2026-02-18', type:'region', proofUrl:''},
-            {id:'QT-26-005', title:'Delivery Proof - Fertilizer', category:'Logistics', supplier:'BioHarvest Co.', deliverFrom:'Batangas Depot', deliverTo:'Region IV-A', status:'delivered', buyer:'Region IV-A', product:'Organic Fertilizer', qty:500, unitPrice:45, otherCharges:1200, otherChargesNote:'Storage + loading', total:23700, date:'2026-02-20', type:'region', proofUrl:'assets/proof-of-delivery/sample-proof.pdf'}
+            {id:'QT-26-005', title:'Organic Fertilizer Supply', category:'Agri Inputs', supplier:'BioHarvest Co.', deliverFrom:'Batangas Depot', deliverTo:'Region IV-A', status:'delivered', buyer:'Region IV-A', product:'Organic Fertilizer', qty:500, unitPrice:45, otherCharges:1200, otherChargesNote:'Storage + loading', total:23700, date:'2026-02-20', type:'region', proofUrl:'assets/proof-of-delivery/sample-proof.pdf'}
         ];
 
         function filterQuotes() {
@@ -454,6 +478,7 @@
                     <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${q.supplier}</td>
                     <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${q.product}</td>
                     <td class="px-3 py-1.5 font-mono text-slate-700 text-right border-r border-slate-100">${q.qty.toLocaleString()}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-700 text-right border-r border-slate-100">&#8369;${q.unitPrice.toLocaleString()}</td>
                     <td class="px-3 py-1.5 font-mono text-slate-700 text-right border-r border-slate-100">&#8369;${subtotal.toLocaleString()}</td>
                     <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${q.otherChargesNote}</td>
                     <td class="px-3 py-1.5 font-mono text-slate-700 text-right border-r border-slate-100">&#8369;${q.otherCharges.toLocaleString()}</td>
@@ -462,18 +487,27 @@
                     <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">${q.deliverTo}</td>
                     <td class="px-3 py-1.5 text-center border-r border-slate-100"><span class="status-badge ${statusClass}">${statusLabel}</span></td>
                     <td class="px-3 py-1.5 text-center no-print">
-                        <button type="button" class="inline-flex items-center justify-center h-6 w-6 rounded border border-slate-300 text-slate-600 hover:bg-slate-50" onclick="openDraftPreview('${q.id}')" title="Draft">
-                            <i class="fa-solid fa-file-lines text-[10px]"></i>
+                        <div class="flex justify-center gap-1 flex-nowrap">
+                        ${q.status !== 'cancelled'
+                            ? `<button type="button" class="btn-action btn-edit" onclick="openEditDrawer('${q.id}')" title="Edit">
+                                <span class="material-icons-round text-[12px]">edit</span>
+                            </button>`
+                            : `<button type="button" class="btn-action btn-locked" title="Cancelled - Locked" disabled>
+                                <span class="material-icons-round text-[12px]">lock</span>
+                            </button>`}
+                        <button type="button" class="btn-action btn-draft" onclick="openDraftPreview('${q.id}')" title="Draft">
+                            <span class="material-icons-round text-[12px]">description</span>
                         </button>
                         ${q.status === 'delivered'
-                            ? `<button type="button" class="ml-1 inline-flex items-center justify-center h-6 w-6 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50" onclick="downloadDeliveryDetails('${q.id}')" title="Delivery Details">
-                                <i class="fa-solid fa-file-arrow-down text-[10px]"></i>
+                            ? `<button type="button" class="btn-action btn-delivery" onclick="downloadDeliveryDetails('${q.id}')" title="Delivery Details">
+                                <span class="material-icons-round text-[12px]">download</span>
                             </button>`
                             : ''}
+                        </div>
                     </td>
                 </tr>
             `;
-            }).join('') : '<tr><td colspan="15" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No quotation records found.</td></tr>';
+            }).join('') : '<tr><td colspan="16" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No quotation records found.</td></tr>';
         }
 
         function updateStats(data) {
@@ -578,6 +612,16 @@
         function openQuoteDrawer() {
             const overlay = document.getElementById('drawerOverlay');
             const drawer = document.getElementById('quoteDrawer');
+            document.getElementById('quoteDrawerTitle').innerText = 'Generate Quotation';
+            document.getElementById('quoteSubmitBtn').innerText = 'Draft Quotation';
+            document.getElementById('editQuoteId').value = '';
+            document.getElementById('editMetaRow').classList.add('hidden');
+            document.getElementById('newStatusRow').classList.add('hidden');
+            document.getElementById('newStatus').value = 'pending';
+            document.getElementById('newBuyer').readOnly = false;
+            document.getElementById('newBuyer').classList.remove('bg-slate-100', 'text-slate-500');
+            document.getElementById('newBuyerType').disabled = false;
+            document.getElementById('newBuyerType').classList.remove('bg-slate-100', 'text-slate-500');
             overlay.classList.remove('hidden');
             setTimeout(() => overlay.classList.add('opacity-100'), 10);
             drawer.classList.remove('opacity-0', 'scale-95', 'pointer-events-none');
@@ -591,6 +635,41 @@
             drawer.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
             overlay.classList.remove('opacity-100');
             setTimeout(() => overlay.classList.add('hidden'), 300);
+        }
+
+        function openEditDrawer(quoteId) {
+            const q = quoteData.find(item => item.id === quoteId);
+            if (!q) return;
+            document.getElementById('quoteDrawerTitle').innerText = 'Edit Quotation';
+            document.getElementById('quoteSubmitBtn').innerText = 'Update Quotation';
+            document.getElementById('editQuoteId').value = q.id;
+            document.getElementById('editQuoteDisplay').value = q.id;
+            document.getElementById('editIssueDate').value = q.date;
+            document.getElementById('editMetaRow').classList.remove('hidden');
+            document.getElementById('newStatusRow').classList.remove('hidden');
+            document.getElementById('newBuyer').value = q.buyer;
+            document.getElementById('newBuyer').readOnly = true;
+            document.getElementById('newBuyer').classList.add('bg-slate-100', 'text-slate-500');
+            document.getElementById('newTitle').value = q.title;
+            document.getElementById('newCategory').value = q.category;
+            document.getElementById('newSupplier').value = q.supplier;
+            document.getElementById('newDeliverFrom').value = q.deliverFrom;
+            document.getElementById('newDeliverTo').value = q.deliverTo;
+            document.getElementById('newStatus').value = q.status;
+            document.getElementById('newBuyerType').value = q.type;
+            document.getElementById('newBuyerType').disabled = true;
+            document.getElementById('newBuyerType').classList.add('bg-slate-100', 'text-slate-500');
+            document.getElementById('newProd').value = q.product;
+            document.getElementById('newQty').value = q.qty;
+            document.getElementById('newPrice').value = q.unitPrice;
+            document.getElementById('newOtherCharges').value = q.otherCharges;
+            document.getElementById('newOtherChargesNote').value = q.otherChargesNote || '';
+            const overlay = document.getElementById('drawerOverlay');
+            const drawer = document.getElementById('quoteDrawer');
+            overlay.classList.remove('hidden');
+            setTimeout(() => overlay.classList.add('opacity-100'), 10);
+            drawer.classList.remove('opacity-0', 'scale-95', 'pointer-events-none');
+            drawer.classList.add('opacity-100', 'scale-100', 'pointer-events-auto');
         }
 
         function openDraftPreview(quoteId) {
@@ -611,17 +690,30 @@
             document.getElementById('draftPrevProduct').innerText = q.product;
             document.getElementById('draftPrevQty').innerText = q.qty.toLocaleString();
             const subtotal = q.qty * q.unitPrice;
+            document.getElementById('draftPrevUnitPrice').innerText = '\u20B1' + q.unitPrice.toLocaleString();
             document.getElementById('draftPrevSubtotal').innerText = '\u20B1' + subtotal.toLocaleString();
             document.getElementById('draftPrevOtherChargesNote').innerText = q.otherChargesNote || '—';
             document.getElementById('draftPrevOtherCharges').innerText = '\u20B1' + q.otherCharges.toLocaleString();
             document.getElementById('draftPrevTotal').innerText = '\u20B1' + q.total.toLocaleString();
-            document.getElementById('draftPrevStatus').innerText = q.status === 'delivered'
+            const statusLabel = q.status === 'delivered'
                 ? 'Delivered'
                 : (q.status === 'in-transit'
                     ? 'In Transit'
                     : (q.status === 'for-delivery'
                         ? 'For Delivery'
                         : (q.status === 'cancelled' ? 'Cancelled' : 'Pending')));
+            const statusClass = q.status === 'delivered'
+                ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
+                : (q.status === 'in-transit'
+                    ? 'border-blue-300 bg-blue-100 text-blue-700'
+                    : (q.status === 'for-delivery'
+                        ? 'border-indigo-300 bg-indigo-100 text-indigo-700'
+                        : (q.status === 'cancelled'
+                            ? 'border-rose-300 bg-rose-100 text-rose-700'
+                            : 'border-amber-300 bg-amber-100 text-amber-700')));
+            const statusEl = document.getElementById('draftPrevStatus');
+            statusEl.className = 'status-badge ' + statusClass;
+            statusEl.innerText = statusLabel;
 
             const m = document.getElementById('draftPreviewModal');
             const b = document.getElementById('draftPreviewBody');
@@ -639,13 +731,14 @@
 
         document.getElementById('newQuoteForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            const id = 'QT-26-' + (quoteData.length + 1).toString().padStart(3, '0');
+            const editId = document.getElementById('editQuoteId').value;
+            const id = editId || ('QT-26-' + (quoteData.length + 1).toString().padStart(3, '0'));
             const qty = parseInt(document.getElementById('newQty').value);
             const price = parseFloat(document.getElementById('newPrice').value);
             const otherCharges = parseFloat(document.getElementById('newOtherCharges').value || '0');
             const otherChargesNote = document.getElementById('newOtherChargesNote').value || '—';
-            
-            quoteData.unshift({
+
+            const payload = {
                 id: id,
                 title: document.getElementById('newTitle').value,
                 category: document.getElementById('newCategory').value,
@@ -662,7 +755,18 @@
                 total: (qty * price) + otherCharges,
                 date: new Date().toISOString().split('T')[0],
                 type: document.getElementById('newBuyerType').value
-            });
+            };
+
+            if (editId) {
+                const idx = quoteData.findIndex(item => item.id === editId);
+                if (idx !== -1) {
+                    payload.date = quoteData[idx].date;
+                    payload.proofUrl = quoteData[idx].proofUrl || '';
+                    quoteData[idx] = payload;
+                }
+            } else {
+                quoteData.unshift(payload);
+            }
             filterQuotes();
             closeQuoteDrawer();
             document.getElementById('newQuoteForm').reset();
