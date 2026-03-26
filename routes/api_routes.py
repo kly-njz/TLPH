@@ -1172,6 +1172,19 @@ def _sa_extract_application(doc, users_map):
         or 'N/A'
     )
 
+    product_name = (
+        data.get('productName')
+        or data.get('resourceName')
+        or data.get('item_name')
+        or data.get('itemName')
+        or form_data.get('productName')
+        or form_data.get('resourceName')
+        or form_data.get('itemName')
+        or form_data.get('cropName')
+        or data.get('cropName')
+        or 'N/A'
+    )
+
     status_payload = _sa_status_payload(data)
 
     return {
@@ -1180,6 +1193,7 @@ def _sa_extract_application(doc, users_map):
         'date': date_filed,
         'date_iso': date_filed,
         'name': _sa_norm_text(name),
+        'product_name': _sa_norm_text(product_name),
         'sector': sector,
         'application_type': application_type,
         'region': _sa_norm_text(region),
@@ -1188,8 +1202,27 @@ def _sa_extract_application(doc, users_map):
         'status': status_payload['status'],
         'status_display': status_payload['status_display'],
         'status_origin': status_payload['status_origin'],
+        'applicant_photo': _sa_norm_text(
+            user_data.get('photoURL')
+            or user_data.get('profilePicture')
+            or user_data.get('profilePic')
+            or user_data.get('avatarUrl')
+            or data.get('photoURL')
+            or data.get('profilePicture'),
+            ''
+        ),
         'email': _sa_norm_text(data.get('email') or data.get('userEmail') or user_data.get('email')),
-        'contact': _sa_norm_text(data.get('contact') or data.get('contactNumber') or user_data.get('contactNumber')),
+        'contact': _sa_norm_text(
+            user_data.get('contactNumber')
+            or user_data.get('phone')
+            or user_data.get('phoneNumber')
+            or user_data.get('mobile')
+            or user_data.get('mobileNumber')
+            or data.get('contact')
+            or data.get('contactNumber')
+            or form_data.get('contact')
+            or form_data.get('contactNumber')
+        ),
         'description': _sa_norm_text(data.get('description') or data.get('notes') or form_data.get('description') or form_data.get('purpose')),
         'form_data': form_data,
         'raw': data

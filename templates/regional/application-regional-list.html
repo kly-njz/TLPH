@@ -366,6 +366,20 @@
                                 
                                 // Only include applications from user's provinces
                                 if (this.userProvinces.includes(appProvince)) {
+                                    const dateField = data.createdAt || data.submittedAt || null;
+                                    let submittedAtTs = 0;
+                                    if (dateField) {
+                                        if (typeof dateField.toDate === 'function') {
+                                            const d = dateField.toDate();
+                                            submittedAtTs = Number.isNaN(d.getTime()) ? 0 : d.getTime();
+                                        } else if (dateField.seconds) {
+                                            submittedAtTs = Number(dateField.seconds) * 1000;
+                                        } else {
+                                            const d = new Date(dateField);
+                                            submittedAtTs = Number.isNaN(d.getTime()) ? 0 : d.getTime();
+                                        }
+                                    }
+
                                     this.apps.push({
                                         id: doc.id,
                                         ref: doc.id.substring(0, 12).toUpperCase(),
@@ -376,7 +390,8 @@
                                         category: this.resolveCategory(data),
                                         status,
                                         nationalStatus: (data.nationalStatus || '').toLowerCase(),
-                                        regionalStatus
+                                        regionalStatus,
+                                        submittedAtTs
                                     });
                                 }
                             });
@@ -407,7 +422,7 @@
                         const matchesStat = this.filterStatus === 'ALL' || this.getStatusLabel(i).key === this.filterStatus;
                         return matchesSearch && matchesProv && matchesStat;
                     });
-                    return filtered;
+                    return filtered.sort((a, b) => (b.submittedAtTs || 0) - (a.submittedAtTs || 0));
                 },
                 
                 getStatusClass(status) {
