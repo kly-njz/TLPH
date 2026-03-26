@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
 from google.cloud.firestore_v1.base_query import FieldFilter
 from firebase_admin import firestore
+from national_system_logs_storage import list_national_system_logs
 
 bp = Blueprint('national', __name__, url_prefix='/national')
 
@@ -41,6 +42,7 @@ def application_national_view():
         approved_count = 0
         pending_count = 0
         rejected_count = 0
+        forwarded_count = 0
 
         from collections import defaultdict
         monthly_trend = defaultdict(int)
@@ -153,6 +155,7 @@ def application_national_view():
             approved_count=approved_count,
             pending_count=pending_count,
             rejected_count=rejected_count,
+            forwarded_count=forwarded_count,
             trend_labels=last_6_months,
             trend_data=trend_data,
             region_labels=region_labels,
@@ -173,6 +176,7 @@ def application_national_view():
             approved_count=0,
             pending_count=0,
             rejected_count=0,
+            forwarded_count=0,
             trend_labels=['S', 'O', 'N', 'D', 'J', 'F'],
             trend_data=[0, 0, 0, 0, 0, 0],
             region_labels=['N/A'],
@@ -1586,9 +1590,11 @@ def audit_logs():
         docs = db.collection('national_audit_logs').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(200).stream()
         for doc in docs:
             entry = doc.to_dict() or {}
+            # Prefer email if available, fallback to name, then 'User'
+            user_val = entry.get('user') or entry.get('user_email') or entry.get('actorEmail') or entry.get('actorName') or entry.get('actor') or 'User'
             logs.append({
                 'timestamp': entry.get('timestamp') or '',
-                'user': entry.get('user') or '',
+                'user': user_val,
                 'entity': entry.get('entity') or '',
                 'action': entry.get('action') or '',
                 'details': entry.get('details') or '',
@@ -1603,56 +1609,35 @@ def audit_logs():
 @bp.route('/system-logs')
 @role_required('national', 'national_admin')
 def system_logs():
-    import system_logs_storage
     try:
-        # Helper to normalize log fields for the template
-        def normalize_log(log, scope=None):
-            return {
-                'timestamp': log.get('timestamp') or log.get('created_at') or log.get('createdAt') or '',
-                'user': log.get('user') or log.get('actorEmail') or log.get('actor') or '',
-                'region': log.get('region', ''),
-                'municipality': log.get('municipality', ''),
-                'role': log.get('role', ''),
-                'action': log.get('action', ''),
-                'details': log.get('details') or log.get('message') or '',
-                'ip': log.get('ip') or log.get('ipAddress') or '',
-                'scope': scope or log.get('scope', ''),
-            }
-
-        db = get_firestore_db()
-        # Fetch last 40 logs directly from system_logs, no filtering or normalization
-        logs = []
-        try:
-            query = db.collection('system_logs').order_by('created_at', direction=firestore.Query.DESCENDING).limit(40)
-            for doc in query.stream():
-                entry = doc.to_dict()
-                logs.append({
-                    'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
-                    'user': entry.get('user') or entry.get('actorEmail') or entry.get('actor') or '',
-                    'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
-                    'module': entry.get('module') or 'SYSTEM',
-                    'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
-                    'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
-                    'device_type': entry.get('device_type') or entry.get('device') or 'Unknown',
-                    'outcome': entry.get('outcome') or 'SUCCESS',
-                    'message': entry.get('message') or entry.get('details') or entry.get('description') or '',
-                    'municipality': entry.get('municipality') or entry.get('municipality_name') or '',
-                    'region': entry.get('region') or entry.get('region_name') or entry.get('regionName') or '',
-                    'role': entry.get('role') or '',
-                    'ip': entry.get('ip') or entry.get('ipAddress') or '',
-                })
-        except Exception as e:
-            print(f"[ERROR] Direct fetch from system_logs failed: {e}")
-        print(f"[DEBUG] Direct system_logs fetch: {len(logs)} logs. Sample: {logs[:1]}")
-        # Pass normalized logs to all tables for debug
+        # Fetch last 40 logs from national_system_logs
+        logs = list_national_system_logs(limit=40)
+        # Normalize for template
+        normalized_logs = []
+        for entry in logs:
+            normalized_logs.append({
+                'timestamp': entry.get('timestamp') or entry.get('created_at') or entry.get('createdAt') or '',
+                'user': entry.get('user') or entry.get('actorEmail') or entry.get('actor') or '',
+                'action': entry.get('action') or entry.get('event') or entry.get('type') or '',
+                'module': entry.get('module') or 'SYSTEM',
+                'target': entry.get('target') or entry.get('targetId') or entry.get('module') or 'System',
+                'targetId': entry.get('targetId') or entry.get('target_id') or entry.get('id') or '',
+                'device_type': entry.get('device_type') or entry.get('device') or 'Unknown',
+                'outcome': entry.get('outcome') or 'SUCCESS',
+                'message': entry.get('message') or entry.get('details') or entry.get('description') or '',
+                'municipality': entry.get('municipality') or entry.get('municipality_name') or '',
+                'region': entry.get('region') or entry.get('region_name') or entry.get('regionName') or '',
+                'role': entry.get('role') or '',
+                'ip': entry.get('ip') or entry.get('ipAddress') or '',
+            })
         return render_template(
             'national/system/system-logs.html',
-            regional_logs=logs,
-            municipal_logs=logs,
-            user_logs=logs
+            regional_logs=normalized_logs,
+            municipal_logs=normalized_logs,
+            user_logs=normalized_logs
         )
     except Exception as e:
-        print(f"[ERROR] Failed to fetch system logs: {e}")
+        print(f"[ERROR] Failed to fetch national system logs: {e}")
         return render_template('national/system/system-logs.html',
             regional_logs=[],
             municipal_logs=[],
@@ -2512,6 +2497,103 @@ def aggregate_regional_audit_logs_to_national():
             ref = db.collection('national_audit_logs').document(f"{region}_tx_{doc.id}")
             batch.set(ref, log)
             count += 1
+
+    # --- NATIONAL SCOPE: Aggregate all payment-related logs ---
+    # 1. All transactions (national scope)
+    tx_docs = db.collection('transactions').limit(5000).stream()
+    for doc in tx_docs:
+        tx = doc.to_dict() or {}
+        log = {
+            'timestamp': tx.get('updated_at') or tx.get('created_at') or tx.get('createdAt') or '',
+            'user': tx.get('updated_by') or tx.get('forwarded_by') or tx.get('user_email') or 'User',
+            'entity': tx.get('region') or 'NATIONAL',
+            'action': tx.get('status') or '',
+            'details': tx.get('description') or '',
+            'ip': tx.get('ip') or tx.get('ipAddress') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_tx_{doc.id}")
+        batch.set(ref, log)
+        count += 1
+
+    # 2. All regional fund distributions (national to regions)
+    fund_docs = db.collection('regional_fund_distribution').limit(5000).stream()
+    for doc in fund_docs:
+        fund = doc.to_dict() or {}
+        log = {
+            'timestamp': fund.get('updated_at') or fund.get('created_at') or fund.get('date') or '',
+            'user': fund.get('updated_by') or fund.get('initiated_by') or 'National',
+            'entity': fund.get('region') or 'NATIONAL',
+            'action': fund.get('status') or '',
+            'details': fund.get('description') or fund.get('fund_type') or '',
+            'ip': fund.get('ip') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_fund_{doc.id}")
+        batch.set(ref, log)
+        count += 1
+
+    # 3. All municipal fund distributions (regions/national to municipalities)
+    muni_fund_docs = db.collection('municipal_fund_distribution').limit(5000).stream()
+    for doc in muni_fund_docs:
+        fund = doc.to_dict() or {}
+        log = {
+            'timestamp': fund.get('updated_at') or fund.get('created_at') or fund.get('date') or '',
+            'user': fund.get('updated_by') or fund.get('initiated_by') or 'National',
+            'entity': fund.get('municipality') or 'NATIONAL',
+            'action': fund.get('status') or '',
+            'details': fund.get('description') or fund.get('fund_type') or '',
+            'ip': fund.get('ip') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_munifund_{doc.id}")
+        batch.set(ref, log)
+        count += 1
+
+    # 4. All applications with payment info
+    app_docs = db.collection('applications').limit(5000).stream()
+    for doc in app_docs:
+        app = doc.to_dict() or {}
+        log = {
+            'timestamp': app.get('updated_at') or app.get('created_at') or app.get('createdAt') or '',
+            'user': app.get('updated_by') or app.get('user_email') or 'User',
+            'entity': app.get('region') or 'NATIONAL',
+            'action': app.get('status') or '',
+            'details': app.get('description') or app.get('application_type') or '',
+            'ip': app.get('ip') or app.get('ipAddress') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_app_{doc.id}")
+        batch.set(ref, log)
+        count += 1
+
+    # 5. All service requests with payment info
+    sr_docs = db.collection('service_requests').limit(5000).stream()
+    for doc in sr_docs:
+        sr = doc.to_dict() or {}
+        log = {
+            'timestamp': sr.get('updated_at') or sr.get('created_at') or sr.get('createdAt') or '',
+            'user': sr.get('updated_by') or sr.get('user_email') or 'User',
+            'entity': sr.get('region') or 'NATIONAL',
+            'action': sr.get('status') or '',
+            'details': sr.get('description') or sr.get('service_type') or '',
+            'ip': sr.get('ip') or sr.get('ipAddress') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_sr_{doc.id}")
+        batch.set(ref, log)
+        count += 1
+
+    # 6. All license applications (permits) with payment info
+    permit_docs = db.collection('license_applications').limit(5000).stream()
+    for doc in permit_docs:
+        permit = doc.to_dict() or {}
+        log = {
+            'timestamp': permit.get('updated_at') or permit.get('created_at') or permit.get('createdAt') or '',
+            'user': permit.get('updated_by') or permit.get('user_email') or 'User',
+            'entity': permit.get('region') or 'NATIONAL',
+            'action': permit.get('status') or '',
+            'details': permit.get('description') or permit.get('applicationType') or '',
+            'ip': permit.get('ip') or permit.get('ipAddress') or '',
+        }
+        ref = db.collection('national_audit_logs').document(f"NATIONAL_permit_{doc.id}")
+        batch.set(ref, log)
+        count += 1
     batch.commit()
     print(f"[INFO] Aggregated {count} audit logs to national_audit_logs.")
 

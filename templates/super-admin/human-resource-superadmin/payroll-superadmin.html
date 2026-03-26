@@ -542,12 +542,223 @@
     $("fr").addEventListener("change", function() { loadMunicipalities(this.options[this.selectedIndex].dataset.code, 'fm', 'All Municipalities', true); render(); });
     $("reg").addEventListener("change", function() { loadMunicipalities(this.options[this.selectedIndex].dataset.code, 'mun', 'Select Municipality / City', false); });
 
-    let rows=[
-      {id:crypto.randomUUID(),payNo:"PR-2026-00021",month:"2026-02",period:"1-15",no:"DENR-2026-0007",name:"Dela Cruz, Juan",cat:"REGIONAL",reg:"National Capital Region",mun:"",status:"POSTED",basic:20000,allow:2000,ot:500,ded:1500,remarks:""},
-      {id:crypto.randomUUID(),payNo:"PR-2026-00025",month:"2026-02",period:"16-EOM",no:"DENR-2026-0011",name:"Santos, Maria",cat:"MUNICIPALITY",reg:"CALABARZON",mun:"City of San Pedro",status:"PAID",basic:18000,allow:1500,ot:0,ded:1200,remarks:""},
-      {id:crypto.randomUUID(),payNo:"PR-2026-00031",month:"2026-03",period:"1-15",no:"DENR-2026-0012",name:"Reyes, Carlo",cat:"REGIONAL",reg:"National Capital Region",mun:"",status:"DRAFT",basic:21000,allow:2200,ot:800,ded:1700,remarks:""},
-      {id:crypto.randomUUID(),payNo:"PR-2026-00044",month:"2026-03",period:"MONTHLY",no:"DENR-2026-0018",name:"Garcia, Ana",cat:"MUNICIPALITY",reg:"CALABARZON",mun:"City of Biñan",status:"CANCELLED",basic:17500,allow:1200,ot:0,ded:900,remarks:"Cancelled due to correction"}
-    ];
+
+    let rows = [];
+
+    async function fetchPayrollRecords() {
+        try {
+            const resp = await fetch('/superadmin/api/hrm/payroll');
+            const data = await resp.json();
+            if (data.success && Array.isArray(data.payrolls)) {
+                rows = data.payrolls.map(x => ({
+                    id: x.id,
+                    payNo: x.payNo || x.pay_no || x.payroll_no || '',
+                    month: x.month || '',
+                    period: x.period || '',
+                    no: x.no || x.employee_no || x.employee_id || '',
+                    name: x.name || x.employee_name || x.first_name + ' ' + (x.middle_name || '') + ' ' + (x.last_name || ''),
+                    cat: x.cat || x.category || x.designation || '',
+                    reg: x.reg || x.region || '',
+                    mun: x.mun || x.municipality || '',
+                    status: x.status || 'DRAFT',
+                    status_payment: x.status_payment || x.statusPayment || '',
+                    basic: Number(x.basic) || Number(x.basic_pay) || 0,
+                    allow: Number(x.allow) || Number(x.allowances) || 0,
+                    ot: Number(x.ot) || 0,
+                    ded: Number(x.ded) || Number(x.deductions) || 0,
+                    gross: Number(x.gross) || Number(x.gross_pay) || (Number(x.basic_pay) + Number(x.allowances)),
+                    net: Number(x.net) || Number(x.net_pay) || ((Number(x.basic_pay) + Number(x.allowances)) - Number(x.deductions)),
+                    remarks: x.remarks || ''
+                }));
+            } else {
+                rows = [];
+            }
+        } catch (e) {
+            rows = [];
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+                // Action button handlers
+                document.addEventListener("click", async (e) => {
+                    const approveBtn = e.target.closest(".btn-superadmin-approve");
+                    const rejectBtn = e.target.closest(".btn-superadmin-reject");
+                    const overrideBtn = e.target.closest(".btn-superadmin-override");
+                    const auditBtn = e.target.closest(".btn-superadmin-audit");
+                    const delBtn = e.target.closest(".rm");
+                    const postBtn = e.target.closest(".post");
+                    const paidBtn = e.target.closest(".paid");
+                    const editBtn = e.target.closest(".ed");
+                    if (approveBtn) {
+                        const id = approveBtn.dataset.id;
+                        if (!id) return;
+                        const resp = await fetch(`/superadmin/api/hrm/payroll/${id}/approve`, {method: 'POST'});
+                        const data = await resp.json();
+                        toast("Approved", data.message || "Payroll approved.");
+                        await fetchPayrollRecords();
+                        render();
+                    } else if (rejectBtn) {
+                        const id = rejectBtn.dataset.id;
+                        if (!id) return;
+                        const resp = await fetch(`/superadmin/api/hrm/payroll/${id}/reject`, {method: 'POST'});
+                        const data = await resp.json();
+                        toast("Rejected", data.message || "Payroll rejected.");
+                        await fetchPayrollRecords();
+                        render();
+                    } else if (overrideBtn) {
+                        const id = overrideBtn.dataset.id;
+                        if (!id) return;
+                        const newStatus = prompt("Enter new status for this payroll record:");
+                        if (!newStatus) return;
+                        const resp = await fetch(`/superadmin/api/hrm/payroll/${id}/override`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({status: newStatus})
+                        });
+                        const data = await resp.json();
+                        toast("Overridden", data.message || "Payroll status overridden.");
+                        await fetchPayrollRecords();
+                        render();
+                    } else if (auditBtn) {
+                        const id = auditBtn.dataset.id;
+                        if (!id) return;
+                        const resp = await fetch(`/superadmin/api/hrm/payroll/${id}/audit-log`);
+                        const data = await resp.json();
+                        if (data.success && Array.isArray(data.logs)) {
+                            alert("Audit Log:\n" + data.logs.map(l => `${l.at}: ${l.action} by ${l.by}`).join("\n"));
+                        } else {
+                            alert("No audit log found.");
+                        }
+                    } else if (delBtn) {
+                        // Existing delete logic
+                        const id = delBtn.dataset.id;
+                        if (!id) return;
+                        openConfirm('<i class="fa-solid fa-trash text-rose-300"></i> Delete Payroll', `Remove payroll for this record? This cannot be undone.`, "danger", () => { del(id); render(); toast("Removed","Payroll deleted."); });
+                    } else if (postBtn) {
+                        // Existing post logic
+                        const id = postBtn.dataset.id;
+                        if (!id) return;
+                        openConfirm('<i class="fa-solid fa-upload text-sky-300"></i> Post Payroll', `Post payroll for this record?`, "info", () => { setStatus(id,"POSTED"); render(); toast("Posted","Payroll posted."); });
+                    } else if (paidBtn) {
+                        // Existing paid logic
+                        const id = paidBtn.dataset.id;
+                        if (!id) return;
+                        openConfirm('<i class="fa-solid fa-check text-emerald-300"></i> Mark Paid', `Mark payroll as paid?`, "success", () => { setStatus(id,"PAID"); render(); toast("Paid","Payroll marked as paid."); });
+                    } else if (editBtn) {
+                        // Existing edit logic
+                        const id = editBtn.dataset.id;
+                        if (!id) return;
+                        openM("edit", id);
+                    }
+                });
+        await initLocationAPI();
+        await fetchPayrollRecords();
+
+        // ...rest of the DOMContentLoaded logic remains unchanged...
+
+        $("btnOpenCreate").onclick=()=>openM("create");
+        $("mx").onclick=$("mc").onclick=closeM; $("mb").onclick=e=>{if(e.target===$("mb")) closeM();};
+        $("cx").onclick=$("cc").onclick=closeConfirm; $("cm").onclick=e=>{if(e.target===$("cm")) closeConfirm();};
+        $("co").onclick=()=>{ if(confirmAction){ const fn=confirmAction; closeConfirm(); fn(); } };
+        ["basic","allow","ot","ded"].forEach(id=>$(id).addEventListener("input",updateCalc));
+
+        ["fc","fr","fs","fPeriod"].forEach(id=>$(id).addEventListener("change",render));
+        ["fm","fMonth","fSearch"].forEach(id=>$(id).addEventListener("input",render));
+        $("btnClear").onclick=()=>{
+            $("fc").value="ALL"; $("fr").value="ALL"; $("fs").value="ALL"; $("fMonth").value=""; $("fPeriod").value="ALL"; $("fSearch").value="";
+            $("fm").innerHTML='<option value="ALL">All Municipalities</option>'; $("fm").disabled=true;
+            render(); toast("Cleared","Filters reset.");
+        };
+
+        $("btnExport").onclick = () => {
+            const view = filt(rows).map(x=>({ ...x, ...calc(x) }));
+            const csv = [["Payroll No.","Month","Period","Employee No.","Employee Name","Category","Region","Municipality","Basic","Allowances","Overtime","Gross","Deductions","Net","Status","Remarks"], ...view.map(x=>[x.payNo,x.month,x.period,x.no,x.name,x.cat,x.reg||"",x.mun||"",x.basic,x.allow,x.ot,x.gross,x.ded,x.net,x.status,x.remarks||""])].map(r=>r.map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(",")).join("\n");
+            const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"})); a.download = "denr_hr_payroll.csv"; document.body.appendChild(a); a.click(); a.remove(); toast("Exported","CSV file downloaded.");
+        };
+
+        $("sa").onchange=(e)=>q(".rc").forEach(x=>x.checked=e.target.checked);
+        $("btnBulkPost").onclick=()=>{ 
+            const ids=selected(); 
+            if(!ids.length) return toast("No selection","Select at least one payroll.");
+            openConfirm('<i class="fa-solid fa-upload text-sky-300"></i> Post Selected', `Post ${ids.length} selected payroll record(s)?`, "info", () => { ids.forEach(id=>setStatus(id,"POSTED")); render(); toast("Updated","Selected payroll posted."); });
+        };
+        $("btnBulkPaid").onclick=()=>{ 
+            const ids=selected(); 
+            if(!ids.length) return toast("No selection","Select at least one payroll.");
+            openConfirm('<i class="fa-solid fa-check text-emerald-300"></i> Mark Selected Paid', `Mark ${ids.length} selected payroll record(s) as paid?`, "success", () => { ids.forEach(id=>setStatus(id,"PAID")); render(); toast("Updated","Selected payroll marked as paid."); });
+        };
+        $("btnBulkDelete").onclick=()=>{ 
+            const ids=selected(); 
+            if(!ids.length) return toast("No selection","Select at least one payroll.");
+            openConfirm('<i class="fa-solid fa-trash text-rose-300"></i> Delete Selected', `Remove ${ids.length} selected payroll record(s)? This cannot be undone.`, "danger", () => { ids.forEach(del); render(); toast("Removed","Selected records deleted."); });
+        };
+
+        document.addEventListener("click",(e)=>{
+            const ed=e.target.closest(".ed"), rm=e.target.closest(".rm"), post=e.target.closest(".post"), paid=e.target.closest(".paid");
+            if(ed) return openM("edit",ed.dataset.id);
+            if(post){ 
+                const id=post.dataset.id; const x=rows.find(z=>z.id===id); if(!x) return;
+                return openConfirm('<i class="fa-solid fa-upload text-sky-300"></i> Post Payroll', `Post payroll ${x.payNo} for ${x.name}?`, "info", () => { setStatus(id,"POSTED"); render(); toast("Posted","Payroll posted."); });
+            }
+            if(paid){ 
+                const id=paid.dataset.id; const x=rows.find(z=>z.id===id); if(!x) return;
+                return openConfirm('<i class="fa-solid fa-check text-emerald-300"></i> Mark Paid', `Mark payroll ${x.payNo} for ${x.name} as paid?`, "success", () => { setStatus(id,"PAID"); render(); toast("Paid","Payroll marked as paid."); });
+            }
+            if(rm){ 
+                const id=rm.dataset.id; const x=rows.find(z=>z.id===id); if(!x) return; 
+                return openConfirm('<i class="fa-solid fa-trash text-rose-300"></i> Delete Payroll', `Remove payroll ${x.payNo} for ${x.name}? This cannot be undone.`, "danger", () => { del(id); render(); toast("Removed","Payroll deleted."); });
+            }
+        });
+
+        $("f").onsubmit=(e)=>{
+            e.preventDefault();
+            const isCreate = !$("eid").value || rows.every(x=>x.id!==$("eid").value);
+            const payload={
+                payNo:$("payNo").value.trim().toUpperCase(),
+                month:$("month").value,
+                period:$("period").value,
+                no:$("no").value.trim().toUpperCase(),
+                name:$("name").value.trim(),
+                cat:$("cat").value,
+                reg:$("reg").value,
+                mun:$("mun").value,
+                status:$("status").value,
+                basic:num($("basic").value),
+                allow:num($("allow").value),
+                ot:num($("ot").value),
+                ded:num($("ded").value),
+                remarks:$("remarks").value.trim(),
+                employee_id: $("eid").value.trim()
+            };
+            if(payload.cat==="MUNICIPALITY" && !payload.mun) return toast("Missing field","Municipality is required.");
+            const id=$("eid").value.trim()||null;
+            const dup=rows.some(x=>x.payNo.toLowerCase()===payload.payNo.toLowerCase() && x.id!==id);
+            if(dup) return toast("Duplicate","Payroll No. must be unique.");
+            if(isCreate) {
+                // POST to backend to create new employee
+                fetch('/superadmin/api/hrm/employee', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                })
+                .then(resp => resp.json())
+                .then(data => {
+                    if(data.success) {
+                        toast("Created","Employee created.");
+                        fetchPayrollRecords().then(render);
+                        closeM();
+                    } else {
+                        toast("Error", data.error || "Failed to create employee.");
+                    }
+                })
+                .catch(()=>toast("Error","Failed to create employee."));
+            } else {
+                upsert(payload,id); closeM(); render(); toast("Saved","Payroll record saved.");
+            }
+        };
+
+        render();
+    });
 
     const calc = (x) => ({gross:num(x.basic)+num(x.allow)+num(x.ot), net:(num(x.basic)+num(x.allow)+num(x.ot))-num(x.ded)});
 
@@ -646,7 +857,7 @@
 
 
     const render = () => {
-      const view = filt(rows).map(x=>({ ...x, ...calc(x) }));
+    const view = filt(rows).map(x=>({ ...x, ...calc(x) }));
       $("stAll").textContent = view.length;
       $("stPending").textContent = view.filter(x=>x.status==="DRAFT"||x.status==="POSTED").length;
       $("stPaid").textContent = view.filter(x=>x.status==="PAID").length;
@@ -654,32 +865,37 @@
       $("cnt").textContent = `Showing ${view.length} records`;
       $("sa").checked = false;
 
-      $("tb").innerHTML = view.length ? view.map(x=>`
-        <tr class="hover:bg-slate-50 transition-colors data-row">
-          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100"><input type="checkbox" class="rc cursor-pointer" data-id="${x.id}"></td>
-          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">
-            <div class="text-[10px] font-black text-slate-800 font-mono tracking-tight">${esc(x.payNo)}</div>
-            <div class="text-[9px] font-bold text-slate-500 uppercase mt-0.5 tracking-widest">${esc(x.month)} • ${esc(x.period)}</div>
-          </td>
-          <td class="px-3 py-1.5 align-middle border-r border-slate-100">
-            <div class="font-black text-slate-900 uppercase tracking-tight">${esc(x.name)}</div>
-            <div class="text-[9px] text-slate-500 font-mono mt-0.5 tracking-widest">${esc(x.no)}</div>
-          </td>
-          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">
-             ${chipCat(x.cat)}
-             <div class="text-[9px] font-bold text-slate-800 uppercase mt-0.5 tracking-widest">${esc(x.reg||"—")}</div>
-             ${x.mun ? `<div class="text-[8px] font-bold text-slate-500 uppercase mt-0.5 tracking-widest">${esc(x.mun)}</div>` : ''}
-          </td>
-          <td class="px-3 py-1.5 align-middle text-right border-r border-slate-100 font-mono text-[10px] font-bold text-slate-700">${money(x.gross)}</td>
-          <td class="px-3 py-1.5 align-middle text-right border-r border-slate-100 font-mono text-[10px] font-bold text-rose-700">${money(x.ded)}</td>
-          <td class="px-3 py-1.5 align-middle text-right border-r border-slate-100 font-mono text-[10px] font-black text-emerald-700 bg-emerald-50/30">${money(x.net)}</td>
-          <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${chipStatus(x.status)}</td>
-          <td class="px-3 py-1.5 align-middle text-center no-print w-[100px]">
-            <div class="flex justify-center gap-1 flex-nowrap">
-              ${x.status === 'DRAFT' ? `<button class="post btn-action btn-post" title="Post" data-id="${x.id}"><span class="material-icons-round text-[12px]">publish</span></button>` : ''}
-              ${x.status === 'POSTED' ? `<button class="paid btn-action btn-paid" title="Mark Paid" data-id="${x.id}"><span class="material-icons-round text-[12px]">check</span></button>` : ''}
-              <button class="ed btn-action btn-edit" title="Edit" data-id="${x.id}"><span class="material-icons-round text-[12px]">edit</span></button>
+            $("tb").innerHTML = view.length ? view.map(x=>`
+                <tr class="hover:bg-slate-50 transition-colors data-row">
+                    <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100"><input type="checkbox" class="rc cursor-pointer" data-id="${x.id}"></td>
+                    <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">
+                        <div class="text-[10px] font-black text-slate-800 font-mono tracking-tight">${esc(x.payNo)}</div>
+                        <div class="text-[9px] font-bold text-slate-500 uppercase mt-0.5 tracking-widest">${esc(x.month)} • ${esc(x.period)}</div>
+                    </td>
+                    <td class="px-3 py-1.5 align-middle border-r border-slate-100">
+                        <div class="font-black text-slate-900 uppercase tracking-tight">${esc(x.name)}</div>
+                        <div class="text-[9px] text-slate-500 font-mono mt-0.5 tracking-widest">${esc(x.no)}</div>
+                    </td>
+                    <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">
+                         ${chipCat(x.cat)}
+                         <div class="text-[9px] font-bold text-slate-800 uppercase mt-0.5 tracking-widest">${esc(x.reg||"—")}</div>
+                         ${x.mun ? `<div class="text-[8px] font-bold text-slate-500 uppercase mt-0.5 tracking-widest">${esc(x.mun)}</div>` : ''}
+                    </td>
+                    <td class="px-3 py-1.5 align-middle text-right border-r border-slate-100 font-mono text-[10px] font-bold text-slate-700">${money(x.gross)}</td>
+                    <td class="px-3 py-1.5 align-middle text-right border-r border-slate-100 font-mono text-[10px] font-bold text-rose-700">${money(x.ded)}</td>
+                    <td class="px-3 py-1.5 align-middle text-right border-r border-slate-100 font-mono text-[10px] font-black text-emerald-700 bg-emerald-50/30">${money(x.net)}</td>
+                    <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${chipStatus(x.status)}</td>
+                    <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${x.status_payment ? `<span class='status-badge bg-yellow-50 text-yellow-800 border-yellow-200'>${esc(x.status_payment)}</span>` : ''}</td>
+                    <td class="px-3 py-1.5 align-middle text-center no-print w-[100px]">
+                        <div class="flex justify-center gap-1 flex-nowrap">
+                            ${x.status === 'DRAFT' ? `<button class="post btn-action btn-post" title="Post" data-id="${x.id}"><span class="material-icons-round text-[12px]">publish</span></button>` : ''}
+                            ${x.status === 'POSTED' ? `<button class="paid btn-action btn-paid" title="Mark Paid" data-id="${x.id}"><span class="material-icons-round text-[12px]">check</span></button>` : ''}
+                            <button class="ed btn-action btn-edit" title="Edit" data-id="${x.id}"><span class="material-icons-round text-[12px]">edit</span></button>
               <button class="rm btn-action btn-delete" title="Delete" data-id="${x.id}"><span class="material-icons-round text-[12px]">delete</span></button>
+              <button class="btn-superadmin-approve" data-id="${x.id}" title="Superadmin Approve"><i class="fa-solid fa-user-shield"></i></button>
+              <button class="btn-superadmin-reject" data-id="${x.id}" title="Superadmin Reject"><i class="fa-solid fa-user-slash"></i></button>
+              <button class="btn-superadmin-override" data-id="${x.id}" title="Override Status"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-superadmin-audit" data-id="${x.id}" title="Audit Log"><i class="fa-solid fa-clock-rotate-left"></i></button>
             </div>
           </td>
         </tr>
@@ -708,20 +924,30 @@
         $("status").value = "DRAFT";
       }
 
-      if(mode==="edit"){
-        const x = rows.find(z=>z.id===id); if(!x) return;
-        $("eid").value=x.id; $("payNo").value=x.payNo; $("month").value=x.month; $("period").value=x.period;
-        $("no").value=x.no; $("name").value=x.name; $("cat").value=x.cat; $("status").value=x.status;
-        $("basic").value=x.basic; $("allow").value=x.allow; $("ot").value=x.ot; $("ded").value=x.ded; $("remarks").value=x.remarks||"";
-        
-        const fReg = $("reg"); fReg.value = x.reg || "";
-        const selectedOption = Array.from(fReg.options).find(opt => opt.value === x.reg);
-        if (selectedOption && selectedOption.dataset.code) {
-           await loadMunicipalities(selectedOption.dataset.code, 'mun', 'Select Municipality / City', false);
-           $("mun").value = x.mun || "";
-        }
-        updateCalc();
-      } else updateCalc();
+            if(mode==="edit"){
+                const x = rows.find(z=>z.id===id); if(!x) return;
+                $("eid").value=x.id;
+                // Auto-generate payroll number if missing
+                if (!x.payNo || x.payNo === "") {
+                    const now = new Date();
+                    const y = now.getFullYear();
+                    const m = String(now.getMonth()+1).padStart(2,'0');
+                    const d = String(now.getDate()).padStart(2,'0');
+                    $("payNo").value = `PAY-${y}${m}${d}-${Math.floor(Math.random()*9000+1000)}`;
+                } else {
+                    $("payNo").value = x.payNo;
+                }
+                $("month").value=x.month; $("period").value=x.period;
+                $("no").value=x.no; $("name").value=x.name; $("cat").value=x.cat; $("status").value=x.status;
+                $("basic").value=x.basic; $("allow").value=x.allow; $("ot").value=x.ot; $("ded").value=x.ded; $("remarks").value=x.remarks||"";
+                const fReg = $("reg"); fReg.value = x.reg || "";
+                const selectedOption = Array.from(fReg.options).find(opt => opt.value === x.reg);
+                if (selectedOption && selectedOption.dataset.code) {
+                     await loadMunicipalities(selectedOption.dataset.code, 'mun', 'Select Municipality / City', false);
+                     $("mun").value = x.mun || "";
+                }
+                updateCalc();
+            } else updateCalc();
     };
     const closeM = () => $("mb").classList.remove("flex");
 
@@ -733,7 +959,29 @@
     document.addEventListener("DOMContentLoaded", async () => {
       await initLocationAPI();
 
-      $("btnOpenCreate").onclick=()=>openM("create");
+            $("btnOpenCreate").onclick=async()=>{
+                // Open modal for new employee creation
+                // Generate new employee_id
+                const empId = `EMP-${Date.now()}-${Math.floor(Math.random()*9000+1000)}`;
+                $("eid").value = empId;
+                $("payNo").value = "";
+                $("month").value = new Date().toISOString().slice(0,7);
+                $("period").value = "MONTHLY";
+                $("no").value = empId;
+                $("name").value = "";
+                $("cat").value = "";
+                $("status").value = "DRAFT";
+                $("basic").value = 0;
+                $("allow").value = 0;
+                $("ot").value = 0;
+                $("ded").value = 0;
+                $("remarks").value = "";
+                $("reg").value = "";
+                $("mun").innerHTML = '<option value="">Select Region First</option>';
+                $("mun").disabled = true;
+                updateCalc();
+                $("mb").classList.add("flex");
+            };
       $("mx").onclick=$("mc").onclick=closeM; $("mb").onclick=e=>{if(e.target===$("mb")) closeM();};
       $("cx").onclick=$("cc").onclick=closeConfirm; $("cm").onclick=e=>{if(e.target===$("cm")) closeConfirm();};
       $("co").onclick=()=>{ if(confirmAction){ const fn=confirmAction; closeConfirm(); fn(); } };

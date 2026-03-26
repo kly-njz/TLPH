@@ -2498,6 +2498,11 @@ def create_regional_employee():
 
     region_name = session.get('region') or session.get('user_region') or ''
 
+    basic_pay = float(data.get('basic_pay') or 0)
+    allowances = float(data.get('allowances') or 0)
+    deductions = float(data.get('deductions') or 0)
+    gross_pay = basic_pay + allowances
+    net_pay = gross_pay - deductions
     payload = {
         'employee_id': employee_id,
         'first_name': first_name,
@@ -2514,6 +2519,12 @@ def create_regional_employee():
         'province': (data.get('province') or '').strip(),
         'region': (data.get('region') or region_name or '').strip(),
         'hire_date': (data.get('hire_date') or '').strip(),
+        'basic_pay': basic_pay,
+        'allowances': allowances,
+        'gross_pay': gross_pay,
+        'deductions': deductions,
+        'net_pay': net_pay,
+        'status_payment': (data.get('status_payment') or 'DRAFT').strip(),
     }
 
     ref = db.collection('employees').document()
