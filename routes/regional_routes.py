@@ -4248,70 +4248,24 @@ def applicants_regional():
 
 
 
-# Unified quotations view for regional
 @bp.route('/operations/quotation')
 @role_required('regional', 'regional_admin')
 def quotation_regional():
-    from quotation_storage import get_quotations, get_all_quotations
+    from quotation_storage import get_quotations
     import json
     from collections import Counter
     user_region = session.get('user_region', '').strip()
-    # DEBUG: Fetch all quotations and log them
-    all_quotations = get_all_quotations()
-    print("[DEBUG] All quotations:")
-    for q in all_quotations:
-        print(f"region: {q.get('region')}, municipality: {q.get('municipality')}, id: {q.get('id', 'N/A')}")
-
-    # Show all quotations for the user's region, regardless of scope
-    from models.ph_locations import philippineLocations
-    region_name = user_region
-    municipalities = []
-    # Map region to provinces for MIMAROPA (REGION-IV-B)
-    REGION_TO_PROVINCES = {
-        'MIMAROPA': [
-            'Occidental Mindoro', 'Oriental Mindoro', 'Marinduque', 'Romblon', 'Palawan'
-        ],
-        'REGION-IV-B': [
-            'Occidental Mindoro', 'Oriental Mindoro', 'Marinduque', 'Romblon', 'Palawan'
-        ]
-    }
-    if region_name in REGION_TO_PROVINCES:
-        for prov in REGION_TO_PROVINCES[region_name]:
-            municipalities.extend(philippineLocations.get(prov, []))
-        municipalities = sorted(set(municipalities))
-    elif region_name and region_name in philippineLocations:
-        municipalities = sorted(philippineLocations[region_name])
-    else:
-        # fallback: use all municipalities from all regions
-        for muni_list in philippineLocations.values():
-            municipalities.extend(muni_list)
-        municipalities = sorted(set(municipalities))
-
-    # Filter quotations to only those in the region's municipalities and region
-    muni_set = set(m.upper() for m in municipalities)
-    region_upper = region_name.upper() if region_name else ''
-    quotations = [
-        q for q in all_quotations
-        if str(q.get('municipality', '')).strip().upper() in muni_set
-        and str(q.get('region', '')).strip().upper() == region_upper
-    ]
-
-    print(f"[DEBUG] Filtering for region={region_upper}, muni_set={muni_set}")
-    print(f"[DEBUG] Filtered quotations:")
-    for q in quotations:
-        print(f"region: {q.get('region')}, municipality: {q.get('municipality')}, id: {q.get('id', 'N/A')}")
-
+    # Only show quotations allocated to this region
+    quotations = get_quotations(deliver_to=user_region, deliver_to_type='region')
     def to_float(value):
         try:
             return float(value)
         except Exception:
             return 0.0
-
     for q in quotations:
-        q['amount_value'] = to_float(q.get('amount'))
+        q['amount_value'] = to_float(q.get('amount', 0))
         q['amount'] = f"{q['amount_value']:,.2f}"
         q['status'] = str(q.get('status') or 'Pending').capitalize()
-
     total_quotes = len(quotations)
     approved_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'APPROVED'])
     pending_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'PENDING'])
@@ -4338,6 +4292,25 @@ def quotation_regional():
         quotations=quotations,
         total_quotes=total_quotes,
         approved_quotes=approved_quotes,
+        
+        @bp.route('/api/quotation/<quotation_id>/update', methods=['POST'])
+        @role_required('regional', 'regional_admin')
+        def api_update_quotation_regional(quotation_id):
+            from quotation_storage import update_quotation, update_quotation_status
+            data = request.get_json() or {}
+            updates = {}
+            # Allow updating deliver_to, deliver_to_type, status, and notes
+            if 'deliver_to' in data:
+                updates['deliver_to'] = data['deliver_to']
+            if 'deliver_to_type' in data:
+                updates['deliver_to_type'] = data['deliver_to_type']
+            if updates:
+                update_quotation(quotation_id, updates)
+            if 'status' in data:
+                user_email = data.get('user_email', 'regional_admin')
+                notes = data.get('notes', '')
+                update_quotation_status(quotation_id, data['status'], user_email, notes)
+            return jsonify({'success': True})
         pending_quotes=pending_quotes,
         rejected_quotes=rejected_quotes,
         total_value=total_value,

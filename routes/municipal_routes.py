@@ -641,7 +641,6 @@ def stock_reorder_municipal():
 
 # --- Operations (Superadmin Extra) ---
 
-# Unified quotations view using quotations collection
 @bp.route('/operations/quotations-municipal')
 @role_required('municipal','municipal_admin')
 def quotations_municipal():
@@ -649,47 +648,22 @@ def quotations_municipal():
     import json
     from collections import Counter
     user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
-    user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
-
-    from quotation_storage import get_all_quotations
-    all_quotations = get_all_quotations()
-    muni_upper = user_municipality.upper() if user_municipality else ''
-    quotations = [
-        q for q in all_quotations
-        if str(q.get('municipality', '')).strip().upper() == muni_upper
-    ]
+    quotations = get_quotations(deliver_to=user_municipality, deliver_to_type='municipality')
     def to_float(value):
         try:
             return float(value)
         except Exception:
             return 0.0
     for q in quotations:
-        q['amount_value'] = to_float(q.get('amount'))
+        q['amount_value'] = to_float(q.get('amount', 0))
         q['amount'] = f"{q['amount_value']:,.2f}"
         q['status'] = str(q.get('status') or 'Pending').capitalize()
-
     total_quotes = len(quotations)
     approved_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'APPROVED'])
     pending_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'PENDING'])
     rejected_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'REJECTED'])
     total_value_number = sum([to_float(q.get('amount_value')) for q in quotations])
     total_value = f"{total_value_number:,.2f}"
-    barangay_options = sorted(list({(q.get('barangay') or '').strip() for q in quotations if (q.get('barangay') or '').strip()}))
-    # If no barangays found in quotations, fallback to all barangays for the user's municipality
-    if not barangay_options:
-        try:
-            from models.ph_locations import philippineLocations
-            user_muni = user_municipality.strip()
-            user_province = None
-            # Try to find the province for the user's municipality
-            for province, munis in philippineLocations.items():
-                if user_muni in munis:
-                    user_province = province
-                    break
-            if user_province:
-                barangay_options = sorted(munis)
-        except Exception:
-            pass
     monthly_amounts = Counter()
     for q in quotations:
         date_raw = str(q.get('date') or '').strip()
@@ -712,6 +686,24 @@ def quotations_municipal():
         approved_quotes=approved_quotes,
         pending_quotes=pending_quotes,
         rejected_quotes=rejected_quotes,
+        # API: Update quotation status/history (municipal)
+        @bp.route('/api/quotation/<quotation_id>/update', methods=['POST'])
+        @role_required('municipal','municipal_admin')
+        def api_update_quotation_municipal(quotation_id):
+            from quotation_storage import update_quotation, update_quotation_status
+            data = request.get_json() or {}
+            updates = {}
+            if 'deliver_to' in data:
+                updates['deliver_to'] = data['deliver_to']
+            if 'deliver_to_type' in data:
+                updates['deliver_to_type'] = data['deliver_to_type']
+            if updates:
+                update_quotation(quotation_id, updates)
+            if 'status' in data:
+                user_email = data.get('user_email', 'municipal_admin')
+                notes = data.get('notes', '')
+                update_quotation_status(quotation_id, data['status'], user_email, notes)
+            return jsonify({'success': True})
         total_value=total_value,
         barangay_options=barangay_options,
         user_municipality=user_municipality,
