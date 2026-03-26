@@ -111,16 +111,20 @@ async function editQuotation(btn) {
     document.getElementById('newOtherChargesNote').value = row.getAttribute('data-other_charges_note') || '';
     // Show modal
     const modal = document.getElementById('quoteDrawer');
-    modal.classList.remove('opacity-0', 'pointer-events-none');
-    modal.classList.add('opacity-100');
+    modal.classList.remove('opacity-0');
+    modal.classList.remove('pointer-events-none');
+    setTimeout(() => {
+        modal.classList.add('opacity-100');
+    }, 10);
 }
 
 function closeQuoteDrawer() {
     const modal = document.getElementById('quoteDrawer');
-    modal.classList.add('opacity-0', 'pointer-events-none');
-    setTimeout(() => {
-        modal.classList.remove('opacity-100');
-    }, 300);
+    modal.classList.remove('opacity-100');
+    modal.classList.add('opacity-0');
+    modal.classList.add('pointer-events-none');
+    // Optionally, after transition, you could reset fields if needed
+}
 }
 
 function draftQuotation(btn) {
