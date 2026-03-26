@@ -4292,25 +4292,6 @@ def quotation_regional():
         quotations=quotations,
         total_quotes=total_quotes,
         approved_quotes=approved_quotes,
-        
-        @bp.route('/api/quotation/<quotation_id>/update', methods=['POST'])
-        @role_required('regional', 'regional_admin')
-        def api_update_quotation_regional(quotation_id):
-            from quotation_storage import update_quotation, update_quotation_status
-            data = request.get_json() or {}
-            updates = {}
-            # Allow updating deliver_to, deliver_to_type, status, and notes
-            if 'deliver_to' in data:
-                updates['deliver_to'] = data['deliver_to']
-            if 'deliver_to_type' in data:
-                updates['deliver_to_type'] = data['deliver_to_type']
-            if updates:
-                update_quotation(quotation_id, updates)
-            if 'status' in data:
-                user_email = data.get('user_email', 'regional_admin')
-                notes = data.get('notes', '')
-                update_quotation_status(quotation_id, data['status'], user_email, notes)
-            return jsonify({'success': True})
         pending_quotes=pending_quotes,
         rejected_quotes=rejected_quotes,
         total_value=total_value,
@@ -4319,6 +4300,27 @@ def quotation_regional():
         trend_labels_json=json.dumps(trend_labels),
         trend_values_json=json.dumps(trend_values)
     )
+
+
+# API: Update quotation status/history (regional)
+@bp.route('/api/quotation/<quotation_id>/update', methods=['POST'])
+@role_required('regional', 'regional_admin')
+def api_update_quotation_regional(quotation_id):
+    from quotation_storage import update_quotation, update_quotation_status
+    data = request.get_json() or {}
+    updates = {}
+    # Allow updating deliver_to, deliver_to_type, status, and notes
+    if 'deliver_to' in data:
+        updates['deliver_to'] = data['deliver_to']
+    if 'deliver_to_type' in data:
+        updates['deliver_to_type'] = data['deliver_to_type']
+    if updates:
+        update_quotation(quotation_id, updates)
+    if 'status' in data:
+        user_email = data.get('user_email', 'regional_admin')
+        notes = data.get('notes', '')
+        update_quotation_status(quotation_id, data['status'], user_email, notes)
+    return jsonify({'success': True})
 
 
 @bp.route('/operations/task')
