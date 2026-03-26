@@ -268,12 +268,54 @@
                 submittedAtText: '—',
                 docFiles: [],
 
+                parseAnyDate(value) {
+                    if (!value) return null;
+                    if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+                    if (typeof value?.toDate === 'function') {
+                        const d = value.toDate();
+                        return isNaN(d?.getTime?.()) ? null : d;
+                    }
+                    if (typeof value === 'number') {
+                        const ms = value < 1000000000000 ? value * 1000 : value;
+                        const d = new Date(ms);
+                        return isNaN(d.getTime()) ? null : d;
+                    }
+                    if (typeof value === 'string') {
+                        const d = new Date(value);
+                        return isNaN(d.getTime()) ? null : d;
+                    }
+                    if (typeof value === 'object') {
+                        if (typeof value.seconds === 'number') {
+                            const d = new Date(value.seconds * 1000);
+                            return isNaN(d.getTime()) ? null : d;
+                        }
+                        if (typeof value._seconds === 'number') {
+                            const d = new Date(value._seconds * 1000);
+                            return isNaN(d.getTime()) ? null : d;
+                        }
+                    }
+                    return null;
+                },
+
+                formatAnyDate(value, withTime = false) {
+                    const d = this.parseAnyDate(value);
+                    if (!d) return 'N/A';
+                    const base = d.toLocaleDateString('en-PH', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                    });
+                    if (!withTime) return base;
+                    const t = d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+                    return `${base} ${t}`;
+                },
+
                 get seminarFields() {
                     if (!this.serviceData) return [];
                     const d = this.serviceData;
                     const svc = (d.serviceType || '').toLowerCase();
                     const fmt = (val) => val ? String(val).charAt(0).toUpperCase() + String(val).slice(1) : 'N/A';
-                    const fmtDate = (val) => val ? new Date(val).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A';
+                    const fmtDate = (val) => this.formatAnyDate(val, true);
 
                     if (svc.includes('good agricultural') || svc.includes('gap training')) {
                         return [
@@ -389,11 +431,7 @@
                             this.refCode = 'DENR-' + this.serviceId.substring(0, 10).toUpperCase();
 
                             // submitted date
-                            if (d.submittedAt || d.createdAt) {
-                                const ts = d.submittedAt || d.createdAt;
-                                const dt = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
-                                this.submittedAtText = dt.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
-                            }
+                            this.submittedAtText = this.formatAnyDate(d.submittedAt || d.createdAt, false);
 
                             // status badge
                             const statusMap = {
@@ -433,12 +471,7 @@
                             if (d.status === 'to-review') {
                                 this.isForwarded = true;
                                 this.forwardedByEmail = d.forwardedByEmail || '';
-                                if (d.forwardedAt) {
-                                    const ts = d.forwardedAt;
-                                    const dt = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
-                                    this.forwardedAtText = dt.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
-                                        + ' ' + dt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
-                                }
+                                this.forwardedAtText = this.formatAnyDate(d.forwardedAt, true);
                             }
 
                             // load applicant user doc
