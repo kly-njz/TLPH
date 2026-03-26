@@ -709,6 +709,7 @@
                 // ── Uploaded Documents Section ──────────────────────────────
                 const docsSection = document.getElementById('documentsSection');
                 const docsGrid = document.getElementById('documentsGrid');
+                const isImageFile = (path) => /\.(jpg|jpeg|png|avif|webp|gif|bmp|svg)(\?|$)/i.test(String(path || ''));
                 const labelMap = {
                     productPhoto: 'Product Photo', registrationDocuments: 'Registration Documents',
                     emergencyPhotos: 'Emergency Photos', fieldPhotos: 'Field Photos',
@@ -745,11 +746,15 @@
                             const safeUrl = String(f || '');
                             const displayName = safeUrl.split('/').pop().split('?')[0] || safeUrl;
                             const canOpen = /^https?:\/\//i.test(safeUrl) || safeUrl.startsWith('/');
+                            const encodedUrl = encodeURIComponent(safeUrl);
                             return `
                             <div class="doc-box rounded mb-1">
                                 <i class="fa-solid ${ext2icon(f)} text-sm"></i>
                                 <span class="text-xs font-bold text-slate-700 text-truncate">${displayName}</span>
-                                ${canOpen ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</a>` : ''}
+                                ${canOpen ? (isImageFile(safeUrl)
+                                    ? `<button type="button" onclick="openMunicipalImageViewer('${encodedUrl}')" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>`
+                                    : `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</a>`)
+                                : ''}
                             </div>`;
                         }).join('');
                         return `<div class="col-md-6 mb-3"><p class="info-label">${label}</p>${fileList}</div>`;
@@ -877,6 +882,25 @@
             document.getElementById('rejectNoteInput').value = '';
         };
 
+        window.openMunicipalImageViewer = function(encodedUrl) {
+            try {
+                const url = decodeURIComponent(encodedUrl || '');
+                const modal = document.getElementById('municipalImageViewerModal');
+                const img = document.getElementById('municipalImageViewerImg');
+                img.src = url;
+                modal.style.display = 'flex';
+            } catch (err) {
+                console.error('Failed to open municipal image viewer:', err);
+            }
+        };
+
+        window.closeMunicipalImageViewer = function() {
+            const modal = document.getElementById('municipalImageViewerModal');
+            const img = document.getElementById('municipalImageViewerImg');
+            img.src = '';
+            modal.style.display = 'none';
+        };
+
         window.forwardToRegional = async function() {
             const confirmed = confirm(`Forward this service request to the Regional Office?\n\nRef: ${document.getElementById('refNumber').textContent}\nRequester: ${document.getElementById('applicantName').textContent}\n\nOnce forwarded, you can no longer approve or reject it here.`);
             if (!confirmed) return;
@@ -912,6 +936,10 @@
                 loadServiceDetails();
             }
         });
+
+        document.getElementById('municipalImageViewerModal')?.addEventListener('click', function(e) {
+            if (e.target === this) closeMunicipalImageViewer();
+        });
     </script>
 
 
@@ -930,6 +958,14 @@
       <button onclick="confirmRejection()" class="flex-1 bg-red-600 text-white font-black text-xs py-2 uppercase rounded hover:bg-red-700 transition-all"><i class="fa-solid fa-circle-xmark me-1"></i> Confirm Rejection</button>
     </div>
   </div>
+</div>
+
+<!-- Municipal Image Viewer Modal -->
+<div id="municipalImageViewerModal" style="display:none;" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-4">
+    <div class="relative w-full max-w-4xl">
+        <button onclick="closeMunicipalImageViewer()" class="absolute -top-3 -right-3 bg-white text-gray-700 hover:text-black rounded-full w-8 h-8 shadow font-bold">&times;</button>
+        <img id="municipalImageViewerImg" src="" alt="Service Attachment" class="w-full max-h-[85vh] object-contain bg-white rounded shadow-2xl" />
+    </div>
 </div>
 
 </body>
