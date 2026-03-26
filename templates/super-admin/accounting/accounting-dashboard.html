@@ -4,53 +4,62 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Accounting Dashboard</title>
-                                // New structure: regional_funds (with regional_total, municipal_total), municipal_funds (with total)
-                                // --- PATCHED: Ensure correct mapping and type assignment after API call ---
-                                this.funds = [];
-                                if (data.national_fund && Number(data.national_fund) > 0) {
-                                    this.funds.push({
-                                        id: 'NATIONAL',
-                                        type: 'national',
-                                        label: 'NATIONAL',
-                                        amount: Number(data.national_fund),
-                                        fund_type: 'national'
-                                    });
-                                }
-                                // Collect all municipality names for exclusion
-                                const municipalityNames = new Set((data.municipal_funds || []).map(f => f.municipality));
-                                (data.regional_funds || []).forEach((f, i) => {
-                                    const regionName = f.region || f.municipality;
-                                    if (!municipalityNames.has(regionName)) {
-                                        this.funds.push({
-                                            id: regionName || `region-${i}`,
-                                            type: 'region',
-                                            region: regionName,
-                                            amount: Number(f.amount) || 0,
-                                            fund_type: f.fund_type || 'GENERAL'
-                                        });
-                                    }
-                                });
-                                (data.municipal_funds || []).forEach((f, i) => {
-                                    this.funds.push({
-                                        id: f.municipality || `muni-${i}`,
-                                        type: 'municipality',
-                                        municipality: f.municipality,
-                                        region: f.region,
-                                        amount: Number(f.amount),
-                                        fund_type: f.fund_type || 'GENERAL'
-                                    });
-                                });
-                                this.totalFunds = this.funds.reduce((sum, fund) => sum + (fund.amount || 0), 0);
-                extend: {
-                    colors: {
-                        'gov-blue': '#1e3a8a', 
-                        'gov-red': '#be123c',  
-                        'denr-dark': '#14532d', 
-                        'denr-green': '#15803d', 
+    <script>
+    function accountingDashboard() {
+        return {
+            funds: [],
+            totalFunds: 0,
+            async loadData() {
+                // New structure: regional_funds (with regional_total, municipal_total), municipal_funds (with total)
+                // --- PATCHED: Ensure correct mapping and type assignment after API call ---
+                const response = await fetch('/superadmin/api/accounting/funds');
+                const data = await response.json();
+                this.funds = [];
+                if (data.national_fund && Number(data.national_fund) > 0) {
+                    this.funds.push({
+                        id: 'NATIONAL',
+                        type: 'national',
+                        label: 'NATIONAL',
+                        amount: Number(data.national_fund),
+                        fund_type: 'national'
+                    });
+                }
+                // Collect all municipality names for exclusion
+                const municipalityNames = new Set((data.municipal_funds || []).map(f => f.municipality));
+                (data.regional_funds || []).forEach((f, i) => {
+                    const regionName = f.region || f.municipality;
+                    if (!municipalityNames.has(regionName)) {
+                        this.funds.push({
+                            id: regionName || `region-${i}`,
+                            type: 'region',
+                            region: regionName,
+                            amount: Number(f.amount) || 0,
+                            fund_type: f.fund_type || 'GENERAL'
+                        });
                     }
+                });
+                (data.municipal_funds || []).forEach((f, i) => {
+                    this.funds.push({
+                        id: f.municipality || `muni-${i}`,
+                        type: 'municipality',
+                        municipality: f.municipality,
+                        region: f.region,
+                        amount: Number(f.amount),
+                        fund_type: f.fund_type || 'GENERAL'
+                    });
+                });
+                this.totalFunds = this.funds.reduce((sum, fund) => sum + (fund.amount || 0), 0);
+            },
+            extend: {
+                colors: {
+                    'gov-blue': '#1e3a8a',
+                    'gov-red': '#be123c',
+                    'denr-dark': '#14532d',
+                    'denr-green': '#15803d',
                 }
             }
         }
+    }
     </script>
     <style>
         /* Government Standard Typography & Layout */
