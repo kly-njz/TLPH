@@ -3,6 +3,9 @@
 
 async function openEditDrawer(quoteId) {
     const modal = document.getElementById('quoteDrawer');
+    modal.hidden = false;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
     document.getElementById('editQuoteId').value = quoteId;
     // Fetch quotation data from backend (national endpoint)
     const res = await fetch(`/national/api/quotation/${quoteId}`);
@@ -39,6 +42,9 @@ function closeQuoteDrawer() {
     modal.classList.add('opacity-0', 'pointer-events-none');
     setTimeout(() => {
         modal.classList.remove('opacity-100');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        modal.hidden = true;
     }, 300);
 }
 
@@ -68,6 +74,7 @@ async function openDraftPreview(quoteId) {
     document.getElementById('draftPrevStatus').textContent = data.status || '—';
     // Show modal
     const modal = document.getElementById('draftPreviewModal');
+    modal.hidden = false;
     modal.classList.remove('hidden');
     setTimeout(() => modal.classList.add('opacity-100'), 10);
 }
@@ -75,7 +82,10 @@ async function openDraftPreview(quoteId) {
 function closeDraftPreview() {
     const modal = document.getElementById('draftPreviewModal');
     modal.classList.remove('opacity-100');
-    setTimeout(() => modal.classList.add('hidden'), 300);
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.hidden = true;
+    }, 300);
 }
 
 async function downloadDeliveryDetails(quoteId) {
