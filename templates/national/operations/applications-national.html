@@ -251,7 +251,7 @@
         // to prevent Alpine's Proxy from wrapping Chart.js objects and causing stack overflows.
 
         get filteredApps() {
-          return this.apps.filter(app => {
+          const filtered = this.apps.filter(app => {
             const name     = (app.applicantName || '').toLowerCase();
             const product  = (app.productName || '').toLowerCase();
             const ref      = (app.refId || '').toLowerCase();
@@ -279,6 +279,8 @@
 
             return searchMatch && regionMatch && categoryMatch && statusMatch;
           });
+
+          return filtered.sort((a, b) => (b.submittedAtRaw || 0) - (a.submittedAtRaw || 0));
         },
 
         async init() {
@@ -442,6 +444,23 @@
                 if (!data.forwardedToNationalAt && data.status !== 'forwarded-to-national') {
                   return;
                 }
+
+                const dateField = data.submittedAt || data.createdAt || null;
+                let submittedAtRaw = 0;
+                if (dateField) {
+                  if (typeof dateField.toDate === 'function') {
+                    const d = dateField.toDate();
+                    submittedAtRaw = Number.isNaN(d.getTime()) ? 0 : d.getTime();
+                  } else if (dateField.seconds) {
+                    submittedAtRaw = Number(dateField.seconds) * 1000;
+                  } else {
+                    const d = new Date(dateField);
+                    submittedAtRaw = Number.isNaN(d.getTime()) ? 0 : d.getTime();
+                  }
+                }
+                const filedDateText = submittedAtRaw
+                  ? new Date(submittedAtRaw).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})
+                  : 'N/A';
                 
                 const userInfo = usersMap[data.userId];
                 const nationalStatus = (data.nationalStatus || 'pending').toLowerCase();
@@ -470,8 +489,8 @@
 
                 newApps.push({
                   id: doc.id,
-                  dateFiled: data.submittedAt ? new Date(data.submittedAt.toDate()).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'}) : 'N/A',
-                  submittedAtRaw: data.submittedAt ? data.submittedAt.toDate().getTime() : null,
+                  dateFiled: filedDateText,
+                  submittedAtRaw,
                   refId: 'APP-' + doc.id.substring(0, 8).toUpperCase(),
                   applicantName: (userInfo?.name || data.userName || 'Unknown').toUpperCase(),
                   productName: (data.resourceName || data.productName || data.cropName || data.product || 'N/A').toUpperCase(),
