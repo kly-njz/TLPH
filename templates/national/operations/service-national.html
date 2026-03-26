@@ -74,6 +74,65 @@
     @media (min-width: 1024px) {
       main { margin-left: 260px; }
     }
+
+    /* National reject-note modal (high contrast and reliable visibility) */
+    .nat-reject-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.66);
+      z-index: 10020;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .nat-reject-card {
+      width: 100%;
+      max-width: 520px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 20px 38px rgba(15, 23, 42, 0.35);
+      border-radius: 2px;
+      color: #0f172a;
+    }
+    .nat-reject-title {
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #b91c1c;
+    }
+    .nat-reject-help {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+    .nat-reject-textarea {
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      border: 1px solid #cbd5e1;
+      border-radius: 2px;
+      padding: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #0f172a;
+      background: #ffffff;
+    }
+    .nat-reject-textarea:focus {
+      outline: none;
+      border-color: #ef4444;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
+    }
+    .nat-reject-error {
+      display: none;
+      margin-top: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #b91c1c;
+    }
   </style>
 </head>
 
@@ -827,8 +886,17 @@
   window.handleNationalAction = async function(reqId, action, btn) {
     if (action === 'rejected') {
       const modal = document.getElementById('natRejectModal');
+      const input = document.getElementById('natRejectNoteInput');
+      const err = document.getElementById('natRejectError');
       modal.style.display = 'flex';
       modal.dataset.reqId = reqId;
+      document.body.style.overflow = 'hidden';
+      if (input) input.value = '';
+      if (err) err.style.display = 'none';
+      if (input) {
+        setTimeout(() => input.focus(), 10);
+      }
+      window.updateNatRejectState();
       return;
     }
     if (!confirm(`Confirm: approve this service request?`)) return;
@@ -881,9 +949,23 @@
   window.confirmNatRejection = async function() {
     const modal = document.getElementById('natRejectModal');
     const reqId = modal.dataset.reqId;
-    const note = document.getElementById('natRejectNoteInput').value.trim();
+    const input = document.getElementById('natRejectNoteInput');
+    const err = document.getElementById('natRejectError');
+    const note = (input?.value || '').trim();
+
+    if (!note || note.length < 5) {
+      if (err) {
+        err.textContent = 'Please provide a clear rejection note (at least 5 characters).';
+        err.style.display = 'block';
+      }
+      if (input) input.focus();
+      return;
+    }
+
     modal.style.display = 'none';
-    document.getElementById('natRejectNoteInput').value = '';
+    document.body.style.overflow = '';
+    if (input) input.value = '';
+    if (err) err.style.display = 'none';
     const row = document.getElementById('row-' + reqId);
     const badge = document.getElementById('badge-' + reqId);
     const btns = row ? row.querySelectorAll('button[title="Approve"], button[title="Reject"]') : [];
@@ -914,8 +996,24 @@
   };
 
   window.cancelNatRejection = function() {
-    document.getElementById('natRejectModal').style.display = 'none';
-    document.getElementById('natRejectNoteInput').value = '';
+    const modal = document.getElementById('natRejectModal');
+    const input = document.getElementById('natRejectNoteInput');
+    const err = document.getElementById('natRejectError');
+    const btn = document.getElementById('natRejectConfirmBtn');
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+    if (input) input.value = '';
+    if (err) err.style.display = 'none';
+    if (btn) btn.disabled = true;
+  };
+
+  window.updateNatRejectState = function() {
+    const input = document.getElementById('natRejectNoteInput');
+    const btn = document.getElementById('natRejectConfirmBtn');
+    const err = document.getElementById('natRejectError');
+    const ok = !!(input && input.value.trim().length >= 5);
+    if (btn) btn.disabled = !ok;
+    if (ok && err) err.style.display = 'none';
   };
 
   window.openNationalAttachmentPreview = function(encodedUrl, encodedName) {
@@ -966,20 +1064,20 @@
 </script>
 
 <!-- National Rejection Note Modal -->
-<div id="natRejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;padding:1rem;">
-  <div class="modal-dialog" style="max-width:480px;width:100%;">
-    <div class="modal-content shadow-lg">
-      <div class="modal-header border-bottom">
-        <h5 class="modal-title fw-black text-uppercase text-danger" style="font-size:12px;"><i class="bi bi-x-circle-fill me-2"></i> Rejection Reason</h5>
-      </div>
-      <div class="modal-body">
-        <p class="text-muted fw-semibold text-uppercase mb-2" style="font-size:10px;">This reason will be visible to the applicant.</p>
-        <textarea id="natRejectNoteInput" class="form-control" rows="4" style="font-size:11px;font-weight:600;" placeholder="e.g. Incomplete requirements, invalid location, non-compliance with DENR regulations..."></textarea>
-      </div>
-      <div class="modal-footer border-top d-flex gap-2">
-        <button onclick="cancelNatRejection()" class="btn btn-outline-secondary btn-sm fw-bold text-uppercase flex-fill" style="font-size:10px;">Cancel</button>
-        <button onclick="confirmNatRejection()" class="btn btn-danger btn-sm fw-bold text-uppercase flex-fill" style="font-size:10px;"><i class="bi bi-x-circle-fill me-1"></i> Confirm Rejection</button>
-      </div>
+<div id="natRejectModal" class="nat-reject-overlay" onclick="cancelNatRejection()">
+  <div class="nat-reject-card" onclick="event.stopPropagation()">
+    <div class="d-flex align-items-center justify-content-between border-bottom px-3 py-2 bg-white">
+      <h5 class="m-0 nat-reject-title"><span class="material-icons-round align-middle me-1" style="font-size:16px;">cancel</span>Rejection Reason</h5>
+      <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:10px;" onclick="cancelNatRejection()">Close</button>
+    </div>
+    <div class="p-3 bg-white">
+      <p class="nat-reject-help">This reason will be visible to the applicant.</p>
+      <textarea id="natRejectNoteInput" class="nat-reject-textarea" oninput="updateNatRejectState()" placeholder="e.g. Incomplete requirements, invalid location, non-compliance with DENR regulations..."></textarea>
+      <div id="natRejectError" class="nat-reject-error"></div>
+    </div>
+    <div class="border-top px-3 py-2 d-flex gap-2 bg-slate-50">
+      <button onclick="cancelNatRejection()" class="btn btn-light btn-sm fw-bold text-uppercase flex-fill border" style="font-size:10px;">Cancel</button>
+      <button id="natRejectConfirmBtn" onclick="confirmNatRejection()" class="btn btn-danger btn-sm fw-bold text-uppercase flex-fill" style="font-size:10px;" disabled>Confirm Rejection</button>
     </div>
   </div>
 </div>
