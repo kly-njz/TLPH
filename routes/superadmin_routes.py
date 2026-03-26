@@ -755,12 +755,19 @@ def api_get_fund_distribution():
             reg_docs = db.collection('regional_fund_distribution').stream()
             for doc in reg_docs:
                 data = doc.to_dict() or {}
+                print(f'[DEBUG] Regional Fund Doc: {doc.id} Data: {data}')
                 region = data.get('region') or doc.id
-                amount = float(data.get('amount', 0) or 0)
+                amount = data.get('amount', 0)
+                print(f'[DEBUG] Regional Fund - region: {region}, amount(raw): {amount}')
+                try:
+                    amount = float(str(amount).replace(',', ''))
+                except Exception as e:
+                    print(f'[ERROR] Could not convert regional amount to float: {amount} ({e})')
+                    amount = 0
                 if region:
                     regional_totals[region] = regional_totals.get(region, 0) + amount
-        except Exception:
-            pass
+        except Exception as e:
+            print(f'[ERROR] Regional fund aggregation failed: {e}')
 
         # 3. Municipal funds aggregation (from municipal_fund_distribution)
         municipal_funds = []
@@ -770,9 +777,16 @@ def api_get_fund_distribution():
             muni_docs = db.collection('municipal_fund_distribution').stream()
             for doc in muni_docs:
                 data = doc.to_dict() or {}
+                print(f'[DEBUG] Municipal Fund Doc: {doc.id} Data: {data}')
                 municipality = data.get('municipality') or data.get('muni') or ''
                 region = data.get('region') or ''
-                amount = float(data.get('amount', 0) or 0)
+                amount = data.get('amount', 0)
+                print(f'[DEBUG] Municipal Fund - municipality: {municipality}, region: {region}, amount(raw): {amount}')
+                try:
+                    amount = float(str(amount).replace(',', ''))
+                except Exception as e:
+                    print(f'[ERROR] Could not convert municipal amount to float: {amount} ({e})')
+                    amount = 0
                 fund_type = data.get('fund_type', 'GENERAL')
                 if municipality and amount > 0:
                     municipal_funds.append({
@@ -784,8 +798,8 @@ def api_get_fund_distribution():
                     if region:
                         municipal_totals_by_region[region] = municipal_totals_by_region.get(region, 0) + amount
                     municipal_totals_by_muni[municipality] = municipal_totals_by_muni.get(municipality, 0) + amount
-        except Exception:
-            pass
+        except Exception as e:
+            print(f'[ERROR] Municipal fund aggregation failed: {e}')
 
         # 4. Compose regional fund summary (include both regional and municipal totals)
         regional_funds = []
