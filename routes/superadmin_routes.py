@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request, jsonify
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
 from datetime import datetime
@@ -504,54 +504,230 @@ def accounting_permissions():
 def accounting_audit():
     return render_template('super-admin/accounting/audit.html')
 
-# -------------------------
-# Human Resource (match sidebar URLs)
-# URL: /superadmin/human-resource-superadmin/<page>
-# Template: templates/super-admin/human-resource-superadmin/<file>.html
-# -------------------------
-
-@bp.route('/hrm/company')
+# --- SUPERADMIN PAYROLL ACTIONS ---
+@bp.route('/api/hrm/payroll/<payroll_id>/approve', methods=['POST'])
 @role_required('super-admin','superadmin')
-def hr_company_view():
-    return render_template('super-admin/human-resource-superadmin/company-superadmin.html')
+def superadmin_approve_payroll(payroll_id):
+    """Approve any payroll record as superadmin."""
+    # TODO: Integrate with payroll storage logic
+    # Example: payroll_storage.superadmin_approve(payroll_id, user=session['user_email'])
+    return jsonify({'success': True, 'message': f'Payroll {payroll_id} approved by superadmin.'})
 
-@bp.route('/hrm/department')
+@bp.route('/api/hrm/payroll/<payroll_id>/reject', methods=['POST'])
 @role_required('super-admin','superadmin')
-def hr_department_view():
-    return render_template('super-admin/human-resource-superadmin/department-superadmin.html')
+def superadmin_reject_payroll(payroll_id):
+    """Reject any payroll record as superadmin."""
+    # TODO: Integrate with payroll storage logic
+    return jsonify({'success': True, 'message': f'Payroll {payroll_id} rejected by superadmin.'})
 
-@bp.route('/hrm/designation')
-
+@bp.route('/api/hrm/payroll/<payroll_id>/override', methods=['POST'])
 @role_required('super-admin','superadmin')
-def hr_designation_view():
-    return render_template('super-admin/human-resource-superadmin/designation-superadmin.html')
+def superadmin_override_payroll(payroll_id):
+    """Override payroll status as superadmin."""
+    # TODO: Integrate with payroll storage logic
+    data = request.get_json() or {}
+    new_status = data.get('status')
+    return jsonify({'success': True, 'message': f'Payroll {payroll_id} status overridden to {new_status} by superadmin.'})
 
-@bp.route('/hrm/shift')
+@bp.route('/api/hrm/payroll/<payroll_id>/audit-log', methods=['GET'])
 @role_required('super-admin','superadmin')
-def hr_shift_view():
-    return render_template('super-admin/human-resource-superadmin/shift-superadmin.html')
-
-@bp.route('/hrm/employee')
-@role_required('super-admin','superadmin')
-def hr_employee_view():
-    return render_template('super-admin/human-resource-superadmin/employee-superadmin.html')
-
-@bp.route('/hrm/attendance')
-@role_required('super-admin','superadmin')
-def hr_attendance_view():
-    return render_template('super-admin/human-resource-superadmin/attendance-superadmin.html')
-
-@bp.route('/hrm/holiday')
-@role_required('super-admin','superadmin')
-def hr_holiday_view():
-    return render_template('super-admin/human-resource-superadmin/holiday-superadmin.html')
-
-@bp.route('/hrm/leave-request')
-@role_required('super-admin','superadmin')
-def hr_leave_request_view():
-    return render_template('super-admin/human-resource-superadmin/leave-request-superadmin.html')
+def superadmin_payroll_audit_log(payroll_id):
+    """Fetch audit log for a payroll record."""
+    # TODO: Integrate with audit log storage
+    # Example: logs = payroll_storage.get_audit_log(payroll_id)
+    logs = [
+        {'action': 'created', 'by': 'user@example.com', 'at': '2026-03-01T10:00:00Z'},
+        {'action': 'approved', 'by': 'regional_admin@example.com', 'at': '2026-03-02T12:00:00Z'},
+        {'action': 'approved', 'by': 'national_admin@example.com', 'at': '2026-03-03T15:00:00Z'},
+    ]
+    return jsonify({'success': True, 'logs': logs})
 
 @bp.route('/hrm/payroll')
 @role_required('super-admin','superadmin')
 def hr_payroll_view():
     return render_template('super-admin/human-resource-superadmin/payroll-superadmin.html')
+
+
+@bp.route('/api/hrm/payroll', methods=['GET'])
+@role_required('super-admin','superadmin')
+def api_get_superadmin_payroll():
+    """Fetch all payroll records for superadmin payroll registry (all regions/municipalities)."""
+    try:
+        db = get_firestore_db()
+        employees_ref = db.collection('employees')
+        docs = employees_ref.stream()
+        employees = []
+        required_fields = [
+            'employee_id', 'first_name', 'middle_name', 'last_name', 'email',
+            'designation', 'department_name', 'division', 'role', 'region', 'municipality',
+            'basic_pay', 'allowances', 'gross_pay', 'deductions', 'net_pay',
+            'status', 'hire_date', 'period', 'month', 'payroll_no'
+        ]
+        for doc in docs:
+            data = doc.to_dict() or {}
+            data['id'] = doc.id
+            # Compose full name if missing
+            if not data.get('name'):
+                fn = data.get('first_name', '')
+                mn = data.get('middle_name', '')
+                ln = data.get('last_name', '')
+                data['name'] = f"{fn} {mn} {ln}".replace('  ', ' ').strip()
+            # Fill missing payroll fields with defaults
+            for field in required_fields:
+                if field not in data or data[field] is None:
+                    if field in ['basic_pay', 'allowances', 'gross_pay', 'deductions', 'net_pay']:
+                        data[field] = 0
+                    elif field == 'status':
+                        data[field] = 'DRAFT'
+                    elif field == 'period':
+                        data[field] = 'MONTHLY'
+                    elif field == 'month':
+                        data[field] = ''
+                    elif field == 'payroll_no':
+                        data[field] = ''
+                    else:
+                        data[field] = ''
+            employees.append(data)
+        return jsonify({'success': True, 'payrolls': employees, 'count': len(employees)})
+    except Exception as e:
+        print(f'[ERROR] Failed to fetch employees for payroll: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
+
+@bp.route('/api/hrm/employee', methods=['POST'])
+@role_required('super-admin','superadmin')
+def api_create_employee():
+    """Create a new employee in the employees collection."""
+    try:
+        db = get_firestore_db()
+        data = request.get_json() or {}
+        # Auto-generate employee_id if not provided
+        employee_id = data.get('employee_id') or f"EMP-{int(datetime.utcnow().timestamp())}-{str(hash(str(data)))[:6]}"
+        data['employee_id'] = employee_id
+        # Set default payroll fields if missing
+        for field, default in [
+            ('basic_pay', 0), ('allowances', 0), ('gross_pay', 0), ('deductions', 0), ('net_pay', 0),
+            ('status', 'DRAFT'), ('period', 'MONTHLY'), ('month', ''), ('payroll_no', ''), ('name', ''),
+            ('region', ''), ('municipality', ''), ('designation', ''), ('department_name', ''), ('division', ''), ('role', ''), ('email', ''), ('first_name', ''), ('middle_name', ''), ('last_name', ''), ('remarks', '')
+        ]:
+            if field not in data:
+                data[field] = default
+        # Compose full name if missing
+        if not data.get('name'):
+            fn = data.get('first_name', '')
+            mn = data.get('middle_name', '')
+            ln = data.get('last_name', '')
+            data['name'] = f"{fn} {mn} {ln}".replace('  ', ' ').strip()
+        db.collection('employees').document(employee_id).set(data)
+        return jsonify({'success': True, 'employee_id': employee_id})
+    except Exception as e:
+        print(f'[ERROR] Failed to create employee: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# --- HRM SUPERADMIN PAGES ---
+from flask import abort
+
+@bp.route('/hrm/attendance')
+@role_required('super-admin','superadmin')
+def hrm_attendance_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/attendance-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/company')
+@role_required('super-admin','superadmin')
+def hrm_company_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/company-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/department')
+@role_required('super-admin','superadmin')
+def hrm_department_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/department-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/designation')
+@role_required('super-admin','superadmin')
+def hrm_designation_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/designation-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/employee')
+@role_required('super-admin','superadmin')
+def hrm_employee_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/employee-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/holiday')
+@role_required('super-admin','superadmin')
+def hrm_holiday_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/holiday-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/leave-request')
+@role_required('super-admin','superadmin')
+def hrm_leave_request_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/leave-request-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/hrm/shift')
+@role_required('super-admin','superadmin')
+def hrm_shift_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/shift-superadmin.html')
+    except Exception:
+        abort(404)
+
+@bp.route('/api/hrm/holidays', methods=['GET'])
+@role_required('super-admin','superadmin')
+def get_superadmin_holidays():
+    db = get_firestore_db()
+    holidays = []
+    try:
+        docs = db.collection('holidays').order_by('date').stream()
+    except Exception:
+        docs = db.collection('holidays').stream()
+
+    for doc in docs:
+        item = doc.to_dict() or {}
+        date_value = item.get('date')
+        if isinstance(date_value, str):
+            item['date'] = date_value.split('T')[0]
+        elif hasattr(date_value, 'strftime'):
+            item['date'] = date_value.strftime('%Y-%m-%d')
+        elif hasattr(date_value, 'isoformat'):
+            item['date'] = date_value.isoformat().split('T')[0]
+        elif hasattr(date_value, 'to_datetime'):
+            item['date'] = date_value.to_datetime().strftime('%Y-%m-%d')
+        else:
+            item['date'] = ''
+
+        holidays.append({
+            'id': doc.id,
+            'name': item.get('name', ''),
+            'date': item.get('date', ''),
+            'type': item.get('type', 'Regular Holiday'),
+            'basis': item.get('basis', ''),
+            'description': item.get('description', ''),
+            'scope': item.get('scope', 'NATIONAL'),
+            'status': item.get('status', 'approved'),
+            'office_status': item.get('office_status', ''),
+            'open_time': item.get('open_time', ''),
+            'close_time': item.get('close_time', '')
+        })
+
+    return jsonify({'success': True, 'holidays': holidays})

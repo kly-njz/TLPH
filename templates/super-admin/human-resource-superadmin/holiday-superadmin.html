@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="/static/js/holiday-superadmin.js"></script>
 
   <script>
       tailwind.config = {
@@ -257,7 +258,7 @@
                         <thead class="bg-slate-100 border-b-2 border-slate-300 sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th class="border-r border-slate-200 text-center w-8">
-                                    <input id="sa" type="checkbox" class="cursor-pointer" />
+                                  <input id="sa" type="checkbox" class="cursor-pointer" />
                                 </th>
                                 <th class="border-r border-slate-200">Date</th>
                                 <th class="border-r border-slate-200">Holiday Details</th>
@@ -265,6 +266,8 @@
                                 <th class="border-r border-slate-200 text-center">Scope</th>
                                 <th class="border-r border-slate-200 text-center">Region</th>
                                 <th class="border-r border-slate-200 text-center">Municipality</th>
+                                <th class="border-r border-slate-200 text-center">Legal Basis</th>
+                                <th class="border-r border-slate-200 text-center">Office Operations</th>
                                 <th class="text-center no-print w-[60px]">Actions</th>
                             </tr>
                         </thead>
@@ -578,13 +581,33 @@
       if(i === 1) opt.selected = true; $("wdMonth").appendChild(opt);
     });
 
-    // Mock DB
-    let holidays = [
-      {id:crypto.randomUUID(),date:"2026-01-01",name:"New Year's Day",type:"REGULAR",scope:"NATIONAL",reg:"",mun:"",notes:""},
-      {id:crypto.randomUUID(),date:"2026-04-09",name:"Araw ng Kagitingan",type:"REGULAR",scope:"NATIONAL",reg:"",mun:"",notes:""},
-      {id:crypto.randomUUID(),date:"2026-02-25",name:"Local Foundation Day",type:"LOCAL",scope:"MUNICIPALITY",reg:"CALABARZON",mun:"City of San Pedro",notes:"Ordinance #12"},
-      {id:crypto.randomUUID(),date:"2026-08-21",name:"Ninoy Aquino Day",type:"SPECIAL_NON_WORKING",scope:"NATIONAL",reg:"",mun:"",notes:""}
-    ];
+
+    // Fetch holidays from backend
+    let holidays = [];
+    async function fetchHolidays() {
+      try {
+        const res = await fetch('/superadmin/api/hrm/holidays');
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.holidays)) {
+          holidays = data.holidays.map(h => ({
+            ...h,
+            reg: h.region || h.reg || '',
+            mun: h.municipality || h.mun || '',
+            notes: h.basis || h.notes || '',
+          }));
+        } else {
+          holidays = [];
+        }
+        rerenderAll();
+      } catch (err) {
+        holidays = [];
+        rerenderAll();
+        toast('Error', 'Failed to load holidays');
+      }
+    }
+
+    // Initial load
+    fetchHolidays();
 
     const keyFor = (h) => {
       const d = norm(h.date), s = norm(h.scope), r = norm(h.reg), m = low(h.mun);
@@ -642,6 +665,10 @@
           <td class="px-3 py-1.5 align-middle text-center border-r border-slate-100">${chipScope(x.scope)}</td>
           <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase tracking-widest text-center">${esc(x.reg||"—")}</td>
           <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-800 uppercase tracking-widest text-center">${esc(x.mun||"—")}</td>
+          <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-[9px] font-bold text-slate-700 uppercase tracking-widest text-center">${esc(x.basis||"—")}</td>
+          <td class="px-3 py-1.5 align-middle border-r border-slate-100 text-center">
+            ${x.office_status === 'open' ? `<span class='text-emerald-700 font-bold'>Open${x.open_time && x.close_time ? ` (${esc(x.open_time)} - ${esc(x.close_time)})` : ''}</span>` : `<span class='text-rose-700 font-bold'>Closed</span>`}
+          </td>
           <td class="px-3 py-1.5 align-middle text-center no-print w-[60px]">
             <div class="flex justify-center gap-1 flex-nowrap">
               <button class="ed btn-action btn-edit" title="Edit" data-id="${x.id}"><span class="material-icons-round text-[12px]">edit</span></button>
@@ -649,7 +676,7 @@
             </div>
           </td>
         </tr>
-      `).join("") : '<tr><td colspan="8" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No holiday records found.</td></tr>';
+      `).join("") : '<tr><td colspan="10" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No holiday records found.</td></tr>';
     };
 
     let calMonth = 0; 

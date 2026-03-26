@@ -4,6 +4,7 @@ from config import Config
 import firebase_admin
 from firebase_admin import credentials
 from datetime import timedelta
+import os
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -19,20 +20,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 mail = Mail(app)
 
 # Initialize Firebase
-import os
-import json
-
 if not firebase_admin._apps:
-    firebase_json = os.environ.get("FIREBASE_CREDENTIALS")
-
-    if firebase_json:
-        # Production (Render)
-        cred_dict = json.loads(firebase_json)
-        cred = credentials.Certificate(cred_dict)
-    else:
-        # Local development fallback
-        cred = credentials.Certificate("firebase-credentials.json")
-
+    cred = credentials.Certificate("firebase-credentials.json")
     firebase_admin.initialize_app(cred)
 
 
@@ -85,4 +74,4 @@ def account_disabled():
     return render_template('account-disabled.html')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)

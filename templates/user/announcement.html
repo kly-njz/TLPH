@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Announcements | TLPH Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+
+    <style>
+        :root {
+            --tlph-primary: #047827; 
+            --tlph-secondary: #0f766e; 
+            --tlph-bg: #f8fafc; 
+            --tlph-surface: #ffffff;
+            --tlph-text-main: #1e293b;
+            --tlph-text-muted: #64748b;
+            --tlph-border: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--tlph-bg);
+            color: var(--tlph-text-main);
+            font-size: 0.95rem;
+        }
+
+        /* HERO SECTION */
+        .hero-section {
+            background: linear-gradient(135deg, var(--tlph-primary) 0%, var(--tlph-secondary) 100%);
+            padding: 3rem 0;
+            color: white;
+            box-shadow: 0 4px 12px rgba(4, 120, 87, 0.15);
+        }
+
+        /* FILTER BAR */
+        .filter-wrapper {
+            background: var(--tlph-surface);
+            border-bottom: 1px solid var(--tlph-border);
+            padding: 1.25rem 0;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        .btn-filter {
+            border: 1px solid transparent;
+            color: var(--tlph-text-muted);
+            font-weight: 600;
+            font-size: 0.95rem;
+            border-radius: 8px;
+            padding: 0.5rem 1.25rem;
+            transition: all 0.2s;
+            background: transparent;
+        }
+
+        .btn-filter:hover { background-color: #f1f5f9; color: var(--tlph-text-main); }
+        .btn-filter.active { background-color: var(--tlph-primary); color: white; }
+
+        /* ==========================================
+           STACKED ANNOUNCEMENT LAYOUT 
+           ========================================== */
+        .announcements-container {
+            background: var(--tlph-surface);
+            border: 1px solid var(--tlph-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            transition: all 0.3s ease;
+        }
+
+        .stacked-card {
+            background: #ffffff;
+            border: 1px solid var(--tlph-border);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 0.75rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
+        }
+
+        .stacked-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border-color: #cbd5e1;
+        }
+
+        .stacked-card:last-child { margin-bottom: 0; }
+
+        /* Borders & Colors */
+        .border-left-red { border-left: 4px solid #ef4444; }
+        .border-left-blue { border-left: 4px solid #3b82f6; }
+        .border-left-green { border-left: 4px solid #10b981; }
+        .border-left-yellow { border-left: 4px solid #f59e0b; }
+
+        .dot { font-size: 0.5rem; margin-right: 6px; vertical-align: middle; }
+        .text-red { color: #ef4444; }
+        .text-blue { color: #3b82f6; }
+        .text-green { color: #10b981; }
+        .text-yellow { color: #f59e0b; }
+
+        .meta-text { font-size: 0.75rem; color: var(--tlph-text-muted); }
+        .category-text { font-size: 0.75rem; letter-spacing: 0.5px; }
+        .title-text { font-size: 1.05rem; font-weight: 700; color: #0f172a; margin-bottom: 0.15rem; }
+        .desc-text { font-size: 0.85rem; color: #475569; margin-bottom: 0; }
+
+        .btn-stacked {
+            font-size: 0.8rem;
+            padding: 0.4rem 1rem;
+            border-radius: 6px;
+            font-weight: 600;
+            border: none;
+            color: white;
+            transition: all 0.2s;
+        }
+        .btn-red { background-color: #ef4444; }
+        .btn-red:hover { background-color: #dc2626; color: white; }
+        .btn-blue { background-color: #3b82f6; }
+        .btn-blue:hover { background-color: #2563eb; color: white; }
+        .btn-green { background-color: #10b981; }
+        .btn-green:hover { background-color: #059669; color: white; }
+        .btn-yellow { background-color: #f59e0b; }
+        .btn-yellow:hover { background-color: #d97706; color: white; }
+
+        /* ==========================================
+           GRID CARDS (Memos)
+           ========================================== */
+        .announcement-card {
+            background: var(--tlph-surface);
+            border-radius: 12px;
+            border: 1px solid var(--tlph-border);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
+            height: 100%; 
+            display: flex;
+            flex-direction: column;
+            padding: 1.25rem;
+        }
+
+        .announcement-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px -5px rgba(0,0,0,0.08);
+        }
+
+        .card-accent-green { border-top: 4px solid var(--tlph-primary); }
+        .card-accent-blue { border-top: 4px solid #3b82f6; }
+        .card-accent-orange { border-top: 4px solid #f59e0b; }
+
+        .card-title { font-weight: 700; font-size: 1rem; margin-bottom: 0.5rem; color: var(--tlph-text-main); }
+        .card-text { color: var(--tlph-text-muted); font-size: 0.85rem; line-height: 1.5; margin-bottom: 0; }
+
+        .badge-custom { padding: 0.35em 0.6em; font-size: 0.7rem; font-weight: 700; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px;}
+        .bg-soft-success { background-color: #d1fae5; color: #065f46; }
+        .bg-soft-primary { background-color: #dbeafe; color: #1e40af; }
+        .bg-soft-warning { background-color: #fef3c7; color: #92400e; }
+        
+        .read-more-link {
+            color: var(--tlph-primary);
+            font-weight: 700;
+            font-size: 0.85rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .read-more-link:hover { color: var(--tlph-secondary); text-decoration: underline; }
+
+        @media (max-width: 767px) {
+            .btn-stacked { width: 100%; margin-top: 0.5rem; text-align: center; }
+            .filter-actions { flex-direction: column; align-items: stretch; }
+            .search-input-group { width: 100% !important; max-width: none !important; margin-top: 1rem; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-slate-900 text-sm font-sans">
+    {% include 'user/header.html' %}
+    <section class="hero-section text-center">
+        <div class="container px-4">
+            <h1 class="fw-bold mb-2" style="letter-spacing: -0.5px; font-size: 2rem;">System Announcements</h1>
+            <p class="opacity-75 mx-auto mb-0" style="max-width: 600px; font-size: 1rem;">
+                Stay informed with the latest policies, features, and portal updates.
+            </p>
+        </div>
+    </section>
+
+    <div class="filter-wrapper">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-10 col-xl-9 d-flex flex-wrap justify-content-between align-items-center filter-actions">
+                    <div class="d-flex gap-2 flex-wrap" id="filterContainer">
+                        <button class="btn-filter active" data-filter="all">All Updates</button>
+                        <button class="btn-filter" data-filter="policy">Policies</button>
+                        <button class="btn-filter" data-filter="feature">Features</button>
+                        <button class="btn-filter" data-filter="system">System & Security</button>
+                    </div>
+                    <div class="input-group input-group-sm search-input-group" style="max-width: 280px;">
+                        <span class="input-group-text bg-light border-end-0 text-muted"><i class="fa-solid fa-search"></i></span>
+                        <input type="text" id="searchBox" class="form-control bg-light border-start-0 ps-0" placeholder="Search announcements...">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container pb-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10 col-xl-9">
+                
+                <div id="noResultsMsg" class="text-center py-5 d-none">
+                    <div class="mb-3">
+                        <i class="fa-solid fa-folder-open text-muted" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark">No announcements found</h5>
+                    <p class="text-muted">Try adjusting your filters or search keywords.</p>
+                </div>
+
+                <div class="announcements-container mb-5" id="alertsSection">
+                    <h6 class="fw-bold text-muted mb-3 section-title" style="letter-spacing: 1px; font-size: 0.8rem;">PORTAL ALERTS</h6>
+
+                    <div class="stacked-card border-left-red js-item" data-category="system">
+                        <div class="row align-items-center">
+                            <div class="col-md-9">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fa-solid fa-circle dot text-red"></i>
+                                    <span class="text-red fw-bold text-uppercase me-3 category-text">Urgent Advisory</span>
+                                    <span class="meta-text"><i class="fa-regular fa-clock me-1"></i> Mar 24, 2026</span>
+                                </div>
+                                <h5 class="title-text search-target">Database Migration Downtime</h5>
+                                <p class="desc-text search-target">Sat 11:00 PM - Sun 3:00 AM. Save drafts.</p>
+                            </div>
+                            <div class="col-md-3 text-md-end mt-2 mt-md-0">
+                                <a href="#" class="btn btn-stacked btn-red">Read Details</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stacked-card border-left-blue js-item" data-category="feature">
+                        <div class="row align-items-center">
+                            <div class="col-md-9">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fa-solid fa-circle dot text-blue"></i>
+                                    <span class="text-blue fw-bold text-uppercase me-3 category-text">System Update</span>
+                                    <span class="meta-text"><i class="fa-regular fa-clock me-1"></i> Mar 25, 2026</span>
+                                </div>
+                                <h5 class="title-text search-target">Enhanced Reporting Tools Live</h5>
+                                <p class="desc-text search-target">Improved templates and faster generation.</p>
+                            </div>
+                            <div class="col-md-3 text-md-end mt-2 mt-md-0">
+                                <a href="#" class="btn btn-stacked btn-blue">View Tools</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stacked-card border-left-green js-item" data-category="feature">
+                        <div class="row align-items-center">
+                            <div class="col-md-9">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fa-solid fa-circle dot text-green"></i>
+                                    <span class="text-green fw-bold text-uppercase me-3 category-text">Feature Enhancement</span>
+                                    <span class="meta-text"><i class="fa-regular fa-clock me-1"></i> Mar 26, 2026</span>
+                                </div>
+                                <h5 class="title-text search-target">SSO Support Added</h5>
+                                <p class="desc-text search-target">Login with corporate credentials.</p>
+                            </div>
+                            <div class="col-md-3 text-md-end mt-2 mt-md-0">
+                                <a href="#" class="btn btn-stacked btn-green">Setup Roles</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stacked-card border-left-yellow js-item" data-category="system">
+                        <div class="row align-items-center">
+                            <div class="col-md-9">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fa-solid fa-circle dot text-yellow"></i>
+                                    <span class="text-yellow fw-bold text-uppercase me-3 category-text">Security Advisory</span>
+                                    <span class="meta-text"><i class="fa-regular fa-clock me-1"></i> Mar 27, 2026</span>
+                                </div>
+                                <h5 class="title-text search-target">Mandatory Password Reset</h5>
+                                <p class="desc-text search-target">All user passwords expire in 7 days.</p>
+                            </div>
+                            <div class="col-md-3 text-md-end mt-2 mt-md-0">
+                                <a href="#" class="btn btn-stacked btn-yellow">Reset Now</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-end mb-3" id="memosHeader">
+                    <h6 class="fw-bold text-muted mb-0 section-title" style="letter-spacing: 1px; font-size: 0.8rem;">RECENT MEMOS & UPDATES</h6>
+                </div>
+                
+                <div class="row g-3 mb-4" id="memosSection">
+                    <div class="col-12 col-md-6 col-lg-4 js-item" data-category="policy">
+                        <div class="announcement-card card-accent-green">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="badge badge-custom bg-soft-success">Policy</span>
+                                <small class="text-muted" style="font-size: 0.75rem;">Mar 20, 2026</small>
+                            </div>
+                            <h3 class="card-title search-target">New Digital Form-B for Wildlife</h3>
+                            <p class="card-text flex-grow-1 search-target">All regional offices will strictly implement the digital version of Form-B. Manual paper submissions will no longer be accepted starting next month.</p>
+                            <div class="mt-3 pt-3 border-top border-light mt-auto">
+                                <a href="#" class="read-more-link">Read Memo <i class="fa-solid fa-arrow-right-long ms-1"></i></a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-lg-4 js-item" data-category="feature">
+                        <div class="announcement-card card-accent-blue">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="badge badge-custom bg-soft-primary">Feature</span>
+                                <small class="text-muted" style="font-size: 0.75rem;">Mar 18, 2026</small>
+                            </div>
+                            <h3 class="card-title search-target">E-Wallet Payment Integration Live</h3>
+                            <p class="card-text flex-grow-1 search-target">Municipal users can now process permit fees directly within the portal using GCash, Maya, or direct bank transfer securely.</p>
+                            <div class="mt-3 pt-3 border-top border-light mt-auto">
+                                <a href="#" class="read-more-link">View Guide <i class="fa-solid fa-arrow-right-long ms-1"></i></a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-lg-4 js-item" data-category="general">
+                        <div class="announcement-card card-accent-orange">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="badge badge-custom bg-soft-warning">General</span>
+                                <small class="text-muted" style="font-size: 0.75rem;">Mar 15, 2026</small>
+                            </div>
+                            <h3 class="card-title search-target">Q2 Forestry Seminar Schedule</h3>
+                            <p class="card-text flex-grow-1 search-target">The calendar for the mandatory quarterly seminar has been posted. Please register your representatives early due to limited slots.</p>
+                            <div class="mt-3 pt-3 border-top border-light mt-auto">
+                                <a href="#" class="read-more-link">View Calendar <i class="fa-solid fa-arrow-right-long ms-1"></i></a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const searchBox = document.getElementById("searchBox");
+            const filterButtons = document.querySelectorAll(".btn-filter");
+            const items = document.querySelectorAll(".js-item");
+            const noResultsMsg = document.getElementById("noResultsMsg");
+            
+            // Section containers to hide if entirely empty
+            const alertsSection = document.getElementById("alertsSection");
+            const memosHeader = document.getElementById("memosHeader");
+            const memosSection = document.getElementById("memosSection");
+
+            let currentSearchTerm = "";
+            let currentFilter = "all";
+
+            // Function to run the filter logic
+            function filterAnnouncements() {
+                let visibleCount = 0;
+                let visibleAlerts = 0;
+                let visibleMemos = 0;
+
+                items.forEach(item => {
+                    const itemCategory = item.getAttribute("data-category");
+                    
+                    // Kunin lang ang text ng title at description para sa search
+                    const textTargets = item.querySelectorAll('.search-target');
+                    let itemText = "";
+                    textTargets.forEach(t => itemText += t.textContent.toLowerCase() + " ");
+
+                    // Check if matches Filter
+                    const matchesFilter = (currentFilter === "all") || (currentFilter === itemCategory);
+                    
+                    // Check if matches Search (kung walang type, auto-match)
+                    const matchesSearch = itemText.includes(currentSearchTerm);
+
+                    // Show or Hide Item
+                    if (matchesFilter && matchesSearch) {
+                        item.classList.remove("d-none");
+                        visibleCount++;
+                        
+                        // Check anong section sya para maitago natin ang empty sections mamaya
+                        if(item.classList.contains('stacked-card')) visibleAlerts++;
+                        else visibleMemos++;
+                        
+                    } else {
+                        item.classList.add("d-none");
+                    }
+                });
+
+                // Display "No Results Found" kung 0 ang nag-match
+                if (visibleCount === 0) {
+                    noResultsMsg.classList.remove("d-none");
+                } else {
+                    noResultsMsg.classList.add("d-none");
+                }
+
+                // Hide completely the white container if no alerts match
+                alertsSection.style.display = visibleAlerts === 0 ? "none" : "block";
+                
+                // Hide completely the Grid Header if no memos match
+                memosHeader.style.display = visibleMemos === 0 ? "none" : "flex";
+                memosSection.style.display = visibleMemos === 0 ? "none" : "flex";
+            }
+
+            // EVENT 1: Kapag may tinype sa Search Box
+            searchBox.addEventListener("input", (e) => {
+                currentSearchTerm = e.target.value.toLowerCase().trim();
+                filterAnnouncements();
+            });
+
+            // EVENT 2: Kapag pinindot ang Filter Buttons
+            filterButtons.forEach(btn => {
+                btn.addEventListener("click", () => {
+                    // Update Active Styling
+                    filterButtons.forEach(b => b.classList.remove("active"));
+                    btn.classList.add("active");
+
+                    // Set state and run filter
+                    currentFilter = btn.getAttribute("data-filter");
+                    filterAnnouncements();
+                });
+            });
+        });
+    </script>
+</body>
+</html>
