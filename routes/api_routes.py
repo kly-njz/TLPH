@@ -1172,6 +1172,19 @@ def _sa_extract_application(doc, users_map):
         or 'N/A'
     )
 
+    product_name = (
+        data.get('productName')
+        or data.get('resourceName')
+        or data.get('item_name')
+        or data.get('itemName')
+        or form_data.get('productName')
+        or form_data.get('resourceName')
+        or form_data.get('itemName')
+        or form_data.get('cropName')
+        or data.get('cropName')
+        or 'N/A'
+    )
+
     status_payload = _sa_status_payload(data)
 
     return {
@@ -1180,6 +1193,7 @@ def _sa_extract_application(doc, users_map):
         'date': date_filed,
         'date_iso': date_filed,
         'name': _sa_norm_text(name),
+        'product_name': _sa_norm_text(product_name),
         'sector': sector,
         'application_type': application_type,
         'region': _sa_norm_text(region),
