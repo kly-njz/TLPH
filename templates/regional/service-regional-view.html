@@ -155,6 +155,20 @@
                         </template>
                     </div>
 
+                    <div class="gov-card p-3 shadow-sm" x-show="submittedFields.length > 0" x-cloak>
+                        <h3 class="label-text border-b pb-1 mb-2 flex items-center gap-2 text-slate-700">
+                            <span class="material-icons-round text-[14px]">list_alt</span> Submitted Information
+                        </h3>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <template x-for="field in submittedFields" :key="field.key">
+                                <div>
+                                    <p class="label-text" x-text="field.label"></p>
+                                    <p class="data-text break-words" x-text="field.value"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
                     <!-- Seminar-specific details panel -->
                     <div class="gov-card p-3 shadow-sm" x-show="seminarFields.length > 0" x-cloak>
                         <h3 class="label-text border-b pb-1 mb-2 flex items-center gap-2 text-indigo-800">
@@ -184,6 +198,12 @@
                                             <p class="text-[9px] font-black uppercase text-slate-700 truncate" x-text="file.name"></p>
                                             <p class="text-[8px] text-slate-400 capitalize" x-text="file.fieldKey.replace(/File$|Files$/i,'').replace(/([A-Z])/g,' $1').trim()"></p>
                                         </div>
+                                        <button
+                                            type="button"
+                                            class="border border-blue-300 bg-white px-2 py-1 text-[8px] font-black uppercase tracking-widest text-blue-700 hover:bg-blue-600 hover:text-white transition-all"
+                                            @click="openFilePreview(file)">
+                                            View
+                                        </button>
                                     </div>
                                 </template>
                             </div>
@@ -215,6 +235,35 @@
             </div>
 
             <p class="text-center text-[8px] text-slate-400 font-black uppercase tracking-[0.5em] mt-4 italic" x-text="`Department of Environment and Natural Resources • Region ${userRegion} Portal`"></p>
+        </div>
+
+        <!-- Attachment Preview Modal (View Only) -->
+        <div x-show="showFilePreviewModal" x-cloak class="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-4" @click="closeFilePreview()">
+            <div class="relative w-full max-w-5xl bg-white border border-slate-300 shadow-2xl" @click.stop>
+                <div class="flex items-center justify-between border-b border-slate-200 px-4 py-2 bg-slate-50">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-700 truncate" x-text="filePreviewName"></p>
+                    <button type="button" class="text-slate-500 hover:text-slate-800" @click="closeFilePreview()">
+                        <span class="material-icons-round text-[18px]">close</span>
+                    </button>
+                </div>
+
+                <div class="bg-slate-100 p-3 min-h-[60vh] max-h-[75vh] overflow-auto flex items-center justify-center">
+                    <template x-if="filePreviewType === 'image'">
+                        <img :src="filePreviewUrl" alt="Attachment Preview" class="max-w-full max-h-[68vh] object-contain bg-white border border-slate-200" />
+                    </template>
+
+                    <template x-if="filePreviewType === 'pdf'">
+                        <iframe :src="filePreviewUrl" class="w-full h-[68vh] bg-white border border-slate-200" title="PDF Preview"></iframe>
+                    </template>
+
+                    <template x-if="filePreviewType === 'other'">
+                        <div class="text-center">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-slate-600">Preview not available for this file type.</p>
+                            <p class="text-[9px] text-slate-500 mt-1">Allowed preview: images and PDF.</p>
+                        </div>
+                    </template>
+                </div>
+            </div>
         </div>
 
         <!-- Rejection Note Modal -->
@@ -267,6 +316,10 @@
                 statusClass: 'bg-amber-50 text-amber-700 border-amber-200',
                 submittedAtText: '—',
                 docFiles: [],
+                showFilePreviewModal: false,
+                filePreviewUrl: '',
+                filePreviewType: '',
+                filePreviewName: '',
 
                 parseAnyDate(value) {
                     if (!value) return null;
@@ -308,6 +361,52 @@
                     if (!withTime) return base;
                     const t = d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
                     return `${base} ${t}`;
+                },
+
+                isImageFile(value) {
+                    return /\.(png|jpe?g|gif|webp|bmp|svg|avif)(\?|$)/i.test(String(value || ''));
+                },
+
+                isPdfFile(value) {
+                    return /\.pdf(\?|$)/i.test(String(value || ''));
+                },
+
+                normalizeFileUrl(raw, userId) {
+                    const str = String(raw || '').trim();
+                    if (!str) return '';
+                    if (/^(https?:\/\/|\/static\/|static\/)/i.test(str)) {
+                        return str.startsWith('static/') ? `/${str}` : str;
+                    }
+                    if (!/\.[a-z0-9]{2,6}(\?|$)/i.test(str) || !userId) return '';
+                    const encoded = str.split('/').map(part => encodeURIComponent(part)).join('/');
+                    return `/static/uploads/service_requests/${encodeURIComponent(userId)}/${encoded}`;
+                },
+
+                getDisplayFileName(value, fallback = 'Attachment') {
+                    try {
+                        const clean = String(value || '').split('?')[0];
+                        const base = clean.split('/').filter(Boolean).pop();
+                        return decodeURIComponent(base || fallback);
+                    } catch (_) {
+                        return fallback;
+                    }
+                },
+
+                openFilePreview(file) {
+                    if (!file?.url) return;
+                    this.filePreviewUrl = file.url;
+                    this.filePreviewName = file.name || 'Attachment';
+                    if (this.isImageFile(file.url)) this.filePreviewType = 'image';
+                    else if (this.isPdfFile(file.url)) this.filePreviewType = 'pdf';
+                    else this.filePreviewType = 'other';
+                    this.showFilePreviewModal = true;
+                },
+
+                closeFilePreview() {
+                    this.showFilePreviewModal = false;
+                    this.filePreviewUrl = '';
+                    this.filePreviewType = '';
+                    this.filePreviewName = '';
                 },
 
                 get seminarFields() {
@@ -359,6 +458,55 @@
                         ];
                     }
                     return [];
+                },
+
+                get submittedFields() {
+                    if (!this.serviceData) return [];
+                    const excluded = new Set([
+                        'userId', 'uid', 'userID', 'userEmail', 'userName',
+                        'serviceType', 'category', 'status', 'paymentStatus',
+                        'createdAt', 'submittedAt', 'updatedAt',
+                        'reviewedBy', 'reviewedByEmail', 'reviewedAt',
+                        'approvedByLevel', 'approvedAt',
+                        'rejectedByLevel', 'rejectedAt', 'rejectionNote',
+                        'forwardedAt', 'forwardedBy', 'forwardedByEmail',
+                        'forwardedToNationalAt', 'forwardedToNationalBy',
+                        'municipality', 'province', 'barangay', 'region',
+                        'amount', 'invoiceId', 'externalId', 'paymentUrl'
+                    ]);
+
+                    const rows = [];
+                    for (const [key, val] of Object.entries(this.serviceData || {})) {
+                        if (excluded.has(key) || key.endsWith('Count')) continue;
+                        if (Array.isArray(val)) {
+                            // file arrays are shown in Attached Documents section
+                            const isLikelyFileArray = val.length && val.every(v => /\.[a-z0-9]{2,6}(\?|$)/i.test(String(v || '')));
+                            if (isLikelyFileArray) continue;
+                            rows.push({ key, label: this.formatFieldLabel(key), value: val.join(', ') || 'N/A' });
+                            continue;
+                        }
+                        if (val && typeof val === 'object') {
+                            if (typeof val.toDate === 'function' || typeof val.seconds === 'number' || typeof val._seconds === 'number') {
+                                rows.push({ key, label: this.formatFieldLabel(key), value: this.formatAnyDate(val, true) });
+                            }
+                            continue;
+                        }
+                        if (typeof val === 'string' && /\.[a-z0-9]{2,6}(\?|$)/i.test(val)) {
+                            // single file string is shown in Attached Documents
+                            continue;
+                        }
+                        if (val === null || val === undefined || String(val).trim() === '') continue;
+                        rows.push({ key, label: this.formatFieldLabel(key), value: String(val) });
+                    }
+                    return rows;
+                },
+
+                formatFieldLabel(key) {
+                    return String(key || '')
+                        .replace(/([a-z])([A-Z])/g, '$1 $2')
+                        .replace(/[_-]+/g, ' ')
+                        .trim()
+                        .replace(/\b\w/g, c => c.toUpperCase());
                 },
 
                 async init() {
@@ -453,17 +601,35 @@
                             }
 
                             // documents — scan all array-valued fields (file inputs stored as filenames)
-                            const FILE_EXT = /\.(pdf|jpg|jpeg|png|doc|docx|xlsx|xls|csv|txt|zip)$/i;
+                            const FILE_EXT = /\.(pdf|jpg|jpeg|png|gif|webp|bmp|svg|avif|doc|docx|xlsx|xls|csv|txt|zip)$/i;
                             this.docFiles = [];
+                            const seen = new Set();
                             for (const [key, val] of Object.entries(d)) {
                                 if (key.endsWith('Count')) continue;
                                 if (Array.isArray(val) && val.length > 0 && val.every(v => typeof v === 'string' && FILE_EXT.test(v))) {
                                     val.forEach(filename => {
-                                        this.docFiles.push({ name: filename, fieldKey: key });
+                                        const url = this.normalizeFileUrl(filename, d.userId || d.userID || d.uid || '');
+                                        if (!url) return;
+                                        const marker = `${key}|${url}`;
+                                        if (seen.has(marker)) return;
+                                        seen.add(marker);
+                                        this.docFiles.push({
+                                            name: this.getDisplayFileName(filename, 'Attachment'),
+                                            fieldKey: key,
+                                            url,
+                                        });
                                     });
                                 } else if (typeof val === 'string' && FILE_EXT.test(val)) {
-                                    // single file stored as string
-                                    this.docFiles.push({ name: val, fieldKey: key });
+                                    const url = this.normalizeFileUrl(val, d.userId || d.userID || d.uid || '');
+                                    if (!url) continue;
+                                    const marker = `${key}|${url}`;
+                                    if (seen.has(marker)) continue;
+                                    seen.add(marker);
+                                    this.docFiles.push({
+                                        name: this.getDisplayFileName(val, 'Attachment'),
+                                        fieldKey: key,
+                                        url,
+                                    });
                                 }
                             }
 
