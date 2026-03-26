@@ -23,7 +23,6 @@ function closeViewModal() {
 }
 
 window.closeViewModal = closeViewModal;
-}
 
 // --- Forward Modal Logic ---
 let currentForwardId = null;
@@ -46,7 +45,6 @@ function closeForwardModal() {
 }
 
 window.closeForwardModal = closeForwardModal;
-}
 // Forward form submit stub
 function submitForward(e) {
     e.preventDefault();
@@ -55,7 +53,6 @@ function submitForward(e) {
 }
 
 window.submitForward = submitForward;
-}
 
 function closeHistoryModal() {
     const modal = document.getElementById('historyModal');
@@ -64,7 +61,6 @@ function closeHistoryModal() {
 }
 
 window.closeHistoryModal = closeHistoryModal;
-}
 // Show history modal and load content stub
 function showHistoryModal(quoteId) {
     document.getElementById('historyContent').textContent = 'History for Quotation ID: ' + quoteId + ' (stub, implement backend fetch)';
@@ -74,7 +70,6 @@ function showHistoryModal(quoteId) {
 }
 
 window.showHistoryModal = showHistoryModal;
-}
 // Status form submit stub
 function submitStatus(e) {
     e.preventDefault();
