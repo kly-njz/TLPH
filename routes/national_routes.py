@@ -898,9 +898,8 @@ def quotation():
         q['amount'] = f"{q['amount_value']:,.2f}"
         q['status'] = str(q.get('status') or 'Pending').capitalize()
     total_quotes = len(quotations)
-    approved_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'APPROVED'])
     pending_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'PENDING'])
-    rejected_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'REJECTED'])
+    cancelled_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'CANCELLED'])
     total_value_number = sum([to_float(q.get('amount_value')) for q in quotations])
     total_value = f"{total_value_number:,.2f}"
     regions = sorted(list({(q.get('region') or '').strip() for q in quotations if (q.get('region') or '').strip()}))
@@ -924,19 +923,20 @@ def quotation():
     from models.region_province_map import region_province_map
     # province_muni_map is just philippineLocations
     province_muni_map = philippineLocations
-    # Always provide status_data for chart (Approved, Pending, Rejected)
+    # Always provide status_data for chart (Pending, In Transit, For Delivery, Delivered, Cancelled)
     status_data = [
-        len([q for q in quotations if str(q.get('status', '')).lower() == 'approved']),
         len([q for q in quotations if str(q.get('status', '')).lower() == 'pending']),
-        len([q for q in quotations if str(q.get('status', '')).lower() == 'rejected'])
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'in-transit']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'for-delivery']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'delivered']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'cancelled'])
     ]
     return render_template(
         'national/operations/quotation.html',
         quotations=quotations,
         total_quotes=total_quotes,
-        approved_quotes=approved_quotes,
         pending_quotes=pending_quotes,
-        rejected_quotes=rejected_quotes,
+        cancelled_quotes=cancelled_quotes,
         total_value=total_value,
         region_province_map=region_province_map,
         province_muni_map=province_muni_map,
