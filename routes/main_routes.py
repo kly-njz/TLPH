@@ -45,7 +45,7 @@ def index():
     main_news = landing_news[0] if landing_news else None
     side_news = landing_news[1:4] if len(landing_news) > 1 else []
 
-    # Fetch active hiring positions (filtered by municipality if logged-in municipal admin)
+    # Fetch active hiring positions (municipal viewers see own municipality + own region-scoped posts)
     hiring_positions = []
     try:
         from firebase_config import get_firestore_db
@@ -53,11 +53,13 @@ def index():
         
         # Determine user's municipality if they are a municipal admin
         user_municipality = None
+        user_region = None
         user_role = session.get('user_role', '').lower()
         
         if user_role in ['municipal_admin', 'municipal']:
             # Try to get municipality from session
             user_municipality = session.get('municipality') or session.get('user_municipality') or ''
+            user_region = session.get('region') or session.get('user_region') or ''
             if not user_municipality.strip():
                 # Fallback: try to resolve from user document
                 if user_id:
@@ -67,18 +69,33 @@ def index():
                     if user_doc.exists:
                         user_data = user_doc.to_dict() or {}
                         user_municipality = user_data.get('municipality') or user_data.get('municipalAdminMunicipality') or ''
+                        user_region = user_region or user_data.get('region') or user_data.get('regionalAdminRegion') or ''
         
-        # Query hiring positions
-        if user_municipality and user_municipality.strip():
-            # If municipal admin, filter by their municipality
-            query = db.collection('hiring_positions').where('is_active', '==', True).where('municipality', '==', user_municipality.upper())
-        else:
-            # For other users, show all active hirings
-            query = db.collection('hiring_positions').where('is_active', '==', True)
-        
-        docs = query.stream()
+        # Query all active hirings, then scope-filter in memory for flexibility.
+        docs = db.collection('hiring_positions').where('is_active', '==', True).stream()
+
+        def normalize_scope(value):
+            return ' '.join(str(value or '').strip().upper().split())
+
+        muni_key = normalize_scope(user_municipality)
+        region_key = normalize_scope(user_region)
+
         for doc in docs:
             item = doc.to_dict() or {}
+            item_muni = normalize_scope(item.get('municipality'))
+            item_region = normalize_scope(item.get('region'))
+            item_scope_type = str(item.get('scope_type') or '').strip().lower()
+
+            if user_role in ['municipal_admin', 'municipal'] and muni_key:
+                is_same_municipality = item_muni and item_muni == muni_key
+                is_same_region_scope = (
+                    item_scope_type == 'region' and
+                    region_key and
+                    item_region == region_key
+                )
+                if not (is_same_municipality or is_same_region_scope):
+                    continue
+
             hiring_positions.append({
                 'id': doc.id,
                 'job_title': str(item.get('job_title') or '').strip(),
@@ -86,6 +103,8 @@ def index():
                 'position': str(item.get('position') or '').strip(),
                 'starting_salary': item.get('starting_salary') or 0,
                 'municipality': str(item.get('municipality') or '').strip(),
+                'region': str(item.get('region') or '').strip(),
+                'scope_type': str(item.get('scope_type') or '').strip(),
                 'scope': str(item.get('scope') or '').strip(),
                 'created_at': str(item.get('created_at') or '').strip(),
             })
