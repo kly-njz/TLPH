@@ -517,9 +517,45 @@ def accounting_dashboard():
 def accounting_entities():
     return render_template('super-admin/accounting/entities.html')
 
+
 @bp.route('/accounting/coa-templates')
+@role_required('super-admin','superadmin')
 def accounting_coa_templates():
-    return render_template('super-admin/accounting/coa-templates.html')
+    db = get_firestore_db()
+    # Fetch all templates
+    templates = []
+    accounts = []
+    stats = {
+        'total_templates': 0,
+        'total_accounts': 0,
+        'total_locked': 0
+    }
+    try:
+        all_templates = db.collection('coa_templates').limit(5000).stream()
+        for doc in all_templates:
+            template = doc.to_dict() or {}
+            template['id'] = doc.id
+            templates.append(template)
+            stats['total_accounts'] += template.get('account_count', 0)
+            stats['total_locked'] += template.get('locked_count', 0)
+        stats['total_templates'] = len(templates)
+        # Fetch all accounts for all templates
+        if templates:
+            template_ids = [t['id'] for t in templates]
+            for template_id in template_ids:
+                template_accounts = db.collection('coa_accounts').where('template_id', '==', template_id).limit(1000).stream()
+                for acc_doc in template_accounts:
+                    acc = acc_doc.to_dict() or {}
+                    acc['id'] = acc_doc.id
+                    accounts.append(acc)
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch COA templates/accounts: {e}")
+    return render_template(
+        'super-admin/accounting/coa-templates.html',
+        templates=templates,
+        accounts=accounts,
+        stats=stats
+    )
 
 @bp.route('/accounting/expense-categories')
 def accounting_expense_categories():
