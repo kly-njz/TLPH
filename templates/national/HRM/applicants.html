@@ -305,6 +305,24 @@
     let nationalHiringRows = [];
     let nationalEditingHiringId = null;
 
+    function nNormalizeHiringRows(rows) {
+      return (rows || []).map((row) => {
+        const scopeType = String(row.scope_type || '').toLowerCase() || (row.municipality ? 'municipality' : (row.region ? 'region' : 'national'));
+        return {
+          id: row.id,
+          job_title: row.job_title || 'N/A',
+          description: row.description || 'N/A',
+          position: row.position || 'N/A',
+          starting_salary: row.starting_salary || 0,
+          scope_type: scopeType,
+          scope: row.scope || (scopeType === 'municipality' ? row.municipality : (scopeType === 'region' ? row.region : 'NATIONAL')),
+          region: row.region || '',
+          municipality: row.municipality || '',
+          is_active: !!row.is_active,
+        };
+      });
+    }
+
     function nHiringStatusClass(isActive) {
       return isActive
         ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
@@ -409,16 +427,19 @@
           await nRefreshHiringRows();
         });
 
-        tr.querySelector('[data-action="archive"]').addEventListener('click', async () => {
-          if (!confirm('Archive this position?')) return;
-          const res = await fetch(`/national/api/hiring/${encodeURIComponent(row.id)}/archive`, { method: 'POST' });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data.success) {
-            alert(data.error || 'Failed to archive position');
-            return;
-          }
-          await nRefreshHiringRows();
-        });
+        const archiveBtn = tr.querySelector('[data-action="archive"]');
+        if (archiveBtn) {
+          archiveBtn.addEventListener('click', async () => {
+            if (!confirm('Archive this position?')) return;
+            const res = await fetch(`/national/api/hiring/${encodeURIComponent(row.id)}/archive`, { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+              alert(data.error || 'Failed to archive position');
+              return;
+            }
+            await nRefreshHiringRows();
+          });
+        }
 
         const unarchiveBtn = tr.querySelector('[data-action="unarchive"]');
         if (unarchiveBtn) {
@@ -446,21 +467,7 @@
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Failed to refresh hiring rows');
       }
-      nationalHiringRows = (data.positions || []).map((row) => {
-        const scopeType = String(row.scope_type || '').toLowerCase() || (row.municipality ? 'municipality' : (row.region ? 'region' : 'national'));
-        return {
-          id: row.id,
-          job_title: row.job_title || 'N/A',
-          description: row.description || 'N/A',
-          position: row.position || 'N/A',
-          starting_salary: row.starting_salary || 0,
-          scope_type: scopeType,
-          scope: row.scope || (scopeType === 'municipality' ? row.municipality : (scopeType === 'region' ? row.region : 'NATIONAL')),
-          region: row.region || '',
-          municipality: row.municipality || '',
-          is_active: !!row.is_active,
-        };
-      });
+      nationalHiringRows = nNormalizeHiringRows(data.positions || []);
       nRenderHiringTable();
     }
 
@@ -483,7 +490,7 @@
     document.addEventListener('DOMContentLoaded', async () => {
       const hiringDataEl = document.getElementById('national-hiring-data');
       try {
-        nationalHiringRows = JSON.parse(hiringDataEl?.textContent || '[]');
+        nationalHiringRows = nNormalizeHiringRows(JSON.parse(hiringDataEl?.textContent || '[]'));
       } catch (e) {
         nationalHiringRows = [];
       }
