@@ -110,20 +110,39 @@ async function downloadDeliveryDetails(quoteId) {
         alert('Delivery details are only available for delivered quotations.');
         return;
     }
-    // Use jsPDF to generate a simple PDF
-    const doc = new window.jspdf.jsPDF();
-    doc.setFontSize(12);
-    doc.text('Delivery Details', 10, 10);
-    doc.setFontSize(10);
-    doc.text(`Quotation ID: ${data.id || ''}`, 10, 20);
-    doc.text(`Buyer: ${data.buyer || ''}`, 10, 28);
-    doc.text(`Supplier: ${data.supplier || ''}`, 10, 36);
-    doc.text(`Deliver From: ${data.deliver_from || ''}`, 10, 44);
-    doc.text(`Deliver To: ${data.deliver_to || ''}`, 10, 52);
-    doc.text(`Product: ${data.product || ''}`, 10, 60);
-    doc.text(`Quantity: ${data.quantity || ''}`, 10, 68);
-    doc.text(`Status: ${data.status || ''}`, 10, 76);
-    doc.save(`delivery-details-${data.id || quoteId}.pdf`);
+    const details = {
+        'Quotation ID': data.id || quoteId,
+        'Issue Date': formatDate(data.issue_date || data.date || data.created_at || ''),
+        'Buyer Entity': data.buyer || data.buyer_entity || data.client || '',
+        'Buyer Category': data.buyer_type || data.buyerType || data.buyer_category || '',
+        'Title': data.title || data.description || '',
+        'Category': data.category || '',
+        'Supplier': data.supplier || '',
+        'Product': data.product || data.item || '',
+        'Quantity': data.quantity || data.qty || '',
+        'Unit Price': formatMoney(data.unit_price || data.unitPrice || 0),
+        'Other Charges': formatMoney(data.other_charges || data.otherCharges || 0),
+        'Total Amount': formatMoney(data.total || 0),
+        'Deliver From': data.deliver_from || '',
+        'Deliver To': data.deliver_to || '',
+        'Status': formatStatus(data.status)
+    };
+    const headers = ['Field', 'Value'];
+    const lines = [headers.map((h) => `"${h}"`).join(',')];
+    Object.entries(details).forEach(([key, value]) => {
+        const safeKey = String(key).replace(/"/g, '""');
+        const safeVal = String(value ?? '').replace(/"/g, '""');
+        lines.push(`"${safeKey}","${safeVal}"`);
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `delivery-details-${data.id || quoteId}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 // quotation-superadmin.js
 // Handles modal logic and workflow actions for superadmin quotation page
