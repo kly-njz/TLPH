@@ -1863,6 +1863,45 @@ def applicants_municipal_job_detail(job_id):
     def normalize_scope(value):
         return ' '.join(str(value or '').strip().upper().split())
 
+    denr_roles = {
+        'Forest Ranger',
+        'Protected Area Management Staff',
+        'Wildlife Enforcement Officer',
+        'Biodiversity Conservation Aide',
+        'Environmental Management Specialist',
+        'Coastal and Marine Ecosystem Aide',
+        'Watershed Rehabilitation Worker',
+        'Community Environment Officer',
+    }
+
+    def normalize_denr_role(raw_value, fallback='Environmental Management Specialist'):
+        raw = str(raw_value or '').strip()
+        if raw in denr_roles:
+            return raw
+
+        key = raw.lower()
+        if any(k in key for k in ['forest', 'timber', 'reforestation']):
+            return 'Forest Ranger'
+        if any(k in key for k in ['protected', 'park', 'sanctuary']):
+            return 'Protected Area Management Staff'
+        if any(k in key for k in ['wildlife', 'poach', 'enforcement']):
+            return 'Wildlife Enforcement Officer'
+        if any(k in key for k in ['biodiversity', 'species', 'habitat']):
+            return 'Biodiversity Conservation Aide'
+        if any(k in key for k in ['environment', 'compliance', 'pollution', 'ecc']):
+            return 'Environmental Management Specialist'
+        if any(k in key for k in ['coast', 'marine', 'mangrove', 'fisher', 'livestock']):
+            return 'Coastal and Marine Ecosystem Aide'
+        if any(k in key for k in ['watershed', 'river', 'erosion', 'farming']):
+            return 'Watershed Rehabilitation Worker'
+        if any(k in key for k in ['community', 'cenro', 'municipal', 'barangay', 'trade']):
+            return 'Community Environment Officer'
+        if any(k in key for k in ['agribusiness']):
+            return 'Environmental Management Specialist'
+        if any(k in key for k in ['infrastructure']):
+            return 'Protected Area Management Staff'
+        return fallback
+
     try:
         doc = db.collection('municipal_denr_applicant_jobs').document(job_id).get()
         if not doc.exists:
