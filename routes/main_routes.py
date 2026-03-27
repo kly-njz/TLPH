@@ -17,37 +17,6 @@ def index():
             if data.get('status', '').lower() == 'disabled':
                 return redirect(url_for('account_disabled'))
 
-    default_news = [
-        {
-            'title': 'DENR Encourages Youth Participation in Environmental Efforts',
-            'summary': 'Protecting, Conserving, and Managing the Environment for Future Generations',
-            'published_date': 'Mar. 26, 2026',
-            'image_url': '/static/images/news1.jpg',
-            'is_published': True,
-        },
-        {
-            'title': 'Infrastructure Support for Environmental Programs',
-            'summary': '',
-            'published_date': 'Mar. 20, 2026',
-            'image_url': '/static/images/news2.jpg',
-            'is_published': True,
-        },
-        {
-            'title': 'Strengthening Environmental Awareness',
-            'summary': '',
-            'published_date': 'Mar. 7, 2026',
-            'image_url': '/static/images/news3.jpg',
-            'is_published': True,
-        },
-        {
-            'title': 'DENR Community News Update',
-            'summary': '',
-            'published_date': 'Feb. 24, 2026',
-            'image_url': '/static/images/news4.jpg',
-            'is_published': True,
-        },
-    ]
-
     landing_news = []
     try:
         from firebase_config import get_firestore_db
@@ -71,14 +40,8 @@ def index():
     except Exception as e:
         print(f"[WARN] Could not load landing news from Firestore: {e}")
 
-    if not landing_news:
-        landing_news = default_news
-
-    main_news = landing_news[0]
-    side_news = landing_news[1:4]
-    if len(side_news) < 3:
-        fallback_tail = default_news[1:4]
-        side_news = (side_news + fallback_tail)[:3]
+    main_news = landing_news[0] if landing_news else None
+    side_news = landing_news[1:4] if len(landing_news) > 1 else []
 
     return render_template(
         'home.html',
