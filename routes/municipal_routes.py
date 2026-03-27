@@ -2170,12 +2170,8 @@ def accounting_dashboard_municipal():
 
 
 # Hiring/Job Positions Routes
-@bp.route('/operations/hiring')
-@role_required('municipal', 'municipal_admin')
-def hiring_management():
-    """Render hiring management page for municipal admin."""
-    return render_template('municipal/operations/hiring-municipal.html')
-
+# Routes are integrated into /operations/applicants page with tab system
+# API endpoints follow below
 
 @bp.route('/api/hiring', methods=['GET'])
 @role_required('municipal', 'municipal_admin')

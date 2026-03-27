@@ -34,6 +34,8 @@
     .btn-view:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
     .btn-approve:hover { color: white; background: #10b981; border-color: #059669; }
     .btn-reject:hover { color: white; background: #ef4444; border-color: #dc2626; }
+    .btn-edit:hover { color: white; background: #3b82f6; border-color: #2563eb; }
+    .btn-delete:hover { color: white; background: #ef4444; border-color: #dc2626; }
 
     .manage-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
 
@@ -745,7 +747,238 @@
   document.addEventListener("DOMContentLoaded", () => {
       filterTable();
       syncDashboardFromTable();
+      loadHiringData();
+      loadContextForHiring();
   });
+
+  // ===== TAB SWITCHING =====
+  function switchTab(tab) {
+    const applicantsSection = document.getElementById('applicantsSection');
+    const hiringSection = document.getElementById('hiringSection');
+    const applicantsMetrics = document.getElementById('applicantsMetrics');
+    const hiringMetrics = document.getElementById('hiringMetrics');
+    const applicantsTab = document.getElementById('applicantsTab');
+    const hiringTab = document.getElementById('hiringTab');
+    const headerTitle = document.getElementById('headerTitle');
+    const headerIcon = document.getElementById('headerIcon');
+
+    if (tab === 'applicants') {
+      applicantsSection.style.display = '';
+      hiringSection.style.display = 'none';
+      applicantsMetrics.style.display = '';
+      hiringMetrics.style.display = 'none';
+      applicantsTab.classList = 'px-4 py-2 bg-blue-900 text-white font-bold text-[10px] uppercase rounded-t-[2px] border-b-2 border-b-blue-900 focus:outline-none transition-all';
+      hiringTab.classList = 'px-4 py-2 bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-t-[2px] hover:bg-slate-300 focus:outline-none transition-all';
+      headerTitle.textContent = 'Municipal Application Registry';
+      headerIcon.textContent = 'description';
+      headerSubtitle.textContent = 'Applications Filed Within Municipality';
+    } else if (tab === 'hiring') {
+      applicantsSection.style.display = 'none';
+      hiringSection.style.display = '';
+      applicantsMetrics.style.display = 'none';
+      hiringMetrics.style.display = '';
+      applicantsTab.classList = 'px-4 py-2 bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-t-[2px] hover:bg-slate-300 focus:outline-none transition-all';
+      hiringTab.classList = 'px-4 py-2 bg-blue-900 text-white font-bold text-[10px] uppercase rounded-t-[2px] border-b-2 border-b-blue-900 focus:outline-none transition-all';
+      headerTitle.textContent = 'Hiring & Job Positions';
+      headerIcon.textContent = 'work';
+      headerSubtitle.textContent = 'Create and Manage Job Openings';
+    }
+  }
+
+  // ===== HIRING MANAGEMENT =====
+  let allHiringPositions = [];
+
+  async function loadContextForHiring() {
+    try {
+      const response = await fetch('/municipal/api/context');
+      const data = await response.json();
+      document.getElementById('municipality').value = data.municipality || 'N/A';
+      document.getElementById('scope').value = data.municipality || 'N/A';
+    } catch (e) {
+      console.error('Failed to load context:', e);
+    }
+  }
+
+  async function loadHiringData() {
+    try {
+      const response = await fetch('/municipal/api/hiring');
+      const data = await response.json();
+      if (data.success) {
+        allHiringPositions = data.positions || [];
+        renderHiringTable();
+        updateHiringMetrics();
+      }
+    } catch (e) {
+      console.error('Failed to load hiring data:', e);
+    }
+  }
+
+  function renderHiringTable() {
+    const tbody = document.getElementById('hiringTableBody');
+    tbody.innerHTML = '';
+
+    if (allHiringPositions.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400 font-bold">No job positions posted yet.</td></tr>';
+      document.getElementById('hiringVisibleCount').textContent = '0';
+      return;
+    }
+
+    allHiringPositions.forEach(pos => {
+      const isActive = pos.is_active ? 'ACTIVE' : 'INACTIVE';
+      const statusColor = pos.is_active 
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+        : 'bg-slate-50 text-slate-600 border-slate-200';
+
+      const row = document.createElement('tr');
+      row.className = 'hover:bg-blue-50 transition hiring-row';
+      row.dataset.posId = pos.id;
+      row.dataset.status = isActive;
+      row.dataset.jobTitle = (pos.job_title || '').toUpperCase();
+      row.dataset.position = (pos.position || '').toUpperCase();
+      row.style.display = 'table-row';
+
+      row.innerHTML = `
+        <td class="px-4 py-3 align-middle font-bold text-blue-800 uppercase border-r border-slate-100">${pos.job_title}</td>
+        <td class="px-4 py-3 align-middle text-slate-700 border-r border-slate-100">${pos.position}</td>
+        <td class="px-4 py-3 align-middle font-mono font-bold text-slate-900 border-r border-slate-100">₱${parseFloat(pos.starting_salary || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
+        <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
+          <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-16 text-center border ${statusColor}">
+            ${isActive}
+          </span>
+        </td>
+        <td class="px-4 py-3 align-middle text-center">
+          <div class="manage-actions">
+            <button type="button" class="btn-action btn-edit" title="Edit" onclick="editHiringPosition('${pos.id}')"><span class="material-icons-round text-[14px]">edit</span></button>
+            <button type="button" class="btn-action btn-delete" title="Delete" onclick="deleteHiringPosition('${pos.id}')"><span class="material-icons-round text-[14px]">delete</span></button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    filterHiringTable();
+  }
+
+  function updateHiringMetrics() {
+    const total = allHiringPositions.length;
+    const active = allHiringPositions.filter(p => p.is_active).length;
+    document.getElementById('metricHiringTotal').textContent = total;
+    document.getElementById('metricHiringActive').textContent = active;
+  }
+
+  document.getElementById('hiringForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const jobTitle = document.getElementById('jobTitle').value.trim();
+    const description = document.getElementById('description').value.trim();
+    const position = document.getElementById('position').value.trim();
+    const startingSalary = document.getElementById('startingSalary').value.trim();
+
+    if (!jobTitle || !description || !position || !startingSalary) {
+      showHiringFormStatus('Please fill in all required fields', 'error');
+      return;
+    }
+
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating...';
+
+    try {
+      const response = await fetch('/municipal/api/hiring', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          job_title: jobTitle,
+          description: description,
+          position: position,
+          starting_salary: startingSalary
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showHiringFormStatus('Position created successfully!', 'success');
+        document.getElementById('hiringForm').reset();
+        loadHiringData();
+        setTimeout(() => {
+          document.getElementById('formStatus').style.display = 'none';
+        }, 3000);
+      } else {
+        showHiringFormStatus('Error: ' + (data.error || 'Failed to create position'), 'error');
+      }
+    } catch (e) {
+      showHiringFormStatus('Error: ' + e.message, 'error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Position';
+    }
+  });
+
+  function showHiringFormStatus(message, type) {
+    const statusDiv = document.getElementById('formStatus');
+    statusDiv.textContent = message;
+    statusDiv.className = type === 'success' 
+      ? 'text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200' 
+      : 'text-rose-700 bg-rose-50 px-2 py-1 rounded border border-rose-200';
+    statusDiv.style.display = 'block';
+  }
+
+  function editHiringPosition(posId) {
+    const pos = allHiringPositions.find(p => p.id === posId);
+    if (!pos) return;
+    alert('Edit feature coming soon');
+  }
+
+  async function deleteHiringPosition(posId) {
+    if (!confirm('Are you sure you want to delete this position?')) return;
+
+    try {
+      const response = await fetch(`/municipal/api/hiring/${posId}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        loadHiringData();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to delete position'));
+      }
+    } catch (e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  function filterHiringTable() {
+    const searchStr = document.getElementById('hiringSearch').value.toUpperCase();
+    const statusFilter = document.getElementById('hiringStatusFilter').value;
+    let visibleCount = 0;
+
+    document.querySelectorAll('.hiring-row').forEach(row => {
+      const jobTitle = row.dataset.jobTitle || '';
+      const position = row.dataset.position || '';
+      const status = row.dataset.status || '';
+
+      const matchesSearch = jobTitle.includes(searchStr) || position.includes(searchStr);
+      const matchesStatus = statusFilter === 'ALL' || status === statusFilter;
+
+      if (matchesSearch && matchesStatus) {
+        row.style.display = 'table-row';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    document.getElementById('hiringVisibleCount').textContent = visibleCount;
+  }
+
+  function clearHiringFilters() {
+    document.getElementById('hiringSearch').value = '';
+    document.getElementById('hiringStatusFilter').value = 'ALL';
+    filterHiringTable();
+  }
 </script>
 
 </body>
