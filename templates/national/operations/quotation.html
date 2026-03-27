@@ -59,7 +59,11 @@
         </div>
         <div class="flex flex-col gap-1">
           <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Deliver From</label>
-          <input type="text" id="newDeliverFrom" class="gov-input w-full" />
+          <select id="newDeliverFrom" class="gov-input w-full bg-white cursor-pointer">
+            <option value="national">National</option>
+            <option value="regional">Regional</option>
+            <option value="municipal">Municipal</option>
+          </select>
         </div>
         <div class="flex flex-col gap-1">
           <label class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Deliver To</label>
@@ -295,7 +299,8 @@
                   <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ q.other_charges_note or q.otherChargesNote or '' }}</td>
                   <td class="px-3 py-1.5 font-mono text-slate-700 text-right border-r border-slate-100">&#8369;{{ '%.2f' % (q.other_charges or q.otherCharges or 0) }}</td>
                   <td class="px-3 py-1.5 font-mono font-black text-emerald-700 text-right border-r border-slate-100">&#8369;{{ '%.2f' % ((q.quantity or q.qty or 0) * (q.unit_price or q.unitPrice or 0) + (q.other_charges or q.otherCharges or 0)) }}</td>
-                  <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ q.deliver_from }}</td>
+                  {% set df = (q.deliver_from or '')|lower %}
+                  <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ 'Municipal' if df == 'municipal' else 'Regional' if df == 'regional' else 'National' }}</td>
                   <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ q.deliver_to }}<br><span class="text-[8px] text-slate-400">({{ q.deliver_to_type }})</span></td>
                   <td class="px-3 py-1.5 text-center border-r border-slate-100">
                     <span class="status-badge border {{ 'bg-emerald-100 text-emerald-700 border-emerald-300' if q.status == 'delivered' else
@@ -513,7 +518,12 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Deliver From *</label>
-            <input type="text" id="qDeliverFrom" name="qDeliverFrom" placeholder="e.g. National Warehouse" class="gov-input w-full h-8" value="NATIONAL" required />
+          <select id="qDeliverFrom" name="qDeliverFrom" class="gov-input w-full h-8 bg-white cursor-pointer" required>
+            <option value="">Select</option>
+            <option value="national">National</option>
+            <option value="regional">Regional</option>
+            <option value="municipal">Municipal</option>
+          </select>
           </div>
           <div>
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Deliver To *</label>
@@ -573,10 +583,6 @@
           </div>
         </div>
 
-        <div>
-          <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Description *</label>
-          <textarea id="qDescription" name="qDescription" rows="2" class="gov-input w-full resize-none" required></textarea>
-        </div>
       </div>
 
       <button type="submit" class="hidden" id="hiddenSubmitBtn"></button>
@@ -670,6 +676,10 @@
     if (dateInput) {
       dateInput.value = new Date().toISOString().slice(0, 10);
     }
+    const otherChargesInput = document.getElementById('qOtherCharges');
+    if (otherChargesInput) {
+      otherChargesInput.value = 0;
+    }
   }
   function closeCreateModal() {
     const modal = document.getElementById('createQuotationModal');
@@ -740,26 +750,50 @@
   async function submitQuotation(e) {
     e.preventDefault();
     const client = document.getElementById('qClient').value.trim();
-    const amount = parseFloat(document.getElementById('qAmount').value);
     const date = document.getElementById('qDate').value;
     const status = 'pending';
     const region = document.getElementById('qRegion').value;
     const municipality = document.getElementById('qMunicipality').value;
-    const description = document.getElementById('qDescription').value.trim();
+    const buyerType = document.getElementById('qBuyerType').value;
+    const title = document.getElementById('qTitle').value.trim();
+    const category = document.getElementById('qCategory').value.trim();
+    const supplier = document.getElementById('qSupplier').value.trim();
+    const deliverFrom = document.getElementById('qDeliverFrom').value.trim();
+    const deliverTo = document.getElementById('qDeliverTo').value.trim();
+    const product = document.getElementById('qProduct').value.trim();
+    const qty = parseFloat(document.getElementById('qQty').value);
+    const unitPrice = parseFloat(document.getElementById('qUnitPrice').value);
+    const otherCharges = parseFloat(document.getElementById('qOtherCharges').value || '0');
+    const otherChargesNote = document.getElementById('qOtherChargesNote').value.trim();
+    const amount = (Number.isFinite(qty) ? qty : 0) * (Number.isFinite(unitPrice) ? unitPrice : 0) + (Number.isFinite(otherCharges) ? otherCharges : 0);
 
-    if (!client || !date || !region || !municipality || !description || isNaN(amount)) {
+    if (!client || !date || !region || !municipality || !title || !category || !supplier || !deliverFrom || !deliverTo || !product || !Number.isFinite(qty) || !Number.isFinite(unitPrice)) {
       alert('Please complete all required fields.');
       return;
     }
 
     const payload = {
       client: client,
+      buyer: client,
       amount: amount,
+      total: amount,
       date: date,
+      issue_date: date,
       status: status,
+      buyer_type: buyerType,
+      deliver_to_type: buyerType,
+      title: title,
+      category: category,
+      supplier: supplier,
+      deliver_from: deliverFrom,
+      deliver_to: deliverTo,
+      product: product,
+      quantity: qty,
+      unit_price: unitPrice,
+      other_charges: otherCharges,
+      other_charges_note: otherChargesNote,
       region: region,
       municipality: municipality,
-      description: description,
       scope: 'national'
     };
 
@@ -769,35 +803,19 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data = null;
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        const snippet = text.replace(/\s+/g, ' ').slice(0, 160);
+        const statusText = res.status ? ` (HTTP ${res.status})` : '';
+        throw new Error(`Server returned a non-JSON response${statusText}. ${snippet ? 'Response: ' + snippet : ''}`);
+      }
       if (!res.ok || !data.success) throw new Error(data.error || 'Failed to create quotation');
-      const q = data.quotation || payload;
-
-      let badgeClass = 'bg-slate-50 text-slate-700 border-slate-200';
-      if(q.status === 'Approved') badgeClass = 'bg-blue-50 text-blue-700 border-blue-200';
-      if(q.status === 'Pending') badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
-      if(q.status === 'Rejected') badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
-
-      const row = document.createElement('tr');
-      row.className = 'hover:bg-blue-50 transition quote-row';
-      row.dataset.id = q.id || Date.now();
-      row.innerHTML = `
-        <td class="font-black text-slate-900 border-r border-slate-100">${q.number || q.id || '—'}</td>
-        <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">${q.client}</td>
-        <td class="font-mono font-bold text-blue-800 border-r border-slate-100 uppercase text-[11px]">₱${parseFloat(q.amount).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-        <td class="font-mono text-slate-500 border-r border-slate-100 text-center uppercase">${q.date}</td>
-        <td class="text-center border-r border-slate-100">
-          <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border ${badgeClass}">${q.status}</span>
-        </td>
-        <td class="text-center">
-          <div class="flex justify-center gap-2">
-            <button onclick="viewQuotation(this)" class="text-blue-700 font-bold hover:underline uppercase text-[9px]">View</button>
-            <button onclick="approveQuotation(this)" class="text-emerald-700 font-bold hover:underline uppercase text-[9px]">Approve</button>
-            <button onclick="deleteQuotation(this)" class="text-rose-700 font-bold hover:underline uppercase text-[9px]">Delete</button>
-          </div>
-        </td>`;
-      document.getElementById('quoteTable').prepend(row);
       closeCreateModal();
+      window.location.reload();
     } catch (error) {
       alert(error.message || 'Unable to save quotation.');
     }
@@ -1008,3 +1026,4 @@
 </script>
 </body>
 </html>
+
