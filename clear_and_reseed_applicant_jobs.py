@@ -12,6 +12,7 @@ from firebase_admin import credentials, firestore
 
 
 TARGET_REGION_OFFICE = "MIMAROPA"
+ALLOWED_MUNICIPAL_SCOPES = {"NAUJAN", "VICTORIA"}
 
 
 def _normalize_status(raw: str) -> str:
@@ -141,9 +142,6 @@ def main() -> None:
             "full_name": full_name,
             "candidate_type": candidate_type,
             "region_office": region_office,
-            "scope_type": scope_type,
-            "scope": scope,
-            "scope_key": _norm_key(scope),
             "status": status,
             "employeeStatus": status.lower(),
             # Backward-compatible fields
@@ -161,7 +159,26 @@ def main() -> None:
             "job_description": "Validate DENR applicant records for regional and municipal processing.",
         }
 
-        db.collection("municipal_denr_applicant_jobs").document(f"APP-{source_doc.id}").set(payload, merge=True)
+        # Seed municipality-scoped records only for Naujan and Victoria.
+        municipality_scope_key = _norm_key(directed_municipality or municipality)
+        if municipality_scope_key in ALLOWED_MUNICIPAL_SCOPES:
+            municipal_payload = {
+                **payload,
+                "scope_type": "municipality",
+                "scope": directed_municipality or municipality,
+                "scope_key": municipality_scope_key,
+            }
+            db.collection("municipal_denr_applicant_jobs").document(f"APP-{source_doc.id}").set(municipal_payload, merge=True)
+            seeded += 1
+
+        # Seed region-scoped records for MIMAROPA for regional admin testing.
+        regional_payload = {
+            **payload,
+            "scope_type": "region",
+            "scope": TARGET_REGION_OFFICE,
+            "scope_key": _norm_key(TARGET_REGION_OFFICE),
+        }
+        db.collection("municipal_denr_applicant_jobs").document(f"REG-{source_doc.id}").set(regional_payload, merge=True)
         seeded += 1
 
     print(f"[INFO] Seeded {seeded} documents into municipal_denr_applicant_jobs")
