@@ -1142,6 +1142,128 @@ def hrm_news_management_superadmin():
     except Exception:
         abort(404)
 
+
+def _parse_bool(value, default=True):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+@bp.route('/api/hrm/news', methods=['GET'])
+@role_required('super-admin', 'superadmin')
+def get_superadmin_news():
+    try:
+        db = get_firestore_db()
+        docs = db.collection('news_updates').stream()
+        items = []
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+            items.append({
+                'id': doc.id,
+                'title': str(data.get('title') or '').strip(),
+                'summary': str(data.get('summary') or '').strip(),
+                'published_date': str(data.get('published_date') or '').strip(),
+                'image_url': str(data.get('image_url') or '').strip(),
+                'is_published': _parse_bool(data.get('is_published'), True),
+            })
+
+        items.sort(key=lambda row: row.get('published_date') or '', reverse=True)
+        return jsonify({'success': True, 'items': items})
+    except Exception as e:
+        print(f'[ERROR] get_superadmin_news: {e}')
+        return jsonify({'success': False, 'error': 'Failed to load news'}), 500
+
+
+@bp.route('/api/hrm/news', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def create_superadmin_news():
+    try:
+        payload = request.get_json() or {}
+        title = str(payload.get('title') or '').strip()
+        summary = str(payload.get('summary') or '').strip()
+        published_date = str(payload.get('published_date') or '').strip()
+        image_url = str(payload.get('image_url') or '').strip()
+        is_published = _parse_bool(payload.get('is_published'), True)
+
+        if not title or not summary:
+            return jsonify({'success': False, 'error': 'Title and summary are required'}), 400
+
+        db = get_firestore_db()
+        doc_ref = db.collection('news_updates').document()
+        actor = session.get('user_email') or 'superadmin'
+        doc_ref.set({
+            'title': title,
+            'summary': summary,
+            'published_date': published_date,
+            'image_url': image_url,
+            'is_published': is_published,
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'created_by': actor,
+            'updated_by': actor,
+        })
+
+        return jsonify({'success': True, 'id': doc_ref.id})
+    except Exception as e:
+        print(f'[ERROR] create_superadmin_news: {e}')
+        return jsonify({'success': False, 'error': 'Failed to create news'}), 500
+
+
+@bp.route('/api/hrm/news/<news_id>', methods=['PUT'])
+@role_required('super-admin', 'superadmin')
+def update_superadmin_news(news_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('news_updates').document(news_id)
+        existing = doc_ref.get()
+        if not existing.exists:
+            return jsonify({'success': False, 'error': 'News item not found'}), 404
+
+        payload = request.get_json() or {}
+        updates = {}
+        if 'title' in payload:
+            updates['title'] = str(payload.get('title') or '').strip()
+        if 'summary' in payload:
+            updates['summary'] = str(payload.get('summary') or '').strip()
+        if 'published_date' in payload:
+            updates['published_date'] = str(payload.get('published_date') or '').strip()
+        if 'image_url' in payload:
+            updates['image_url'] = str(payload.get('image_url') or '').strip()
+        if 'is_published' in payload:
+            updates['is_published'] = _parse_bool(payload.get('is_published'), True)
+
+        if not updates:
+            return jsonify({'success': False, 'error': 'No valid updates provided'}), 400
+
+        updates['updated_at'] = firestore.SERVER_TIMESTAMP
+        updates['updated_by'] = session.get('user_email') or 'superadmin'
+        doc_ref.update(updates)
+
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] update_superadmin_news: {e}')
+        return jsonify({'success': False, 'error': 'Failed to update news'}), 500
+
+
+@bp.route('/api/hrm/news/<news_id>', methods=['DELETE'])
+@role_required('super-admin', 'superadmin')
+def delete_superadmin_news(news_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('news_updates').document(news_id)
+        existing = doc_ref.get()
+        if not existing.exists:
+            return jsonify({'success': False, 'error': 'News item not found'}), 404
+
+        doc_ref.delete()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] delete_superadmin_news: {e}')
+        return jsonify({'success': False, 'error': 'Failed to delete news'}), 500
+
 @bp.route('/api/hrm/holidays', methods=['GET'])
 @role_required('super-admin','superadmin')
 def get_superadmin_holidays():

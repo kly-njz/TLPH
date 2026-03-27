@@ -16,7 +16,76 @@ def index():
             data = user_doc.to_dict()
             if data.get('status', '').lower() == 'disabled':
                 return redirect(url_for('account_disabled'))
-    return render_template('home.html')
+
+    default_news = [
+        {
+            'title': 'DENR Encourages Youth Participation in Environmental Efforts',
+            'summary': 'Protecting, Conserving, and Managing the Environment for Future Generations',
+            'published_date': 'Mar. 26, 2026',
+            'image_url': '/static/images/news1.jpg',
+            'is_published': True,
+        },
+        {
+            'title': 'Infrastructure Support for Environmental Programs',
+            'summary': '',
+            'published_date': 'Mar. 20, 2026',
+            'image_url': '/static/images/news2.jpg',
+            'is_published': True,
+        },
+        {
+            'title': 'Strengthening Environmental Awareness',
+            'summary': '',
+            'published_date': 'Mar. 7, 2026',
+            'image_url': '/static/images/news3.jpg',
+            'is_published': True,
+        },
+        {
+            'title': 'DENR Community News Update',
+            'summary': '',
+            'published_date': 'Feb. 24, 2026',
+            'image_url': '/static/images/news4.jpg',
+            'is_published': True,
+        },
+    ]
+
+    landing_news = []
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+        docs = db.collection('news_updates').stream()
+        for doc in docs:
+            item = doc.to_dict() or {}
+            if not bool(item.get('is_published', True)):
+                continue
+            landing_news.append({
+                'id': doc.id,
+                'title': str(item.get('title') or '').strip(),
+                'summary': str(item.get('summary') or '').strip(),
+                'published_date': str(item.get('published_date') or '').strip(),
+                'image_url': str(item.get('image_url') or '').strip(),
+                'is_published': True,
+            })
+
+        landing_news = [n for n in landing_news if n.get('title')]
+        landing_news.sort(key=lambda row: row.get('published_date') or '', reverse=True)
+    except Exception as e:
+        print(f"[WARN] Could not load landing news from Firestore: {e}")
+
+    if not landing_news:
+        landing_news = default_news
+
+    main_news = landing_news[0]
+    side_news = landing_news[1:4]
+    if len(side_news) < 3:
+        fallback_tail = default_news[1:4]
+        side_news = (side_news + fallback_tail)[:3]
+
+    return render_template(
+        'home.html',
+        landing_news=landing_news,
+        main_news=main_news,
+        side_news=side_news,
+    )
 
 @bp.route('/login')
 def login():
