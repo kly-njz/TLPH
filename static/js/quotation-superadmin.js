@@ -50,6 +50,53 @@ function closeDraftPreview() {
     setTimeout(() => modal.classList.add('hidden'), 300);
 }
 
+function exportCSV() {
+    const table = document.querySelector('#quotTable');
+    if (!table) {
+        alert('No records to export.');
+        return;
+    }
+    const head = table.closest('table')?.querySelectorAll('thead th') || [];
+    const includeIdx = [];
+    const headers = [];
+    Array.from(head).forEach((th, idx) => {
+        if (th.classList.contains('no-print')) return;
+        includeIdx.push(idx);
+        headers.push(th.textContent.trim());
+    });
+    const rows = Array.from(table.querySelectorAll('tr'));
+    if (!rows.length) {
+        alert('No records to export.');
+        return;
+    }
+    const lines = [];
+    lines.push(headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(','));
+    rows.forEach((row) => {
+        const cells = Array.from(row.querySelectorAll('td'));
+        if (!cells.length) return;
+        const values = includeIdx.map((idx) => {
+            const cell = cells[idx];
+            const text = cell ? cell.textContent.replace(/\s+/g, ' ').trim() : '';
+            return `"${text.replace(/"/g, '""')}"`;
+        });
+        lines.push(values.join(','));
+    });
+    if (lines.length <= 1) {
+        alert('No records to export.');
+        return;
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `SuperAdmin_Quotations_${date}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 // Download delivery details as PDF (simple implementation)
 async function downloadDeliveryDetails(quoteId) {
     const res = await fetch(`/superadmin/api/quotation/${quoteId}`);
