@@ -919,6 +919,227 @@ def superadmin_delete_applicant(applicant_id):
         print(f'[ERROR] superadmin_delete_applicant: {e}')
         return jsonify({'success': False, 'error': 'Failed to delete applicant'}), 500
 
+
+def _normalize_hiring_scope_type(raw_scope_type):
+    scope_type = str(raw_scope_type or 'national').strip().lower()
+    return scope_type if scope_type in {'national', 'region', 'municipality'} else 'national'
+
+
+def _normalize_hiring_payload(payload):
+    scope_type = _normalize_hiring_scope_type(payload.get('scope_type'))
+    region = str(payload.get('region') or '').strip().upper()
+    municipality = str(payload.get('municipality') or '').strip().upper()
+    scope = str(payload.get('scope') or '').strip().upper()
+
+    if scope_type == 'national':
+        scope = 'NATIONAL'
+        region = ''
+        municipality = ''
+    elif scope_type == 'region':
+        scope = scope or region
+        region = region or scope
+        municipality = ''
+    else:
+        scope = scope or municipality
+        municipality = municipality or scope
+
+    return {
+        'job_title': str(payload.get('job_title') or '').strip(),
+        'description': str(payload.get('description') or '').strip(),
+        'position': str(payload.get('position') or '').strip(),
+        'starting_salary': payload.get('starting_salary'),
+        'scope_type': scope_type,
+        'scope': scope,
+        'region': region,
+        'municipality': municipality,
+    }
+
+
+@bp.route('/api/hiring', methods=['GET'])
+@role_required('super-admin', 'superadmin')
+def superadmin_get_hiring_positions():
+    try:
+        db = get_firestore_db()
+        docs = db.collection('hiring_positions').stream()
+
+        positions = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            scope_type = _normalize_hiring_scope_type(data.get('scope_type'))
+            positions.append({
+                'id': doc.id,
+                'job_title': data.get('job_title') or 'N/A',
+                'description': data.get('description') or 'N/A',
+                'position': data.get('position') or 'N/A',
+                'starting_salary': data.get('starting_salary') or 0,
+                'scope_type': scope_type,
+                'scope': data.get('scope') or ('NATIONAL' if scope_type == 'national' else (data.get('region') if scope_type == 'region' else data.get('municipality'))),
+                'region': data.get('region') or '',
+                'municipality': data.get('municipality') or '',
+                'is_active': bool(data.get('is_active', True)),
+                'created_at': _format_firestore_timestamp(data.get('created_at')),
+                'updated_at': _format_firestore_timestamp(data.get('updated_at')),
+            })
+
+        positions.sort(key=lambda row: (not row.get('is_active', True), str(row.get('job_title') or '').lower()))
+        return jsonify({'success': True, 'positions': positions})
+    except Exception as e:
+        print(f'[ERROR] superadmin_get_hiring_positions: {e}')
+        return jsonify({'success': False, 'error': 'Failed to load hiring positions'}), 500
+
+
+@bp.route('/api/hiring', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def superadmin_create_hiring_position():
+    try:
+        payload = _normalize_hiring_payload(request.get_json() or {})
+
+        if not payload['job_title'] or not payload['description'] or not payload['position']:
+            return jsonify({'success': False, 'error': 'job_title, description, and position are required'}), 400
+
+        try:
+            salary = float(payload['starting_salary'])
+        except Exception:
+            return jsonify({'success': False, 'error': 'starting_salary must be a valid number'}), 400
+        if salary < 0:
+            return jsonify({'success': False, 'error': 'starting_salary must be non-negative'}), 400
+
+        if payload['scope_type'] == 'region' and not payload['region']:
+            return jsonify({'success': False, 'error': 'region is required for region scope'}), 400
+        if payload['scope_type'] == 'municipality' and (not payload['region'] or not payload['municipality']):
+            return jsonify({'success': False, 'error': 'region and municipality are required for municipality scope'}), 400
+
+        db = get_firestore_db()
+        doc_ref = db.collection('hiring_positions').document()
+        actor = session.get('user_email') or 'superadmin'
+
+        doc_ref.set({
+            'job_title': payload['job_title'],
+            'description': payload['description'],
+            'position': payload['position'],
+            'starting_salary': salary,
+            'scope_type': payload['scope_type'],
+            'scope': payload['scope'],
+            'region': payload['region'],
+            'municipality': payload['municipality'],
+            'is_active': True,
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'created_by': actor,
+            'updated_by': actor,
+            'created_by_role': 'super_admin',
+        })
+
+        return jsonify({'success': True, 'id': doc_ref.id}), 201
+    except Exception as e:
+        print(f'[ERROR] superadmin_create_hiring_position: {e}')
+        return jsonify({'success': False, 'error': 'Failed to create hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>', methods=['PUT'])
+@role_required('super-admin', 'superadmin')
+def superadmin_update_hiring_position(hiring_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('hiring_positions').document(hiring_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Hiring position not found'}), 404
+
+        payload = _normalize_hiring_payload(request.get_json() or {})
+        if not payload['job_title'] or not payload['description'] or not payload['position']:
+            return jsonify({'success': False, 'error': 'job_title, description, and position are required'}), 400
+
+        try:
+            salary = float(payload['starting_salary'])
+        except Exception:
+            return jsonify({'success': False, 'error': 'starting_salary must be a valid number'}), 400
+        if salary < 0:
+            return jsonify({'success': False, 'error': 'starting_salary must be non-negative'}), 400
+
+        if payload['scope_type'] == 'region' and not payload['region']:
+            return jsonify({'success': False, 'error': 'region is required for region scope'}), 400
+        if payload['scope_type'] == 'municipality' and (not payload['region'] or not payload['municipality']):
+            return jsonify({'success': False, 'error': 'region and municipality are required for municipality scope'}), 400
+
+        actor = session.get('user_email') or 'superadmin'
+        doc_ref.update({
+            'job_title': payload['job_title'],
+            'description': payload['description'],
+            'position': payload['position'],
+            'starting_salary': salary,
+            'scope_type': payload['scope_type'],
+            'scope': payload['scope'],
+            'region': payload['region'],
+            'municipality': payload['municipality'],
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': actor,
+        })
+
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_update_hiring_position: {e}')
+        return jsonify({'success': False, 'error': 'Failed to update hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>', methods=['DELETE'])
+@role_required('super-admin', 'superadmin')
+def superadmin_delete_hiring_position(hiring_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('hiring_positions').document(hiring_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Hiring position not found'}), 404
+
+        doc_ref.delete()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_delete_hiring_position: {e}')
+        return jsonify({'success': False, 'error': 'Failed to delete hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>/archive', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def superadmin_archive_hiring_position(hiring_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('hiring_positions').document(hiring_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Hiring position not found'}), 404
+
+        doc_ref.update({
+            'is_active': False,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': session.get('user_email') or 'superadmin'
+        })
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_archive_hiring_position: {e}')
+        return jsonify({'success': False, 'error': 'Failed to archive hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>/unarchive', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def superadmin_unarchive_hiring_position(hiring_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('hiring_positions').document(hiring_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Hiring position not found'}), 404
+
+        doc_ref.update({
+            'is_active': True,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': session.get('user_email') or 'superadmin'
+        })
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_unarchive_hiring_position: {e}')
+        return jsonify({'success': False, 'error': 'Failed to reactivate hiring position'}), 500
+
 # --- Accounting Module Routes ---
 @bp.route('/accounting/dashboard')
 def accounting_dashboard():
