@@ -124,6 +124,26 @@
             background: #fff;
         }
 
+        .doc-gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .doc-gallery-item {
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            padding: 8px;
+        }
+
+        .doc-gallery-thumb {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
         .applicant-photo-wrap {
             width: 88px;
             height: 88px;
@@ -301,7 +321,10 @@
     <div id="docPreviewModal" class="doc-preview-overlay" onclick="closeDocumentPreview(event)">
         <div class="doc-preview-panel" onclick="event.stopPropagation()">
             <div class="px-3 py-2 bg-slate-900 text-white flex items-center justify-between">
-                <p id="docPreviewTitle" class="text-[11px] font-black uppercase tracking-wider m-0 truncate">Document Preview</p>
+                <div class="d-flex align-items-center gap-2 min-w-0">
+                    <button id="docPreviewBackBtn" type="button" onclick="backToDocumentGallery()" class="btn btn-sm btn-outline-light py-0 px-2 text-[9px] font-bold" style="display:none;">BACK</button>
+                    <p id="docPreviewTitle" class="text-[11px] font-black uppercase tracking-wider m-0 truncate">Document Preview</p>
+                </div>
                 <button type="button" onclick="closeDocumentPreview()" class="text-white/90 hover:text-white border-0 bg-transparent">
                     <span class="material-icons-round text-base">close</span>
                 </button>
@@ -344,6 +367,7 @@
         let actionLocked = false;
         let previewDocuments = [];
         let previewDocumentGroups = [];
+        let activePreviewGroup = null;
         let isSubmittingRejection = false;
         let rejectionMessage = '';
 
@@ -775,6 +799,81 @@
             if (!doc || !doc.url) return;
 
             const modal = document.getElementById('docPreviewModal');
+            const backBtn = document.getElementById('docPreviewBackBtn');
+            backBtn.style.display = 'none';
+            activePreviewGroup = null;
+
+            renderSingleDocumentPreview(doc);
+
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.openDocumentGroupByIndex = function(index) {
+            const group = previewDocumentGroups[index];
+            if (!group || !Array.isArray(group.files) || group.files.length === 0) return;
+
+            const modal = document.getElementById('docPreviewModal');
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+
+            activePreviewGroup = {
+                name: group.name || 'Document',
+                files: (group.files || []).map((file) => ({
+                    name: group.name || 'Document',
+                    fileName: file.fileName || 'file',
+                    url: file.url
+                }))
+            };
+
+            renderDocumentGallery(activePreviewGroup);
+        };
+
+        window.openDocumentFromGroup = function(index) {
+            if (!activePreviewGroup || !Array.isArray(activePreviewGroup.files)) return;
+            const selectedFile = activePreviewGroup.files[index];
+            if (!selectedFile) return;
+
+            const backBtn = document.getElementById('docPreviewBackBtn');
+            backBtn.style.display = 'inline-block';
+            renderSingleDocumentPreview(selectedFile);
+        };
+
+        window.backToDocumentGallery = function() {
+            if (!activePreviewGroup) return;
+            renderDocumentGallery(activePreviewGroup);
+        };
+
+        function renderDocumentGallery(group) {
+            const body = document.getElementById('docPreviewBody');
+            const title = document.getElementById('docPreviewTitle');
+            const backBtn = document.getElementById('docPreviewBackBtn');
+            title.textContent = `${group.name || 'Document'} (${group.files.length})`.toUpperCase();
+            backBtn.style.display = 'none';
+
+            body.innerHTML = `
+                <div class="doc-gallery-grid">
+                    ${group.files.map((file, index) => {
+                        const fileUrl = String(file.url || '');
+                        const lower = fileUrl.toLowerCase();
+                        const isImage = /\.(png|jpg|jpeg|gif|webp|avif|bmp)(\?|$)/i.test(lower);
+
+                        return `
+                            <div class="doc-gallery-item">
+                                ${isImage
+                                    ? `<img src="${fileUrl}" alt="${group.name || 'Document'} ${index + 1}" class="doc-gallery-thumb" />`
+                                    : `<div class="doc-gallery-thumb d-flex align-items-center justify-content-center"><span class="material-icons-round text-slate-400">description</span></div>`
+                                }
+                                <p class="text-[9px] font-black uppercase m-0 mt-2 truncate">${group.name || 'Document'} ${index + 1}</p>
+                                <button onclick="openDocumentFromGroup(${index})" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold mt-2">VIEW</button>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function renderSingleDocumentPreview(doc) {
             const body = document.getElementById('docPreviewBody');
             const title = document.getElementById('docPreviewTitle');
             const url = String(doc.url || '');
@@ -786,37 +885,32 @@
 
             if (isImage) {
                 body.innerHTML = `<img src="${url}" alt="Document Preview" class="doc-preview-image" />`;
-            } else if (isPdf) {
-                body.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0&scrollbar=1" class="doc-preview-frame"></iframe>`;
-            } else {
-                body.innerHTML = `
-                    <div class="bg-white border border-slate-200 p-5 text-center">
-                        <span class="material-icons-round text-4xl text-slate-400">description</span>
-                        <p class="mt-2 text-[10px] font-black uppercase text-slate-600">Preview not available for this file type.</p>
-                        <button type="button" onclick="window.open('${url}', '_blank')" class="mt-3 btn btn-sm btn-outline-primary text-[10px] font-bold">Open in New Tab</button>
-                    </div>
-                `;
+                return;
             }
 
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        };
+            if (isPdf) {
+                body.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0&scrollbar=1" class="doc-preview-frame"></iframe>`;
+                return;
+            }
 
-        window.openDocumentGroupByIndex = function(index) {
-            const group = previewDocumentGroups[index];
-            if (!group || !Array.isArray(group.files) || group.files.length === 0) return;
-
-            const firstFile = group.files[0];
-            previewDocuments = [{ name: group.name || 'Document', fileName: firstFile.fileName || 'file', url: firstFile.url }];
-            openDocumentPreviewByIndex(0);
+            body.innerHTML = `
+                <div class="bg-white border border-slate-200 p-5 text-center">
+                    <span class="material-icons-round text-4xl text-slate-400">description</span>
+                    <p class="mt-2 text-[10px] font-black uppercase text-slate-600">Preview not available for this file type.</p>
+                    <button type="button" onclick="window.open('${url}', '_blank')" class="mt-3 btn btn-sm btn-outline-primary text-[10px] font-bold">Open in New Tab</button>
+                </div>
+            `;
         };
 
         window.closeDocumentPreview = function(event) {
             if (event && event.target && event.target.id !== 'docPreviewModal') return;
             const modal = document.getElementById('docPreviewModal');
             const body = document.getElementById('docPreviewBody');
+            const backBtn = document.getElementById('docPreviewBackBtn');
             modal.style.display = 'none';
             body.innerHTML = '';
+            backBtn.style.display = 'none';
+            activePreviewGroup = null;
             document.body.style.overflow = '';
         };
 
