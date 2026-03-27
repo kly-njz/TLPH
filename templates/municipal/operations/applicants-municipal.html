@@ -323,7 +323,7 @@
                       <button type="submit" id="submitBtn" class="gov-btn flex-1 bg-blue-900 text-white hover:bg-blue-800 transition">
                         Create Position
                       </button>
-                      <button type="reset" class="gov-btn flex-1 bg-slate-200 text-slate-700 hover:bg-slate-300 transition">
+                      <button type="reset" id="hiringResetBtn" class="gov-btn flex-1 bg-slate-200 text-slate-700 hover:bg-slate-300 transition">
                         Clear
                       </button>
                     </div>
@@ -787,6 +787,14 @@
 
   // ===== HIRING MANAGEMENT =====
   let allHiringPositions = [];
+  let editingHiringId = null;
+
+  function resetHiringFormMode() {
+    editingHiringId = null;
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.textContent = 'Create Position';
+    submitBtn.disabled = false;
+  }
 
   async function loadContextForHiring() {
     try {
@@ -881,11 +889,12 @@
 
     const submitBtn = document.getElementById('submitBtn');
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Creating...';
+    const isEditing = Boolean(editingHiringId);
+    submitBtn.textContent = isEditing ? 'Updating...' : 'Creating...';
 
     try {
-      const response = await fetch('/municipal/api/hiring', {
-        method: 'POST',
+      const response = await fetch(isEditing ? `/municipal/api/hiring/${editingHiringId}` : '/municipal/api/hiring', {
+        method: isEditing ? 'PUT' : 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           job_title: jobTitle,
@@ -898,8 +907,9 @@
       const data = await response.json();
 
       if (data.success) {
-        showHiringFormStatus('Position created successfully!', 'success');
+        showHiringFormStatus(isEditing ? 'Position updated successfully!' : 'Position created successfully!', 'success');
         document.getElementById('hiringForm').reset();
+        resetHiringFormMode();
         loadHiringData();
         setTimeout(() => {
           document.getElementById('formStatus').style.display = 'none';
@@ -911,8 +921,19 @@
       showHiringFormStatus('Error: ' + e.message, 'error');
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Create Position';
+      if (editingHiringId) {
+        submitBtn.textContent = 'Update Position';
+      } else {
+        submitBtn.textContent = 'Create Position';
+      }
     }
+  });
+
+  document.getElementById('hiringResetBtn').addEventListener('click', () => {
+    resetHiringFormMode();
+    setTimeout(() => {
+      document.getElementById('formStatus').style.display = 'none';
+    }, 0);
   });
 
   function showHiringFormStatus(message, type) {
@@ -927,7 +948,18 @@
   function editHiringPosition(posId) {
     const pos = allHiringPositions.find(p => p.id === posId);
     if (!pos) return;
-    alert('Edit feature coming soon');
+
+    editingHiringId = pos.id;
+    document.getElementById('jobTitle').value = pos.job_title || '';
+    document.getElementById('description').value = pos.description || '';
+    document.getElementById('position').value = pos.position || '';
+    document.getElementById('startingSalary').value = pos.starting_salary || '';
+
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.textContent = 'Update Position';
+
+    showHiringFormStatus('Editing selected position. Click "Update Position" to save changes.', 'success');
+    document.getElementById('jobTitle').focus();
   }
 
   async function deleteHiringPosition(posId) {
@@ -941,6 +973,10 @@
       const data = await response.json();
 
       if (data.success) {
+        if (editingHiringId === posId) {
+          document.getElementById('hiringForm').reset();
+          resetHiringFormMode();
+        }
         loadHiringData();
       } else {
         alert('Error: ' + (data.error || 'Failed to delete position'));
