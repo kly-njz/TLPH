@@ -4293,6 +4293,7 @@ def applicants_regional_data():
                 'full_name': data.get('full_name') or data.get('applicant_name') or 'N/A',
                 'candidate_type': data.get('candidate_type') or data.get('category') or 'N/A',
                 'region_office': data.get('region_office') or data.get('region') or 'N/A',
+                'job_description': data.get('job_description') or 'DENR field and compliance operations support.',
                 'status': status,
                 'created_at': created_at_iso,
             })
