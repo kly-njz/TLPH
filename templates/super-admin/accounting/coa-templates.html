@@ -48,7 +48,7 @@
         .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; }
 
         /* Modal Styles */
-        .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 2050; backdrop-filter: blur(2px); padding: 16px; }
+        .gov-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 2050; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); padding: 16px; }
         .gov-modal.active { display: flex; }
 
         @media print { 
@@ -390,6 +390,13 @@
 
         let currentEditRow = null;
 
+        function resolveSelectedTemplateId() {
+            if (selectedTemplateId) return selectedTemplateId;
+            const activeCard = document.querySelector('[data-template-id].border-emerald-300');
+            const anyCard = document.querySelector('[data-template-id]');
+            return activeCard?.getAttribute('data-template-id') || anyCard?.getAttribute('data-template-id') || '';
+        }
+
         function selectTemplate(id) {
             if (!id) return;
             selectedTemplateId = id;
@@ -400,12 +407,46 @@
         function openAddCOA() { document.getElementById('createTemplateModal').classList.add('active'); }
         function closeAddCOA() { document.getElementById('createTemplateModal').classList.remove('active'); }
         
-        function saveCOATemplate() {
-            // Placeholder logic
-            closeAddCOA();
+        async function saveCOATemplate() {
+            const name = (document.getElementById('templateName').value || '').trim();
+            const description = (document.getElementById('templateDescription').value || '').trim();
+
+            if (!name) {
+                alert('Template name is required.');
+                return;
+            }
+
+            try {
+                const resp = await fetch('/superadmin/api/accounting/coa/templates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        status: 'active'
+                    })
+                });
+
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to create template');
+                }
+
+                closeAddCOA();
+                const createdTemplateId = data.template?.id || '';
+                if (createdTemplateId) {
+                    window.location.href = `/superadmin/accounting/coa-templates?template_id=${encodeURIComponent(createdTemplateId)}`;
+                    return;
+                }
+                window.location.reload();
+            } catch (err) {
+                console.error('Error creating template:', err);
+                alert(err.message || 'Failed to create template');
+            }
         }
 
         function openAddAccount() {
+            selectedTemplateId = resolveSelectedTemplateId();
             if (!selectedTemplateId) {
                 alert('Select a template first.');
                 return;
@@ -415,6 +456,7 @@
         function closeAddAccount() { document.getElementById('addAccountModal').classList.remove('active'); }
 
         async function saveAccount() {
+            selectedTemplateId = resolveSelectedTemplateId();
             if (!selectedTemplateId) {
                 alert('Select a template first.');
                 return;

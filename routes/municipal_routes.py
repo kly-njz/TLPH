@@ -1635,14 +1635,25 @@ def applicants_municipal():
             created_raw = src.get('date_filed') or src.get('created_at') or src.get('timestamp')
             created_dt = _safe_datetime(created_raw)
 
+            if status not in {'APPROVED', 'REJECTED', 'PENDING'}:
+                status = 'PENDING'
+
+            full_name = str(applicant_name).strip() or 'N/A'
+            candidate_type = str(category).strip() or 'DENR Application'
+            region_office = str(user_region).strip() or str(src.get('region') or '').strip() or 'N/A'
+
             denr_job = {
                 'source_id': source_doc.id,
                 'source_collection': 'applications',
+                'full_name': full_name,
+                'candidate_type': candidate_type,
+                'region_office': region_office,
                 'applicant_name': str(applicant_name).strip(),
                 'category': str(category).strip(),
                 'job_title': f"{str(category).strip()} Review",
                 'job_description': 'Validate DENR applicant documents and requirements for municipal processing.',
                 'status': status,
+                'employeeStatus': status.lower(),
                 'barangay': str(barangay).strip(),
                 'reference_id': reference_id,
                 'municipality': user_municipality,
@@ -1677,10 +1688,15 @@ def applicants_municipal():
             if ref_value.upper().startswith('APP-'):
                 ref_value = ref_value[4:]
             item['reference_id'] = ref_value
-            item['applicant_name'] = item.get('applicant_name') or 'N/A'
-            item['category'] = item.get('category') or 'DENR Application'
+            item['full_name'] = item.get('full_name') or item.get('applicant_name') or 'N/A'
+            item['candidate_type'] = item.get('candidate_type') or item.get('category') or 'DENR Application'
+            item['region_office'] = item.get('region_office') or item.get('region') or user_region or 'N/A'
+            item['applicant_name'] = item.get('applicant_name') or item.get('full_name') or 'N/A'
+            item['category'] = item.get('category') or item.get('candidate_type') or 'DENR Application'
             item['barangay'] = item.get('barangay') or 'N/A'
             item['status'] = str(item.get('status') or 'PENDING').upper()
+            if item['status'] not in {'APPROVED', 'REJECTED', 'PENDING'}:
+                item['status'] = 'PENDING'
             applications.append(item)
     except Exception as e:
         print(f"[WARN] Scoped query failed, fallback filtering in-memory: {e}")
@@ -1701,10 +1717,15 @@ def applicants_municipal():
                 if ref_value.upper().startswith('APP-'):
                     ref_value = ref_value[4:]
                 item['reference_id'] = ref_value
-                item['applicant_name'] = item.get('applicant_name') or 'N/A'
-                item['category'] = item.get('category') or 'DENR Application'
+                item['full_name'] = item.get('full_name') or item.get('applicant_name') or 'N/A'
+                item['candidate_type'] = item.get('candidate_type') or item.get('category') or 'DENR Application'
+                item['region_office'] = item.get('region_office') or item.get('region') or user_region or 'N/A'
+                item['applicant_name'] = item.get('applicant_name') or item.get('full_name') or 'N/A'
+                item['category'] = item.get('category') or item.get('candidate_type') or 'DENR Application'
                 item['barangay'] = item.get('barangay') or 'N/A'
                 item['status'] = str(item.get('status') or 'PENDING').upper()
+                if item['status'] not in {'APPROVED', 'REJECTED', 'PENDING'}:
+                    item['status'] = 'PENDING'
                 applications.append(item)
         except Exception as fallback_error:
             print(f"[ERROR] Fallback query failed for municipal_denr_applicant_jobs: {fallback_error}")
@@ -1716,8 +1737,8 @@ def applicants_municipal():
     pending_count = len([a for a in applications if a.get('status') == 'PENDING'])
     rejected_count = len([a for a in applications if a.get('status') == 'REJECTED'])
 
-    barangay_counts = Counter([(a.get('barangay') or 'N/A') for a in applications])
-    barangay_options = sorted([b for b in barangay_counts.keys() if b and b != 'N/A'])
+    region_office_counts = Counter([(a.get('region_office') or 'N/A') for a in applications])
+    region_office_options = sorted([r for r in region_office_counts.keys() if r and r != 'N/A'])
 
     monthly_counts = Counter()
     for app in applications:
@@ -1735,9 +1756,9 @@ def applicants_municipal():
 
     status_values = [approved_count, pending_count, rejected_count]
 
-    top_barangays = barangay_counts.most_common(5)
-    barangay_labels = [x[0] for x in top_barangays] if top_barangays else ['No Data']
-    barangay_values = [x[1] for x in top_barangays] if top_barangays else [0]
+    top_region_offices = region_office_counts.most_common(5)
+    barangay_labels = [x[0] for x in top_region_offices] if top_region_offices else ['No Data']
+    barangay_values = [x[1] for x in top_region_offices] if top_region_offices else [0]
 
     return render_template(
         'municipal/operations/applicants-municipal.html',
@@ -1746,7 +1767,7 @@ def applicants_municipal():
         approved_count=approved_count,
         pending_count=pending_count,
         rejected_count=rejected_count,
-        barangay_options=barangay_options,
+        region_office_options=region_office_options,
         trend_labels_json=json.dumps(trend_labels),
         trend_values_json=json.dumps(trend_values),
         status_values_json=json.dumps(status_values),
@@ -1781,8 +1802,11 @@ def applicants_municipal_job_detail(job_id):
         return jsonify({'success': True, 'job': {
             'id': doc.id,
             'reference_id': data.get('reference_id') or doc.id,
-            'applicant_name': data.get('applicant_name') or 'N/A',
-            'category': data.get('category') or 'DENR Application',
+            'full_name': data.get('full_name') or data.get('applicant_name') or 'N/A',
+            'candidate_type': data.get('candidate_type') or data.get('category') or 'DENR Application',
+            'region_office': data.get('region_office') or data.get('region') or 'N/A',
+            'applicant_name': data.get('applicant_name') or data.get('full_name') or 'N/A',
+            'category': data.get('category') or data.get('candidate_type') or 'DENR Application',
             'barangay': data.get('barangay') or 'N/A',
             'status': str(data.get('status') or 'PENDING').upper(),
             'date_filed': data.get('date_filed') or 'N/A',
@@ -1825,6 +1849,7 @@ def applicants_municipal_job_update_status(job_id):
 
         doc_ref.set({
             'status': new_status,
+            'employeeStatus': new_status.lower(),
             'updated_at': firestore.SERVER_TIMESTAMP
         }, merge=True)
 

@@ -611,6 +611,32 @@ def api_add_superadmin_coa_account(template_id):
         print(f"[ERROR] Failed to add COA account: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@bp.route('/api/accounting/coa/templates', methods=['POST'])
+@role_required('super-admin','superadmin')
+def api_add_superadmin_coa_template():
+    """Create a COA template for super-admin."""
+    try:
+        payload = request.get_json() or {}
+        name = str(payload.get('name', '')).strip()
+        description = str(payload.get('description', '')).strip()
+        status = str(payload.get('status', 'active')).strip().lower() or 'active'
+
+        if not name:
+            return jsonify({'success': False, 'error': 'name is required'}), 400
+
+        # Keep super-admin templates globally visible.
+        template = coa_storage.add_coa_template(
+            municipality='superadmin',
+            name=name,
+            description=description,
+            status=status,
+        )
+        return jsonify({'success': True, 'template': template}), 201
+    except Exception as e:
+        print(f"[ERROR] Failed to add COA template: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @bp.route('/accounting/expense-categories')
 def accounting_expense_categories():
     return render_template('super-admin/accounting/expense-categories.html')
