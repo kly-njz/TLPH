@@ -1,4 +1,6 @@
-from flask import Blueprint, render_template, redirect, url_for, session
+from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify
+import uuid
+from datetime import datetime
 from firebase_auth_middleware import role_required, firebase_auth_required
 
 bp = Blueprint('main', __name__)
@@ -100,6 +102,102 @@ def index():
         side_news=side_news,
         hiring_positions=hiring_positions,
     )
+
+
+@bp.route('/api/hiring/apply', methods=['POST'])
+def apply_for_hiring_position():
+    """Public endpoint for submitting a hiring application.
+
+    Creates a municipal applicant record directly in municipal_denr_applicant_jobs
+    so it appears in applicants-municipal with PENDING status.
+    """
+    from firebase_config import get_firestore_db
+    from firebase_admin import firestore
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    db = get_firestore_db()
+    data = request.get_json(silent=True) or {}
+
+    hiring_id = str(data.get('hiring_id') or '').strip()
+    full_name = str(data.get('full_name') or '').strip()
+    email = str(data.get('email') or '').strip()
+    phone = str(data.get('phone') or '').strip()
+    barangay = str(data.get('barangay') or '').strip()
+    applicant_address = str(data.get('address') or '').strip()
+    notes = str(data.get('notes') or '').strip()
+
+    if not hiring_id:
+        return jsonify({'success': False, 'error': 'Missing hiring position reference'}), 400
+    if not full_name:
+        return jsonify({'success': False, 'error': 'Full name is required'}), 400
+
+    try:
+        hiring_doc = db.collection('hiring_positions').document(hiring_id).get()
+        if not hiring_doc.exists:
+            return jsonify({'success': False, 'error': 'Hiring position not found'}), 404
+
+        hiring = hiring_doc.to_dict() or {}
+        if not bool(hiring.get('is_active', True)):
+            return jsonify({'success': False, 'error': 'This hiring position is no longer active'}), 400
+
+        municipality = str(hiring.get('municipality') or '').strip()
+        region = str(hiring.get('region') or '').strip()
+        position = str(hiring.get('position') or '').strip()
+        job_title = str(hiring.get('job_title') or '').strip()
+        description = str(hiring.get('description') or '').strip()
+
+        if not municipality:
+            return jsonify({'success': False, 'error': 'Hiring position has no municipality scope'}), 400
+
+        application_id = f"HIRE-{hiring_id}-{uuid.uuid4().hex[:8].upper()}"
+        reference_id = f"APP-{uuid.uuid4().hex[:8].upper()}"
+
+        payload = {
+            'source_id': hiring_id,
+            'source_collection': 'hiring_positions',
+            'full_name': full_name,
+            'applicant_name': full_name,
+            'email': email or 'N/A',
+            'phone': phone or 'N/A',
+            'contact_number': phone or 'N/A',
+            'address': applicant_address or 'N/A',
+            'barangay': barangay or 'N/A',
+            'notes': notes or 'N/A',
+            'candidate_type': position or 'Environmental Management Specialist',
+            'category': position or 'Environmental Management Specialist',
+            'region_office': region or 'N/A',
+            'scope_type': 'municipality',
+            'scope': municipality,
+            'scope_key': normalize_scope(municipality),
+            'job_title': job_title or 'DENR Hiring Position',
+            'job_description': description or 'No description provided.',
+            'status': 'PENDING',
+            'employeeStatus': 'pending',
+            'reference_id': reference_id,
+            'municipality': municipality,
+            'region': region or 'N/A',
+            'municipality_key': normalize_scope(municipality),
+            'region_key': normalize_scope(region),
+            'date_filed': datetime.utcnow().strftime('%Y-%m-%d'),
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'created_via': 'home_hiring_modal',
+        }
+
+        db.collection('municipal_denr_applicant_jobs').document(application_id).set(payload, merge=True)
+
+        return jsonify({
+            'success': True,
+            'message': 'Application submitted successfully',
+            'application_id': application_id,
+            'reference_id': reference_id,
+            'status': 'PENDING'
+        })
+    except Exception as e:
+        print(f"[ERROR] apply_for_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to submit application'}), 500
 
 @bp.route('/login')
 def login():
