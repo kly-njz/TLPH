@@ -4,6 +4,7 @@ from firebase_config import get_firestore_db
 from datetime import datetime
 from collections import defaultdict
 import coa_storage
+from firebase_admin import firestore
 
 bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
 
@@ -508,6 +509,168 @@ def tasks_view():
 @role_required('super-admin','superadmin')
 def applicants_view():
     return render_template('super-admin/applicants/applicants.html')
+
+
+def _normalize_superadmin_applicant_status(raw_status):
+    status = str(raw_status or 'pending').strip().lower()
+    if status in ['accepted', 'approve', 'approved', 'hired']:
+        return 'accepted'
+    if status in ['reject', 'rejected', 'denied', 'declined']:
+        return 'rejected'
+    return 'pending'
+
+
+def _is_accepted_status(raw_status):
+    return _normalize_superadmin_applicant_status(raw_status) == 'accepted'
+
+
+@bp.route('/api/applicants/data', methods=['GET'])
+@role_required('super-admin', 'superadmin')
+def superadmin_applicants_data():
+    try:
+        db = get_firestore_db()
+        docs = db.collection('municipal_denr_applicant_jobs').stream()
+
+        applicants = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+
+            full_name = (
+                data.get('full_name')
+                or data.get('applicant_name')
+                or data.get('fullName')
+                or data.get('name')
+                or 'N/A'
+            )
+            candidate_type = (
+                data.get('candidate_type')
+                or data.get('category')
+                or data.get('applicantCategory')
+                or 'N/A'
+            )
+            region_office = data.get('region_office') or data.get('region') or 'N/A'
+            status = _normalize_superadmin_applicant_status(
+                data.get('status') or data.get('employeeStatus') or data.get('application_status')
+            )
+
+            applicants.append({
+                'id': doc.id,
+                'full_name': full_name,
+                'candidate_type': candidate_type,
+                'region_office': region_office,
+                'status': status,
+                'is_accepted': status == 'accepted',
+                'can_delete': status == 'rejected',
+                'reference_id': data.get('reference_id') or doc.id[:12].upper(),
+            })
+
+        applicants.sort(key=lambda row: row.get('full_name', '').lower())
+        return jsonify({'success': True, 'applicants': applicants})
+    except Exception as e:
+        print(f'[ERROR] superadmin_applicants_data: {e}')
+        return jsonify({'success': False, 'error': 'Failed to load applicants'}), 500
+
+
+@bp.route('/api/applicants', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def superadmin_create_applicant():
+    try:
+        payload = request.get_json() or {}
+        full_name = str(payload.get('full_name') or '').strip()
+        candidate_type = str(payload.get('candidate_type') or '').strip()
+        region_office = str(payload.get('region_office') or '').strip()
+
+        if not full_name or not candidate_type or not region_office:
+            return jsonify({'success': False, 'error': 'full_name, candidate_type, and region_office are required'}), 400
+
+        db = get_firestore_db()
+        doc_ref = db.collection('municipal_denr_applicant_jobs').document()
+
+        data = {
+            'full_name': full_name,
+            'candidate_type': candidate_type,
+            'region_office': region_office,
+            'status': 'pending',
+            'employeeStatus': 'pending',
+            'scope_type': 'region',
+            'scope': region_office,
+            'scope_key': region_office.strip().lower(),
+            'reference_id': f'SUP-{doc_ref.id[:8].upper()}',
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'created_by_role': 'super_admin',
+        }
+
+        doc_ref.set(data)
+        return jsonify({'success': True, 'id': doc_ref.id})
+    except Exception as e:
+        print(f'[ERROR] superadmin_create_applicant: {e}')
+        return jsonify({'success': False, 'error': 'Failed to create applicant'}), 500
+
+
+@bp.route('/api/applicants/<applicant_id>', methods=['PUT'])
+@role_required('super-admin', 'superadmin')
+def superadmin_update_applicant(applicant_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('municipal_denr_applicant_jobs').document(applicant_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Applicant not found'}), 404
+
+        current = snap.to_dict() or {}
+        if _is_accepted_status(current.get('status') or current.get('employeeStatus')):
+            return jsonify({'success': False, 'error': 'Accepted applicants cannot be edited'}), 400
+
+        payload = request.get_json() or {}
+        updates = {}
+
+        if 'full_name' in payload:
+            updates['full_name'] = str(payload.get('full_name') or '').strip()
+        if 'candidate_type' in payload:
+            updates['candidate_type'] = str(payload.get('candidate_type') or '').strip()
+            updates['category'] = updates['candidate_type']
+        if 'region_office' in payload:
+            updates['region_office'] = str(payload.get('region_office') or '').strip()
+            updates['region'] = updates['region_office']
+            if str(current.get('scope_type') or '').strip().lower() == 'region':
+                updates['scope'] = updates['region_office']
+                updates['scope_key'] = updates['region_office'].lower()
+        if 'status' in payload:
+            normalized = _normalize_superadmin_applicant_status(payload.get('status'))
+            updates['status'] = normalized
+            updates['employeeStatus'] = normalized
+
+        updates['updated_at'] = firestore.SERVER_TIMESTAMP
+        if not updates:
+            return jsonify({'success': False, 'error': 'No valid updates provided'}), 400
+
+        doc_ref.update(updates)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_update_applicant: {e}')
+        return jsonify({'success': False, 'error': 'Failed to update applicant'}), 500
+
+
+@bp.route('/api/applicants/<applicant_id>', methods=['DELETE'])
+@role_required('super-admin', 'superadmin')
+def superadmin_delete_applicant(applicant_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('municipal_denr_applicant_jobs').document(applicant_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Applicant not found'}), 404
+
+        current = snap.to_dict() or {}
+        status = _normalize_superadmin_applicant_status(current.get('status') or current.get('employeeStatus'))
+        if status != 'rejected':
+            return jsonify({'success': False, 'error': 'Only rejected applicants can be permanently deleted'}), 400
+
+        doc_ref.delete()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_delete_applicant: {e}')
+        return jsonify({'success': False, 'error': 'Failed to delete applicant'}), 500
 
 # --- Accounting Module Routes ---
 @bp.route('/accounting/dashboard')
