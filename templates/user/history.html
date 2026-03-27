@@ -1920,7 +1920,21 @@
         // Form fields (the actual data they entered in the application)
         const formFields = (d.formData && d.formData.formFields) ? d.formData.formFields : {};
         const skipKeys = new Set(['xendit_raw_amount', '']);
-        const fieldEntries = Object.entries(formFields).filter(([k, v]) => v && String(v).trim() && !skipKeys.has(k));
+
+        const extraFields = {
+          farmerIdNumber: d.farmerIdNumber || '',
+          googlePinLocation: d.googlePinLocation || '',
+          farmAddress: d.farmAddress || '',
+          farmLatitude: d.farmLatitude || '',
+          farmLongitude: d.farmLongitude || ''
+        };
+
+        const mergedFields = { ...formFields, ...extraFields };
+        const fieldEntries = Object.entries(mergedFields).filter(([k, v]) => {
+          if (skipKeys.has(k) || v === null || v === undefined) return false;
+          const str = String(v).trim();
+          return str.length > 0;
+        });
 
         if (fieldEntries.length > 0) {
           html += `
@@ -1934,9 +1948,57 @@
           html += `</div></div>`;
         }
 
-        // Uploaded files
-        const uploadedFiles = d.uploadedFiles || {};
-        const fileEntries = Object.entries(uploadedFiles).filter(([k, v]) => v);
+        // Uploaded files (supports both new `files` map and legacy `uploadedFiles` map)
+        const filesMap = (d.files && typeof d.files === 'object') ? d.files : {};
+        const uploadedFiles = (d.uploadedFiles && typeof d.uploadedFiles === 'object') ? d.uploadedFiles : {};
+        const mergedFileMap = { ...uploadedFiles, ...filesMap };
+
+        const fileLabelMap = {
+          brgy: 'Barangay Certificate',
+          title: 'Title / Tax Declaration',
+          tax: 'Tax Receipt',
+          blueprint: 'Blueprint',
+          land: 'Land Photo',
+          crop: 'Crop Photo',
+          plan: 'Business Plan',
+          productPicture: 'Product Picture',
+          validId: 'Any Valid ID'
+        };
+
+        const normalizeFileItems = (val) => {
+          const out = [];
+          const list = Array.isArray(val) ? val : [val];
+          list.forEach((item) => {
+            if (!item) return;
+
+            if (typeof item === 'string' && item.trim()) {
+              const url = item.trim();
+              const name = decodeURIComponent((url.split('?')[0].split('/').pop() || 'file').trim());
+              out.push({ name, url, size: null });
+              return;
+            }
+
+            if (typeof item === 'object') {
+              const url = item.downloadUrl || item.url || item.path || '';
+              const name = item.name || (url ? decodeURIComponent(url.split('?')[0].split('/').pop() || 'file') : 'file');
+              if (!name && !url) return;
+              out.push({ name, url, size: item.size || null });
+            }
+          });
+
+          const seen = new Set();
+          return out.filter((f) => {
+            const key = `${f.name}|${f.url}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        };
+
+        const fileEntries = Object.entries(mergedFileMap)
+          .filter(([k, v]) => v && !String(k).endsWith('Primary'))
+          .map(([k, v]) => ({ key: k, label: fileLabelMap[k] || fmtKey(k), items: normalizeFileItems(v) }))
+          .filter(group => group.items.length > 0);
 
         if (fileEntries.length > 0) {
           html += `
@@ -1944,22 +2006,23 @@
               <p class="text-blue-800 font-black uppercase tracking-widest text-[10px] mb-2"><i class="fa-solid fa-paperclip mr-1"></i> Uploaded Documents</p>
               <div class="space-y-2">
           `;
-          fileEntries.forEach(([key, val]) => {
-            const files = Array.isArray(val) ? val : [val];
-            files.forEach(f => {
-              if (f && f.name) {
-                html += `
-                  <div class="flex items-center justify-between bg-white border border-blue-100 rounded-lg p-2 gap-2">
-                    <div class="min-w-0">
-                      <p class="text-[9px] font-black uppercase text-gray-400 mb-0.5">${fmtKey(key)}</p>
-                      <p class="font-semibold text-gray-800 text-xs truncate">${f.name}</p>
-                      ${f.size ? `<p class="text-[9px] text-gray-400">${(f.size/1024).toFixed(1)} KB</p>` : ''}
+          fileEntries.forEach((group) => {
+            html += `
+              <div class="bg-white border border-blue-100 rounded-lg p-2">
+                <p class="text-[9px] font-black uppercase text-gray-400 mb-1">${group.label}</p>
+                <div class="space-y-1">
+                  ${group.items.map((f) => `
+                    <div class="flex items-center justify-between gap-2 border border-slate-100 rounded p-1.5">
+                      <div class="min-w-0">
+                        <p class="font-semibold text-gray-800 text-xs truncate">${f.name}</p>
+                        ${f.size ? `<p class="text-[9px] text-gray-400">${(f.size/1024).toFixed(1)} KB</p>` : ''}
+                      </div>
+                      ${f.url ? `<a href="${f.url}" target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center gap-1 text-blue-600 hover:text-blue-800 font-black text-[10px] uppercase bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded transition-all"><i class="fa-solid fa-eye"></i> View</a>` : '<span class="text-[9px] text-gray-400 italic shrink-0">No URL</span>'}
                     </div>
-                    ${f.downloadUrl ? `<a href="${f.downloadUrl}" target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center gap-1 text-blue-600 hover:text-blue-800 font-black text-[10px] uppercase bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded transition-all"><i class="fa-solid fa-eye"></i> View</a>` : '<span class="text-[9px] text-gray-400 italic shrink-0">No URL</span>'}
-                  </div>
-                `;
-              }
-            });
+                  `).join('')}
+                </div>
+              </div>
+            `;
           });
           html += `</div></div>`;
         }

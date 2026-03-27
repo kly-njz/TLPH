@@ -64,6 +64,11 @@
       box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
     }
 
+    .doc-gallery-grid { display: grid; gap: 12px; }
+    .doc-gallery-item { background: #fff; border: 1px solid #cbd5e1; padding: 8px; cursor: zoom-in; }
+    .doc-gallery-thumb { width: 100%; height: 250px; object-fit: cover; border: 1px solid #e2e8f0; background: #f8fafc; }
+    .doc-single-image { width: min(1220px, 96vw); max-height: 82vh; object-fit: contain; border: 1px solid #cbd5e1; background: #fff; display:block; margin:0 auto; }
+
     [x-cloak] { display: none !important; }
   </style>
 </head>
@@ -213,6 +218,29 @@
                 <label class="gov-label">Expected Yield</label>
                 <div class="gov-value uppercase" x-text="formData.harvest || 'N/A'"></div>
               </div>
+              <div>
+                <label class="gov-label">Farmer ID Number</label>
+                <div class="gov-value uppercase" x-text="formData.farmerIdNumber || 'N/A'"></div>
+              </div>
+              <div>
+                <label class="gov-label">Farm Coordinates</label>
+                <div class="gov-value font-mono text-[11px] normal-case" x-text="formData.farmCoordinates || 'N/A'"></div>
+              </div>
+              <div class="md:col-span-2">
+                <label class="gov-label">Farm Address</label>
+                <div class="gov-value uppercase" x-text="formData.farmAddress || 'N/A'"></div>
+              </div>
+              <div class="md:col-span-2">
+                <label class="gov-label">Google Pin Location</label>
+                <div class="gov-value normal-case">
+                  <template x-if="formData.googlePinLocation && formData.googlePinLocation.startsWith('http')">
+                    <a :href="formData.googlePinLocation" target="_blank" rel="noopener noreferrer" class="text-blue-700 text-[11px] font-black underline">Open Google Maps Pin</a>
+                  </template>
+                  <template x-if="!formData.googlePinLocation || !formData.googlePinLocation.startsWith('http')">
+                    <span>N/A</span>
+                  </template>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -222,21 +250,24 @@
                 <span class="material-icons-round text-[16px]">folder_copy</span>
                 Uploaded Documents
               </h3>
-              <span class="text-[8px] font-black uppercase bg-slate-100 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-[1px]" x-text="documents.length + ' Files'"></span>
+              <span class="text-[8px] font-black uppercase bg-slate-100 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-[1px]" x-text="documentGroups.reduce((sum, g) => sum + (g.files?.length || 0), 0) + ' Files'"></span>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <template x-for="doc in documents" :key="doc.url || doc.name">
-                <button type="button" @click="openDocumentPreview(doc)" class="w-full text-left group flex items-center justify-between border border-slate-200 bg-slate-50 p-2 hover:bg-blue-50 hover:border-blue-300 transition-all rounded-[2px] no-underline">
+              <template x-for="(group, idx) in documentGroups" :key="group.key || group.name || idx">
+                <button type="button" @click="openDocumentGroupPreview(group)" class="w-full text-left group flex items-center justify-between border border-slate-200 bg-slate-50 p-2 hover:bg-blue-50 hover:border-blue-300 transition-all rounded-[2px] no-underline">
                   <div class="flex items-center gap-2 overflow-hidden">
-                    <span class="material-icons-round text-slate-400 group-hover:text-blue-700 text-[16px]" x-text="doc.icon"></span>
-                    <span class="text-[9px] font-black uppercase text-slate-700 group-hover:text-blue-900 truncate" x-text="doc.name"></span>
+                    <span class="material-icons-round text-slate-400 group-hover:text-blue-700 text-[16px]" x-text="group.icon || 'description'"></span>
+                    <div class="min-w-0">
+                      <span class="text-[9px] font-black uppercase text-slate-700 group-hover:text-blue-900 truncate block" x-text="group.name"></span>
+                      <span class="text-[8px] font-black uppercase text-slate-500" x-text="(group.files?.length || 0) + ((group.files?.length || 0) === 1 ? ' File' : ' Files')"></span>
+                    </div>
                   </div>
                   <span class="material-icons-round text-slate-300 group-hover:text-blue-600 text-[14px]">visibility</span>
                 </button>
               </template>
 
-              <template x-if="!documents.length">
+              <template x-if="!documentGroups.length">
                 <div class="col-span-full text-center py-4 border border-slate-200 bg-slate-50 rounded-[2px]">
                   <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">No uploaded documents found</p>
                 </div>
@@ -302,24 +333,43 @@
 
   <!-- Document Preview Modal -->
   <div x-show="preview.open" x-cloak class="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4" style="display:none;" @click.self="closeDocumentPreview()">
-    <div class="bg-white w-full max-w-5xl rounded-[2px] border border-slate-300 shadow-xl overflow-hidden">
+    <div class="bg-white w-full rounded-[2px] border border-slate-300 shadow-xl overflow-hidden" :style="preview.mode === 'gallery' ? 'max-width: min(96vw, calc(' + preview.galleryCols + ' * 360px));' : 'max-width: min(98vw, 1280px);'">
       <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
-        <h3 class="text-[10px] font-black uppercase tracking-widest truncate" x-text="preview.name || 'Document Preview'"></h3>
+        <div class="flex items-center gap-2 min-w-0">
+          <button type="button" x-show="preview.mode === 'single' && preview.fromGroup" class="border border-white/50 px-2 py-0 text-[9px] font-black uppercase" @click="backToGroupGallery()">Back</button>
+          <h3 class="text-[10px] font-black uppercase tracking-widest truncate" x-text="preview.name || 'Document Preview'"></h3>
+        </div>
         <button type="button" class="text-white/80 hover:text-white" @click="closeDocumentPreview()">
           <span class="material-icons-round text-[18px]">close</span>
         </button>
       </div>
 
-      <div class="bg-slate-50 p-3 max-h-[78vh] overflow-auto custom-scrollbar">
-        <template x-if="preview.type === 'image'">
-          <img :src="preview.url" alt="Document Preview" class="w-full h-auto border border-slate-200 bg-white" />
+      <div class="bg-slate-50 p-3 max-h-[84vh] overflow-auto custom-scrollbar">
+        <template x-if="preview.mode === 'gallery'">
+          <div class="doc-gallery-grid" :style="'grid-template-columns: repeat(' + preview.galleryCols + ', minmax(300px, 1fr));'">
+            <template x-for="(file, idx) in preview.files" :key="file.url || idx">
+              <div class="doc-gallery-item" @click="openDocumentFromGroup(idx)">
+                <template x-if="file.type === 'image'">
+                  <img :src="file.url" :alt="(preview.groupName || 'Document') + ' ' + (idx + 1)" class="doc-gallery-thumb" />
+                </template>
+                <template x-if="file.type !== 'image'">
+                  <div class="doc-gallery-thumb flex items-center justify-center"><span class="material-icons-round text-slate-400">description</span></div>
+                </template>
+                <p class="mt-2 text-[9px] font-black uppercase text-slate-700" x-text="(preview.groupName || 'Document') + ' ' + (idx + 1)"></p>
+              </div>
+            </template>
+          </div>
         </template>
 
-        <template x-if="preview.type === 'pdf'">
-          <iframe :src="preview.url + '#toolbar=0&navpanes=0&scrollbar=1'" class="w-full h-[72vh] border border-slate-200 bg-white"></iframe>
+        <template x-if="preview.mode === 'single' && preview.type === 'image'">
+          <img :src="preview.url" alt="Document Preview" class="doc-single-image" />
         </template>
 
-        <template x-if="preview.type !== 'image' && preview.type !== 'pdf'">
+        <template x-if="preview.mode === 'single' && preview.type === 'pdf'">
+          <iframe :src="preview.url + '#toolbar=0&navpanes=0&scrollbar=1'" class="w-full h-[80vh] border border-slate-200 bg-white"></iframe>
+        </template>
+
+        <template x-if="preview.mode === 'single' && preview.type !== 'image' && preview.type !== 'pdf'">
           <div class="text-center py-12 bg-white border border-slate-200">
             <span class="material-icons-round text-4xl text-slate-400">description</span>
             <p class="mt-2 text-[10px] font-black uppercase text-slate-600">Preview not available for this file type.</p>
@@ -351,15 +401,25 @@
           nationalStatus: "pending", email: "---", phone: "---", address: "---", region: "---", categoryLabel: "---"
         },
         timeline: { submitted: "---", forwarded: "", updated: "" },
-        formData: { productName: "", category: "", province: "", municipality: "", investment: "0.00", harvest: "" },
+        formData: {
+          productName: "", category: "", province: "", municipality: "", investment: "0.00", harvest: "",
+          farmerIdNumber: "", farmAddress: "", farmCoordinates: "", googlePinLocation: ""
+        },
         currentCollection: 'applications',
         currentRecordType: 'application',
         documents: [],
+        documentGroups: [],
         rejectionMessage: '',
         showingRejectionModal: false,
         preview: {
           open: false,
+          mode: 'single',
           name: '',
+          groupName: '',
+          files: [],
+          galleryCols: 1,
+          fromGroup: false,
+          selectedIndex: -1,
           url: '',
           type: 'file'
         },
@@ -462,7 +522,13 @@
                 : (appData.investmentQty ? Number(appData.investmentQty).toLocaleString('en-PH', {minimumFractionDigits: 2}) : '0.00'),
               harvest: this.currentRecordType === 'inventory'
                 ? `${Number(appData.stockAvailable || 0).toLocaleString()} ${appData.unitOfMeasure || 'pcs'}`
-                : (appData.harvestQty || 'N/A')
+                : (appData.harvestQty || 'N/A'),
+              farmerIdNumber: appData.farmerIdNumber || appData.farmerId || 'N/A',
+              farmAddress: appData.farmAddress || appData.googlePinLocation || 'N/A',
+              farmCoordinates: (appData.farmLatitude !== undefined && appData.farmLatitude !== null && appData.farmLatitude !== '' && appData.farmLongitude !== undefined && appData.farmLongitude !== null && appData.farmLongitude !== '')
+                ? `${appData.farmLatitude}, ${appData.farmLongitude}`
+                : 'N/A',
+              googlePinLocation: appData.googlePinLocation || ''
             };
 
             const labelMap = {
@@ -470,10 +536,14 @@
               title: 'Land Title / Tax Declaration',
               tax: 'Tax Receipt',
               blueprint: 'Blueprint / Site Plan',
+              blueprintPrimary: 'Blueprint / Site Plan',
               land: 'Land / Site Photo',
+              landPrimary: 'Land / Site Photo',
               crop: 'Crop / Product Photo',
+              cropPrimary: 'Crop / Product Photo',
               plan: 'Business Plan',
               productPicture: 'Product Picture',
+              validId: 'Any Valid ID',
               image: 'Resource Photo',
               permit: 'Permit File'
             };
@@ -492,14 +562,83 @@
             };
 
             const docs = [];
+            const groupedDocsMap = new Map();
+            const globalSeenUrls = new Set();
+
+            const aliasMap = {
+              blueprintprimary: 'blueprint',
+              landprimary: 'land',
+              cropprimary: 'crop',
+              validid: 'validId',
+              valid_id: 'validId',
+              productpicture: 'productPicture'
+            };
+
+            const normalizeGroupKey = (rawKey, rawLabel) => {
+              const keyText = String(rawKey || '').trim().toLowerCase();
+              const labelText = String(rawLabel || '').trim().toLowerCase();
+              const combined = `${keyText} ${labelText}`;
+
+              if (combined.includes('blueprint')) return 'blueprint';
+              if (combined.includes('land')) return 'land';
+              if (combined.includes('crop')) return 'crop';
+              if (combined.includes('barangay')) return 'brgy';
+              if (combined.includes('title') || combined.includes('tax declaration')) return 'title';
+              if (combined.includes('tax receipt') || combined === 'tax') return 'tax';
+              if (combined.includes('business plan') || combined === 'plan') return 'plan';
+              if (combined.includes('product')) return 'productPicture';
+              if (combined.includes('valid id') || combined === 'id') return 'validId';
+
+              const compact = keyText.replace(/\s+/g, '');
+              return aliasMap[compact] || rawKey || rawLabel || 'document';
+            };
+
+            const detectFileType = (urlValue) => {
+              const lower = String(urlValue || '').toLowerCase();
+              if (/\.(png|jpg|jpeg|gif|webp|avif|bmp)(\?|$)/i.test(lower)) return 'image';
+              if (/\.pdf(\?|$)/i.test(lower)) return 'pdf';
+              return 'file';
+            };
+
+            const addGroupedDocument = (groupKey, label, icon, url) => {
+              if (!url || typeof url !== 'string' || !url.trim()) return;
+              const normalizedUrl = url.trim();
+              if (globalSeenUrls.has(normalizedUrl)) return;
+              globalSeenUrls.add(normalizedUrl);
+
+              const normalizedKey = normalizeGroupKey(groupKey, label);
+              const normalizedName = labelMap[normalizedKey] || label || 'Document';
+              const normalizedIcon = iconMap[normalizedKey] || icon || 'description';
+
+              if (!groupedDocsMap.has(normalizedKey)) {
+                groupedDocsMap.set(normalizedKey, {
+                  key: normalizedKey,
+                  name: normalizedName,
+                  icon: normalizedIcon,
+                  files: []
+                });
+              }
+
+              groupedDocsMap.get(normalizedKey).files.push({
+                url: normalizedUrl,
+                type: detectFileType(normalizedUrl),
+                name: normalizedName
+              });
+
+              docs.push({ name: normalizedName, icon: normalizedIcon, url: normalizedUrl });
+            };
 
             if (appData.files && typeof appData.files === 'object') {
               Object.entries(appData.files).forEach(([key, url]) => {
                 if (typeof url === 'string' && url.trim()) {
-                  docs.push({
-                    name: labelMap[key] || key,
-                    icon: iconMap[key] || 'description',
-                    url
+                  addGroupedDocument(key, labelMap[key] || key, iconMap[key] || 'description', url);
+                  return;
+                }
+
+                if (Array.isArray(url)) {
+                  url.forEach((itemUrl) => {
+                    if (typeof itemUrl !== 'string' || !itemUrl.trim()) return;
+                    addGroupedDocument(key, labelMap[key] || key, iconMap[key] || 'description', itemUrl);
                   });
                 }
               });
@@ -508,11 +647,7 @@
             if (Array.isArray(appData.documents)) {
               appData.documents.forEach((d) => {
                 if (d && d.url) {
-                  docs.push({
-                    name: d.name || 'Document',
-                    icon: 'description',
-                    url: d.url
-                  });
+                  addGroupedDocument(d.name || 'Document', d.name || 'Document', 'description', d.url);
                 }
               });
             }
@@ -522,27 +657,19 @@
                 const arr = Array.isArray(val) ? val : [val];
                 arr.forEach((f) => {
                   if (f && f.downloadUrl) {
-                    docs.push({
-                      name: labelMap[key] || key,
-                      icon: iconMap[key] || 'description',
-                      url: f.downloadUrl
-                    });
+                    addGroupedDocument(key, labelMap[key] || key, iconMap[key] || 'description', f.downloadUrl);
                   }
                 });
               });
             }
 
             if (this.currentRecordType === 'inventory') {
-              if (appData.imageUrl) docs.push({ name: 'Resource Photo', icon: 'image', url: appData.imageUrl });
-              if (appData.permitUrl) docs.push({ name: 'Permit File', icon: 'description', url: appData.permitUrl });
+              if (appData.imageUrl) addGroupedDocument('image', 'Resource Photo', 'image', appData.imageUrl);
+              if (appData.permitUrl) addGroupedDocument('permit', 'Permit File', 'description', appData.permitUrl);
             }
 
-            const seen = new Set();
-            this.documents = docs.filter((d) => {
-              if (!d.url || seen.has(d.url)) return false;
-              seen.add(d.url);
-              return true;
-            });
+            this.documents = docs;
+            this.documentGroups = Array.from(groupedDocsMap.values()).filter((g) => (g.files || []).length > 0);
 
             this.loading = false;
           } catch (error) {
@@ -605,24 +732,90 @@
           }
         },
 
-        openDocumentPreview(doc) {
+        openDocumentGroupPreview(group) {
+          if (!group || !Array.isArray(group.files) || !group.files.length) return;
+
+          const fileCount = group.files.length;
+          if (fileCount === 1) {
+            this.openSingleDocument(group.files[0], false, group.name || 'Document');
+            return;
+          }
+
+          const cols = Math.min(Math.max(fileCount, 1), 3);
+          this.preview = {
+            open: true,
+            mode: 'gallery',
+            name: `${(group.name || 'Document').toUpperCase()} (${fileCount})`,
+            groupName: group.name || 'Document',
+            files: group.files,
+            galleryCols: cols,
+            fromGroup: false,
+            selectedIndex: -1,
+            url: '',
+            type: 'file'
+          };
+        },
+
+        openDocumentFromGroup(index) {
+          if (!this.preview.files || !this.preview.files.length) return;
+          const selected = this.preview.files[index];
+          if (!selected) return;
+          this.openSingleDocument(selected, true, this.preview.groupName || selected.name || 'Document');
+          this.preview.selectedIndex = index;
+        },
+
+        backToGroupGallery() {
+          if (!this.preview.files || this.preview.files.length <= 1) return;
+          const cols = Math.min(Math.max(this.preview.files.length, 1), 3);
+          this.preview.mode = 'gallery';
+          this.preview.name = `${(this.preview.groupName || 'Document').toUpperCase()} (${this.preview.files.length})`;
+          this.preview.galleryCols = cols;
+          this.preview.fromGroup = false;
+          this.preview.url = '';
+          this.preview.type = 'file';
+        },
+
+        openSingleDocument(doc, fromGroup = false, label = '') {
           if (!doc || !doc.url) return;
           const url = String(doc.url || '');
           const lower = url.toLowerCase();
-          let type = 'file';
-          if (/\.(png|jpg|jpeg|gif|webp|avif|bmp)(\?|$)/i.test(lower)) type = 'image';
-          else if (/\.pdf(\?|$)/i.test(lower)) type = 'pdf';
+          let type = doc.type || 'file';
+          if (!doc.type) {
+            if (/\.(png|jpg|jpeg|gif|webp|avif|bmp)(\?|$)/i.test(lower)) type = 'image';
+            else if (/\.pdf(\?|$)/i.test(lower)) type = 'pdf';
+          }
 
           this.preview = {
             open: true,
-            name: doc.name || 'Document Preview',
+            mode: 'single',
+            name: label || doc.name || 'Document Preview',
+            groupName: this.preview.groupName || '',
+            files: this.preview.files || [],
+            galleryCols: this.preview.galleryCols || 1,
+            fromGroup,
+            selectedIndex: this.preview.selectedIndex || -1,
             url,
             type
           };
         },
 
+        openDocumentPreview(doc) {
+          this.openSingleDocument(doc, false, doc?.name || 'Document Preview');
+        },
+
         closeDocumentPreview() {
-          this.preview.open = false;
+          this.preview = {
+            open: false,
+            mode: 'single',
+            name: '',
+            groupName: '',
+            files: [],
+            galleryCols: 1,
+            fromGroup: false,
+            selectedIndex: -1,
+            url: '',
+            type: 'file'
+          };
         }
       }));
     });
