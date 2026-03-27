@@ -1107,6 +1107,76 @@ def applicants():
 
         applicants.sort(key=lambda x: x.get('created_sort', 0), reverse=True)
 
+        hiring_rows = []
+        hiring_regions_set = set()
+        hiring_municipalities_set = set()
+        hiring_total_count = 0
+        hiring_active_count = 0
+        hiring_inactive_count = 0
+
+        for doc in db.collection('hiring_positions').stream():
+            row = doc.to_dict() or {}
+            scope_type = str(row.get('scope_type') or '').strip().lower()
+            if scope_type not in {'municipality', 'region', 'national'}:
+                if str(row.get('municipality') or '').strip():
+                    scope_type = 'municipality'
+                elif str(row.get('region') or '').strip():
+                    scope_type = 'region'
+                else:
+                    scope_type = 'national'
+
+            municipality = str(row.get('municipality') or '').strip()
+            region = str(row.get('region') or '').strip()
+            scope_value = str(row.get('scope') or '').strip()
+            if not scope_value:
+                if scope_type == 'municipality':
+                    scope_value = municipality or 'N/A'
+                elif scope_type == 'region':
+                    scope_value = region or 'N/A'
+                else:
+                    scope_value = 'NATIONAL'
+
+            is_active = bool(row.get('is_active', True))
+            created_sort = 0
+            created_at_raw = row.get('created_at')
+            if isinstance(created_at_raw, str):
+                try:
+                    created_sort = int(datetime.fromisoformat(created_at_raw.replace('Z', '+00:00')).timestamp())
+                except Exception:
+                    created_sort = 0
+            elif hasattr(created_at_raw, 'timestamp'):
+                try:
+                    created_sort = int(created_at_raw.timestamp())
+                except Exception:
+                    created_sort = 0
+
+            hiring_rows.append({
+                'id': doc.id,
+                'job_title': str(row.get('job_title') or '').strip() or 'N/A',
+                'description': str(row.get('description') or '').strip() or 'N/A',
+                'position': str(row.get('position') or '').strip() or 'N/A',
+                'starting_salary': row.get('starting_salary') or 0,
+                'scope_type': scope_type,
+                'scope': scope_value,
+                'region': region,
+                'municipality': municipality,
+                'is_active': is_active,
+                'created_sort': created_sort,
+            })
+
+            hiring_total_count += 1
+            if is_active:
+                hiring_active_count += 1
+            else:
+                hiring_inactive_count += 1
+
+            if region:
+                hiring_regions_set.add(region.upper())
+            if municipality:
+                hiring_municipalities_set.add(municipality.upper())
+
+        hiring_rows.sort(key=lambda x: x.get('created_sort', 0), reverse=True)
+
         return render_template(
             'national/HRM/applicants.html',
             applicants=applicants,
@@ -1119,6 +1189,12 @@ def applicants():
             regional_scope_count=regional_scope_count,
             regions=sorted(region_set),
             candidate_types=sorted(candidate_type_set),
+            hiring_rows_json=json.dumps(hiring_rows),
+            hiring_total_count=hiring_total_count,
+            hiring_active_count=hiring_active_count,
+            hiring_inactive_count=hiring_inactive_count,
+            hiring_regions=sorted(hiring_regions_set),
+            hiring_municipalities=sorted(hiring_municipalities_set),
         )
     except Exception as e:
         print(f"[ERROR] Loading national applicants: {e}")
@@ -1134,7 +1210,212 @@ def applicants():
             regional_scope_count=0,
             regions=[],
             candidate_types=[],
+            hiring_rows_json='[]',
+            hiring_total_count=0,
+            hiring_active_count=0,
+            hiring_inactive_count=0,
+            hiring_regions=[],
+            hiring_municipalities=[],
         )
+
+
+@bp.route('/api/hiring', methods=['GET'])
+@role_required('national', 'national_admin')
+def national_get_hiring_positions():
+    db = get_firestore_db()
+    rows = []
+    try:
+        for doc in db.collection('hiring_positions').stream():
+            item = doc.to_dict() or {}
+            item['id'] = doc.id
+            rows.append(item)
+        return jsonify({'success': True, 'positions': rows}), 200
+    except Exception as e:
+        print(f"[ERROR] national_get_hiring_positions failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to fetch hiring positions'}), 500
+
+
+@bp.route('/api/hiring', methods=['POST'])
+@role_required('national', 'national_admin')
+def national_create_hiring_position():
+    db = get_firestore_db()
+    data = request.get_json(silent=True) or {}
+
+    job_title = str(data.get('job_title') or '').strip()
+    description = str(data.get('description') or '').strip()
+    position = str(data.get('position') or '').strip()
+    starting_salary = str(data.get('starting_salary') or '').strip()
+    scope_type = str(data.get('scope_type') or '').strip().lower()
+    scope = str(data.get('scope') or '').strip()
+    region = str(data.get('region') or '').strip()
+    municipality = str(data.get('municipality') or '').strip()
+
+    if scope_type not in {'national', 'region', 'municipality'}:
+        return jsonify({'success': False, 'error': 'Invalid scope type'}), 400
+
+    if not job_title or not description or not position or not starting_salary:
+        return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+    try:
+        salary_value = float(starting_salary)
+    except Exception:
+        return jsonify({'success': False, 'error': 'Invalid salary format'}), 400
+
+    if scope_type == 'region':
+        if not region:
+            return jsonify({'success': False, 'error': 'Region is required for region scope'}), 400
+        municipality = ''
+        scope = region
+    elif scope_type == 'municipality':
+        if not municipality:
+            return jsonify({'success': False, 'error': 'Municipality is required for municipality scope'}), 400
+        if not region:
+            return jsonify({'success': False, 'error': 'Region is required for municipality scope'}), 400
+        scope = municipality
+    else:
+        scope = 'NATIONAL'
+        region = ''
+        municipality = ''
+
+    try:
+        payload = {
+            'job_title': job_title,
+            'description': description,
+            'position': position,
+            'starting_salary': salary_value,
+            'scope_type': scope_type,
+            'scope': scope,
+            'scope_key': str(scope).upper(),
+            'region': region.upper() if region else '',
+            'municipality': municipality.upper() if municipality else '',
+            'is_active': True,
+            'created_by': session.get('user_email', ''),
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }
+        ref = db.collection('hiring_positions').document()
+        ref.set(payload)
+        return jsonify({'success': True, 'id': ref.id}), 200
+    except Exception as e:
+        print(f"[ERROR] national_create_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>', methods=['PUT'])
+@role_required('national', 'national_admin')
+def national_update_hiring_position(hiring_id):
+    db = get_firestore_db()
+    data = request.get_json(silent=True) or {}
+
+    job_title = str(data.get('job_title') or '').strip()
+    description = str(data.get('description') or '').strip()
+    position = str(data.get('position') or '').strip()
+    starting_salary = str(data.get('starting_salary') or '').strip()
+    scope_type = str(data.get('scope_type') or '').strip().lower()
+    scope = str(data.get('scope') or '').strip()
+    region = str(data.get('region') or '').strip()
+    municipality = str(data.get('municipality') or '').strip()
+
+    if scope_type not in {'national', 'region', 'municipality'}:
+        return jsonify({'success': False, 'error': 'Invalid scope type'}), 400
+    if not job_title or not description or not position or not starting_salary:
+        return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+    try:
+        salary_value = float(starting_salary)
+    except Exception:
+        return jsonify({'success': False, 'error': 'Invalid salary format'}), 400
+
+    if scope_type == 'region':
+        if not region:
+            return jsonify({'success': False, 'error': 'Region is required for region scope'}), 400
+        municipality = ''
+        scope = region
+    elif scope_type == 'municipality':
+        if not municipality or not region:
+            return jsonify({'success': False, 'error': 'Region and municipality are required for municipality scope'}), 400
+        scope = municipality
+    else:
+        scope = 'NATIONAL'
+        region = ''
+        municipality = ''
+
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        if not ref.get().exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+
+        ref.set({
+            'job_title': job_title,
+            'description': description,
+            'position': position,
+            'starting_salary': salary_value,
+            'scope_type': scope_type,
+            'scope': scope,
+            'scope_key': str(scope).upper(),
+            'region': region.upper() if region else '',
+            'municipality': municipality.upper() if municipality else '',
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        print(f"[ERROR] national_update_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>', methods=['DELETE'])
+@role_required('national', 'national_admin')
+def national_delete_hiring_position(hiring_id):
+    db = get_firestore_db()
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        if not ref.get().exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+        ref.delete()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        print(f"[ERROR] national_delete_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to delete hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>/archive', methods=['POST'])
+@role_required('national', 'national_admin')
+def national_archive_hiring_position(hiring_id):
+    db = get_firestore_db()
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        if not ref.get().exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+        ref.set({
+            'is_active': False,
+            'archived_at': firestore.SERVER_TIMESTAMP,
+            'archived_by': session.get('user_email', ''),
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        print(f"[ERROR] national_archive_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to archive hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>/unarchive', methods=['POST'])
+@role_required('national', 'national_admin')
+def national_unarchive_hiring_position(hiring_id):
+    db = get_firestore_db()
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        if not ref.get().exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+        ref.set({
+            'is_active': True,
+            'archived_at': firestore.DELETE_FIELD,
+            'archived_by': firestore.DELETE_FIELD,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        print(f"[ERROR] national_unarchive_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to unarchive hiring position'}), 500
 
 
 # -----------------------------

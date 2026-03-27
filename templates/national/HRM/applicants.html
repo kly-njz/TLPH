@@ -158,10 +158,96 @@
           </p>
         </div>
       </section>
+
+      <section class="gov-card flex-1 flex flex-col min-h-[420px] overflow-hidden">
+        <div class="bg-blue-50 border-b border-slate-300 p-2 flex items-center justify-between">
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-blue-900 m-0">National Hiring Registry</h2>
+          <div class="text-[9px] font-bold uppercase text-slate-600">
+            Total: {{ hiring_total_count }} | Active: {{ hiring_active_count }} | Inactive: {{ hiring_inactive_count }}
+          </div>
+        </div>
+
+        <div class="p-2 border-b border-slate-200 bg-slate-50">
+          <form id="nationalHiringForm" class="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <input id="nHiringJobTitle" type="text" placeholder="Job Title" class="gov-input h-8" required>
+            <input id="nHiringPosition" type="text" placeholder="Position" class="gov-input h-8" required>
+            <input id="nHiringSalary" type="number" min="0" step="0.01" placeholder="Starting Salary" class="gov-input h-8" required>
+            <select id="nHiringScopeType" class="gov-input h-8" title="Scope type" required>
+              <option value="national">National</option>
+              <option value="region">Region</option>
+              <option value="municipality">Municipality</option>
+            </select>
+
+            <input id="nHiringRegion" type="text" placeholder="Region (for region/municipality scope)" class="gov-input h-8 md:col-span-2">
+            <input id="nHiringMunicipality" type="text" placeholder="Municipality (for municipality scope)" class="gov-input h-8 md:col-span-2">
+
+            <textarea id="nHiringDescription" placeholder="Job Description" class="gov-input md:col-span-4 min-h-[52px]" required></textarea>
+
+            <div class="md:col-span-4 flex flex-wrap gap-2 items-center">
+              <button id="nHiringSubmitBtn" type="submit" class="gov-btn bg-blue-900 text-white hover:bg-blue-800">Create Position</button>
+              <button id="nHiringResetBtn" type="button" class="gov-btn bg-slate-200 text-slate-700 hover:bg-slate-300">Clear</button>
+              <span id="nHiringFormStatus" class="text-[9px] font-bold text-slate-500"></span>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-slate-50 border-b border-slate-300 p-2 flex flex-wrap items-center gap-1.5">
+          <div class="relative min-w-[220px] flex-1">
+            <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
+            <input id="nHiringSearch" type="text" placeholder="Search title, position, scope..." class="gov-input pl-6 w-full h-7" />
+          </div>
+
+          <select id="nHiringStatusFilter" class="gov-input h-7 min-w-[130px] cursor-pointer" title="Filter by status">
+            <option value="ALL">All Status</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>
+
+          <select id="nHiringScopeFilter" class="gov-input h-7 min-w-[130px] cursor-pointer" title="Filter by scope">
+            <option value="ALL">All Scope</option>
+            <option value="national">National</option>
+            <option value="region">Region</option>
+            <option value="municipality">Municipality</option>
+          </select>
+
+          <select id="nHiringRegionFilter" class="gov-input h-7 min-w-[130px] cursor-pointer" title="Filter by region">
+            <option value="ALL">All Regions</option>
+            {% for region in hiring_regions %}
+            <option value="{{ region }}">{{ region }}</option>
+            {% endfor %}
+          </select>
+
+          <button id="nHiringFilterReset" class="gov-btn bg-blue-900 text-white hover:bg-blue-800 h-7" type="button">Reset</button>
+        </div>
+
+        <div class="flex-1 overflow-auto custom-scrollbar bg-white">
+          <table class="w-full border-collapse text-left">
+            <thead class="sticky top-0 z-10 shadow-sm">
+              <tr>
+                <th class="px-3 py-2 border-r border-slate-200">Job Title</th>
+                <th class="px-3 py-2 border-r border-slate-200">Position</th>
+                <th class="px-3 py-2 border-r border-slate-200">Salary</th>
+                <th class="px-3 py-2 border-r border-slate-200">Scope</th>
+                <th class="px-3 py-2 border-r border-slate-200">Region</th>
+                <th class="px-3 py-2 border-r border-slate-200 text-center">Status</th>
+                <th class="px-3 py-2 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="nHiringTableBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+
+        <div class="bg-slate-50 border-t border-slate-300 px-3 py-2 flex items-center justify-between">
+          <p class="text-[9px] font-bold uppercase tracking-widest text-slate-500 m-0">
+            Showing <span id="nHiringVisibleCount">0</span> positions
+          </p>
+        </div>
+      </section>
     </main>
   </div>
 
   <script id="national-applicants-data" type="application/json">{{ applicants_json | safe }}</script>
+  <script id="national-hiring-data" type="application/json">{{ hiring_rows_json | safe }}</script>
   <script>
     function nationalApplicantsRegistry() {
       const payload = document.getElementById('national-applicants-data');
@@ -213,6 +299,253 @@
         }
       };
     }
+  </script>
+
+  <script>
+    let nationalHiringRows = [];
+    let nationalEditingHiringId = null;
+
+    function nHiringStatusClass(isActive) {
+      return isActive
+        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+        : 'bg-slate-100 border-slate-200 text-slate-600';
+    }
+
+    function nHiringScopeLabel(row) {
+      if (row.scope_type === 'municipality') return `Municipality: ${row.scope || row.municipality || 'N/A'}`;
+      if (row.scope_type === 'region') return `Region: ${row.scope || row.region || 'N/A'}`;
+      return 'National';
+    }
+
+    function nResetFormMode() {
+      nationalEditingHiringId = null;
+      document.getElementById('nHiringSubmitBtn').textContent = 'Create Position';
+    }
+
+    function nSetFormStatus(msg, ok) {
+      const el = document.getElementById('nHiringFormStatus');
+      el.textContent = msg || '';
+      el.className = ok ? 'text-[9px] font-bold text-emerald-700' : 'text-[9px] font-bold text-rose-700';
+    }
+
+    function nCurrentFilteredRows() {
+      const search = (document.getElementById('nHiringSearch').value || '').trim().toLowerCase();
+      const statusFilter = document.getElementById('nHiringStatusFilter').value;
+      const scopeFilter = document.getElementById('nHiringScopeFilter').value;
+      const regionFilter = document.getElementById('nHiringRegionFilter').value;
+
+      return nationalHiringRows.filter((row) => {
+        const searchable = [row.job_title, row.position, row.scope, row.region, row.municipality, row.description].join(' ').toLowerCase();
+        const matchesSearch = !search || searchable.includes(search);
+        const rowStatus = row.is_active ? 'ACTIVE' : 'INACTIVE';
+        const matchesStatus = statusFilter === 'ALL' || rowStatus === statusFilter;
+        const matchesScope = scopeFilter === 'ALL' || String(row.scope_type || '').toLowerCase() === scopeFilter;
+        const matchesRegion = regionFilter === 'ALL' || String(row.region || '').toUpperCase() === regionFilter;
+        return matchesSearch && matchesStatus && matchesScope && matchesRegion;
+      });
+    }
+
+    function nRenderHiringTable() {
+      const tbody = document.getElementById('nHiringTableBody');
+      const rows = nCurrentFilteredRows();
+      tbody.innerHTML = '';
+
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-[9px] font-bold uppercase tracking-widest text-slate-500">No hiring positions found.</td></tr>';
+        document.getElementById('nHiringVisibleCount').textContent = '0';
+        return;
+      }
+
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        const status = row.is_active ? 'ACTIVE' : 'INACTIVE';
+        const archiveButton = row.is_active
+          ? `<button type="button" class="gov-btn bg-amber-500 text-white hover:bg-amber-600 h-6 px-2" data-action="archive">Archive</button>`
+          : `<button type="button" class="gov-btn bg-emerald-600 text-white hover:bg-emerald-700 h-6 px-2" data-action="unarchive">Unarchive</button>`;
+
+        tr.innerHTML = `
+          <td class="px-3 py-2 font-bold uppercase text-slate-900">${row.job_title || 'N/A'}</td>
+          <td class="px-3 py-2 text-[9px] uppercase text-slate-700">${row.position || 'N/A'}</td>
+          <td class="px-3 py-2 text-[9px] text-slate-700">PHP ${Number(row.starting_salary || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+          <td class="px-3 py-2 text-[9px]">${nHiringScopeLabel(row)}</td>
+          <td class="px-3 py-2 text-[9px] uppercase text-slate-700">${row.region || 'N/A'}</td>
+          <td class="px-3 py-2 text-center">
+            <span class="inline-block px-2 py-0.5 rounded-[2px] border uppercase font-black text-[8px] tracking-wide ${nHiringStatusClass(row.is_active)}">${status}</span>
+          </td>
+          <td class="px-3 py-2 text-center">
+            <div class="flex items-center justify-center gap-1">
+              <button type="button" class="gov-btn bg-blue-900 text-white hover:bg-blue-800 h-6 px-2" data-action="edit">Edit</button>
+              ${archiveButton}
+              <button type="button" class="gov-btn bg-rose-600 text-white hover:bg-rose-700 h-6 px-2" data-action="delete">Delete</button>
+            </div>
+          </td>
+        `;
+
+        tr.querySelector('[data-action="edit"]').addEventListener('click', () => {
+          nationalEditingHiringId = row.id;
+          document.getElementById('nHiringJobTitle').value = row.job_title || '';
+          document.getElementById('nHiringDescription').value = row.description || '';
+          document.getElementById('nHiringPosition').value = row.position || '';
+          document.getElementById('nHiringSalary').value = row.starting_salary || '';
+          document.getElementById('nHiringScopeType').value = row.scope_type || 'national';
+          document.getElementById('nHiringRegion').value = row.region || '';
+          document.getElementById('nHiringMunicipality').value = row.municipality || '';
+          document.getElementById('nHiringSubmitBtn').textContent = 'Update Position';
+          nSetFormStatus('Editing selected hiring row.', true);
+        });
+
+        tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+          if (!confirm('Delete this hiring position?')) return;
+          const res = await fetch(`/national/api/hiring/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.success) {
+            alert(data.error || 'Failed to delete position');
+            return;
+          }
+          if (nationalEditingHiringId === row.id) {
+            document.getElementById('nationalHiringForm').reset();
+            nResetFormMode();
+          }
+          await nRefreshHiringRows();
+        });
+
+        tr.querySelector('[data-action="archive"]').addEventListener('click', async () => {
+          if (!confirm('Archive this position?')) return;
+          const res = await fetch(`/national/api/hiring/${encodeURIComponent(row.id)}/archive`, { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.success) {
+            alert(data.error || 'Failed to archive position');
+            return;
+          }
+          await nRefreshHiringRows();
+        });
+
+        const unarchiveBtn = tr.querySelector('[data-action="unarchive"]');
+        if (unarchiveBtn) {
+          unarchiveBtn.addEventListener('click', async () => {
+            if (!confirm('Reactivate this archived position?')) return;
+            const res = await fetch(`/national/api/hiring/${encodeURIComponent(row.id)}/unarchive`, { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+              alert(data.error || 'Failed to reactivate position');
+              return;
+            }
+            await nRefreshHiringRows();
+          });
+        }
+
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('nHiringVisibleCount').textContent = String(rows.length);
+    }
+
+    async function nRefreshHiringRows() {
+      const res = await fetch('/national/api/hiring');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to refresh hiring rows');
+      }
+      nationalHiringRows = (data.positions || []).map((row) => {
+        const scopeType = String(row.scope_type || '').toLowerCase() || (row.municipality ? 'municipality' : (row.region ? 'region' : 'national'));
+        return {
+          id: row.id,
+          job_title: row.job_title || 'N/A',
+          description: row.description || 'N/A',
+          position: row.position || 'N/A',
+          starting_salary: row.starting_salary || 0,
+          scope_type: scopeType,
+          scope: row.scope || (scopeType === 'municipality' ? row.municipality : (scopeType === 'region' ? row.region : 'NATIONAL')),
+          region: row.region || '',
+          municipality: row.municipality || '',
+          is_active: !!row.is_active,
+        };
+      });
+      nRenderHiringTable();
+    }
+
+    function nCollectFormPayload() {
+      const scopeType = document.getElementById('nHiringScopeType').value;
+      const region = document.getElementById('nHiringRegion').value.trim();
+      const municipality = document.getElementById('nHiringMunicipality').value.trim();
+      return {
+        job_title: document.getElementById('nHiringJobTitle').value.trim(),
+        description: document.getElementById('nHiringDescription').value.trim(),
+        position: document.getElementById('nHiringPosition').value.trim(),
+        starting_salary: document.getElementById('nHiringSalary').value.trim(),
+        scope_type: scopeType,
+        scope: scopeType === 'municipality' ? municipality : (scopeType === 'region' ? region : 'NATIONAL'),
+        region,
+        municipality,
+      };
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const hiringDataEl = document.getElementById('national-hiring-data');
+      try {
+        nationalHiringRows = JSON.parse(hiringDataEl?.textContent || '[]');
+      } catch (e) {
+        nationalHiringRows = [];
+      }
+
+      document.getElementById('nHiringSearch').addEventListener('input', nRenderHiringTable);
+      document.getElementById('nHiringStatusFilter').addEventListener('change', nRenderHiringTable);
+      document.getElementById('nHiringScopeFilter').addEventListener('change', nRenderHiringTable);
+      document.getElementById('nHiringRegionFilter').addEventListener('change', nRenderHiringTable);
+      document.getElementById('nHiringFilterReset').addEventListener('click', () => {
+        document.getElementById('nHiringSearch').value = '';
+        document.getElementById('nHiringStatusFilter').value = 'ALL';
+        document.getElementById('nHiringScopeFilter').value = 'ALL';
+        document.getElementById('nHiringRegionFilter').value = 'ALL';
+        nRenderHiringTable();
+      });
+
+      document.getElementById('nHiringResetBtn').addEventListener('click', () => {
+        document.getElementById('nationalHiringForm').reset();
+        nResetFormMode();
+        nSetFormStatus('', true);
+      });
+
+      document.getElementById('nationalHiringForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = nCollectFormPayload();
+        if (!payload.job_title || !payload.description || !payload.position || !payload.starting_salary) {
+          nSetFormStatus('Please complete required fields.', false);
+          return;
+        }
+
+        const isEditing = !!nationalEditingHiringId;
+        const submitBtn = document.getElementById('nHiringSubmitBtn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = isEditing ? 'Updating...' : 'Creating...';
+
+        try {
+          const endpoint = isEditing ? `/national/api/hiring/${encodeURIComponent(nationalEditingHiringId)}` : '/national/api/hiring';
+          const method = isEditing ? 'PUT' : 'POST';
+          const res = await fetch(endpoint, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Failed to save hiring position');
+          }
+
+          document.getElementById('nationalHiringForm').reset();
+          nResetFormMode();
+          nSetFormStatus(isEditing ? 'Position updated.' : 'Position created.', true);
+          await nRefreshHiringRows();
+        } catch (err) {
+          nSetFormStatus(err.message || 'Unexpected error while saving', false);
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = nationalEditingHiringId ? 'Update Position' : 'Create Position';
+        }
+      });
+
+      nRenderHiringTable();
+    });
   </script>
 </body>
 </html>
