@@ -1540,6 +1540,47 @@ def applicants_municipal():
     def normalize_scope(value):
         return ' '.join(str(value or '').strip().upper().split())
 
+    denr_roles = [
+        'Forest Ranger',
+        'Protected Area Management Staff',
+        'Wildlife Enforcement Officer',
+        'Biodiversity Conservation Aide',
+        'Environmental Management Specialist',
+        'Coastal and Marine Ecosystem Aide',
+        'Watershed Rehabilitation Worker',
+        'Community Environment Officer',
+    ]
+
+    def normalize_denr_role(raw_value, fallback='Environmental Management Specialist'):
+        raw = str(raw_value or '').strip()
+        if raw in denr_roles:
+            return raw
+
+        key = raw.lower()
+        if any(k in key for k in ['forest', 'timber', 'reforestation']):
+            return 'Forest Ranger'
+        if any(k in key for k in ['protected', 'park', 'sanctuary']):
+            return 'Protected Area Management Staff'
+        if any(k in key for k in ['wildlife', 'poach', 'enforcement']):
+            return 'Wildlife Enforcement Officer'
+        if any(k in key for k in ['biodiversity', 'species', 'habitat']):
+            return 'Biodiversity Conservation Aide'
+        if any(k in key for k in ['environment', 'compliance', 'pollution', 'ecc']):
+            return 'Environmental Management Specialist'
+        if any(k in key for k in ['coast', 'marine', 'mangrove', 'fisher']):
+            return 'Coastal and Marine Ecosystem Aide'
+        if any(k in key for k in ['watershed', 'river', 'erosion', 'farming']):
+            return 'Watershed Rehabilitation Worker'
+        if any(k in key for k in ['community', 'cenro', 'municipal', 'barangay', 'trade']):
+            return 'Community Environment Officer'
+        if any(k in key for k in ['livestock']):
+            return 'Coastal and Marine Ecosystem Aide'
+        if any(k in key for k in ['agribusiness']):
+            return 'Environmental Management Specialist'
+        if any(k in key for k in ['infrastructure']):
+            return 'Protected Area Management Staff'
+        return fallback
+
     municipality_key = normalize_scope(user_municipality)
     region_key = normalize_scope(user_region)
 
@@ -1656,7 +1697,7 @@ def applicants_municipal():
                 status = 'PENDING'
 
             full_name = str(applicant_name).strip() or 'N/A'
-            candidate_type = str(category).strip() or 'DENR Application'
+            candidate_type = normalize_denr_role(category)
             region_office = str(user_region).strip() or str(src.get('region') or '').strip() or 'N/A'
             scope_type = 'municipality'
             scope = str(src.get('target_municipality') or src.get('municipality') or user_municipality).strip() or user_municipality
@@ -1671,7 +1712,7 @@ def applicants_municipal():
                 'scope': scope,
                 'scope_key': normalize_scope(scope),
                 'applicant_name': str(applicant_name).strip(),
-                'category': str(category).strip(),
+                'category': candidate_type,
                 'job_title': f"{str(category).strip()} Review",
                 'job_description': 'Validate DENR applicant documents and requirements for municipal processing.',
                 'status': status,
@@ -1717,10 +1758,10 @@ def applicants_municipal():
                 ref_value = ref_value[4:]
             item['reference_id'] = ref_value
             item['full_name'] = item.get('full_name') or item.get('applicant_name') or 'N/A'
-            item['candidate_type'] = item.get('candidate_type') or item.get('category') or 'DENR Application'
+            item['candidate_type'] = normalize_denr_role(item.get('candidate_type') or item.get('category') or '')
             item['region_office'] = item.get('region_office') or item.get('region') or user_region or 'N/A'
             item['applicant_name'] = item.get('applicant_name') or item.get('full_name') or 'N/A'
-            item['category'] = item.get('category') or item.get('candidate_type') or 'DENR Application'
+            item['category'] = item['candidate_type']
             item['barangay'] = item.get('barangay') or 'N/A'
             item['status'] = str(item.get('status') or 'PENDING').upper()
             if item['status'] not in {'APPROVED', 'REJECTED', 'PENDING'}:
@@ -1752,10 +1793,10 @@ def applicants_municipal():
                     ref_value = ref_value[4:]
                 item['reference_id'] = ref_value
                 item['full_name'] = item.get('full_name') or item.get('applicant_name') or 'N/A'
-                item['candidate_type'] = item.get('candidate_type') or item.get('category') or 'DENR Application'
+                item['candidate_type'] = normalize_denr_role(item.get('candidate_type') or item.get('category') or '')
                 item['region_office'] = item.get('region_office') or item.get('region') or user_region or 'N/A'
                 item['applicant_name'] = item.get('applicant_name') or item.get('full_name') or 'N/A'
-                item['category'] = item.get('category') or item.get('candidate_type') or 'DENR Application'
+                item['category'] = item['candidate_type']
                 item['barangay'] = item.get('barangay') or 'N/A'
                 item['status'] = str(item.get('status') or 'PENDING').upper()
                 if item['status'] not in {'APPROVED', 'REJECTED', 'PENDING'}:
@@ -1843,10 +1884,10 @@ def applicants_municipal_job_detail(job_id):
             'id': doc.id,
             'reference_id': data.get('reference_id') or doc.id,
             'full_name': data.get('full_name') or data.get('applicant_name') or 'N/A',
-            'candidate_type': data.get('candidate_type') or data.get('category') or 'DENR Application',
+            'candidate_type': normalize_denr_role(data.get('candidate_type') or data.get('category') or ''),
             'region_office': data.get('region_office') or data.get('region') or 'N/A',
             'applicant_name': data.get('applicant_name') or data.get('full_name') or 'N/A',
-            'category': data.get('category') or data.get('candidate_type') or 'DENR Application',
+            'category': normalize_denr_role(data.get('candidate_type') or data.get('category') or ''),
             'barangay': data.get('barangay') or 'N/A',
             'status': str(data.get('status') or 'PENDING').upper(),
             'date_filed': data.get('date_filed') or 'N/A',
