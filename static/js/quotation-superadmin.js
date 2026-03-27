@@ -62,6 +62,78 @@ async function downloadDeliveryDetails(quoteId) {
 // quotation-superadmin.js
 // Handles modal logic and workflow actions for superadmin quotation page
 
+function toNumber(value) {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function computeTotal(quantity, unitPrice, otherCharges) {
+    return (toNumber(quantity) * toNumber(unitPrice)) + toNumber(otherCharges);
+}
+
+function getQuotePayload() {
+    const quantity = toNumber(document.getElementById('newQty').value);
+    const unitPrice = toNumber(document.getElementById('newPrice').value);
+    const otherCharges = toNumber(document.getElementById('newOtherCharges').value);
+    const buyerType = document.getElementById('newBuyerType').value;
+    return {
+        issue_date: document.getElementById('newIssueDate').value,
+        buyer: document.getElementById('newBuyer').value,
+        title: document.getElementById('newTitle').value,
+        category: document.getElementById('newCategory').value,
+        supplier: document.getElementById('newSupplier').value,
+        deliver_from: document.getElementById('newDeliverFrom').value,
+        deliver_to: document.getElementById('newDeliverTo').value,
+        status: document.getElementById('newStatus').value,
+        buyer_type: buyerType,
+        deliver_to_type: buyerType,
+        product: document.getElementById('newProd').value,
+        quantity,
+        unit_price: unitPrice,
+        other_charges: otherCharges,
+        other_charges_note: document.getElementById('newOtherChargesNote').value,
+        total: computeTotal(quantity, unitPrice, otherCharges)
+    };
+}
+
+function showQuoteDrawer() {
+    const modal = document.getElementById('quoteDrawer');
+    const overlay = document.getElementById('drawerOverlay');
+    overlay.classList.remove('hidden');
+    setTimeout(() => overlay.classList.add('opacity-100'), 10);
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    modal.classList.add('opacity-100');
+    modal.classList.replace('scale-95', 'scale-100');
+}
+
+function resetQuoteForm() {
+    document.getElementById('editQuoteId').value = '';
+    document.getElementById('editMetaRow').classList.add('hidden');
+    document.getElementById('newStatusRow').classList.add('hidden');
+    document.getElementById('quoteDrawerTitle').textContent = 'Generate Quotation';
+    document.getElementById('quoteSubmitBtn').textContent = 'Draft Quotation';
+
+    document.getElementById('newIssueDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('newBuyer').value = '';
+    document.getElementById('newTitle').value = '';
+    document.getElementById('newCategory').value = '';
+    document.getElementById('newSupplier').value = '';
+    document.getElementById('newDeliverFrom').value = '';
+    document.getElementById('newDeliverTo').value = '';
+    document.getElementById('newStatus').value = 'pending';
+    document.getElementById('newBuyerType').value = 'company';
+    document.getElementById('newProd').value = '';
+    document.getElementById('newQty').value = '';
+    document.getElementById('newPrice').value = '';
+    document.getElementById('newOtherCharges').value = 0;
+    document.getElementById('newOtherChargesNote').value = '';
+}
+
+function openQuoteDrawer() {
+    resetQuoteForm();
+    showQuoteDrawer();
+}
+
 // Open the edit modal and populate fields
 async function openEditDrawer(quoteId) {
     const modal = document.getElementById('quoteDrawer');
@@ -76,7 +148,7 @@ async function openEditDrawer(quoteId) {
     // Populate modal fields
     document.getElementById('editMetaRow').classList.remove('hidden');
     document.getElementById('editQuoteDisplay').value = data.id || '';
-    document.getElementById('editIssueDate').value = data.issue_date || '';
+    document.getElementById('newIssueDate').value = data.issue_date || data.date || '';
     document.getElementById('newBuyer').value = data.buyer || '';
     document.getElementById('newTitle').value = data.title || '';
     document.getElementById('newCategory').value = data.category || '';
@@ -91,14 +163,24 @@ async function openEditDrawer(quoteId) {
     document.getElementById('newPrice').value = data.unit_price || 0;
     document.getElementById('newOtherCharges').value = data.other_charges || 0;
     document.getElementById('newOtherChargesNote').value = data.other_charges_note || '';
+    document.getElementById('quoteDrawerTitle').textContent = 'Edit Quotation';
+    document.getElementById('quoteSubmitBtn').textContent = 'Update Quotation';
     // Show modal
+    const overlay = document.getElementById('drawerOverlay');
+    overlay.classList.remove('hidden');
+    setTimeout(() => overlay.classList.add('opacity-100'), 10);
     modal.classList.remove('opacity-0', 'pointer-events-none');
     modal.classList.add('opacity-100');
+    modal.classList.replace('scale-95', 'scale-100');
 }
 
 function closeQuoteDrawer() {
     const modal = document.getElementById('quoteDrawer');
+    const overlay = document.getElementById('drawerOverlay');
+    overlay.classList.remove('opacity-100');
+    setTimeout(() => overlay.classList.add('hidden'), 300);
     modal.classList.add('opacity-0', 'pointer-events-none');
+    modal.classList.replace('scale-100', 'scale-95');
     setTimeout(() => {
         modal.classList.remove('opacity-100');
     }, 300);
@@ -110,33 +192,23 @@ if (quoteForm) {
     quoteForm.onsubmit = async function(e) {
         e.preventDefault();
         const quoteId = document.getElementById('editQuoteId').value;
-        const payload = {
-            buyer: document.getElementById('newBuyer').value,
-            title: document.getElementById('newTitle').value,
-            category: document.getElementById('newCategory').value,
-            supplier: document.getElementById('newSupplier').value,
-            deliver_from: document.getElementById('newDeliverFrom').value,
-            deliver_to: document.getElementById('newDeliverTo').value,
-            status: document.getElementById('newStatus').value,
-            buyer_type: document.getElementById('newBuyerType').value,
-            product: document.getElementById('newProd').value,
-            quantity: document.getElementById('newQty').value,
-            unit_price: document.getElementById('newPrice').value,
-            other_charges: document.getElementById('newOtherCharges').value,
-            other_charges_note: document.getElementById('newOtherChargesNote').value
-        };
-        const res = await fetch(`/superadmin/api/quotation/${quoteId}/update`, {
+        const payload = getQuotePayload();
+        const isEdit = Boolean(quoteId);
+        const url = isEdit
+            ? `/superadmin/api/quotation/${quoteId}/update`
+            : '/superadmin/api/quotation/create';
+        const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            alert('Quotation updated successfully.');
+            alert(isEdit ? 'Quotation updated successfully.' : 'Quotation created successfully.');
             closeQuoteDrawer();
             window.location.reload();
         } else {
-            alert(data.error || 'Failed to update quotation.');
+            alert(data.error || (isEdit ? 'Failed to update quotation.' : 'Failed to create quotation.'));
         }
     }
 }

@@ -473,6 +473,62 @@ def quotation_view():
         quotations=quotations
     )
 
+# API: Create quotation (superadmin)
+@bp.route('/api/quotation/create', methods=['POST'])
+@role_required('super-admin','superadmin')
+def api_create_quotation_superadmin():
+    from quotation_storage import add_quotation
+    data = request.get_json(silent=True) or {}
+    required_fields = [
+        'buyer', 'title', 'category', 'supplier',
+        'deliver_from', 'deliver_to', 'product'
+    ]
+    missing = [f for f in required_fields if not str(data.get(f) or '').strip()]
+    if missing:
+        return jsonify({'success': False, 'error': 'Missing required quotation fields'}), 400
+    try:
+        quantity = float(data.get('quantity') or 0)
+    except Exception:
+        quantity = 0.0
+    try:
+        unit_price = float(data.get('unit_price') or 0)
+    except Exception:
+        unit_price = 0.0
+    try:
+        other_charges = float(data.get('other_charges') or 0)
+    except Exception:
+        other_charges = 0.0
+    total = (quantity * unit_price) + other_charges
+    issue_date = str(data.get('issue_date') or '').strip()
+    if not issue_date:
+        issue_date = datetime.utcnow().date().isoformat()
+    payload = {
+        'buyer': data.get('buyer'),
+        'title': data.get('title'),
+        'category': data.get('category'),
+        'supplier': data.get('supplier'),
+        'deliver_from': data.get('deliver_from'),
+        'deliver_to': data.get('deliver_to'),
+        'deliver_to_type': data.get('deliver_to_type') or '',
+        'buyer_type': data.get('buyer_type') or '',
+        'product': data.get('product'),
+        'quantity': quantity,
+        'unit_price': unit_price,
+        'other_charges': other_charges,
+        'other_charges_note': data.get('other_charges_note') or '',
+        'status': data.get('status') or 'pending',
+        'issue_date': issue_date,
+        'date': issue_date,
+        'total': total,
+        'created_by': 'superadmin'
+    }
+    try:
+        quotation = add_quotation(payload)
+        return jsonify({'success': True, 'quotation': {'id': quotation.get('id')}})
+    except Exception as e:
+        print(f"[ERROR] api_create_quotation_superadmin failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
+
 # API: Allocate/forward quotation to region/municipality or update status
 @bp.route('/api/quotation/<quotation_id>/update', methods=['POST'])
 @role_required('super-admin','superadmin')
@@ -480,11 +536,29 @@ def api_update_quotation_superadmin(quotation_id):
     from quotation_storage import update_quotation, update_quotation_status
     data = request.get_json() or {}
     updates = {}
-    # Allow updating deliver_to, deliver_to_type, status, and notes
-    if 'deliver_to' in data:
-        updates['deliver_to'] = data['deliver_to']
-    if 'deliver_to_type' in data:
-        updates['deliver_to_type'] = data['deliver_to_type']
+    # Allow updating full quotation fields
+    for field in [
+        'buyer', 'title', 'category', 'supplier',
+        'deliver_from', 'deliver_to', 'deliver_to_type',
+        'buyer_type', 'product', 'quantity', 'unit_price',
+        'other_charges', 'other_charges_note', 'issue_date', 'date', 'total'
+    ]:
+        if field in data:
+            updates[field] = data[field]
+    if any(key in data for key in ['quantity', 'unit_price', 'other_charges']) and 'total' not in updates:
+        try:
+            quantity = float(data.get('quantity') or 0)
+        except Exception:
+            quantity = 0.0
+        try:
+            unit_price = float(data.get('unit_price') or 0)
+        except Exception:
+            unit_price = 0.0
+        try:
+            other_charges = float(data.get('other_charges') or 0)
+        except Exception:
+            other_charges = 0.0
+        updates['total'] = (quantity * unit_price) + other_charges
     if updates:
         update_quotation(quotation_id, updates)
     if 'status' in data:
