@@ -1133,6 +1133,15 @@ def hrm_shift_superadmin():
     except Exception:
         abort(404)
 
+@bp.route('/human-resource/news-management')
+@bp.route('/hrm/news-management')
+@role_required('super-admin','superadmin')
+def hrm_news_management_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/news-management/news-management-superadmin.html')
+    except Exception:
+        abort(404)
+
 @bp.route('/api/hrm/holidays', methods=['GET'])
 @role_required('super-admin','superadmin')
 def get_superadmin_holidays():
