@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, session
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
 from datetime import datetime
@@ -524,6 +524,20 @@ def _is_accepted_status(raw_status):
     return _normalize_superadmin_applicant_status(raw_status) == 'accepted'
 
 
+def _format_firestore_timestamp(value):
+    if not value:
+        return 'N/A'
+    try:
+        if isinstance(value, str):
+            parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            return parsed.strftime('%b %d, %Y %I:%M %p')
+        if hasattr(value, 'strftime'):
+            return value.strftime('%b %d, %Y %I:%M %p')
+    except Exception:
+        return str(value)
+    return str(value)
+
+
 @bp.route('/api/applicants/data', methods=['GET'])
 @role_required('super-admin', 'superadmin')
 def superadmin_applicants_data():
@@ -562,6 +576,8 @@ def superadmin_applicants_data():
                 'is_accepted': status == 'accepted',
                 'can_delete': status == 'rejected',
                 'reference_id': data.get('reference_id') or doc.id[:12].upper(),
+                'accepted_by': data.get('accepted_by') or data.get('reviewed_by') or 'N/A',
+                'updated_at': _format_firestore_timestamp(data.get('updated_at') or data.get('reviewed_at') or data.get('created_at')),
             })
 
         applicants.sort(key=lambda row: row.get('full_name', '').lower())
@@ -585,6 +601,7 @@ def superadmin_create_applicant():
 
         db = get_firestore_db()
         doc_ref = db.collection('municipal_denr_applicant_jobs').document()
+        actor = session.get('user_email') or 'superadmin'
 
         data = {
             'full_name': full_name,
@@ -597,6 +614,8 @@ def superadmin_create_applicant():
             'scope_key': region_office.strip().lower(),
             'reference_id': f'SUP-{doc_ref.id[:8].upper()}',
             'created_at': firestore.SERVER_TIMESTAMP,
+            'created_by': actor,
+            'updated_by': actor,
             'created_by_role': 'super_admin',
         }
 
@@ -620,6 +639,7 @@ def superadmin_update_applicant(applicant_id):
         current = snap.to_dict() or {}
         if _is_accepted_status(current.get('status') or current.get('employeeStatus')):
             return jsonify({'success': False, 'error': 'Accepted applicants cannot be edited'}), 400
+        actor = session.get('user_email') or 'superadmin'
 
         payload = request.get_json() or {}
         updates = {}
@@ -639,8 +659,13 @@ def superadmin_update_applicant(applicant_id):
             normalized = _normalize_superadmin_applicant_status(payload.get('status'))
             updates['status'] = normalized
             updates['employeeStatus'] = normalized
+            if normalized == 'accepted':
+                updates['accepted_by'] = actor
+                updates['reviewed_by'] = actor
+                updates['reviewed_at'] = firestore.SERVER_TIMESTAMP
 
         updates['updated_at'] = firestore.SERVER_TIMESTAMP
+        updates['updated_by'] = actor
         if not updates:
             return jsonify({'success': False, 'error': 'No valid updates provided'}), 400
 

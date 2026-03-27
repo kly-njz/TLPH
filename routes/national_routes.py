@@ -982,6 +982,24 @@ def applicants():
                 return 'rejected'
             return 'pending'
 
+        def _format_datetime(raw):
+            if not raw:
+                return 'N/A'
+            if isinstance(raw, str):
+                try:
+                    dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                    return dt.strftime('%b %d, %Y %I:%M %p')
+                except Exception:
+                    return raw
+            if hasattr(raw, 'to_datetime'):
+                try:
+                    raw = raw.to_datetime()
+                except Exception:
+                    pass
+            if hasattr(raw, 'strftime'):
+                return raw.strftime('%b %d, %Y %I:%M %p')
+            return str(raw)
+
         db = get_firestore_db()
         docs = db.collection('municipal_denr_applicant_jobs').stream()
 
@@ -1063,6 +1081,8 @@ def applicants():
                 'scope': str(scope),
                 'municipality': str(municipality),
                 'status': status,
+                'accepted_by': str(data.get('accepted_by') or data.get('reviewed_by') or 'N/A'),
+                'updated_at': _format_datetime(data.get('updated_at') or data.get('reviewed_at') or data.get('created_at') or data.get('createdAt')),
                 'date_filed': date_filed,
                 'created_sort': created_sort,
             })

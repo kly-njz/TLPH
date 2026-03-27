@@ -1954,6 +1954,7 @@ def applicants_municipal_job_update_status(job_id):
     new_status = str(data.get('status') or '').strip().upper()
     if new_status not in {'APPROVED', 'REJECTED', 'PENDING'}:
         return jsonify({'success': False, 'error': 'Invalid status value'}), 400
+    actor_email = session.get('user_email', 'municipal_admin')
 
     try:
         doc_ref = db.collection('municipal_denr_applicant_jobs').document(job_id)
@@ -1973,11 +1974,27 @@ def applicants_municipal_job_update_status(job_id):
         if normalize_scope(existing.get('region_key') or existing.get('region')) != normalize_scope(user_region):
             return jsonify({'success': False, 'error': 'Access denied for region'}), 403
 
-        doc_ref.set({
+        update_payload = {
             'status': new_status,
             'employeeStatus': new_status.lower(),
-            'updated_at': firestore.SERVER_TIMESTAMP
-        }, merge=True)
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': actor_email,
+        }
+
+        if new_status == 'APPROVED':
+            update_payload.update({
+                'accepted_by': actor_email,
+                'reviewed_by': actor_email,
+                'reviewed_at': firestore.SERVER_TIMESTAMP,
+            })
+        else:
+            update_payload.update({
+                'accepted_by': firestore.DELETE_FIELD,
+                'reviewed_by': firestore.DELETE_FIELD,
+                'reviewed_at': firestore.DELETE_FIELD,
+            })
+
+        doc_ref.set(update_payload, merge=True)
 
         return jsonify({'success': True, 'status': new_status})
     except Exception as e:

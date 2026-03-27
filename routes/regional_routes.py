@@ -4259,6 +4259,24 @@ def applicants_regional_data():
 
     applications = []
     try:
+        def _format_datetime(raw):
+            if not raw:
+                return 'N/A'
+            if hasattr(raw, 'to_datetime'):
+                try:
+                    raw = raw.to_datetime()
+                except Exception:
+                    pass
+            if isinstance(raw, datetime):
+                return raw.strftime('%b %d, %Y %I:%M %p')
+            if isinstance(raw, str):
+                try:
+                    dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                    return dt.strftime('%b %d, %Y %I:%M %p')
+                except Exception:
+                    return raw
+            return str(raw)
+
         docs = db.collection('municipal_denr_applicant_jobs').stream()
         for doc in docs:
             data = doc.to_dict() or {}
@@ -4296,6 +4314,8 @@ def applicants_regional_data():
                 'job_description': data.get('job_description') or 'DENR field and compliance operations support.',
                 'status': status,
                 'created_at': created_at_iso,
+                'accepted_by': data.get('accepted_by') or data.get('reviewed_by') or 'N/A',
+                'updated_at': _format_datetime(data.get('updated_at') or data.get('reviewed_at') or data.get('created_at')),
             })
 
         applications.sort(key=lambda x: x.get('created_at') or '', reverse=True)
@@ -4314,6 +4334,7 @@ def applicants_regional_update_status(job_id):
     new_status = str(payload.get('status') or '').strip().upper()
     if new_status not in {'APPROVED', 'REJECTED', 'PENDING'}:
         return jsonify({'success': False, 'error': 'Invalid status value'}), 400
+    actor_email = session.get('user_email', 'regional_admin')
 
     session_region = session.get('region') or session.get('user_region')
     user_region = get_firestore_region_name(session_region) or session_region or ''
@@ -4338,13 +4359,29 @@ def applicants_regional_update_status(job_id):
         if canonical_region and job_region and job_region != canonical_region:
             return jsonify({'success': False, 'error': 'Access denied for region'}), 403
 
-        doc_ref.set({
+        update_payload = {
             'status': new_status,
             'employeeStatus': new_status.lower(),
             'regionalReviewedAt': firestore.SERVER_TIMESTAMP,
-            'regionalReviewedBy': session.get('user_email', 'regional_admin'),
+            'regionalReviewedBy': actor_email,
             'updated_at': firestore.SERVER_TIMESTAMP,
-        }, merge=True)
+            'updated_by': actor_email,
+        }
+
+        if new_status == 'APPROVED':
+            update_payload.update({
+                'accepted_by': actor_email,
+                'reviewed_by': actor_email,
+                'reviewed_at': firestore.SERVER_TIMESTAMP,
+            })
+        else:
+            update_payload.update({
+                'accepted_by': firestore.DELETE_FIELD,
+                'reviewed_by': firestore.DELETE_FIELD,
+                'reviewed_at': firestore.DELETE_FIELD,
+            })
+
+        doc_ref.set(update_payload, merge=True)
         return jsonify({'success': True, 'status': new_status}), 200
     except Exception as e:
         print(f"[ERROR] Failed to update regional applicant status: {e}")
