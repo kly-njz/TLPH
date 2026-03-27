@@ -153,7 +153,7 @@
             <div class="bg-gray-50 p-4 md:p-6 border-t border-gray-100">
                 <label class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-4 text-center">Technical Documentation</label>
                 
-                <div id="documentsList" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                <div id="documentsList" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-start auto-rows-min">
                 </div>
             </div>
         </div>
@@ -170,14 +170,20 @@
         <div class="relative w-full max-w-5xl bg-white rounded-xl shadow-2xl overflow-hidden">
             <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
                 <h3 id="attachmentPreviewTitle" class="text-[11px] font-black uppercase tracking-wider text-slate-700 m-0">Attachment Preview</h3>
-                <button type="button" id="attachmentPreviewCloseBtn" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-800">
-                    &times;
-                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="attachmentPreviewBackBtn" class="hidden inline-flex items-center gap-1 text-[9px] font-black uppercase bg-white border border-slate-300 text-slate-700 px-2 py-1 rounded hover:bg-slate-100">
+                        <i class="fa-solid fa-arrow-left"></i> Back
+                    </button>
+                    <button type="button" id="attachmentPreviewCloseBtn" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-800">
+                        &times;
+                    </button>
+                </div>
             </div>
 
             <div id="attachmentPreviewBody" class="p-3 bg-slate-100 max-h-[78vh] overflow-auto flex items-center justify-center">
                 <img id="attachmentPreviewImage" src="" alt="Attachment Preview" class="hidden max-w-full max-h-[70vh] object-contain rounded" />
                 <iframe id="attachmentPreviewFrame" src="" class="hidden w-full h-[70vh] bg-white rounded border border-slate-200"></iframe>
+                <div id="attachmentPreviewGallery" class="hidden w-full"></div>
                 <div id="attachmentPreviewFallback" class="hidden text-center">
                     <p class="text-xs text-slate-600 font-semibold mb-3">Preview not available for this file type.</p>
                     <a id="attachmentPreviewOpenLink" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded text-[10px] font-black uppercase no-underline">
@@ -271,14 +277,19 @@
             const title = document.getElementById('attachmentPreviewTitle');
             const image = document.getElementById('attachmentPreviewImage');
             const frame = document.getElementById('attachmentPreviewFrame');
+            const gallery = document.getElementById('attachmentPreviewGallery');
             const fallback = document.getElementById('attachmentPreviewFallback');
             const openLink = document.getElementById('attachmentPreviewOpenLink');
             const downloadLink = document.getElementById('attachmentPreviewDownloadLink');
+            const backBtn = document.getElementById('attachmentPreviewBackBtn');
 
             title.textContent = label || 'Attachment Preview';
             image.classList.add('hidden');
             frame.classList.add('hidden');
+            gallery.classList.add('hidden');
+            gallery.innerHTML = '';
             fallback.classList.add('hidden');
+            backBtn.classList.add('hidden');
             image.src = '';
             frame.src = '';
             image.onerror = null;
@@ -308,11 +319,81 @@
             const modal = document.getElementById('attachmentPreviewModal');
             const image = document.getElementById('attachmentPreviewImage');
             const frame = document.getElementById('attachmentPreviewFrame');
+            const gallery = document.getElementById('attachmentPreviewGallery');
+            const backBtn = document.getElementById('attachmentPreviewBackBtn');
 
             image.src = '';
             frame.src = '';
+            gallery.innerHTML = '';
+            gallery.classList.add('hidden');
+            backBtn.classList.add('hidden');
+            window.__attachmentGroupState = null;
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+        }
+
+        function showAttachmentPreviewGroup(urls, label) {
+            const safeUrls = (Array.isArray(urls) ? urls : [urls])
+                .map(normalizeFileUrl)
+                .filter(Boolean);
+
+            if (!safeUrls.length) return;
+            if (safeUrls.length === 1) {
+                showAttachmentPreview(safeUrls[0], label);
+                return;
+            }
+
+            const modal = document.getElementById('attachmentPreviewModal');
+            const title = document.getElementById('attachmentPreviewTitle');
+            const image = document.getElementById('attachmentPreviewImage');
+            const frame = document.getElementById('attachmentPreviewFrame');
+            const gallery = document.getElementById('attachmentPreviewGallery');
+            const fallback = document.getElementById('attachmentPreviewFallback');
+            const openLink = document.getElementById('attachmentPreviewOpenLink');
+            const downloadLink = document.getElementById('attachmentPreviewDownloadLink');
+            const backBtn = document.getElementById('attachmentPreviewBackBtn');
+
+            title.textContent = `${label || 'Attachments'} (${safeUrls.length})`;
+            image.classList.add('hidden');
+            frame.classList.add('hidden');
+            fallback.classList.add('hidden');
+            gallery.classList.remove('hidden');
+            backBtn.classList.add('hidden');
+
+            window.__attachmentGroupState = {
+                urls: safeUrls,
+                label: label || 'Attachments'
+            };
+
+            openLink.href = safeUrls[0];
+            downloadLink.href = safeUrls[0];
+
+            gallery.innerHTML = `
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    ${safeUrls.map((u, idx) => {
+                        const encodedUrl = encodeURIComponent(u);
+                        const encodedItemLabel = encodeURIComponent(`${label || 'Attachment'} ${idx + 1}`);
+                        if (isImageFile(u)) {
+                            return `
+                                <div class="bg-white border border-slate-200 rounded p-1">
+                                    <button type="button" onclick="openApplicationAttachmentPreviewFromEncoded('${encodedUrl}','${encodedItemLabel}')" class="w-full p-0 border-0 bg-transparent cursor-zoom-in" title="View this photo">
+                                        <img src="${escapeAttr(u)}" alt="Attachment ${idx + 1}" class="w-full h-44 object-cover rounded"/>
+                                    </button>
+                                    <div class="mt-1 flex justify-end">
+                                        <button type="button" onclick="openApplicationAttachmentPreviewFromEncoded('${encodedUrl}','${encodedItemLabel}')" class="inline-flex items-center gap-1 text-[8px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded">
+                                            <i class="fa-solid fa-eye"></i> View Solo
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        return `<div class="bg-white border border-slate-200 rounded p-2 flex items-center justify-between gap-2"><span class="text-[10px] font-semibold text-slate-700">Attachment ${idx + 1}</span><a href="${escapeAttr(u)}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-black uppercase bg-emerald-600 text-white px-2 py-1 rounded no-underline">Open</a></div>`;
+                    }).join('')}
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
 
         window.openApplicationAttachmentPreviewFromEncoded = function(encodedUrl, encodedLabel = '') {
@@ -320,12 +401,33 @@
                 const url = decodeURIComponent(encodedUrl || '');
                 const label = decodeURIComponent(encodedLabel || 'Attachment Preview');
                 showAttachmentPreview(url, label);
+                const backBtn = document.getElementById('attachmentPreviewBackBtn');
+                if (window.__attachmentGroupState && Array.isArray(window.__attachmentGroupState.urls) && window.__attachmentGroupState.urls.length > 1) {
+                    backBtn.classList.remove('hidden');
+                }
             } catch (err) {
                 console.error('Failed to open attachment preview:', err);
             }
         };
 
+        window.openApplicationAttachmentGroupFromEncoded = function(encodedUrls, encodedLabel = '') {
+            try {
+                const raw = decodeURIComponent(encodedUrls || '[]');
+                const urls = JSON.parse(raw);
+                const label = decodeURIComponent(encodedLabel || 'Attachments');
+                showAttachmentPreviewGroup(urls, label);
+            } catch (err) {
+                console.error('Failed to open attachment preview group:', err);
+            }
+        };
+
         window.closeApplicationAttachmentPreview = closeAttachmentPreview;
+
+        document.getElementById('attachmentPreviewBackBtn').addEventListener('click', function() {
+            if (window.__attachmentGroupState && Array.isArray(window.__attachmentGroupState.urls) && window.__attachmentGroupState.urls.length > 1) {
+                showAttachmentPreviewGroup(window.__attachmentGroupState.urls, window.__attachmentGroupState.label || 'Attachments');
+            }
+        });
 
         document.getElementById('attachmentPreviewCloseBtn').addEventListener('click', closeAttachmentPreview);
         document.getElementById('attachmentPreviewModal').addEventListener('click', function(e) {
@@ -545,7 +647,12 @@
                 const app = docSnap.data();
 
                 // --- Common header ---
-                const imageUrl = app.imageUrl || app?.files?.crop || app?.files?.land || null;
+                const imageUrl = app.imageUrl
+                    || app?.files?.cropPrimary
+                    || (Array.isArray(app?.files?.crop) ? app.files.crop[0] : app?.files?.crop)
+                    || app?.files?.landPrimary
+                    || (Array.isArray(app?.files?.land) ? app.files.land[0] : app?.files?.land)
+                    || null;
                 const imgEl = document.getElementById('productImage');
                 const noPhoto = document.getElementById('noPhotoState');
                 if (imageUrl) {
@@ -660,6 +767,12 @@
                     document.getElementById('unitPrice').textContent = '₱' + unitPrice;
                     document.getElementById('appSubmittedDate').textContent = formatDate(app.submittedAt || app.createdAt);
 
+                    const farmerIdNumber = app.farmerIdNumber || app?.formData?.farmerIdNumber || 'N/A';
+                    const farmAddress = app.farmAddress || app?.formData?.farmAddress || 'N/A';
+                    const googlePinLocation = app.googlePinLocation || app?.formData?.googlePinLocation || '';
+                    const farmLat = app.farmLatitude || app?.formData?.farmLatitude || '';
+                    const farmLng = app.farmLongitude || app?.formData?.farmLongitude || '';
+
                     document.getElementById('applicationMetaFields').innerHTML = `
                         <div class="grid grid-cols-2 gap-3 text-xs">
                             <div>
@@ -686,6 +799,24 @@
                                 <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Reference ID</label>
                                 <span class="text-[11px] font-mono text-slate-600 break-all">${app.externalId || app.invoiceId || appId}</span>
                             </div>
+                            <div>
+                                <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Farmer ID Number</label>
+                                <span class="text-sm font-semibold text-slate-700">${farmerIdNumber}</span>
+                            </div>
+                            <div>
+                                <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Map Coordinates</label>
+                                <span class="text-sm font-semibold text-slate-700">${farmLat && farmLng ? `${farmLat}, ${farmLng}` : 'N/A'}</span>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Farm Address</label>
+                                <span class="text-sm font-semibold text-slate-700">${farmAddress}</span>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Google Pin Point Farm Location</label>
+                                ${googlePinLocation
+                                    ? `<a href="${escapeAttr(googlePinLocation)}" target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-emerald-700 hover:text-emerald-800 break-all no-underline">${escapeHtml(googlePinLocation)}</a>`
+                                    : '<span class="text-sm font-semibold text-slate-700">N/A</span>'}
+                            </div>
                         </div>
                     `;
 
@@ -693,41 +824,50 @@
 
                     // Show documents / uploaded file references
                     const documentsList = document.getElementById('documentsList');
-                    const docIcons = { 'title': 'description', 'tax': 'receipt_long', 'blueprint': 'architecture', 'plan': 'business_center', 'brgy': 'location_city', 'land': 'landscape', 'crop': 'eco' };
-                    const docLabels = { 'title': 'Title / Tax Dec', 'tax': 'Tax Receipt', 'blueprint': 'Blueprint', 'plan': 'Business Plan', 'brgy': 'Brgy Cert', 'land': 'Land Photo', 'crop': 'Crop Photo' };
+                    const docIcons = { 'title': 'description', 'tax': 'receipt_long', 'blueprint': 'architecture', 'plan': 'business_center', 'brgy': 'location_city', 'land': 'landscape', 'crop': 'eco', 'productPicture': 'photo_camera', 'validId': 'badge' };
+                    const docLabels = { 'title': 'Title / Tax Dec', 'tax': 'Tax Receipt', 'blueprint': 'Blueprint', 'plan': 'Business Plan', 'brgy': 'Brgy Cert', 'land': 'Land Photo', 'crop': 'Crop Photo', 'productPicture': 'Product Picture', 'validId': 'Any Valid ID' };
                     if (app.files) {
-                        const fileItems = [];
+                        const groupedItems = [];
                         Object.entries(app.files).forEach(([key, value]) => {
+                            if (String(key).endsWith('Primary')) return;
                             const values = Array.isArray(value) ? value : [value];
-                            values.filter(Boolean).forEach((rawUrl, idx) => {
-                                const cleanUrl = normalizeFileUrl(rawUrl);
-                                if (!cleanUrl) return;
-                                const baseLabel = docLabels[key] || key;
-                                const label = values.length > 1 ? `${baseLabel} ${idx + 1}` : baseLabel;
-                                fileItems.push({ key, label, url: cleanUrl });
+                            const files = values
+                                .filter(Boolean)
+                                .map(rawUrl => normalizeFileUrl(rawUrl))
+                                .filter(Boolean)
+                                .map((url) => ({
+                                    url,
+                                    fileName: decodeURIComponent(String(url).split('?')[0].split('/').pop() || 'file')
+                                }));
+                            if (!files.length) return;
+
+                            groupedItems.push({
+                                key,
+                                label: docLabels[key] || key,
+                                files
                             });
                         });
 
-                        documentsList.innerHTML = fileItems
-                            .map(({ key, label, url }) => {
-                                const encodedUrl = encodeURIComponent(url);
-                                const encodedLabel = encodeURIComponent(label);
+                        documentsList.innerHTML = groupedItems
+                            .map(({ key, label, files }) => {
                                 return `
                                     <div class="p-2 bg-white border border-gray-200 rounded-lg hover:border-emerald-500 transition-all">
-                                        <div class="flex items-center gap-2 mb-2 min-w-0">
+                                        <div class="flex items-center justify-between gap-2 min-w-0">
+                                            <div class="flex items-center gap-2 min-w-0">
                                             <span class="material-icons-round text-slate-400 text-sm">${docIcons[key] || 'description'}</span>
-                                            <span class="text-[8px] font-black text-slate-600 uppercase truncate">${escapeHtml(label)}</span>
-                                        </div>
-                                        <div class="flex items-center gap-1.5">
-                                            <button type="button"
-                                                onclick="openApplicationAttachmentPreviewFromEncoded('${encodedUrl}','${encodedLabel}')"
-                                                class="flex-1 inline-flex items-center justify-center gap-1 text-[9px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded">
-                                                <i class="fa-solid fa-eye"></i> View
-                                            </button>
-                                            <a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer"
-                                                class="inline-flex items-center justify-center gap-1 text-[9px] font-black uppercase bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded no-underline">
-                                                <i class="fa-solid fa-up-right-from-square"></i>
-                                            </a>
+                                            <span class="text-[8px] font-black text-slate-600 uppercase truncate">${escapeHtml(label)} ${files.length > 1 ? `(${files.length})` : ''}</span>
+                                            ${(() => {
+                                                const encodedUrls = encodeURIComponent(JSON.stringify(files.map(f => f.url)));
+                                                const encodedLabel = encodeURIComponent(label);
+                                                return `
+                                                    <button type="button"
+                                                        onclick="openApplicationAttachmentGroupFromEncoded('${encodedUrls}','${encodedLabel}')"
+                                                        class="inline-flex items-center justify-center gap-1 text-[8px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded whitespace-nowrap">
+                                                        <i class="fa-solid fa-eye"></i> View
+                                                    </button>
+                                                `;
+                                            })()}
+                                            </div>
                                         </div>
                                     </div>`;
                             }).join('');

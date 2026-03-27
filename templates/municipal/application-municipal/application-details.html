@@ -101,6 +101,11 @@
             flex-direction: column;
         }
 
+        .doc-preview-panel.gallery-mode {
+            width: fit-content;
+            max-width: 96vw;
+        }
+
         .doc-preview-body {
             padding: 10px;
             background: #f8fafc;
@@ -108,20 +113,59 @@
             flex: 1;
         }
 
+        .doc-preview-panel.gallery-mode .doc-preview-body {
+            flex: 0 1 auto;
+        }
+
         .doc-preview-frame {
             width: 100%;
-            height: 72vh;
+            height: 80vh;
             border: 1px solid #cbd5e1;
             background: #fff;
         }
 
         .doc-preview-image {
-            max-width: 100%;
-            height: auto;
+            width: min(1220px, 96vw);
+            max-height: 82vh;
+            object-fit: contain;
             display: block;
             margin: 0 auto;
             border: 1px solid #cbd5e1;
             background: #fff;
+        }
+
+        .doc-gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(1, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .doc-gallery-item {
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            padding: 8px;
+        }
+
+        .doc-gallery-item.clickable {
+            cursor: zoom-in;
+        }
+
+        .doc-gallery-thumb {
+            width: 100%;
+            height: 245px;
+            object-fit: cover;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
+        .doc-gallery-single-image {
+            width: min(1020px, 94vw);
+            max-height: 74vh;
+            object-fit: contain;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            display: block;
+            margin: 0 auto;
         }
 
         .applicant-photo-wrap {
@@ -223,6 +267,23 @@
 
                             <hr class="my-4 opacity-10">
 
+                            <div id="farmMetaSection" class="row g-2 mb-4" style="display:none;">
+                                <div class="col-md-6">
+                                    <p class="info-label">Farmer ID Number</p>
+                                    <p class="info-value" id="farmerIdNumber">—</p>
+
+                                    <p class="info-label">Farm Address</p>
+                                    <p class="info-value" id="farmAddress">—</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="info-label">Farm Coordinates</p>
+                                    <p class="info-value" id="farmCoordinates">—</p>
+
+                                    <p class="info-label">Google Pin Location</p>
+                                    <p class="info-value" id="farmPinLocation">—</p>
+                                </div>
+                            </div>
+
                             <h3 id="docsHeading" class="text-xs font-black uppercase border-b pb-2 mb-4 text-emerald-800"><i class="fa-solid fa-file-shield me-2"></i> Technical Documents</h3>
                             
                             <div id="documentsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -284,7 +345,10 @@
     <div id="docPreviewModal" class="doc-preview-overlay" onclick="closeDocumentPreview(event)">
         <div class="doc-preview-panel" onclick="event.stopPropagation()">
             <div class="px-3 py-2 bg-slate-900 text-white flex items-center justify-between">
-                <p id="docPreviewTitle" class="text-[11px] font-black uppercase tracking-wider m-0 truncate">Document Preview</p>
+                <div class="d-flex align-items-center gap-2 min-w-0">
+                    <button id="docPreviewBackBtn" type="button" onclick="backToDocumentGallery()" class="btn btn-sm btn-outline-light py-0 px-2 text-[9px] font-bold" style="display:none;">BACK</button>
+                    <p id="docPreviewTitle" class="text-[11px] font-black uppercase tracking-wider m-0 truncate">Document Preview</p>
+                </div>
                 <button type="button" onclick="closeDocumentPreview()" class="text-white/90 hover:text-white border-0 bg-transparent">
                     <span class="material-icons-round text-base">close</span>
                 </button>
@@ -326,6 +390,8 @@
         let currentRecordType = 'application';
         let actionLocked = false;
         let previewDocuments = [];
+        let previewDocumentGroups = [];
+        let activePreviewGroup = null;
         let isSubmittingRejection = false;
         let rejectionMessage = '';
 
@@ -513,6 +579,7 @@
                 }
 
                 if (currentRecordType === 'inventory') {
+                    document.getElementById('farmMetaSection').style.display = 'none';
                     const sectorLabels = {
                         'timber': 'Timber / Logs',
                         'ntfp': 'Non-Timber Forest Products',
@@ -541,6 +608,28 @@
                     const unit = applicationData.unitOfMeasure || 'pcs';
                     document.getElementById('harvestQty').textContent = `${stock.toLocaleString()} ${unit}`;
                 } else {
+                    const farmMetaSection = document.getElementById('farmMetaSection');
+                    farmMetaSection.style.display = 'flex';
+
+                    const farmerId = applicationData.farmerIdNumber || applicationData.farmerId || 'N/A';
+                    document.getElementById('farmerIdNumber').textContent = farmerId;
+
+                    const farmAddress = applicationData.farmAddress || applicationData.googlePinLocation || 'N/A';
+                    document.getElementById('farmAddress').textContent = farmAddress;
+
+                    const lat = applicationData.farmLatitude;
+                    const lng = applicationData.farmLongitude;
+                    const hasCoords = lat !== undefined && lat !== null && lat !== '' && lng !== undefined && lng !== null && lng !== '';
+                    document.getElementById('farmCoordinates').textContent = hasCoords ? `${lat}, ${lng}` : 'N/A';
+
+                    const pinUrl = applicationData.googlePinLocation || '';
+                    const pinEl = document.getElementById('farmPinLocation');
+                    if (pinUrl && /^https?:\/\//i.test(pinUrl)) {
+                        pinEl.innerHTML = `<a href="${pinUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-700 normal-case text-[12px] font-bold">Open Google Maps Pin</a>`;
+                    } else {
+                        pinEl.textContent = 'N/A';
+                    }
+
                     document.getElementById('nameLabel').textContent = 'Product/Project Name';
                     document.getElementById('categoryLabelTitle').textContent = 'Category';
                     document.getElementById('amountLabel').textContent = 'Initial Investment';
@@ -618,17 +707,78 @@
                         documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No files uploaded.</p>';
                     }
                 } else {
-                    const appDocs = [];
+                    const groupedDocsMap = new Map();
+                    const globalSeenUrls = new Set();
 
                     const labelMap = {
                         brgy: 'Barangay Certificate',
                         title: 'Title / Tax Declaration',
                         tax: 'Tax Receipt',
                         blueprint: 'Blueprint',
+                        blueprintPrimary: 'Blueprint',
                         land: 'Land Photo',
+                        landPrimary: 'Land Photo',
                         crop: 'Crop Photo',
+                        cropPrimary: 'Crop Photo',
                         plan: 'Business Plan',
-                        productPicture: 'Picture of Product'
+                        productPicture: 'Picture of Product',
+                        validId: 'Any Valid ID'
+                    };
+
+                    const aliasMap = {
+                        blueprintprimary: 'blueprint',
+                        landprimary: 'land',
+                        cropprimary: 'crop',
+                        validid: 'validId',
+                        valid_id: 'validId',
+                        productpicture: 'productPicture'
+                    };
+
+                    const normalizeGroupKey = (rawKey, rawLabel) => {
+                        const keyText = String(rawKey || '').trim().toLowerCase();
+                        const labelText = String(rawLabel || '').trim().toLowerCase();
+                        const combined = `${keyText} ${labelText}`;
+
+                        if (combined.includes('blueprint')) return 'blueprint';
+                        if (combined.includes('land')) return 'land';
+                        if (combined.includes('crop')) return 'crop';
+                        if (combined.includes('barangay')) return 'brgy';
+                        if (combined.includes('title') || combined.includes('tax declaration')) return 'title';
+                        if (combined.includes('tax receipt') || combined === 'tax') return 'tax';
+                        if (combined.includes('business plan') || combined === 'plan') return 'plan';
+                        if (combined.includes('product')) return 'productPicture';
+                        if (combined.includes('valid id') || combined === 'id') return 'validId';
+
+                        const compact = keyText.replace(/\s+/g, '');
+                        return aliasMap[compact] || rawKey || rawLabel || 'document';
+                    };
+
+                    const addGroupedDocument = (groupKey, label, url, fileName) => {
+                        if (!url || typeof url !== 'string' || !url.trim()) return;
+
+                        const normalizedUrl = url.trim();
+                        if (globalSeenUrls.has(normalizedUrl)) return;
+                        globalSeenUrls.add(normalizedUrl);
+
+                        const safeGroupKey = normalizeGroupKey(groupKey, label);
+                        const normalizedLabel = labelMap[safeGroupKey] || label || 'Document';
+
+                        if (!groupedDocsMap.has(safeGroupKey)) {
+                            groupedDocsMap.set(safeGroupKey, {
+                                key: safeGroupKey,
+                                name: normalizedLabel,
+                                files: []
+                            });
+                        }
+
+                        const targetGroup = groupedDocsMap.get(safeGroupKey);
+                        const alreadyExists = targetGroup.files.some((item) => item.url === url);
+                        if (alreadyExists) return;
+
+                        targetGroup.files.push({
+                            url: normalizedUrl,
+                            fileName: fileName || (url.split('/').pop() || 'file')
+                        });
                     };
 
                     // 1) New format: files object with direct URLs
@@ -636,10 +786,15 @@
                         Object.entries(applicationData.files).forEach(([key, value]) => {
                             if (typeof value === 'string' && value.trim()) {
                                 const filename = value.split('/').pop() || key;
-                                appDocs.push({
-                                    name: labelMap[key] || key,
-                                    fileName: filename,
-                                    url: value
+                                addGroupedDocument(key, labelMap[key] || key, value, filename);
+                                return;
+                            }
+
+                            if (Array.isArray(value)) {
+                                value.forEach((itemUrl, idx) => {
+                                    if (typeof itemUrl !== 'string' || !itemUrl.trim()) return;
+                                    const filename = itemUrl.split('/').pop() || `${key}-${idx + 1}`;
+                                    addGroupedDocument(key, labelMap[key] || key, itemUrl, filename);
                                 });
                             }
                         });
@@ -649,11 +804,8 @@
                     if (Array.isArray(applicationData.documents)) {
                         applicationData.documents.forEach((docItem) => {
                             if (docItem && docItem.url) {
-                                appDocs.push({
-                                    name: docItem.name || 'Document',
-                                    fileName: docItem.fileName || (docItem.url.split('/').pop() || 'file'),
-                                    url: docItem.url
-                                });
+                                const groupLabel = docItem.name || 'Document';
+                                addGroupedDocument(groupLabel, groupLabel, docItem.url, docItem.fileName || (docItem.url.split('/').pop() || 'file'));
                             }
                         });
                     }
@@ -664,38 +816,30 @@
                             const items = Array.isArray(val) ? val : [val];
                             items.forEach((fileObj) => {
                                 if (fileObj && fileObj.downloadUrl) {
-                                    appDocs.push({
-                                        name: labelMap[key] || key,
-                                        fileName: fileObj.name || (fileObj.downloadUrl.split('/').pop() || key),
-                                        url: fileObj.downloadUrl
-                                    });
+                                    addGroupedDocument(key, labelMap[key] || key, fileObj.downloadUrl, fileObj.name || (fileObj.downloadUrl.split('/').pop() || key));
                                 }
                             });
                         });
                     }
 
-                    // Remove duplicates by URL
-                    const seen = new Set();
-                    const uniqueDocs = appDocs.filter((d) => {
-                        if (!d.url || seen.has(d.url)) return false;
-                        seen.add(d.url);
-                        return true;
-                    });
+                    const groupedDocs = Array.from(groupedDocsMap.values()).filter((group) => group.files.length > 0);
 
-                    if (uniqueDocs.length > 0) {
-                        previewDocuments = uniqueDocs;
-                        documentsContainer.innerHTML = uniqueDocs.map(doc => `
+                    if (groupedDocs.length > 0) {
+                        previewDocuments = [];
+                        previewDocumentGroups = groupedDocs;
+                        documentsContainer.innerHTML = groupedDocs.map((docGroup, groupIndex) => `
                             <div class="doc-box">
                                 <i class="fa-solid fa-file text-blue-600 text-xl"></i>
                                 <div class="flex-grow min-w-0">
-                                    <p class="text-[9px] font-black uppercase m-0">${doc.name || 'Document'}</p>
-                                    <p class="text-[10px] font-bold text-slate-700 m-0 truncate">${doc.fileName || 'file'}</p>
+                                    <p class="text-[9px] font-black uppercase m-0">${docGroup.name || 'Document'}</p>
+                                    <p class="text-[10px] font-bold text-slate-700 m-0 truncate">${docGroup.files.length} FILE${docGroup.files.length > 1 ? 'S' : ''}</p>
                                 </div>
-                                <button onclick="openDocumentPreviewByIndex(${uniqueDocs.indexOf(doc)})" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
+                                <button onclick="openDocumentGroupByIndex(${groupIndex})" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
                             </div>
                         `).join('');
                     } else {
                         previewDocuments = [];
+                        previewDocumentGroups = [];
                         documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No documents uploaded.</p>';
                     }
                 }
@@ -714,39 +858,171 @@
             if (!doc || !doc.url) return;
 
             const modal = document.getElementById('docPreviewModal');
+            const backBtn = document.getElementById('docPreviewBackBtn');
+            backBtn.style.display = 'none';
+            activePreviewGroup = null;
+
+            renderSingleDocumentPreview(doc);
+
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.openDocumentGroupByIndex = function(index) {
+            const group = previewDocumentGroups[index];
+            if (!group || !Array.isArray(group.files) || group.files.length === 0) return;
+
+            const modal = document.getElementById('docPreviewModal');
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+
+            activePreviewGroup = {
+                name: group.name || 'Document',
+                files: (group.files || []).map((file) => ({
+                    name: group.name || 'Document',
+                    fileName: file.fileName || 'file',
+                    url: file.url
+                }))
+            };
+
+            renderDocumentGallery(activePreviewGroup);
+        };
+
+        window.openDocumentFromGroup = function(index) {
+            if (!activePreviewGroup || !Array.isArray(activePreviewGroup.files)) return;
+            const selectedFile = activePreviewGroup.files[index];
+            if (!selectedFile) return;
+
+            const backBtn = document.getElementById('docPreviewBackBtn');
+            backBtn.style.display = 'inline-block';
+            renderSingleDocumentPreview(selectedFile);
+        };
+
+        window.backToDocumentGallery = function() {
+            if (!activePreviewGroup) return;
+            renderDocumentGallery(activePreviewGroup);
+        };
+
+        function renderDocumentGallery(group) {
             const body = document.getElementById('docPreviewBody');
             const title = document.getElementById('docPreviewTitle');
+            const backBtn = document.getElementById('docPreviewBackBtn');
+            const panel = document.querySelector('#docPreviewModal .doc-preview-panel');
+            const imageCount = Array.isArray(group.files) ? group.files.length : 0;
+            const isSingleFile = imageCount === 1;
+            const colCount = Math.min(Math.max(imageCount, 1), 3);
+
+            if (panel) {
+                panel.classList.add('gallery-mode');
+                panel.style.width = isSingleFile
+                    ? 'min(96vw, 1080px)'
+                    : `min(96vw, ${(colCount * 350) + 40}px)`;
+            }
+
+            title.textContent = `${group.name || 'Document'} (${group.files.length})`.toUpperCase();
+            backBtn.style.display = 'none';
+
+            if (isSingleFile) {
+                const onlyFile = group.files[0];
+                const fileUrl = String(onlyFile.url || '');
+                const lower = fileUrl.toLowerCase();
+                const isImage = /\.(png|jpg|jpeg|gif|webp|avif|bmp)(\?|$)/i.test(lower);
+                const isPdf = /\.pdf(\?|$)/i.test(lower);
+
+                if (isImage) {
+                    body.innerHTML = `
+                        <div class="doc-gallery-item p-2">
+                            <img src="${fileUrl}" alt="${group.name || 'Document'}" class="doc-gallery-single-image" />
+                        </div>
+                    `;
+                    return;
+                }
+
+                if (isPdf) {
+                    body.innerHTML = `<iframe src="${fileUrl}#toolbar=0&navpanes=0&scrollbar=1" class="doc-preview-frame"></iframe>`;
+                    return;
+                }
+
+                body.innerHTML = `
+                    <div class="bg-white border border-slate-200 p-5 text-center">
+                        <span class="material-icons-round text-4xl text-slate-400">description</span>
+                        <p class="mt-2 text-[10px] font-black uppercase text-slate-600">Preview not available for this file type.</p>
+                        <button type="button" onclick="window.open('${fileUrl}', '_blank')" class="mt-3 btn btn-sm btn-outline-primary text-[10px] font-bold">Open in New Tab</button>
+                    </div>
+                `;
+                return;
+            }
+
+            body.innerHTML = `
+                <div class="doc-gallery-grid" style="grid-template-columns: repeat(${colCount}, minmax(300px, 1fr));">
+                    ${group.files.map((file, index) => {
+                        const fileUrl = String(file.url || '');
+                        const lower = fileUrl.toLowerCase();
+                        const isImage = /\.(png|jpg|jpeg|gif|webp|avif|bmp)(\?|$)/i.test(lower);
+
+                        return `
+                            <div class="doc-gallery-item clickable" onclick="openDocumentFromGroup(${index})" title="Click to enlarge">
+                                ${isImage
+                                    ? `<img src="${fileUrl}" alt="${group.name || 'Document'} ${index + 1}" class="doc-gallery-thumb" />`
+                                    : `<div class="doc-gallery-thumb d-flex align-items-center justify-content-center"><span class="material-icons-round text-slate-400">description</span></div>`
+                                }
+                                <p class="text-[9px] font-black uppercase m-0 mt-2 truncate">${group.name || 'Document'} ${index + 1}</p>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function renderSingleDocumentPreview(doc) {
+            const body = document.getElementById('docPreviewBody');
+            const title = document.getElementById('docPreviewTitle');
+            const panel = document.querySelector('#docPreviewModal .doc-preview-panel');
             const url = String(doc.url || '');
             const lower = url.toLowerCase();
             const isImage = /\.(png|jpg|jpeg|gif|webp|avif|bmp)(\?|$)/i.test(lower);
             const isPdf = /\.pdf(\?|$)/i.test(lower);
 
+            if (panel) {
+                panel.classList.remove('gallery-mode');
+                panel.style.width = 'min(1280px, 98vw)';
+            }
+
             title.textContent = (doc.name || 'Document Preview').toUpperCase();
 
             if (isImage) {
                 body.innerHTML = `<img src="${url}" alt="Document Preview" class="doc-preview-image" />`;
-            } else if (isPdf) {
-                body.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0&scrollbar=1" class="doc-preview-frame"></iframe>`;
-            } else {
-                body.innerHTML = `
-                    <div class="bg-white border border-slate-200 p-5 text-center">
-                        <span class="material-icons-round text-4xl text-slate-400">description</span>
-                        <p class="mt-2 text-[10px] font-black uppercase text-slate-600">Preview not available for this file type.</p>
-                        <button type="button" onclick="window.open('${url}', '_blank')" class="mt-3 btn btn-sm btn-outline-primary text-[10px] font-bold">Open in New Tab</button>
-                    </div>
-                `;
+                return;
             }
 
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
+            if (isPdf) {
+                body.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0&scrollbar=1" class="doc-preview-frame"></iframe>`;
+                return;
+            }
+
+            body.innerHTML = `
+                <div class="bg-white border border-slate-200 p-5 text-center">
+                    <span class="material-icons-round text-4xl text-slate-400">description</span>
+                    <p class="mt-2 text-[10px] font-black uppercase text-slate-600">Preview not available for this file type.</p>
+                    <button type="button" onclick="window.open('${url}', '_blank')" class="mt-3 btn btn-sm btn-outline-primary text-[10px] font-bold">Open in New Tab</button>
+                </div>
+            `;
         };
 
         window.closeDocumentPreview = function(event) {
             if (event && event.target && event.target.id !== 'docPreviewModal') return;
             const modal = document.getElementById('docPreviewModal');
             const body = document.getElementById('docPreviewBody');
+            const backBtn = document.getElementById('docPreviewBackBtn');
+            const panel = document.querySelector('#docPreviewModal .doc-preview-panel');
             modal.style.display = 'none';
             body.innerHTML = '';
+            backBtn.style.display = 'none';
+            if (panel) {
+                panel.classList.remove('gallery-mode');
+                panel.style.width = 'min(1100px, 96vw)';
+            }
+            activePreviewGroup = null;
             document.body.style.overflow = '';
         };
 

@@ -893,27 +893,35 @@ def submit_application():
         category = request.form.get('category')
         investment_qty = request.form.get('investmentQty')
         harvest_qty = request.form.get('harvestQty')
+        farmer_id_number = request.form.get('farmerIdNumber')
+        google_pin_location = request.form.get('googlePinLocation')
         
         # Validate required fields
-        if not all([user_id, user_email, category, investment_qty, harvest_qty]):
+        if not all([user_id, user_email, category, investment_qty, harvest_qty, farmer_id_number, google_pin_location]):
             return jsonify({
                 'success': False,
                 'message': 'Missing required fields'
             }), 400
         
         # Process file uploads
-        file_fields = ['titleFile', 'taxFile', 'blueprintFile', 'landFile', 'cropFile', 'planFile', 'brgyFile', 'productPictureFile']
+        file_fields = ['titleFile', 'taxFile', 'blueprintFile', 'landFile', 'cropFile', 'planFile', 'brgyFile', 'productPictureFile', 'validIdFile']
+        multi_file_fields = {'blueprintFile', 'landFile', 'cropFile'}
         file_paths = {}
         
         for field in file_fields:
             if field in request.files:
-                file = request.files[field]
-                if file and file.filename:
+                files = request.files.getlist(field)
+                saved_urls = []
+
+                for idx, file in enumerate(files):
+                    if not file or not file.filename:
+                        continue
+
                     # Secure filename
                     filename = secure_filename(file.filename)
                     timestamp = int(datetime.now().timestamp())
-                    unique_filename = f"{timestamp}_{field}_{filename}"
-                    
+                    unique_filename = f"{timestamp}_{field}_{idx}_{filename}"
+
                     web_path = None
                     if _cloudinary_enabled():
                         web_path = _upload_to_cloudinary(file, f"tlph/applications/{user_id}")
@@ -926,7 +934,18 @@ def submit_application():
                         file.save(file_path)
                         web_path = f"/static/uploads/applications/{user_id}/{unique_filename}"
 
-                    file_paths[field.replace('File', '')] = web_path
+                    saved_urls.append(web_path)
+
+                if not saved_urls:
+                    continue
+
+                normalized_key = field.replace('File', '')
+                if field in multi_file_fields:
+                    file_paths[normalized_key] = saved_urls
+                    # Keep single-value compatibility for older viewers
+                    file_paths[f"{normalized_key}Primary"] = saved_urls[0]
+                else:
+                    file_paths[normalized_key] = saved_urls[0]
         
         return jsonify({
             'success': True,
