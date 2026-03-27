@@ -235,263 +235,269 @@
       </div>
   </div>
 
-  <script type="module">
-    // Import shared Firebase config (prevents duplicate-app errors)
-    import "/static/js/firebase-config.js";
-    import { createUserWithEmailAndPassword, onAuthStateChanged, getAuth } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+</main>
+</div>
 
-    // Use globally exposed Firebase objects from firebase-config.js
-    const app = window.app;
-    const db = window.db;
-    const auth = window.auth;
+<!-- Move main script to end of body to ensure Alpine and helpers are loaded first -->
+<script type="module">
+  // Import shared Firebase config (prevents duplicate-app errors)
+  import "/static/js/firebase-config.js";
+  import { createUserWithEmailAndPassword, onAuthStateChanged, getAuth } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { collection, query, where, getDocs, doc, getDoc, updateDoc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Initialize SECONDARY App (For Creating Users without logging out)
-    let secondaryApp, secondaryAuth;
+  // Use globally exposed Firebase objects from firebase-config.js
+  const app = window.app;
+  const db = window.db;
+  const auth = window.auth;
+
+  // Initialize SECONDARY App (For Creating Users without logging out)
+  let secondaryApp, secondaryAuth;
+  try {
+    secondaryApp = getAuth(window.firebase?.apps?.find(a => a.name === "SecondaryApp") || window.app, "SecondaryApp");
+  } catch {
+    // fallback for first time
+    secondaryApp = getAuth(window.app, "SecondaryApp");
+  }
+  secondaryAuth = getAuth(secondaryApp);
+
+  // Global State
+  let adminProfile = {
+    municipality: "",
+    province: ""
+  };
+  let allUsers = [];
+  let actionCount = 0;
+
+  // Helper: Select DOM element
+  const $ = (id) => document.getElementById(id);
+
+  // 1. AUTH & INITIAL LOADING
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      console.log("Logged in user:", user.uid);
+      try {
+        const uDoc = await getDoc(doc(db, 'users', user.uid));
+        if (uDoc.exists()) {
+          const data = uDoc.data();
+          
+          // Fix: Check for case sensitivity in Firestore fields
+          adminProfile.municipality = data.municipality || data.Municipality || "";
+          adminProfile.province = data.province || data.Province || "";
+          
+          console.log("Admin Profile Loaded:", adminProfile);
+
+          // Update Scope Chip
+          $('scopeChip').textContent = `Municipality: ${adminProfile.municipality || 'Unknown'}`;
+          
+          // Load Users for this municipality
+          loadUsers();
+        } else {
+          console.error("No profile document found for user.");
+        }
+      } catch (error) {
+        console.error("Error loading admin profile:", error);
+      }
+    } else {
+      window.location.href = '/login'; 
+    }
+  });
+
+  // 2. FETCH USERS
+  async function loadUsers() {
+    if (!adminProfile.municipality) return;
     try {
-      secondaryApp = getAuth(window.firebase?.apps?.find(a => a.name === "SecondaryApp") || window.app, "SecondaryApp");
-    } catch {
-      // fallback for first time
-      secondaryApp = getAuth(window.app, "SecondaryApp");
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('municipality', '==', adminProfile.municipality));
+      const snapshot = await getDocs(q);
+      
+      allUsers = snapshot.docs.map(d => ({ 
+          id: d.id, 
+          ...d.data(), 
+          name: (d.data().firstName || '') + ' ' + (d.data().lastName || ''),
+          status: d.data().status || 'Active'
+      }));
+      
+      renderAll();
+    } catch (err) { 
+      console.error("Error loading users:", err); 
     }
-    secondaryAuth = getAuth(secondaryApp);
+  }
 
-    // Global State
-    let adminProfile = {
-      municipality: "",
-      province: ""
-    };
-    let allUsers = [];
-    let actionCount = 0;
+  // 3. RENDER TABLE & FILTERS
+  function renderTable(list) {
+    const tbody = $('usersTbody');
+    tbody.innerHTML = list.length === 0 
+      ? `<tr><td class="p-6 text-center text-[10px] font-bold uppercase text-slate-400 tracking-widest">No users found for ${adminProfile.municipality}.</td></tr>`
+      : list.map(u => `
+      <tr class="grid grid-cols-12 gap-2 px-3 py-1 hover:bg-slate-50 items-center border-b border-gray-100 transition-colors">
+        <td class="col-span-3 min-w-0">
+          <div class="text-[10px] font-bold text-slate-900 truncate">${u.name}</div>
+          <div class="text-[8px] font-mono text-slate-400 truncate">ID: ${u.employeeId || u.id.substring(0,8)}</div>
+        </td>
+        <td class="col-span-3 text-[10px] font-semibold text-slate-700 truncate">${u.email}</td>
+        <td class="col-span-2 text-[10px] font-bold text-slate-500 uppercase truncate">${u.municipality}</td>
+        <td class="col-span-1 text-center">
+          <span class="material-icons-round text-[18px] ${u.status === 'Active' ? 'text-emerald-500' : 'text-slate-400'}" title="${u.status}">
+            ${u.status === 'Active' ? 'check_circle' : 'do_not_disturb_on'}
+          </span>
+        </td>
+        <td class="col-span-3 text-right flex justify-end gap-1">
+          <button data-action="view" data-id="${u.id}" class="p-1 rounded-full text-blue-600 hover:bg-blue-100 transition-all" title="View Profile">
+              <span class="material-icons-round text-[18px]">visibility</span>
+          </button>
+          <button data-action="${u.status === 'Disabled' ? 'enable' : 'disable'}" data-id="${u.id}" class="p-1 rounded-full ${u.status === 'Disabled' ? 'text-emerald-600 hover:bg-emerald-100' : 'text-amber-600 hover:bg-amber-100'} transition-all" title="Toggle Access">
+              <span class="material-icons-round text-[18px]">${u.status === 'Disabled' ? 'person_add' : 'person_off'}</span>
+          </button>
+          <button data-action="remove" data-id="${u.id}" class="p-1 rounded-full text-rose-600 hover:bg-rose-100 transition-all" title="Delete User">
+              <span class="material-icons-round text-[18px]">delete_forever</span>
+          </button>
+        </td>
+      </tr>`).join("");
+  }
 
-    // Helper: Select DOM element
-    const $ = (id) => document.getElementById(id);
+  function renderAll() {
+    const q = ($('searchInput').value || "").toLowerCase().trim();
+    const s = $('statusSelect').value;
+    const filtered = allUsers.filter(u => (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) && (s === "all" || u.status === s));
 
-    // 1. AUTH & INITIAL LOADING
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        console.log("Logged in user:", user.uid);
-        try {
-          const uDoc = await getDoc(doc(db, 'users', user.uid));
-          if (uDoc.exists()) {
-            const data = uDoc.data();
-            
-            // Fix: Check for case sensitivity in Firestore fields
-            adminProfile.municipality = data.municipality || data.Municipality || "";
-            adminProfile.province = data.province || data.Province || "";
-            
-            console.log("Admin Profile Loaded:", adminProfile);
+    $('resultsChip').textContent = `Showing ${filtered.length} of ${allUsers.length}`;
+    $('kpiTotal').textContent = allUsers.length;
+    $('kpiActive').textContent = allUsers.filter(u => u.status === "Active").length;
+    $('kpiDisabled').textContent = allUsers.filter(u => u.status === "Disabled").length;
+    $('kpiActions').textContent = actionCount;
+    renderTable(filtered);
+  }
 
-            // Update Scope Chip
-            $('scopeChip').textContent = `Municipality: ${adminProfile.municipality || 'Unknown'}`;
-            
-            // Load Users for this municipality
-            loadUsers();
-          } else {
-            console.error("No profile document found for user.");
-          }
-        } catch (error) {
-          console.error("Error loading admin profile:", error);
+  // 4. EVENT LISTENERS
+  
+  // Table Actions
+  $('usersTbody').addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const user = allUsers.find(u => u.id === id);
+    const action = btn.dataset.action;
+
+    if (action === "view") {
+        const photoURL = user.photoURL;
+        const picEl = $('viewProfilePic');
+        picEl.src = photoURL ? (photoURL + '?t=' + Date.now()) : '/static/images/default-avatar.png';
+
+        $('viewName').textContent = user.name || '—';
+        $('viewEmail').textContent = user.email || '—';
+        $('viewId').textContent = user.id;
+        $('viewMunicipality').textContent = user.municipality || '—';
+        $('viewPhone').textContent = user.contactNumber || user.phone || '—';
+
+        const statusEl = $('viewStatus');
+        statusEl.textContent = user.status || 'Active';
+        statusEl.className = 'text-[9px] font-bold uppercase tracking-widest m-0 mt-0.5 ' +
+            (user.status === 'Disabled' ? 'text-rose-600' : 'text-emerald-600');
+
+        $('viewModal').classList.remove('hidden');
+    } else if (action === "disable" || action === "enable") {
+        const next = action === "disable" ? "Disabled" : "Active";
+        if (confirm(`Set status of ${user.name} to ${next}?`)) { 
+            await updateDoc(doc(db, 'users', id), { status: next }); 
+            actionCount++; 
+            loadUsers(); 
         }
-      } else {
-        window.location.href = '/login'; 
+    } else if (action === "remove") {
+        if (confirm(`Permanently delete account for ${user.name}? This cannot be undone.`)) { 
+            await deleteDoc(doc(db, 'users', id)); 
+            actionCount++; 
+            loadUsers(); 
+        }
+    }
+  });
+
+  // Add User Modal Trigger
+  $('btnAddMunicipalUser').addEventListener('click', () => {
+      // Validation: Ensure we actually have the admin's location before opening
+      if (!adminProfile.municipality || !adminProfile.province) {
+          console.warn("Admin profile incomplete:", adminProfile);
+          alert("Your administrative data (Municipality/Province) hasn't loaded yet. Please wait a moment or refresh the page.");
+          return;
       }
-    });
 
-    // 2. FETCH USERS
-    async function loadUsers() {
-      if (!adminProfile.municipality) return;
-      try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('municipality', '==', adminProfile.municipality));
-        const snapshot = await getDocs(q);
-        
-        allUsers = snapshot.docs.map(d => ({ 
-            id: d.id, 
-            ...d.data(), 
-            name: (d.data().firstName || '') + ' ' + (d.data().lastName || ''),
-            status: d.data().status || 'Active'
-        }));
-        
-        renderAll();
-      } catch (err) { 
-        console.error("Error loading users:", err); 
-      }
-    }
+      // Generate Random ID
+      const year = new Date().getFullYear();
+      const rand = Math.floor(100 + Math.random() * 900);
+      $('add-employeeId').value = `DENR-${year}-${rand}`;
+      
+      // AUTO-FILL - Explicitly setting values
+      $('add-municipality').value = adminProfile.municipality;
+      $('add-province').value = adminProfile.province;
 
-    // 3. RENDER TABLE & FILTERS
-    function renderTable(list) {
-      const tbody = $('usersTbody');
-      tbody.innerHTML = list.length === 0 
-        ? `<tr><td class="p-6 text-center text-[10px] font-bold uppercase text-slate-400 tracking-widest">No users found for ${adminProfile.municipality}.</td></tr>`
-        : list.map(u => `
-        <tr class="grid grid-cols-12 gap-2 px-3 py-1 hover:bg-slate-50 items-center border-b border-gray-100 transition-colors">
-          <td class="col-span-3 min-w-0">
-            <div class="text-[10px] font-bold text-slate-900 truncate">${u.name}</div>
-            <div class="text-[8px] font-mono text-slate-400 truncate">ID: ${u.employeeId || u.id.substring(0,8)}</div>
-          </td>
-          <td class="col-span-3 text-[10px] font-semibold text-slate-700 truncate">${u.email}</td>
-          <td class="col-span-2 text-[10px] font-bold text-slate-500 uppercase truncate">${u.municipality}</td>
-          <td class="col-span-1 text-center">
-            <span class="material-icons-round text-[18px] ${u.status === 'Active' ? 'text-emerald-500' : 'text-slate-400'}" title="${u.status}">
-              ${u.status === 'Active' ? 'check_circle' : 'do_not_disturb_on'}
-            </span>
-          </td>
-          <td class="col-span-3 text-right flex justify-end gap-1">
-            <button data-action="view" data-id="${u.id}" class="p-1 rounded-full text-blue-600 hover:bg-blue-100 transition-all" title="View Profile">
-                <span class="material-icons-round text-[18px]">visibility</span>
-            </button>
-            <button data-action="${u.status === 'Disabled' ? 'enable' : 'disable'}" data-id="${u.id}" class="p-1 rounded-full ${u.status === 'Disabled' ? 'text-emerald-600 hover:bg-emerald-100' : 'text-amber-600 hover:bg-amber-100'} transition-all" title="Toggle Access">
-                <span class="material-icons-round text-[18px]">${u.status === 'Disabled' ? 'person_add' : 'person_off'}</span>
-            </button>
-            <button data-action="remove" data-id="${u.id}" class="p-1 rounded-full text-rose-600 hover:bg-rose-100 transition-all" title="Delete User">
-                <span class="material-icons-round text-[18px]">delete_forever</span>
-            </button>
-          </td>
-        </tr>`).join("");
-    }
+      $('addUserModal').classList.remove('hidden');
+  });
 
-    function renderAll() {
-      const q = ($('searchInput').value || "").toLowerCase().trim();
-      const s = $('statusSelect').value;
-      const filtered = allUsers.filter(u => (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) && (s === "all" || u.status === s));
-
-      $('resultsChip').textContent = `Showing ${filtered.length} of ${allUsers.length}`;
-      $('kpiTotal').textContent = allUsers.length;
-      $('kpiActive').textContent = allUsers.filter(u => u.status === "Active").length;
-      $('kpiDisabled').textContent = allUsers.filter(u => u.status === "Disabled").length;
-      $('kpiActions').textContent = actionCount;
-      renderTable(filtered);
-    }
-
-    // 4. EVENT LISTENERS
+  // Add User Form Submit
+  $('addUserForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const form = e.target;
+    const btn = $('btnSubmitAddUser');
     
-    // Table Actions
-    $('usersTbody').addEventListener("click", async (e) => {
-      const btn = e.target.closest("button[data-action]");
-      if (!btn) return;
-      const id = btn.dataset.id;
-      const user = allUsers.find(u => u.id === id);
-      const action = btn.dataset.action;
+    // Values
+    const email = form['email'].value;
+    const password = form['password'].value;
+    
+    // UI State
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-icons-round animate-spin text-[14px]">sync</span> Saving...';
 
-      if (action === "view") {
-          const photoURL = user.photoURL;
-          const picEl = $('viewProfilePic');
-          picEl.src = photoURL ? (photoURL + '?t=' + Date.now()) : '/static/images/default-avatar.png';
-
-          $('viewName').textContent = user.name || '—';
-          $('viewEmail').textContent = user.email || '—';
-          $('viewId').textContent = user.id;
-          $('viewMunicipality').textContent = user.municipality || '—';
-          $('viewPhone').textContent = user.contactNumber || user.phone || '—';
-
-          const statusEl = $('viewStatus');
-          statusEl.textContent = user.status || 'Active';
-          statusEl.className = 'text-[9px] font-bold uppercase tracking-widest m-0 mt-0.5 ' +
-              (user.status === 'Disabled' ? 'text-rose-600' : 'text-emerald-600');
-
-          $('viewModal').classList.remove('hidden');
-      } else if (action === "disable" || action === "enable") {
-          const next = action === "disable" ? "Disabled" : "Active";
-          if (confirm(`Set status of ${user.name} to ${next}?`)) { 
-              await updateDoc(doc(db, 'users', id), { status: next }); 
-              actionCount++; 
-              loadUsers(); 
-          }
-      } else if (action === "remove") {
-          if (confirm(`Permanently delete account for ${user.name}? This cannot be undone.`)) { 
-              await deleteDoc(doc(db, 'users', id)); 
-              actionCount++; 
-              loadUsers(); 
-          }
-      }
-    });
-
-    // Add User Modal Trigger
-    $('btnAddMunicipalUser').addEventListener('click', () => {
-        // Validation: Ensure we actually have the admin's location before opening
-        if (!adminProfile.municipality || !adminProfile.province) {
-            console.warn("Admin profile incomplete:", adminProfile);
-            alert("Your administrative data (Municipality/Province) hasn't loaded yet. Please wait a moment or refresh the page.");
-            return;
-        }
-
-        // Generate Random ID
-        const year = new Date().getFullYear();
-        const rand = Math.floor(100 + Math.random() * 900);
-        $('add-employeeId').value = `DENR-${year}-${rand}`;
-        
-        // AUTO-FILL - Explicitly setting values
-        $('add-municipality').value = adminProfile.municipality;
-        $('add-province').value = adminProfile.province;
-
-        $('addUserModal').classList.remove('hidden');
-    });
-
-    // Add User Form Submit
-    $('addUserForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      const form = e.target;
-      const btn = $('btnSubmitAddUser');
+    const newUser = {
+      firstName: form['firstName'].value.toUpperCase(),
+      lastName: form['lastName'].value.toUpperCase(),
+      middleName: form['middleName'].value.toUpperCase(),
+      email: email,
+      phone: form['phone'].value,
+      division: form['division'].value.toUpperCase(),
+      employeeId: form['employeeId'].value,
       
-      // Values
-      const email = form['email'].value;
-      const password = form['password'].value;
+      // Use value from form (which was auto-filled)
+      municipality: form['municipality'].value, 
+      province: form['province'].value,
+
+      role: "municipal",
+      applicationType: "municipal",
+      status: "Active",
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      // Fix: Use SECONDARY auth instance so Admin doesn't get logged out
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const user = userCredential.user;
+
+      // Save to Firestore using Main DB
+      await setDoc(doc(db, "users", user.uid), newUser);
       
-      // UI State
-      btn.disabled = true;
-      btn.innerHTML = '<span class="material-icons-round animate-spin text-[14px]">sync</span> Saving...';
+      alert('User added successfully!');
+      $('addUserModal').classList.add('hidden');
+      form.reset();
+      loadUsers(); 
+    } catch (err) {
+      alert('Failed to add user: ' + err.message);
+      console.error(err);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-icons-round text-[14px]">person_add</span> Add User';
+    }
+  });
 
-      const newUser = {
-        firstName: form['firstName'].value.toUpperCase(),
-        lastName: form['lastName'].value.toUpperCase(),
-        middleName: form['middleName'].value.toUpperCase(),
-        email: email,
-        phone: form['phone'].value,
-        division: form['division'].value.toUpperCase(),
-        employeeId: form['employeeId'].value,
-        
-        // Use value from form (which was auto-filled)
-        municipality: form['municipality'].value, 
-        province: form['province'].value,
+  // Close Modals
+  $('btnCloseAddUserModal').addEventListener('click', () => $('addUserModal').classList.add('hidden'));
+  $('btnCloseModal').addEventListener('click', () => $('viewModal').classList.add('hidden'));
 
-        role: "municipal",
-        applicationType: "municipal",
-        status: "Active",
-        createdAt: new Date().toISOString()
-      };
+  // Filters & Refresh
+  $('searchInput').addEventListener("input", renderAll);
+  $('statusSelect').addEventListener("change", renderAll);
+  $('btnClear').addEventListener("click", () => { $('searchInput').value = ""; $('statusSelect').value = "all"; renderAll(); });
+  $('btnRefresh').addEventListener("click", loadUsers);
 
-      try {
-        // Fix: Use SECONDARY auth instance so Admin doesn't get logged out
-        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-        const user = userCredential.user;
-
-        // Save to Firestore using Main DB
-        await setDoc(doc(db, "users", user.uid), newUser);
-        
-        alert('User added successfully!');
-        $('addUserModal').classList.add('hidden');
-        form.reset();
-        loadUsers(); 
-      } catch (err) {
-        alert('Failed to add user: ' + err.message);
-        console.error(err);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<span class="material-icons-round text-[14px]">person_add</span> Add User';
-      }
-    });
-
-    // Close Modals
-    $('btnCloseAddUserModal').addEventListener('click', () => $('addUserModal').classList.add('hidden'));
-    $('btnCloseModal').addEventListener('click', () => $('viewModal').classList.add('hidden'));
-
-    // Filters & Refresh
-    $('searchInput').addEventListener("input", renderAll);
-    $('statusSelect').addEventListener("change", renderAll);
-    $('btnClear').addEventListener("click", () => { $('searchInput').value = ""; $('statusSelect').value = "all"; renderAll(); });
-    $('btnRefresh').addEventListener("click", loadUsers);
-
-  </script>
+</script>
+</body>
+</html>
 </body>
 </html>
