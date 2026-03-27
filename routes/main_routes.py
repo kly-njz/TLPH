@@ -143,14 +143,34 @@ def apply_for_hiring_position():
     full_name = str(data.get('full_name') or '').strip()
     email = str(data.get('email') or '').strip()
     phone = str(data.get('phone') or '').strip()
+    gender = str(data.get('gender') or '').strip()
+    birth_date = str(data.get('birth_date') or '').strip()
+    civil_status = str(data.get('civil_status') or '').strip()
     barangay = str(data.get('barangay') or '').strip()
     applicant_address = str(data.get('address') or '').strip()
+    education_level = str(data.get('education_level') or '').strip()
+    school_name = str(data.get('school_name') or '').strip()
+    course = str(data.get('course') or '').strip()
+    years_experience = str(data.get('years_experience') or '').strip()
+    current_employer = str(data.get('current_employer') or '').strip()
+    employment_status = str(data.get('employment_status') or '').strip()
+    skills = str(data.get('skills') or '').strip()
+    certifications = str(data.get('certifications') or '').strip()
+    expected_salary = str(data.get('expected_salary') or '').strip()
+    available_start_date = str(data.get('available_start_date') or '').strip()
+    preferred_work_type = str(data.get('preferred_work_type') or '').strip()
+    resume_link = str(data.get('resume_link') or '').strip()
+    cover_letter = str(data.get('cover_letter') or '').strip()
     notes = str(data.get('notes') or '').strip()
 
     if not hiring_id:
         return jsonify({'success': False, 'error': 'Missing hiring position reference'}), 400
     if not full_name:
         return jsonify({'success': False, 'error': 'Full name is required'}), 400
+    if not email:
+        return jsonify({'success': False, 'error': 'Email is required'}), 400
+    if not phone:
+        return jsonify({'success': False, 'error': 'Phone is required'}), 400
 
     try:
         hiring_doc = db.collection('hiring_positions').document(hiring_id).get()
@@ -186,11 +206,27 @@ def apply_for_hiring_position():
             'source_collection': 'hiring_positions',
             'full_name': full_name,
             'applicant_name': full_name,
-            'email': email or 'N/A',
-            'phone': phone or 'N/A',
-            'contact_number': phone or 'N/A',
+            'email': email,
+            'phone': phone,
+            'contact_number': phone,
             'address': applicant_address or 'N/A',
             'barangay': barangay or 'N/A',
+            'gender': gender or 'N/A',
+            'birth_date': birth_date or 'N/A',
+            'civil_status': civil_status or 'N/A',
+            'education_level': education_level or 'N/A',
+            'school_name': school_name or 'N/A',
+            'course': course or 'N/A',
+            'years_experience': years_experience or '0',
+            'current_employer': current_employer or 'N/A',
+            'employment_status': employment_status or 'N/A',
+            'skills': skills or 'N/A',
+            'certifications': certifications or 'N/A',
+            'expected_salary': expected_salary or 'N/A',
+            'available_start_date': available_start_date or 'N/A',
+            'preferred_work_type': preferred_work_type or 'N/A',
+            'resume_link': resume_link or 'N/A',
+            'cover_letter': cover_letter or 'N/A',
             'notes': notes or 'N/A',
             'candidate_type': position or 'Environmental Management Specialist',
             'category': position or 'Environmental Management Specialist',
