@@ -104,16 +104,36 @@
                     </div>
                     
                     <div id="templateList" class="flex-1 overflow-y-auto custom-scrollbar p-2 flex flex-col gap-1.5 bg-slate-50/50">
-                        <div onclick="selectTemplate('standard')" class="border border-emerald-300 bg-emerald-50 rounded-[2px] p-2 cursor-pointer hover:bg-emerald-100 transition border-l-4 border-l-emerald-600 shadow-sm" data-template-id="standard" data-template-name="DENR Standard v2.1">
+                        {% if templates|length == 0 %}
+                        <div class="text-center py-8 text-slate-500 text-[10px] font-bold uppercase">
+                            <span class="material-icons-round text-[32px] text-slate-300 block mb-1">inbox</span>
+                            No templates found
+                        </div>
+                        {% endif %}
+                        {% for t in templates %}
+                        <div onclick="selectTemplate('{{ t.id }}')" class="border {{ 'border-emerald-300 bg-emerald-50 border-l-emerald-600' if t.status == 'active' else 'border-slate-200 bg-white border-l-slate-400' }} rounded-[2px] p-2 cursor-pointer hover:bg-emerald-100 transition border-l-4 shadow-sm" data-template-id="{{ t.id }}" data-template-name="{{ t.name }}">
+                            <div class="flex items-center justify-between mb-1">
+                                <h3 class="text-[10px] font-black {{ 'text-slate-900' if t.status == 'active' else 'text-slate-700' }} uppercase m-0">{{ t.name }}</h3>
+                                <span class="status-badge {{ 'bg-emerald-600 text-white' if t.status == 'active' else 'bg-slate-200 text-slate-600' }}">{{ t.status|capitalize }}</span>
+                            </div>
+                            <p class="text-[9px] {{ 'text-slate-600' if t.status == 'active' else 'text-slate-500' }} font-bold m-0 leading-tight">{{ t.description or 'COA template' }}</p>
+                            <div class="flex items-center gap-2 mt-1.5 pt-1.5 border-t {{ 'border-emerald-200/50 text-emerald-800' if t.status == 'active' else 'border-slate-100 text-slate-500' }} text-[8px] font-bold uppercase tracking-widest">
+                                <span>{{ t.account_count or 0 }} Accounts</span>
+                                <span>&bull;</span>
+                                <span>{{ t.entity_count or 0 }} Entities</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
                             <div class="flex items-center justify-between mb-1">
                                 <h3 class="text-[10px] font-black text-slate-900 uppercase m-0">DENR Standard v2.1</h3>
                                 <span class="status-badge bg-emerald-600 text-white">Active</span>
                             </div>
                             <p class="text-[9px] text-slate-600 font-bold m-0 leading-tight">Default template for all entities</p>
-                            <div class="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-emerald-200/50 text-[8px] font-bold text-emerald-800 uppercase tracking-widest">
-                                <span>125 Accounts</span>
+                            <div class="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-slate-100 text-[8px] font-bold text-slate-500 uppercase tracking-widest">
+                                <span>156 Accounts</span>
                                 <span>&bull;</span>
-                                <span>47 Entities</span>
+                                <span>8 Entities</span>
                             </div>
                         </div>
 
@@ -155,102 +175,51 @@
                                 </tr>
                             </thead>
                             <tbody class="text-[10px] divide-y divide-slate-100">
+                                {% set selected_template_id = templates[0].id if templates|length > 0 else None %}
+                                {% set filtered_accounts = accounts|selectattr('template_id', 'equalto', selected_template_id)|list if selected_template_id else [] %}
+                                {% if filtered_accounts|length == 0 %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-8 text-slate-500 font-bold uppercase">
+                                        <span class="material-icons-round text-[32px] text-slate-300 block mb-1">deployed_code</span>
+                                        No accounts found for this template
+                                    </td>
+                                </tr>
+                                {% else %}
+                                {% for a in filtered_accounts %}
                                 <tr class="hover:bg-blue-50 transition data-row">
-                                    <td class="font-mono font-black text-slate-900 border-r border-slate-100">1001</td>
-                                    <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">Cash on Hand</td>
+                                    <td class="font-mono font-black text-slate-900 border-r border-slate-100">{{ a.code }}</td>
+                                    <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">{{ a.name }}</td>
                                     <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-blue-50 text-blue-700 border-blue-200">Asset</span>
+                                        {% if a.account_type == 'asset' %}
+                                            <span class="status-badge bg-blue-50 text-blue-700 border-blue-200">Asset</span>
+                                        {% elif a.account_type == 'liability' %}
+                                            <span class="status-badge bg-amber-50 text-amber-700 border-amber-200">Liability</span>
+                                        {% elif a.account_type == 'equity' %}
+                                            <span class="status-badge bg-purple-50 text-purple-700 border-purple-200">Equity</span>
+                                        {% elif a.account_type == 'revenue' or a.account_type == 'income' %}
+                                            <span class="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">Revenue</span>
+                                        {% elif a.account_type == 'expense' %}
+                                            <span class="status-badge bg-rose-50 text-rose-700 border-rose-200">Expense</span>
+                                        {% else %}
+                                            <span class="status-badge bg-slate-100 text-slate-500 border-slate-300">Other</span>
+                                        {% endif %}
                                     </td>
                                     <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-slate-100 text-slate-500 border-slate-300">🔒 Locked</span>
+                                        {% if a.locked %}
+                                            <span class="status-badge bg-slate-100 text-slate-500 border-slate-300">🔒 Locked</span>
+                                        {% else %}
+                                            <span class="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">Editable</span>
+                                        {% endif %}
                                     </td>
                                     <td class="text-center no-print">
                                         <div class="flex items-center justify-center gap-2">
                                             <button onclick="openEditAccount(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
-                                            <button onclick="toggleLock(this)" class="text-[9px] font-bold uppercase text-slate-400 hover:underline">Unlock</button>
+                                            <button onclick="toggleLock(this)" class="text-[9px] font-bold uppercase {{ 'text-slate-400' if a.locked else 'text-emerald-700' }} hover:underline">{{ 'Unlock' if a.locked else 'Lock' }}</button>
                                         </div>
                                     </td>
                                 </tr>
-                                <tr class="hover:bg-blue-50 transition data-row">
-                                    <td class="font-mono font-black text-slate-900 border-r border-slate-100">1002</td>
-                                    <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">Cash in Bank</td>
-                                    <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-blue-50 text-blue-700 border-blue-200">Asset</span>
-                                    </td>
-                                    <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-slate-100 text-slate-500 border-slate-300">🔒 Locked</span>
-                                    </td>
-                                    <td class="text-center no-print">
-                                        <div class="flex items-center justify-center gap-2">
-                                            <button onclick="openEditAccount(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
-                                            <button onclick="toggleLock(this)" class="text-[9px] font-bold uppercase text-slate-400 hover:underline">Unlock</button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr class="hover:bg-blue-50 transition data-row">
-                                    <td class="font-mono font-black text-slate-900 border-r border-slate-100">2001</td>
-                                    <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">Accounts Payable</td>
-                                    <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-amber-50 text-amber-700 border-amber-200">Liability</span>
-                                    </td>
-                                    <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">Editable</span>
-                                    </td>
-                                    <td class="text-center no-print">
-                                        <div class="flex items-center justify-center gap-2">
-                                            <button onclick="openEditAccount(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
-                                            <button onclick="toggleLock(this)" class="text-[9px] font-bold uppercase text-emerald-700 hover:underline">Lock</button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr class="hover:bg-blue-50 transition data-row">
-                                    <td class="font-mono font-black text-slate-900 border-r border-slate-100">3001</td>
-                                    <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">Retained Earnings</td>
-                                    <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-purple-50 text-purple-700 border-purple-200">Equity</span>
-                                    </td>
-                                    <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-slate-100 text-slate-500 border-slate-300">🔒 Locked</span>
-                                    </td>
-                                    <td class="text-center no-print">
-                                        <div class="flex items-center justify-center gap-2">
-                                            <button onclick="openEditAccount(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
-                                            <button onclick="toggleLock(this)" class="text-[9px] font-bold uppercase text-slate-400 hover:underline">Unlock</button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr class="hover:bg-blue-50 transition data-row">
-                                    <td class="font-mono font-black text-slate-900 border-r border-slate-100">4001</td>
-                                    <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">Service Revenue</td>
-                                    <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">Revenue</span>
-                                    </td>
-                                    <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">Editable</span>
-                                    </td>
-                                    <td class="text-center no-print">
-                                        <div class="flex items-center justify-center gap-2">
-                                            <button onclick="openEditAccount(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
-                                            <button onclick="toggleLock(this)" class="text-[9px] font-bold uppercase text-emerald-700 hover:underline">Lock</button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr class="hover:bg-blue-50 transition data-row">
-                                    <td class="font-mono font-black text-slate-900 border-r border-slate-100">5001</td>
-                                    <td class="font-bold text-slate-800 border-r border-slate-100 uppercase">Salaries and Wages</td>
-                                    <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-rose-50 text-rose-700 border-rose-200">Expense</span>
-                                    </td>
-                                    <td class="text-center border-r border-slate-100">
-                                        <span class="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">Editable</span>
-                                    </td>
-                                    <td class="text-center no-print">
-                                        <div class="flex items-center justify-center gap-2">
-                                            <button onclick="openEditAccount(this)" class="text-[9px] font-bold uppercase text-blue-700 hover:underline">Edit</button>
-                                            <button onclick="toggleLock(this)" class="text-[9px] font-bold uppercase text-emerald-700 hover:underline">Lock</button>
-                                        </div>
-                                    </td>
-                                </tr>
+                                {% endfor %}
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>
