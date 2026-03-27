@@ -684,6 +684,7 @@
                     }
                 } else {
                     const groupedDocsMap = new Map();
+                    const globalSeenUrls = new Set();
 
                     const labelMap = {
                         brgy: 'Barangay Certificate',
@@ -700,14 +701,48 @@
                         validId: 'Any Valid ID'
                     };
 
+                    const aliasMap = {
+                        blueprintprimary: 'blueprint',
+                        landprimary: 'land',
+                        cropprimary: 'crop',
+                        validid: 'validId',
+                        valid_id: 'validId',
+                        productpicture: 'productPicture'
+                    };
+
+                    const normalizeGroupKey = (rawKey, rawLabel) => {
+                        const keyText = String(rawKey || '').trim().toLowerCase();
+                        const labelText = String(rawLabel || '').trim().toLowerCase();
+                        const combined = `${keyText} ${labelText}`;
+
+                        if (combined.includes('blueprint')) return 'blueprint';
+                        if (combined.includes('land')) return 'land';
+                        if (combined.includes('crop')) return 'crop';
+                        if (combined.includes('barangay')) return 'brgy';
+                        if (combined.includes('title') || combined.includes('tax declaration')) return 'title';
+                        if (combined.includes('tax receipt') || combined === 'tax') return 'tax';
+                        if (combined.includes('business plan') || combined === 'plan') return 'plan';
+                        if (combined.includes('product')) return 'productPicture';
+                        if (combined.includes('valid id') || combined === 'id') return 'validId';
+
+                        const compact = keyText.replace(/\s+/g, '');
+                        return aliasMap[compact] || rawKey || rawLabel || 'document';
+                    };
+
                     const addGroupedDocument = (groupKey, label, url, fileName) => {
                         if (!url || typeof url !== 'string' || !url.trim()) return;
 
-                        const safeGroupKey = groupKey || label || 'document';
+                        const normalizedUrl = url.trim();
+                        if (globalSeenUrls.has(normalizedUrl)) return;
+                        globalSeenUrls.add(normalizedUrl);
+
+                        const safeGroupKey = normalizeGroupKey(groupKey, label);
+                        const normalizedLabel = labelMap[safeGroupKey] || label || 'Document';
+
                         if (!groupedDocsMap.has(safeGroupKey)) {
                             groupedDocsMap.set(safeGroupKey, {
                                 key: safeGroupKey,
-                                name: label || 'Document',
+                                name: normalizedLabel,
                                 files: []
                             });
                         }
@@ -717,7 +752,7 @@
                         if (alreadyExists) return;
 
                         targetGroup.files.push({
-                            url,
+                            url: normalizedUrl,
                             fileName: fileName || (url.split('/').pop() || 'file')
                         });
                     };
@@ -743,10 +778,10 @@
 
                     // 2) Legacy format: documents array
                     if (Array.isArray(applicationData.documents)) {
-                        applicationData.documents.forEach((docItem, docIndex) => {
+                        applicationData.documents.forEach((docItem) => {
                             if (docItem && docItem.url) {
                                 const groupLabel = docItem.name || 'Document';
-                                addGroupedDocument(`legacy-document-${docIndex}-${groupLabel}`, groupLabel, docItem.url, docItem.fileName || (docItem.url.split('/').pop() || 'file'));
+                                addGroupedDocument(groupLabel, groupLabel, docItem.url, docItem.fileName || (docItem.url.split('/').pop() || 'file'));
                             }
                         });
                     }
