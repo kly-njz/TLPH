@@ -663,7 +663,30 @@ def announcement_main():
 
 @bp.route('/news')
 def news_main():
-    return render_template('news.html')
+    news_items = []
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+        docs = db.collection('news_updates').stream()
+        for doc in docs:
+            item = doc.to_dict() or {}
+            if not bool(item.get('is_published', True)):
+                continue
+            title = str(item.get('title') or '').strip()
+            if not title:
+                continue
+            news_items.append({
+                'id': doc.id,
+                'title': title,
+                'summary': str(item.get('summary') or '').strip(),
+                'published_date': str(item.get('published_date') or '').strip(),
+                'image_url': str(item.get('image_url') or '').strip(),
+            })
+        news_items.sort(key=lambda row: row.get('published_date') or '', reverse=True)
+    except Exception as e:
+        print(f"[WARN] Could not load news page items from Firestore: {e}")
+
+    return render_template('news.html', news_items=news_items)
 
 @bp.route('/programs')
 def programs_main():
