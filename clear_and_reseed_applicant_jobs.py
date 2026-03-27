@@ -73,6 +73,25 @@ def _infer_denr_work_type(src: dict, fallback_index: int) -> str:
     return DENR_WORK_TYPES[fallback_index % len(DENR_WORK_TYPES)]
 
 
+def _normalize_denr_work_type(value: str, fallback_index: int) -> str:
+    txt = str(value or "").strip()
+    if txt in DENR_WORK_TYPES:
+        return txt
+
+    key = txt.lower()
+    legacy_map = {
+        "farming": "Watershed Rehabilitation Worker",
+        "livestock": "Coastal and Marine Ecosystem Aide",
+        "agribusiness": "Environmental Management Specialist",
+        "trade": "Community Environment Officer",
+        "infrastructure": "Protected Area Management Staff",
+    }
+    if key in legacy_map:
+        return legacy_map[key]
+
+    return DENR_WORK_TYPES[fallback_index % len(DENR_WORK_TYPES)]
+
+
 def main() -> None:
     if not firebase_admin._apps:
         cred = credentials.Certificate("firebase-credentials.json")
@@ -101,7 +120,7 @@ def main() -> None:
             or src.get("name")
             or src.get("userName")
         )
-        candidate_type = _infer_denr_work_type(src, idx)
+        candidate_type = _normalize_denr_work_type(_infer_denr_work_type(src, idx), idx)
         region_office = TARGET_REGION_OFFICE
         municipality = _safe_text(
             src.get("target_municipality")
