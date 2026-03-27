@@ -1,9 +1,69 @@
 from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify
 import uuid
 from datetime import datetime
+import os
+import time
+import hashlib
+import requests
 from firebase_auth_middleware import role_required, firebase_auth_required
 
 bp = Blueprint('main', __name__)
+
+
+def _cloudinary_enabled() -> bool:
+    return all([
+        os.environ.get('CLOUDINARY_CLOUD_NAME'),
+        os.environ.get('CLOUDINARY_API_KEY'),
+        os.environ.get('CLOUDINARY_API_SECRET')
+    ])
+
+
+def _cloudinary_signature(params: dict, api_secret: str) -> str:
+    filtered = {k: v for k, v in params.items() if v is not None and v != ''}
+    base = '&'.join([f"{k}={filtered[k]}" for k in sorted(filtered.keys())])
+    return hashlib.sha1(f"{base}{api_secret}".encode('utf-8')).hexdigest()
+
+
+def _upload_to_cloudinary(file_obj, folder: str):
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '').strip()
+    api_key = os.environ.get('CLOUDINARY_API_KEY', '').strip()
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET', '').strip()
+
+    if not cloud_name or not api_key or not api_secret:
+        return None
+
+    timestamp = int(time.time())
+    params_to_sign = {
+        'folder': folder,
+        'timestamp': timestamp,
+    }
+    signature = _cloudinary_signature(params_to_sign, api_secret)
+
+    endpoint = f"https://api.cloudinary.com/v1_1/{cloud_name}/auto/upload"
+    try:
+        file_obj.stream.seek(0)
+    except Exception:
+        pass
+
+    resp = requests.post(
+        endpoint,
+        data={
+            'api_key': api_key,
+            'timestamp': timestamp,
+            'folder': folder,
+            'signature': signature,
+        },
+        files={
+            'file': (file_obj.filename, file_obj.stream, file_obj.mimetype or 'application/octet-stream')
+        },
+        timeout=60,
+    )
+
+    if not resp.ok:
+        raise RuntimeError(f"Cloudinary upload failed: {resp.status_code} {resp.text[:300]}")
+
+    payload = resp.json() or {}
+    return payload.get('secure_url') or payload.get('url')
 
 @bp.route('/')
 def index():
@@ -159,9 +219,9 @@ def apply_for_hiring_position():
     expected_salary = str(data.get('expected_salary') or '').strip()
     available_start_date = str(data.get('available_start_date') or '').strip()
     preferred_work_type = str(data.get('preferred_work_type') or '').strip()
-    resume_link = str(data.get('resume_link') or '').strip()
     cover_letter = str(data.get('cover_letter') or '').strip()
     notes = str(data.get('notes') or '').strip()
+    resume_url = str(data.get('resume_url') or '').strip()
 
     if not hiring_id:
         return jsonify({'success': False, 'error': 'Missing hiring position reference'}), 400
@@ -171,6 +231,8 @@ def apply_for_hiring_position():
         return jsonify({'success': False, 'error': 'Email is required'}), 400
     if not phone:
         return jsonify({'success': False, 'error': 'Phone is required'}), 400
+    if not resume_url:
+        return jsonify({'success': False, 'error': 'Resume upload is required'}), 400
 
     try:
         hiring_doc = db.collection('hiring_positions').document(hiring_id).get()
@@ -225,7 +287,8 @@ def apply_for_hiring_position():
             'expected_salary': expected_salary or 'N/A',
             'available_start_date': available_start_date or 'N/A',
             'preferred_work_type': preferred_work_type or 'N/A',
-            'resume_link': resume_link or 'N/A',
+            'resume_link': resume_url,
+            'resume_url': resume_url,
             'cover_letter': cover_letter or 'N/A',
             'notes': notes or 'N/A',
             'candidate_type': position or 'Environmental Management Specialist',
@@ -261,6 +324,37 @@ def apply_for_hiring_position():
     except Exception as e:
         print(f"[ERROR] apply_for_hiring_position failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to submit application'}), 500
+
+
+@bp.route('/api/hiring/upload-resume', methods=['POST'])
+def upload_hiring_resume():
+    """Upload applicant resume (PDF/DOC/DOCX) to Cloudinary."""
+    if not _cloudinary_enabled():
+        return jsonify({'success': False, 'error': 'Resume upload service is not configured'}), 500
+
+    file_obj = request.files.get('resume')
+    if not file_obj or not getattr(file_obj, 'filename', ''):
+        return jsonify({'success': False, 'error': 'Resume file is required'}), 400
+
+    filename = str(file_obj.filename or '').strip()
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    allowed_ext = {'pdf', 'doc', 'docx'}
+    if ext not in allowed_ext:
+        return jsonify({'success': False, 'error': 'Only PDF, DOC, and DOCX files are allowed'}), 400
+
+    content_length = request.content_length or 0
+    max_size = 8 * 1024 * 1024  # 8 MB
+    if content_length > max_size:
+        return jsonify({'success': False, 'error': 'Resume file is too large (max 8MB)'}), 400
+
+    try:
+        uploaded_url = _upload_to_cloudinary(file_obj, 'tlph/applications/resumes')
+        if not uploaded_url:
+            return jsonify({'success': False, 'error': 'Failed to upload resume'}), 500
+        return jsonify({'success': True, 'resume_url': uploaded_url}), 200
+    except Exception as e:
+        print(f"[ERROR] upload_hiring_resume failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to upload resume'}), 500
 
 @bp.route('/login')
 def login():
