@@ -170,9 +170,14 @@
         <div class="relative w-full max-w-5xl bg-white rounded-xl shadow-2xl overflow-hidden">
             <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
                 <h3 id="attachmentPreviewTitle" class="text-[11px] font-black uppercase tracking-wider text-slate-700 m-0">Attachment Preview</h3>
-                <button type="button" id="attachmentPreviewCloseBtn" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-800">
-                    &times;
-                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="attachmentPreviewBackBtn" class="hidden inline-flex items-center gap-1 text-[9px] font-black uppercase bg-white border border-slate-300 text-slate-700 px-2 py-1 rounded hover:bg-slate-100">
+                        <i class="fa-solid fa-arrow-left"></i> Back
+                    </button>
+                    <button type="button" id="attachmentPreviewCloseBtn" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-800">
+                        &times;
+                    </button>
+                </div>
             </div>
 
             <div id="attachmentPreviewBody" class="p-3 bg-slate-100 max-h-[78vh] overflow-auto flex items-center justify-center">
@@ -276,6 +281,7 @@
             const fallback = document.getElementById('attachmentPreviewFallback');
             const openLink = document.getElementById('attachmentPreviewOpenLink');
             const downloadLink = document.getElementById('attachmentPreviewDownloadLink');
+            const backBtn = document.getElementById('attachmentPreviewBackBtn');
 
             title.textContent = label || 'Attachment Preview';
             image.classList.add('hidden');
@@ -283,6 +289,7 @@
             gallery.classList.add('hidden');
             gallery.innerHTML = '';
             fallback.classList.add('hidden');
+            backBtn.classList.add('hidden');
             image.src = '';
             frame.src = '';
             image.onerror = null;
@@ -313,11 +320,14 @@
             const image = document.getElementById('attachmentPreviewImage');
             const frame = document.getElementById('attachmentPreviewFrame');
             const gallery = document.getElementById('attachmentPreviewGallery');
+            const backBtn = document.getElementById('attachmentPreviewBackBtn');
 
             image.src = '';
             frame.src = '';
             gallery.innerHTML = '';
             gallery.classList.add('hidden');
+            backBtn.classList.add('hidden');
+            window.__attachmentGroupState = null;
             modal.classList.add('hidden');
             modal.classList.remove('flex');
         }
@@ -341,12 +351,19 @@
             const fallback = document.getElementById('attachmentPreviewFallback');
             const openLink = document.getElementById('attachmentPreviewOpenLink');
             const downloadLink = document.getElementById('attachmentPreviewDownloadLink');
+            const backBtn = document.getElementById('attachmentPreviewBackBtn');
 
             title.textContent = `${label || 'Attachments'} (${safeUrls.length})`;
             image.classList.add('hidden');
             frame.classList.add('hidden');
             fallback.classList.add('hidden');
             gallery.classList.remove('hidden');
+            backBtn.classList.add('hidden');
+
+            window.__attachmentGroupState = {
+                urls: safeUrls,
+                label: label || 'Attachments'
+            };
 
             openLink.href = safeUrls[0];
             downloadLink.href = safeUrls[0];
@@ -354,8 +371,21 @@
             gallery.innerHTML = `
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     ${safeUrls.map((u, idx) => {
+                        const encodedUrl = encodeURIComponent(u);
+                        const encodedItemLabel = encodeURIComponent(`${label || 'Attachment'} ${idx + 1}`);
                         if (isImageFile(u)) {
-                            return `<div class="bg-white border border-slate-200 rounded p-1"><img src="${escapeAttr(u)}" alt="Attachment ${idx + 1}" class="w-full h-44 object-cover rounded"/></div>`;
+                            return `
+                                <div class="bg-white border border-slate-200 rounded p-1">
+                                    <button type="button" onclick="openApplicationAttachmentPreviewFromEncoded('${encodedUrl}','${encodedItemLabel}')" class="w-full p-0 border-0 bg-transparent cursor-zoom-in" title="View this photo">
+                                        <img src="${escapeAttr(u)}" alt="Attachment ${idx + 1}" class="w-full h-44 object-cover rounded"/>
+                                    </button>
+                                    <div class="mt-1 flex justify-end">
+                                        <button type="button" onclick="openApplicationAttachmentPreviewFromEncoded('${encodedUrl}','${encodedItemLabel}')" class="inline-flex items-center gap-1 text-[8px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded">
+                                            <i class="fa-solid fa-eye"></i> View Solo
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
                         }
                         return `<div class="bg-white border border-slate-200 rounded p-2 flex items-center justify-between gap-2"><span class="text-[10px] font-semibold text-slate-700">Attachment ${idx + 1}</span><a href="${escapeAttr(u)}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-black uppercase bg-emerald-600 text-white px-2 py-1 rounded no-underline">Open</a></div>`;
                     }).join('')}
@@ -371,6 +401,10 @@
                 const url = decodeURIComponent(encodedUrl || '');
                 const label = decodeURIComponent(encodedLabel || 'Attachment Preview');
                 showAttachmentPreview(url, label);
+                const backBtn = document.getElementById('attachmentPreviewBackBtn');
+                if (window.__attachmentGroupState && Array.isArray(window.__attachmentGroupState.urls) && window.__attachmentGroupState.urls.length > 1) {
+                    backBtn.classList.remove('hidden');
+                }
             } catch (err) {
                 console.error('Failed to open attachment preview:', err);
             }
@@ -388,6 +422,12 @@
         };
 
         window.closeApplicationAttachmentPreview = closeAttachmentPreview;
+
+        document.getElementById('attachmentPreviewBackBtn').addEventListener('click', function() {
+            if (window.__attachmentGroupState && Array.isArray(window.__attachmentGroupState.urls) && window.__attachmentGroupState.urls.length > 1) {
+                showAttachmentPreviewGroup(window.__attachmentGroupState.urls, window.__attachmentGroupState.label || 'Attachments');
+            }
+        });
 
         document.getElementById('attachmentPreviewCloseBtn').addEventListener('click', closeAttachmentPreview);
         document.getElementById('attachmentPreviewModal').addEventListener('click', function(e) {
@@ -812,11 +852,10 @@
                             .map(({ key, label, files }) => {
                                 return `
                                     <div class="p-2 bg-white border border-gray-200 rounded-lg hover:border-emerald-500 transition-all">
-                                        <div class="flex items-center gap-2 mb-2 min-w-0">
+                                        <div class="flex items-center justify-between gap-2 min-w-0">
+                                            <div class="flex items-center gap-2 min-w-0">
                                             <span class="material-icons-round text-slate-400 text-sm">${docIcons[key] || 'description'}</span>
                                             <span class="text-[8px] font-black text-slate-600 uppercase truncate">${escapeHtml(label)} ${files.length > 1 ? `(${files.length})` : ''}</span>
-                                        </div>
-                                        <div class="flex">
                                             ${(() => {
                                                 const encodedUrls = encodeURIComponent(JSON.stringify(files.map(f => f.url)));
                                                 const encodedLabel = encodeURIComponent(label);
@@ -828,6 +867,7 @@
                                                     </button>
                                                 `;
                                             })()}
+                                            </div>
                                         </div>
                                     </div>`;
                             }).join('');
