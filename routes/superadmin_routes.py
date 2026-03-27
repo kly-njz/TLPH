@@ -3,6 +3,7 @@ from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
 from datetime import datetime
 from collections import defaultdict
+import coa_storage
 
 bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
 
@@ -522,6 +523,7 @@ def accounting_entities():
 @role_required('super-admin','superadmin')
 def accounting_coa_templates():
     db = get_firestore_db()
+    selected_template_id = (request.args.get('template_id') or '').strip()
     # Fetch all templates
     templates = []
     accounts = []
@@ -539,23 +541,75 @@ def accounting_coa_templates():
             stats['total_accounts'] += template.get('account_count', 0)
             stats['total_locked'] += template.get('locked_count', 0)
         stats['total_templates'] = len(templates)
+
+        if templates and not selected_template_id:
+            selected_template_id = templates[0].get('id', '')
+
         # Fetch all accounts for all templates
-        if templates:
-            template_ids = [t['id'] for t in templates]
-            for template_id in template_ids:
-                template_accounts = db.collection('coa_accounts').where('template_id', '==', template_id).limit(1000).stream()
-                for acc_doc in template_accounts:
-                    acc = acc_doc.to_dict() or {}
-                    acc['id'] = acc_doc.id
-                    accounts.append(acc)
+        if selected_template_id:
+            template_accounts = db.collection('coa_accounts').where('template_id', '==', selected_template_id).limit(1000).stream()
+            for acc_doc in template_accounts:
+                acc = acc_doc.to_dict() or {}
+                acc['id'] = acc_doc.id
+                accounts.append(acc)
     except Exception as e:
         print(f"[ERROR] Failed to fetch COA templates/accounts: {e}")
     return render_template(
         'super-admin/accounting/coa-templates.html',
         templates=templates,
         accounts=accounts,
-        stats=stats
+        stats=stats,
+        selected_template_id=selected_template_id
     )
+
+
+@bp.route('/api/accounting/coa/accounts/<template_id>', methods=['GET'])
+@role_required('super-admin','superadmin')
+def api_get_superadmin_coa_accounts(template_id):
+    """Return all COA accounts under the selected template."""
+    try:
+        template = coa_storage.get_coa_template(template_id)
+        if not template:
+            return jsonify({'success': False, 'error': 'Template not found'}), 404
+
+        accounts = coa_storage.list_coa_accounts(template_id)
+        return jsonify({'success': True, 'accounts': accounts, 'count': len(accounts)}), 200
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch COA accounts: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/accounting/coa/accounts/<template_id>', methods=['POST'])
+@role_required('super-admin','superadmin')
+def api_add_superadmin_coa_account(template_id):
+    """Create a COA account under a template for super-admin."""
+    try:
+        payload = request.get_json() or {}
+        code = str(payload.get('code', '')).strip()
+        name = str(payload.get('name', '')).strip()
+        account_type = str(payload.get('account_type', '')).strip().lower()
+        locked = bool(payload.get('locked', False))
+        description = str(payload.get('description', '')).strip()
+
+        if not code or not name or not account_type:
+            return jsonify({'success': False, 'error': 'code, name, and account_type are required'}), 400
+
+        template = coa_storage.get_coa_template(template_id)
+        if not template:
+            return jsonify({'success': False, 'error': 'Template not found'}), 404
+
+        account = coa_storage.add_coa_account(
+            template_id=template_id,
+            code=code,
+            name=name,
+            account_type=account_type,
+            locked=locked,
+            description=description,
+        )
+        return jsonify({'success': True, 'account': account}), 201
+    except Exception as e:
+        print(f"[ERROR] Failed to add COA account: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @bp.route('/accounting/expense-categories')
 def accounting_expense_categories():

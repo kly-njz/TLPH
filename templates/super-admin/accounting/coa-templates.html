@@ -58,7 +58,7 @@
         }
     </style>
 </head>
-<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50">
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-50" data-selected-template-id="{{ selected_template_id or '' }}">
 
     <div class="gov-strip no-print"></div>
 
@@ -113,7 +113,7 @@
                         
                         {% for t in templates %}
                         <div onclick="selectTemplate('{{ t.id }}')" 
-                             class="border rounded-[2px] p-2 cursor-pointer hover:bg-emerald-50 transition border-l-4 shadow-sm {{ 'border-emerald-300 bg-emerald-50 border-l-emerald-600' if t.status == 'active' else 'border-slate-200 bg-white border-l-slate-400' }}" 
+                                class="border rounded-[2px] p-2 cursor-pointer hover:bg-emerald-50 transition border-l-4 shadow-sm {{ 'border-emerald-300 bg-emerald-50 border-l-emerald-600' if t.id == selected_template_id else 'border-slate-200 bg-white border-l-slate-400' }}" 
                              data-template-id="{{ t.id }}" 
                              data-template-name="{{ t.name }}">
                             <div class="flex items-center justify-between mb-1">
@@ -155,14 +155,13 @@
                                 </tr>
                             </thead>
                             <tbody id="accountsTableBody" class="text-[10px] divide-y divide-slate-100">
-                                {% set selected_template_id = templates[0].id if templates|length > 0 else None %}
+                                {% set selected_template_id = selected_template_id if selected_template_id else (templates[0].id if templates|length > 0 else None) %}
                                 {% set filtered_accounts = accounts|selectattr('template_id', 'equalto', selected_template_id)|list if selected_template_id else [] %}
                                 
                                 {% if filtered_accounts|length == 0 %}
                                 <tr>
                                     <td colspan="5" class="text-center py-12 text-slate-400 font-bold uppercase bg-slate-50/50">
-                                        
-                                        SELECT AN TEMPLATE TO ADD ACCOUNT
+                                        SELECT A TEMPLATE TO VIEW OR ADD ACCOUNTS
                                     </td>
                                 </tr>
                                 {% else %}
@@ -386,24 +385,15 @@
     </div>
 
     <script>
-        // Ensure |safe is applied so JSON stringifies correctly
-        const templates = {{ templates|tojson | safe }};
-        const accounts = {{ accounts|tojson | safe }};
+        let selectedTemplateId = '';
 
         let currentEditRow = null;
 
         function selectTemplate(id) {
-            console.log('Selected template:', id);
-            const selected = document.querySelector(`[data-template-id="${id}"]`);
-            const name = selected?.getAttribute('data-template-name') || '';
-            const headerName = document.getElementById('selectedTemplateName');
-            if (headerName && name) {
-                headerName.textContent = name;
-            }
-            
-            // To make this fully functional without a page reload, 
-            // you would put logic here to empty the table body and re-populate it 
-            // using the `accounts` JavaScript array filter, similar to the renderAccountsTable() logic you had previously.
+            if (!id) return;
+            selectedTemplateId = id;
+            const nextUrl = `/superadmin/accounting/coa-templates?template_id=${encodeURIComponent(id)}`;
+            window.location.href = nextUrl;
         }
 
         function openAddCOA() { document.getElementById('createTemplateModal').classList.add('active'); }
@@ -414,12 +404,54 @@
             closeAddCOA();
         }
 
-        function openAddAccount() { document.getElementById('addAccountModal').classList.add('active'); }
+        function openAddAccount() {
+            if (!selectedTemplateId) {
+                alert('Select a template first.');
+                return;
+            }
+            document.getElementById('addAccountModal').classList.add('active');
+        }
         function closeAddAccount() { document.getElementById('addAccountModal').classList.remove('active'); }
 
-        function saveAccount() {
-            // Placeholder logic
-            closeAddAccount();
+        async function saveAccount() {
+            if (!selectedTemplateId) {
+                alert('Select a template first.');
+                return;
+            }
+
+            const code = (document.getElementById('accountCode').value || '').trim();
+            const name = (document.getElementById('accountName').value || '').trim();
+            const accountType = (document.getElementById('accountType').value || '').trim().toLowerCase();
+            const locked = !!document.getElementById('accountLocked').checked;
+
+            if (!code || !name || !accountType) {
+                alert('Please fill in code, name, and type.');
+                return;
+            }
+
+            try {
+                const resp = await fetch(`/superadmin/api/accounting/coa/accounts/${encodeURIComponent(selectedTemplateId)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        code,
+                        name,
+                        account_type: accountType,
+                        locked
+                    })
+                });
+
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to add account');
+                }
+
+                closeAddAccount();
+                window.location.reload();
+            } catch (err) {
+                console.error('Error adding account:', err);
+                alert(err.message || 'Failed to add account');
+            }
         }
 
         function openEditAccount(button) {
@@ -474,6 +506,8 @@
 
         // Setup Event Listeners
         document.addEventListener('DOMContentLoaded', () => {
+            selectedTemplateId = document.body?.dataset?.selectedTemplateId || '';
+
             document.getElementById('pushTarget').addEventListener('change', function() {
                 document.getElementById('specificEntityField').classList.toggle('hidden', this.value === 'all');
             });
