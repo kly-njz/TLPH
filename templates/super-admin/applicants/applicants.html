@@ -220,6 +220,22 @@
                         <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Region Office *</label>
                         <input type="text" id="newRegion" placeholder="MIMAROPA" class="gov-input w-full h-8 uppercase" required>
                     </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Scope Type *</label>
+                            <select id="newScopeType" title="Choose where this applicant should be visible" class="gov-input w-full h-8 cursor-pointer uppercase" required>
+                                <option value="region">Region</option>
+                                <option value="municipality">Municipality</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Scope Target *</label>
+                            <input type="text" id="newScope" placeholder="MIMAROPA" class="gov-input w-full h-8 uppercase" required>
+                        </div>
+                    </div>
+                    <p id="newScopeHint" class="text-[8px] font-bold uppercase tracking-wide text-slate-500 -mt-1">
+                        Region scope shows in regional views for this region.
+                    </p>
                     <div>
                         <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
                         <select id="newStatus" title="Set initial status" class="gov-input w-full h-8 cursor-pointer uppercase" required>
@@ -435,12 +451,21 @@
         });
 
         async function createApplicant() {
+            const scopeType = document.getElementById('newScopeType').value;
+            const scopeValue = document.getElementById('newScope').value.trim();
             const payload = {
                 full_name: document.getElementById('newName').value.trim(),
                 candidate_type: document.getElementById('newType').value.trim(),
                 region_office: document.getElementById('newRegion').value.trim(),
+                scope_type: scopeType,
+                scope: scopeValue,
                 status: document.getElementById('newStatus').value,
             };
+
+            if (!scopeValue) {
+                alert('Scope target is required.');
+                return;
+            }
 
             try {
                 const res = await fetch('/superadmin/api/applicants', {
@@ -466,10 +491,42 @@
 
         window.onload = async () => {
             await loadApplicants();
+            bindScopeControls();
             const chartFont = { size: 9, weight: 'bold' };
             new Chart(document.getElementById('hiringChart').getContext('2d'), { type:'line', data:trendData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{display:false}, x:{grid:{display:false}, ticks:{font:chartFont}}}} });
             new Chart(document.getElementById('typeChart').getContext('2d'), { type:'doughnut', data:typeDist, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right', labels:{boxWidth:10, font:chartFont}}}, cutout:'75%'} });
         };
+
+        function bindScopeControls() {
+            const scopeTypeEl = document.getElementById('newScopeType');
+            const scopeEl = document.getElementById('newScope');
+            const regionEl = document.getElementById('newRegion');
+            const hintEl = document.getElementById('newScopeHint');
+
+            if (!scopeTypeEl || !scopeEl || !regionEl || !hintEl) return;
+
+            const updateScopeUi = () => {
+                const type = scopeTypeEl.value;
+                if (type === 'region') {
+                    scopeEl.placeholder = 'MIMAROPA';
+                    if (!scopeEl.value.trim() && regionEl.value.trim()) {
+                        scopeEl.value = regionEl.value.trim();
+                    }
+                    hintEl.textContent = 'Region scope shows in regional views for this region.';
+                } else {
+                    scopeEl.placeholder = 'NAUJAN';
+                    hintEl.textContent = 'Municipality scope shows in municipal views for this municipality.';
+                }
+            };
+
+            scopeTypeEl.addEventListener('change', updateScopeUi);
+            regionEl.addEventListener('input', () => {
+                if (scopeTypeEl.value === 'region' && !scopeEl.value.trim()) {
+                    scopeEl.value = regionEl.value.trim();
+                }
+            });
+            updateScopeUi();
+        }
 
         function openChartModal(type) {
             const m = document.getElementById('chartModal');
