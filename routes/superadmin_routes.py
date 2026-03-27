@@ -595,10 +595,18 @@ def superadmin_create_applicant():
         full_name = str(payload.get('full_name') or '').strip()
         candidate_type = str(payload.get('candidate_type') or '').strip()
         region_office = str(payload.get('region_office') or '').strip()
+        scope_type = str(payload.get('scope_type') or 'region').strip().lower()
+        requested_scope = str(payload.get('scope') or '').strip()
         status = _normalize_superadmin_applicant_status(payload.get('status'))
 
         if not full_name or not candidate_type or not region_office:
             return jsonify({'success': False, 'error': 'full_name, candidate_type, and region_office are required'}), 400
+        if scope_type not in {'region', 'municipality'}:
+            return jsonify({'success': False, 'error': 'scope_type must be region or municipality'}), 400
+
+        scope = requested_scope or (region_office if scope_type == 'region' else '')
+        if not scope:
+            return jsonify({'success': False, 'error': 'scope is required for municipality scope'}), 400
 
         db = get_firestore_db()
         doc_ref = db.collection('municipal_denr_applicant_jobs').document()
@@ -612,9 +620,9 @@ def superadmin_create_applicant():
             'region': region_office,
             'status': status,
             'employeeStatus': status,
-            'scope_type': 'region',
-            'scope': region_office,
-            'scope_key': region_office.strip().lower(),
+            'scope_type': scope_type,
+            'scope': scope,
+            'scope_key': scope.strip().lower(),
             'reference_id': f'SUP-{doc_ref.id[:8].upper()}',
             'created_at': firestore.SERVER_TIMESTAMP,
             'updated_at': firestore.SERVER_TIMESTAMP,
@@ -622,6 +630,12 @@ def superadmin_create_applicant():
             'updated_by': actor,
             'created_by_role': 'super_admin',
         }
+
+        if scope_type == 'municipality':
+            data.update({
+                'municipality': scope,
+                'municipality_key': scope,
+            })
 
         if status == 'accepted':
             data.update({
