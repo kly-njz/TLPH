@@ -76,6 +76,11 @@
             main { margin-left: 0 !important; padding-top: 0 !important; position: static !important; overflow: visible !important; } 
             .gov-card { box-shadow: none !important; border: 1px solid #000 !important; break-inside: avoid; }
         }
+
+        .attachment-gallery-grid { display: grid; gap: 10px; }
+        .attachment-gallery-item { background: #fff; border: 1px solid #cbd5e1; padding: 8px; cursor: zoom-in; }
+        .attachment-gallery-thumb { width: 100%; height: 230px; object-fit: cover; border: 1px solid #e2e8f0; background: #f8fafc; }
+        .attachment-single-image { width: min(1220px, 96vw); max-height: 82vh; object-fit: contain; border: 1px solid #cbd5e1; background: #fff; display: block; margin: 0 auto; }
     </style>
 </head>
 
@@ -294,9 +299,12 @@
         <div class="absolute inset-0 cursor-pointer" onclick="closeApplicationAttachmentPreview(event)"></div>
         <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-5xl overflow-hidden relative z-10 flex flex-col max-h-[88vh]">
             <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
-                <h3 id="applicationAttachmentPreviewTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
-                    <i class="fa-solid fa-file text-slate-400"></i> Attachment Preview
-                </h3>
+                <div class="flex items-center gap-2 min-w-0">
+                    <button id="applicationAttachmentPreviewBack" onclick="backToAttachmentGallery()" class="gov-btn border border-white/50 bg-transparent text-white hover:bg-white/10 px-2 py-0 text-[8px]" style="display:none;">Back</button>
+                    <h3 id="applicationAttachmentPreviewTitle" class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                        <i class="fa-solid fa-file text-slate-400"></i> Attachment Preview
+                    </h3>
+                </div>
                 <button onclick="closeApplicationAttachmentPreview()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
                     <span class="material-icons-round text-sm">close</span>
                 </button>
@@ -327,6 +335,13 @@
 
         let ALL_DATA = [];
         let myTrendChart, myRegionalChart, myCategoryChart, modalChartInstance = null;
+        let CURRENT_ATTACHMENT_GROUPS = [];
+        let attachmentPreviewState = {
+            mode: 'single',
+            groupLabel: '',
+            files: [],
+            selectedIndex: -1
+        };
 
         function toDateTimestamp(value) {
             const raw = String(value || '').trim();
@@ -602,42 +617,114 @@
             return `/${raw}`;
         }
 
-        function _collectAttachments(raw) {
-            const files = [];
-            const addFile = (label, url) => {
-                const normalized = _normalizeAttachmentUrl(url);
-                if (!normalized) return;
-                files.push({ label: label || 'Attachment', url: normalized });
+        function _collectAttachmentGroups(raw) {
+            const grouped = new Map();
+            const seenUrl = new Set();
+
+            const labelMap = {
+                brgy: 'Barangay Certificate',
+                title: 'Title / Tax Declaration',
+                tax: 'Tax Receipt',
+                blueprint: 'Blueprint',
+                blueprintPrimary: 'Blueprint',
+                land: 'Land Photo',
+                landPrimary: 'Land Photo',
+                crop: 'Crop Photo',
+                cropPrimary: 'Crop Photo',
+                plan: 'Business Plan',
+                productPicture: 'Picture of Product',
+                validId: 'Any Valid ID',
+                image: 'Resource Photo',
+                permit: 'Permit File'
+            };
+
+            const aliasMap = {
+                blueprintprimary: 'blueprint',
+                landprimary: 'land',
+                cropprimary: 'crop',
+                validid: 'validId',
+                valid_id: 'validId',
+                productpicture: 'productPicture'
+            };
+
+            const normalizeKey = (rawKey, rawLabel) => {
+                const keyText = String(rawKey || '').trim().toLowerCase();
+                const labelText = String(rawLabel || '').trim().toLowerCase();
+                const combined = `${keyText} ${labelText}`;
+
+                if (combined.includes('blueprint')) return 'blueprint';
+                if (combined.includes('land')) return 'land';
+                if (combined.includes('crop')) return 'crop';
+                if (combined.includes('barangay')) return 'brgy';
+                if (combined.includes('title') || combined.includes('tax declaration')) return 'title';
+                if (combined.includes('tax receipt') || combined === 'tax') return 'tax';
+                if (combined.includes('business plan') || combined === 'plan') return 'plan';
+                if (combined.includes('product')) return 'productPicture';
+                if (combined.includes('valid id') || combined === 'id') return 'validId';
+
+                const compact = keyText.replace(/\s+/g, '');
+                return aliasMap[compact] || rawKey || rawLabel || 'document';
+            };
+
+            const detectType = (url) => {
+                const lower = String(url || '').toLowerCase();
+                if (/\.(png|jpg|jpeg|gif|webp|bmp|svg|avif)(\?.*)?$/i.test(lower)) return 'image';
+                if (/\.pdf(\?.*)?$/i.test(lower)) return 'pdf';
+                return 'file';
+            };
+
+            const add = (groupKey, label, url) => {
+                const normalizedUrl = _normalizeAttachmentUrl(url);
+                if (!normalizedUrl || seenUrl.has(normalizedUrl)) return;
+                seenUrl.add(normalizedUrl);
+
+                const normalizedKey = normalizeKey(groupKey, label);
+                const normalizedLabel = labelMap[normalizedKey] || label || _titleCaseKey(normalizedKey);
+                if (!grouped.has(normalizedKey)) {
+                    grouped.set(normalizedKey, {
+                        key: normalizedKey,
+                        label: normalizedLabel,
+                        files: []
+                    });
+                }
+
+                grouped.get(normalizedKey).files.push({
+                    url: normalizedUrl,
+                    fileName: normalizedUrl.split('/').pop() || 'file',
+                    type: detectType(normalizedUrl)
+                });
             };
 
             const directFiles = raw?.files || {};
             Object.entries(directFiles).forEach(([key, value]) => {
                 const values = Array.isArray(value) ? value : [value];
-                values.forEach((v, idx) => addFile(values.length > 1 ? `${_titleCaseKey(key)} ${idx + 1}` : _titleCaseKey(key), v));
+                values.forEach((v) => add(key, labelMap[key] || _titleCaseKey(key), v));
             });
 
             const uploadedFiles = raw?.uploadedFiles || {};
             Object.entries(uploadedFiles).forEach(([key, value]) => {
                 const values = Array.isArray(value) ? value : [value];
-                values.forEach((entry, idx) => {
+                values.forEach((entry) => {
                     if (!entry) return;
                     if (typeof entry === 'string') {
-                        addFile(values.length > 1 ? `${_titleCaseKey(key)} ${idx + 1}` : _titleCaseKey(key), entry);
+                        add(key, labelMap[key] || _titleCaseKey(key), entry);
                         return;
                     }
-                    addFile(values.length > 1 ? `${_titleCaseKey(key)} ${idx + 1}` : _titleCaseKey(key), entry.downloadUrl || entry.url || entry.path || '');
+                    add(key, labelMap[key] || _titleCaseKey(key), entry.downloadUrl || entry.url || entry.path || '');
                 });
             });
 
-            addFile('Product Picture', raw?.imageUrl || '');
+            if (Array.isArray(raw?.documents)) {
+                raw.documents.forEach((entry) => {
+                    if (!entry || !entry.url) return;
+                    add(entry.name || 'document', entry.name || 'Document', entry.url);
+                });
+            }
 
-            const uniq = new Set();
-            return files.filter(f => {
-                const key = `${f.label}|${f.url}`;
-                if (uniq.has(key)) return false;
-                uniq.add(key);
-                return true;
-            });
+            add('image', 'Product Picture', raw?.imageUrl || '');
+            add('permit', 'Permit File', raw?.permitUrl || '');
+
+            return Array.from(grouped.values()).filter(g => g.files.length > 0);
         }
 
         function _renderFormDataCards(formData) {
@@ -660,10 +747,11 @@
             `;
         }
 
-        function openApplicationAttachmentPreview(url, label) {
+        function openApplicationAttachmentPreview(url, label, fromGroup = false) {
             const modal = document.getElementById('applicationAttachmentPreviewModal');
             const body = document.getElementById('applicationAttachmentPreviewBody');
             const title = document.getElementById('applicationAttachmentPreviewTitle');
+            const backBtn = document.getElementById('applicationAttachmentPreviewBack');
 
             const cleanUrl = _normalizeAttachmentUrl(url);
             if (!cleanUrl) return;
@@ -671,9 +759,12 @@
             const isImage = /\.(png|jpg|jpeg|gif|webp|bmp|svg|avif)(\?.*)?$/i.test(cleanUrl);
             const isPdf = /\.pdf(\?.*)?$/i.test(cleanUrl);
             title.innerHTML = `<i class="fa-solid fa-file text-slate-400"></i> ${_safeHtml(label || 'Attachment Preview')}`;
+            backBtn.style.display = fromGroup ? 'inline-flex' : 'none';
+
+            attachmentPreviewState.mode = 'single';
 
             if (isImage) {
-                body.innerHTML = `<img src="${cleanUrl}" alt="Attachment" class="block max-w-full max-h-[74vh] mx-auto border border-slate-300 bg-white" />`;
+                body.innerHTML = `<img src="${cleanUrl}" alt="Attachment" class="attachment-single-image" />`;
             } else if (isPdf) {
                 body.innerHTML = `<iframe src="${cleanUrl}#toolbar=0&navpanes=0&scrollbar=1" class="w-full h-[74vh] border border-slate-300 bg-white"></iframe>`;
             } else {
@@ -691,17 +782,85 @@
             modal.classList.add('flex');
         }
 
+        function openApplicationAttachmentGroupPreview(groupIndex) {
+            const group = CURRENT_ATTACHMENT_GROUPS[groupIndex];
+            if (!group || !group.files || !group.files.length) return;
+
+            if (group.files.length === 1) {
+                openApplicationAttachmentPreview(group.files[0].url, group.label || 'Attachment Preview', false);
+                return;
+            }
+
+            const modal = document.getElementById('applicationAttachmentPreviewModal');
+            const body = document.getElementById('applicationAttachmentPreviewBody');
+            const title = document.getElementById('applicationAttachmentPreviewTitle');
+            const backBtn = document.getElementById('applicationAttachmentPreviewBack');
+
+            attachmentPreviewState = {
+                mode: 'gallery',
+                groupLabel: group.label || 'Attachment',
+                files: group.files,
+                selectedIndex: -1
+            };
+
+            const colCount = Math.min(Math.max(group.files.length, 1), 3);
+            title.innerHTML = `<i class="fa-solid fa-images text-slate-400"></i> ${_safeHtml((group.label || 'Attachment') + ' (' + group.files.length + ')')}`;
+            backBtn.style.display = 'none';
+
+            body.innerHTML = `
+                <div class="attachment-gallery-grid" style="grid-template-columns: repeat(${colCount}, minmax(280px, 1fr));">
+                    ${group.files.map((file, index) => `
+                        <div class="attachment-gallery-item" onclick="openApplicationAttachmentFromGroup(${index})">
+                            ${file.type === 'image'
+                                ? `<img src="${_safeHtml(file.url)}" alt="${_safeHtml(group.label)} ${index + 1}" class="attachment-gallery-thumb" />`
+                                : `<div class="attachment-gallery-thumb flex items-center justify-center"><i class="fa-solid fa-file text-slate-400 text-xl"></i></div>`}
+                            <p class="text-[9px] font-black uppercase tracking-widest text-slate-600 m-0 mt-2">${_safeHtml(group.label)} ${index + 1}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function openApplicationAttachmentFromGroup(fileIndex) {
+            const files = attachmentPreviewState.files || [];
+            const file = files[fileIndex];
+            if (!file) return;
+            attachmentPreviewState.selectedIndex = fileIndex;
+            openApplicationAttachmentPreview(file.url, `${attachmentPreviewState.groupLabel || 'Attachment'} ${fileIndex + 1}`, true);
+        }
+
+        function backToAttachmentGallery() {
+            if (attachmentPreviewState.mode !== 'single' || !attachmentPreviewState.files.length) return;
+            const group = {
+                label: attachmentPreviewState.groupLabel,
+                files: attachmentPreviewState.files
+            };
+            const idx = CURRENT_ATTACHMENT_GROUPS.findIndex(g => g.label === group.label && (g.files?.length || 0) === (group.files?.length || 0));
+            if (idx >= 0) {
+                openApplicationAttachmentGroupPreview(idx);
+            }
+        }
+
         function closeApplicationAttachmentPreview(event) {
             if (event && event.target && event.target.id !== 'applicationAttachmentPreviewModal') return;
             const modal = document.getElementById('applicationAttachmentPreviewModal');
             const body = document.getElementById('applicationAttachmentPreviewBody');
+            const backBtn = document.getElementById('applicationAttachmentPreviewBack');
             modal.classList.remove('flex');
             modal.classList.add('hidden');
             body.innerHTML = '';
+            backBtn.style.display = 'none';
+            attachmentPreviewState = { mode: 'single', groupLabel: '', files: [], selectedIndex: -1 };
         }
 
         window.openApplicationAttachmentPreview = openApplicationAttachmentPreview;
         window.closeApplicationAttachmentPreview = closeApplicationAttachmentPreview;
+        window.openApplicationAttachmentGroupPreview = openApplicationAttachmentGroupPreview;
+        window.openApplicationAttachmentFromGroup = openApplicationAttachmentFromGroup;
+        window.backToAttachmentGallery = backToAttachmentGallery;
 
         async function openApplicationView(appId) {
             const modal = document.getElementById('applicationViewModal');
@@ -719,7 +878,8 @@
                 const statusOrigin = d.status_origin || {};
                 const formData = d.form_data || {};
                 const raw = d.raw || {};
-                const attachments = _collectAttachments(raw);
+                const attachmentGroups = _collectAttachmentGroups(raw);
+                CURRENT_ATTACHMENT_GROUPS = attachmentGroups;
                 const farmCoordinates = (raw.farmLatitude !== undefined && raw.farmLatitude !== null && raw.farmLatitude !== '' && raw.farmLongitude !== undefined && raw.farmLongitude !== null && raw.farmLongitude !== '')
                     ? `${raw.farmLatitude}, ${raw.farmLongitude}`
                     : '';
@@ -729,16 +889,16 @@
                        <div style="display:none" class="w-16 h-16 border border-slate-300 bg-slate-100 place-items-center text-slate-400"><span class="material-icons-round">account_circle</span></div>`
                     : `<div class="w-16 h-16 border border-slate-300 bg-slate-100 grid place-items-center text-slate-400"><span class="material-icons-round">account_circle</span></div>`;
 
-                const attachmentHtml = attachments.length
+                const attachmentHtml = attachmentGroups.length
                     ? `
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            ${attachments.map(file => `
+                            ${attachmentGroups.map((group, idx) => `
                                 <div class="bg-slate-50 border border-slate-200 p-2 flex items-center justify-between gap-2">
                                     <div class="min-w-0">
-                                        <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">${_safeHtml(file.label)}</p>
-                                        <p class="text-[10px] font-bold text-slate-700 truncate m-0 mt-0.5">${_safeHtml(file.url.split('/').pop() || file.url)}</p>
+                                        <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">${_safeHtml(group.label)}</p>
+                                        <p class="text-[10px] font-bold text-slate-700 truncate m-0 mt-0.5">${group.files.length} FILE${group.files.length > 1 ? 'S' : ''}</p>
                                     </div>
-                                    <button onclick="openApplicationAttachmentPreview('${_safeHtml(file.url)}', '${_safeHtml(file.label)}')" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 px-2 py-1 text-[8px]">
+                                    <button onclick="openApplicationAttachmentGroupPreview(${idx})" class="gov-btn bg-gov-blue text-white hover:bg-blue-900 px-2 py-1 text-[8px]">
                                         <i class="fa-solid fa-eye"></i> View
                                     </button>
                                 </div>
