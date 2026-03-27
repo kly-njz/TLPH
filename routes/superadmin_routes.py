@@ -595,6 +595,7 @@ def superadmin_create_applicant():
         full_name = str(payload.get('full_name') or '').strip()
         candidate_type = str(payload.get('candidate_type') or '').strip()
         region_office = str(payload.get('region_office') or '').strip()
+        status = _normalize_superadmin_applicant_status(payload.get('status'))
 
         if not full_name or not candidate_type or not region_office:
             return jsonify({'success': False, 'error': 'full_name, candidate_type, and region_office are required'}), 400
@@ -606,18 +607,28 @@ def superadmin_create_applicant():
         data = {
             'full_name': full_name,
             'candidate_type': candidate_type,
+            'category': candidate_type,
             'region_office': region_office,
-            'status': 'pending',
-            'employeeStatus': 'pending',
+            'region': region_office,
+            'status': status,
+            'employeeStatus': status,
             'scope_type': 'region',
             'scope': region_office,
             'scope_key': region_office.strip().lower(),
             'reference_id': f'SUP-{doc_ref.id[:8].upper()}',
             'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
             'created_by': actor,
             'updated_by': actor,
             'created_by_role': 'super_admin',
         }
+
+        if status == 'accepted':
+            data.update({
+                'accepted_by': actor,
+                'reviewed_by': actor,
+                'reviewed_at': firestore.SERVER_TIMESTAMP,
+            })
 
         doc_ref.set(data)
         return jsonify({'success': True, 'id': doc_ref.id})
