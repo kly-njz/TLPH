@@ -69,6 +69,7 @@
     .btn-edit:hover { color: white; background: #3b82f6; border-color: #2563eb; }
     .btn-delete:hover { color: white; background: #ef4444; border-color: #dc2626; }
     .btn-archive:hover { color: white; background: #f59e0b; border-color: #d97706; }
+    .btn-unarchive:hover { color: white; background: #10b981; border-color: #059669; }
   </style>
 </head>
 
@@ -802,6 +803,9 @@
         const statusClass = row.is_active
           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
           : 'bg-slate-100 text-slate-600 border-slate-200';
+        const archiveActionBtn = row.is_active
+          ? '<button type="button" class="btn-action btn-archive" title="Archive"><span class="material-icons-round text-[12px]">inventory_2</span></button>'
+          : '<button type="button" class="btn-action btn-unarchive" title="Unarchive"><span class="material-icons-round text-[12px]">unarchive</span></button>';
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-teal-50 transition';
         tr.innerHTML = `
@@ -814,7 +818,7 @@
           <td class="text-center px-3 py-1.5">
             <div class="flex justify-center gap-1">
               <button type="button" class="btn-action btn-edit" title="Edit"><span class="material-icons-round text-[12px]">edit</span></button>
-              <button type="button" class="btn-action btn-archive" title="Archive"><span class="material-icons-round text-[12px]">inventory_2</span></button>
+              ${archiveActionBtn}
               <button type="button" class="btn-action btn-delete" title="Delete"><span class="material-icons-round text-[12px]">delete</span></button>
             </div>
           </td>
@@ -832,12 +836,17 @@
         });
 
         archiveBtn.addEventListener('click', async () => {
-          if (!confirm('Archive this hiring position? It will be marked inactive and kept in records.')) return;
+          const isActive = !!row.is_active;
+          const confirmMsg = isActive
+            ? 'Archive this hiring position? It will be marked inactive and kept in records.'
+            : 'Reactivate this archived hiring position?';
+          if (!confirm(confirmMsg)) return;
           try {
-            const res = await fetch(`/regional/api/hiring/${encodeURIComponent(row.id)}/archive`, { method: 'POST' });
+            const endpoint = isActive ? 'archive' : 'unarchive';
+            const res = await fetch(`/regional/api/hiring/${encodeURIComponent(row.id)}/${endpoint}`, { method: 'POST' });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.success) {
-              throw new Error(data.error || 'Failed to archive position');
+              throw new Error(data.error || (isActive ? 'Failed to archive position' : 'Failed to reactivate position'));
             }
             if (regionalEditingHiringId === row.id) {
               document.getElementById('regionalHiringForm').reset();

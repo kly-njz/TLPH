@@ -2389,6 +2389,42 @@ def archive_hiring_position(hiring_id):
         print(f"[ERROR] archive_hiring_position failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to archive position'}), 500
 
+
+@bp.route('/api/hiring/<hiring_id>/unarchive', methods=['POST'])
+@role_required('municipal', 'municipal_admin')
+def unarchive_hiring_position(hiring_id):
+    """Reactivate an archived hiring position."""
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+
+    if not user_municipality:
+        return jsonify({'success': False, 'error': 'Municipality context not found'}), 400
+
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        doc = ref.get()
+
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+
+        existing = doc.to_dict() or {}
+        if existing.get('municipality', '').upper() != user_municipality.upper():
+            return jsonify({'success': False, 'error': 'Access denied for this position'}), 403
+
+        ref.set({
+            'is_active': True,
+            'archived_at': firestore.DELETE_FIELD,
+            'archived_by': firestore.DELETE_FIELD,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+
+        return jsonify({'success': True, 'message': 'Position reactivated successfully'})
+    except Exception as e:
+        print(f"[ERROR] unarchive_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to reactivate position'}), 500
+
     revenue_mix = []
     try:
         if municipality_name:
