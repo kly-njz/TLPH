@@ -2870,26 +2870,39 @@ def api_get_national_leave_requests():
 @bp.route('/operations/quotation/api/create', methods=['POST'])
 @role_required('national', 'national_admin')
 def quotations_national_create():
-    from quotation_storage import create_quotation
+    from quotation_storage import add_quotation
     data = request.get_json(silent=True) or {}
     try:
         # Map form fields to Firestore schema
         payload = {
-            'number': data.get('number'),
-            'client': data.get('client'),
+            'buyer': data.get('buyer') or data.get('client'),
+            'title': data.get('title'),
+            'category': data.get('category'),
+            'supplier': data.get('supplier'),
+            'deliver_from': data.get('deliver_from'),
+            'deliver_to': data.get('deliver_to'),
+            'deliver_to_type': data.get('deliver_to_type') or data.get('buyer_type') or '',
+            'buyer_type': data.get('buyer_type') or '',
+            'product': data.get('product'),
+            'quantity': data.get('quantity'),
+            'unit_price': data.get('unit_price'),
+            'other_charges': data.get('other_charges'),
+            'other_charges_note': data.get('other_charges_note') or '',
+            'total': data.get('total') or data.get('amount'),
             'amount_value': data.get('amount'),
-            'date': data.get('date'),
+            'issue_date': data.get('issue_date') or data.get('date'),
+            'date': data.get('date') or data.get('issue_date'),
             'status': data.get('status'),
             'region': data.get('region'),
             'municipality': data.get('municipality'),
             'description': data.get('description'),
             'scope': 'national',
-            'created_by_role': 'national_admin',
+            'created_by': 'national_admin',
         }
-        result = create_quotation(payload)
-        if not result:
+        quotation = add_quotation(payload)
+        if not quotation:
             return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
-        return jsonify({'success': True, 'id': result})
+        return jsonify({'success': True, 'quotation': {'id': quotation.get('id')}})
     except Exception as e:
         print(f"[ERROR] quotations_national_create failed: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500

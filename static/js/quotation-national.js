@@ -22,7 +22,11 @@ async function openEditDrawer(quoteId) {
     document.getElementById('newTitle').value = data.title || '';
     document.getElementById('newCategory').value = data.category || '';
     document.getElementById('newSupplier').value = data.supplier || '';
-    document.getElementById('newDeliverFrom').value = data.deliver_from || '';
+    const deliverFromRaw = String(data.deliver_from || '').toLowerCase();
+    const deliverFrom = (deliverFromRaw === 'national' || deliverFromRaw === 'regional' || deliverFromRaw === 'municipal')
+        ? deliverFromRaw
+        : 'national';
+    document.getElementById('newDeliverFrom').value = deliverFrom;
     document.getElementById('newDeliverTo').value = data.deliver_to || '';
     document.getElementById('newStatusRow').classList.remove('hidden');
     document.getElementById('newStatus').value = data.status || 'pending';
