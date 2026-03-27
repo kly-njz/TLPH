@@ -53,7 +53,6 @@
               <label for="imageFile" class="block text-[9px] font-bold text-slate-500 uppercase tracking-wide">News Image</label>
               <div class="mt-2 flex items-center gap-2 flex-wrap">
                 <input id="imageFile" type="file" title="News image file" accept="image/*" class="text-[10px] text-slate-600" />
-                <button id="uploadImageBtn" type="button" class="px-2 py-1 border border-slate-300 bg-white rounded-[2px] text-[9px] font-bold uppercase tracking-widest hover:bg-slate-100">Upload to Cloudinary</button>
                 <span id="imageUploadStatus" class="text-[9px] font-bold uppercase tracking-wide text-slate-500"></span>
               </div>
             </div>
@@ -99,7 +98,6 @@
     const publishedDateInput = document.getElementById('publishedDate');
     const imageUrlInput = document.getElementById('imageUrl');
     const imageFileInput = document.getElementById('imageFile');
-    const uploadImageBtn = document.getElementById('uploadImageBtn');
     const imageUploadStatus = document.getElementById('imageUploadStatus');
     const isPublishedInput = document.getElementById('isPublished');
 
@@ -140,11 +138,10 @@
     async function uploadSelectedImage() {
       const file = imageFileInput.files && imageFileInput.files[0];
       if (!file) {
-        alert('Select an image file first.');
-        return;
+        return imageUrlInput.value.trim();
       }
 
-      uploadImageBtn.disabled = true;
+      imageFileInput.disabled = true;
       imageUploadStatus.textContent = 'Uploading...';
 
       try {
@@ -160,11 +157,12 @@
 
         imageUrlInput.value = (data.image_url || '').trim();
         imageUploadStatus.textContent = 'Uploaded';
+        return imageUrlInput.value;
       } catch (err) {
         imageUploadStatus.textContent = 'Upload failed';
-        alert(err.message || 'Failed to upload image');
+        throw err;
       } finally {
-        uploadImageBtn.disabled = false;
+        imageFileInput.disabled = false;
       }
     }
 
@@ -208,18 +206,19 @@
     async function saveItem(evt) {
       evt.preventDefault();
       const id = newsId.value.trim();
-      const payload = {
-        title: titleInput.value.trim(),
-        summary: summaryInput.value.trim(),
-        published_date: publishedDateInput.value,
-        image_url: imageUrlInput.value.trim(),
-        is_published: isPublishedInput.checked,
-      };
-
       const url = id ? `/superadmin/api/hrm/news/${encodeURIComponent(id)}` : '/superadmin/api/hrm/news';
       const method = id ? 'PUT' : 'POST';
 
       try {
+        const imageUrl = await uploadSelectedImage();
+        const payload = {
+          title: titleInput.value.trim(),
+          summary: summaryInput.value.trim(),
+          published_date: publishedDateInput.value,
+          image_url: imageUrl,
+          is_published: isPublishedInput.checked,
+        };
+
         const res = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
@@ -263,7 +262,11 @@
 
     newBtn.addEventListener('click', resetForm);
     resetBtn.addEventListener('click', resetForm);
-    uploadImageBtn.addEventListener('click', uploadSelectedImage);
+    imageFileInput.addEventListener('change', () => {
+      imageUploadStatus.textContent = imageFileInput.files && imageFileInput.files[0]
+        ? 'Will upload on save'
+        : '';
+    });
     newsForm.addEventListener('submit', saveItem);
 
     loadItems();
