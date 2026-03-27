@@ -4598,6 +4598,48 @@ def regional_delete_hiring_position(hiring_id):
         return jsonify({'success': False, 'error': 'Failed to delete regional hiring position'}), 500
 
 
+@bp.route('/api/hiring/<hiring_id>/archive', methods=['POST'])
+@role_required('regional', 'regional_admin')
+def regional_archive_hiring_position(hiring_id):
+    """Archive (deactivate) a region-scoped hiring position without deleting it."""
+    db = get_firestore_db()
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+
+    if not canonical_region:
+        return jsonify({'success': False, 'error': 'Region context not found'}), 400
+
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+
+        existing = doc.to_dict() or {}
+        existing_scope_type = str(existing.get('scope_type') or '').strip().lower()
+        existing_scope_key = _canonical_region(existing.get('scope_key') or existing.get('scope'))
+        existing_region = _canonical_region(existing.get('region') or existing.get('region_key'))
+        if existing_scope_type and existing_scope_type != 'region':
+            return jsonify({'success': False, 'error': 'Access denied: not a region-scoped position'}), 403
+        if existing_scope_key and existing_scope_key != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for this region'}), 403
+        if existing_region and existing_region != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for this region'}), 403
+
+        ref.set({
+            'is_active': False,
+            'archived_at': firestore.SERVER_TIMESTAMP,
+            'archived_by': session.get('user_email', ''),
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+
+        return jsonify({'success': True, 'message': 'Position archived successfully'}), 200
+    except Exception as e:
+        print(f"[ERROR] regional_archive_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to archive regional hiring position'}), 500
+
+
 
 @bp.route('/operations/quotation')
 @role_required('regional', 'regional_admin')

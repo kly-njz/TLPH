@@ -68,6 +68,7 @@
     .btn-return:hover { color: white; background: #ef4444; border-color: #dc2626; }
     .btn-edit:hover { color: white; background: #3b82f6; border-color: #2563eb; }
     .btn-delete:hover { color: white; background: #ef4444; border-color: #dc2626; }
+    .btn-archive:hover { color: white; background: #f59e0b; border-color: #d97706; }
   </style>
 </head>
 
@@ -813,12 +814,13 @@
           <td class="text-center px-3 py-1.5">
             <div class="flex justify-center gap-1">
               <button type="button" class="btn-action btn-edit" title="Edit"><span class="material-icons-round text-[12px]">edit</span></button>
+              <button type="button" class="btn-action btn-archive" title="Archive"><span class="material-icons-round text-[12px]">inventory_2</span></button>
               <button type="button" class="btn-action btn-delete" title="Delete"><span class="material-icons-round text-[12px]">delete</span></button>
             </div>
           </td>
         `;
 
-        const [editBtn, deleteBtn] = tr.querySelectorAll('button');
+        const [editBtn, archiveBtn, deleteBtn] = tr.querySelectorAll('button');
         editBtn.addEventListener('click', () => {
           regionalEditingHiringId = row.id;
           document.getElementById('regionalJobTitle').value = row.job_title || '';
@@ -827,6 +829,24 @@
           document.getElementById('regionalSalary').value = row.starting_salary || '';
           document.getElementById('regionalHiringSubmitBtn').textContent = 'Update Position';
           setRegionalHiringFormStatus('Editing selected regional position.', true);
+        });
+
+        archiveBtn.addEventListener('click', async () => {
+          if (!confirm('Archive this hiring position? It will be marked inactive and kept in records.')) return;
+          try {
+            const res = await fetch(`/regional/api/hiring/${encodeURIComponent(row.id)}/archive`, { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || 'Failed to archive position');
+            }
+            if (regionalEditingHiringId === row.id) {
+              document.getElementById('regionalHiringForm').reset();
+              resetRegionalHiringFormMode();
+            }
+            await loadRegionalHiringData();
+          } catch (err) {
+            alert(err.message || 'Unexpected error while archiving');
+          }
         });
 
         deleteBtn.addEventListener('click', async () => {
