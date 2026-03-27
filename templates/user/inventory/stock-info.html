@@ -178,6 +178,7 @@
             <div id="attachmentPreviewBody" class="p-3 bg-slate-100 max-h-[78vh] overflow-auto flex items-center justify-center">
                 <img id="attachmentPreviewImage" src="" alt="Attachment Preview" class="hidden max-w-full max-h-[70vh] object-contain rounded" />
                 <iframe id="attachmentPreviewFrame" src="" class="hidden w-full h-[70vh] bg-white rounded border border-slate-200"></iframe>
+                <div id="attachmentPreviewGallery" class="hidden w-full"></div>
                 <div id="attachmentPreviewFallback" class="hidden text-center">
                     <p class="text-xs text-slate-600 font-semibold mb-3">Preview not available for this file type.</p>
                     <a id="attachmentPreviewOpenLink" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded text-[10px] font-black uppercase no-underline">
@@ -271,6 +272,7 @@
             const title = document.getElementById('attachmentPreviewTitle');
             const image = document.getElementById('attachmentPreviewImage');
             const frame = document.getElementById('attachmentPreviewFrame');
+            const gallery = document.getElementById('attachmentPreviewGallery');
             const fallback = document.getElementById('attachmentPreviewFallback');
             const openLink = document.getElementById('attachmentPreviewOpenLink');
             const downloadLink = document.getElementById('attachmentPreviewDownloadLink');
@@ -278,6 +280,8 @@
             title.textContent = label || 'Attachment Preview';
             image.classList.add('hidden');
             frame.classList.add('hidden');
+            gallery.classList.add('hidden');
+            gallery.innerHTML = '';
             fallback.classList.add('hidden');
             image.src = '';
             frame.src = '';
@@ -308,11 +312,58 @@
             const modal = document.getElementById('attachmentPreviewModal');
             const image = document.getElementById('attachmentPreviewImage');
             const frame = document.getElementById('attachmentPreviewFrame');
+            const gallery = document.getElementById('attachmentPreviewGallery');
 
             image.src = '';
             frame.src = '';
+            gallery.innerHTML = '';
+            gallery.classList.add('hidden');
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+        }
+
+        function showAttachmentPreviewGroup(urls, label) {
+            const safeUrls = (Array.isArray(urls) ? urls : [urls])
+                .map(normalizeFileUrl)
+                .filter(Boolean);
+
+            if (!safeUrls.length) return;
+            if (safeUrls.length === 1) {
+                showAttachmentPreview(safeUrls[0], label);
+                return;
+            }
+
+            const modal = document.getElementById('attachmentPreviewModal');
+            const title = document.getElementById('attachmentPreviewTitle');
+            const image = document.getElementById('attachmentPreviewImage');
+            const frame = document.getElementById('attachmentPreviewFrame');
+            const gallery = document.getElementById('attachmentPreviewGallery');
+            const fallback = document.getElementById('attachmentPreviewFallback');
+            const openLink = document.getElementById('attachmentPreviewOpenLink');
+            const downloadLink = document.getElementById('attachmentPreviewDownloadLink');
+
+            title.textContent = `${label || 'Attachments'} (${safeUrls.length})`;
+            image.classList.add('hidden');
+            frame.classList.add('hidden');
+            fallback.classList.add('hidden');
+            gallery.classList.remove('hidden');
+
+            openLink.href = safeUrls[0];
+            downloadLink.href = safeUrls[0];
+
+            gallery.innerHTML = `
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    ${safeUrls.map((u, idx) => {
+                        if (isImageFile(u)) {
+                            return `<div class="bg-white border border-slate-200 rounded p-1"><img src="${escapeAttr(u)}" alt="Attachment ${idx + 1}" class="w-full h-44 object-cover rounded"/></div>`;
+                        }
+                        return `<div class="bg-white border border-slate-200 rounded p-2 flex items-center justify-between gap-2"><span class="text-[10px] font-semibold text-slate-700">Attachment ${idx + 1}</span><a href="${escapeAttr(u)}" target="_blank" rel="noopener noreferrer" class="text-[9px] font-black uppercase bg-emerald-600 text-white px-2 py-1 rounded no-underline">Open</a></div>`;
+                    }).join('')}
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
 
         window.openApplicationAttachmentPreviewFromEncoded = function(encodedUrl, encodedLabel = '') {
@@ -322,6 +373,17 @@
                 showAttachmentPreview(url, label);
             } catch (err) {
                 console.error('Failed to open attachment preview:', err);
+            }
+        };
+
+        window.openApplicationAttachmentGroupFromEncoded = function(encodedUrls, encodedLabel = '') {
+            try {
+                const raw = decodeURIComponent(encodedUrls || '[]');
+                const urls = JSON.parse(raw);
+                const label = decodeURIComponent(encodedLabel || 'Attachments');
+                showAttachmentPreviewGroup(urls, label);
+            } catch (err) {
+                console.error('Failed to open attachment preview group:', err);
             }
         };
 
@@ -754,18 +816,18 @@
                                             <span class="material-icons-round text-slate-400 text-sm">${docIcons[key] || 'description'}</span>
                                             <span class="text-[8px] font-black text-slate-600 uppercase truncate">${escapeHtml(label)} ${files.length > 1 ? `(${files.length})` : ''}</span>
                                         </div>
-                                        <div class="flex flex-wrap gap-1.5">
-                                            ${files.map((f) => {
-                                                const encodedUrl = encodeURIComponent(f.url);
+                                        <div class="flex">
+                                            ${(() => {
+                                                const encodedUrls = encodeURIComponent(JSON.stringify(files.map(f => f.url)));
                                                 const encodedLabel = encodeURIComponent(label);
                                                 return `
                                                     <button type="button"
-                                                        onclick="openApplicationAttachmentPreviewFromEncoded('${encodedUrl}','${encodedLabel}')"
+                                                        onclick="openApplicationAttachmentGroupFromEncoded('${encodedUrls}','${encodedLabel}')"
                                                         class="inline-flex items-center justify-center gap-1 text-[8px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded whitespace-nowrap">
                                                         <i class="fa-solid fa-eye"></i> View
                                                     </button>
                                                 `;
-                                            }).join('')}
+                                            })()}
                                         </div>
                                     </div>`;
                             }).join('');
