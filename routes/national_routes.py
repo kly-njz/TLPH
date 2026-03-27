@@ -924,11 +924,13 @@ def quotation():
     from models.region_province_map import region_province_map
     # province_muni_map is just philippineLocations
     province_muni_map = philippineLocations
-    # Always provide status_data for chart (Approved, Pending, Rejected)
+    # Always provide status_data for chart (Pending, In Transit, For Delivery, Delivered, Cancelled)
     status_data = [
-        len([q for q in quotations if str(q.get('status', '')).lower() == 'approved']),
         len([q for q in quotations if str(q.get('status', '')).lower() == 'pending']),
-        len([q for q in quotations if str(q.get('status', '')).lower() == 'rejected'])
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'in-transit']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'for-delivery']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'delivered']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'cancelled'])
     ]
     return render_template(
         'national/operations/quotation.html',

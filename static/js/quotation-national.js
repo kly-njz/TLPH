@@ -166,19 +166,37 @@ async function downloadDeliveryDetails(quoteId) {
         return;
     }
     const data = await res.json();
-    const doc = new window.jspdf.jsPDF();
-    doc.setFontSize(12);
-    doc.text('Delivery Details', 10, 10);
-    doc.setFontSize(10);
-    doc.text(`Quotation ID: ${data.id || ''}`, 10, 20);
-    doc.text(`Buyer: ${data.buyer || ''}`, 10, 28);
-    doc.text(`Supplier: ${data.supplier || ''}`, 10, 36);
-    doc.text(`Deliver From: ${data.deliver_from || ''}`, 10, 44);
-    doc.text(`Deliver To: ${data.deliver_to || ''}`, 10, 52);
-    doc.text(`Product: ${data.product || ''}`, 10, 60);
-    doc.text(`Quantity: ${data.quantity || ''}`, 10, 68);
-    doc.text(`Status: ${data.status || ''}`, 10, 76);
-    doc.save(`delivery-details-${data.id || quoteId}.pdf`);
+    const headers = [
+        'Quotation ID',
+        'Buyer',
+        'Supplier',
+        'Deliver From',
+        'Deliver To',
+        'Product',
+        'Quantity',
+        'Status'
+    ];
+    const row = [
+        data.id || '',
+        data.buyer || '',
+        data.supplier || '',
+        data.deliver_from || '',
+        data.deliver_to || '',
+        data.product || '',
+        data.quantity || '',
+        data.status || ''
+    ];
+    const escapeCell = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = `${headers.map(escapeCell).join(',')}\n${row.map(escapeCell).join(',')}`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `delivery-details-${data.id || quoteId}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // Show quotation history (placeholder)
