@@ -898,9 +898,8 @@ def quotation():
         q['amount'] = f"{q['amount_value']:,.2f}"
         q['status'] = str(q.get('status') or 'Pending').capitalize()
     total_quotes = len(quotations)
-    approved_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'APPROVED'])
     pending_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'PENDING'])
-    rejected_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'REJECTED'])
+    cancelled_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'CANCELLED'])
     total_value_number = sum([to_float(q.get('amount_value')) for q in quotations])
     total_value = f"{total_value_number:,.2f}"
     regions = sorted(list({(q.get('region') or '').strip() for q in quotations if (q.get('region') or '').strip()}))
@@ -924,19 +923,20 @@ def quotation():
     from models.region_province_map import region_province_map
     # province_muni_map is just philippineLocations
     province_muni_map = philippineLocations
-    # Always provide status_data for chart (Approved, Pending, Rejected)
+    # Always provide status_data for chart (Pending, In Transit, For Delivery, Delivered, Cancelled)
     status_data = [
-        len([q for q in quotations if str(q.get('status', '')).lower() == 'approved']),
         len([q for q in quotations if str(q.get('status', '')).lower() == 'pending']),
-        len([q for q in quotations if str(q.get('status', '')).lower() == 'rejected'])
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'in-transit']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'for-delivery']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'delivered']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'cancelled'])
     ]
     return render_template(
         'national/operations/quotation.html',
         quotations=quotations,
         total_quotes=total_quotes,
-        approved_quotes=approved_quotes,
         pending_quotes=pending_quotes,
-        rejected_quotes=rejected_quotes,
+        cancelled_quotes=cancelled_quotes,
         total_value=total_value,
         region_province_map=region_province_map,
         province_muni_map=province_muni_map,
@@ -971,7 +971,170 @@ def tasks():
 @bp.route('/applicants')
 @role_required('national', 'national_admin')
 def applicants():
-    return render_template('national/HRM/applicants.html')
+    try:
+        import json
+
+        def _normalize_status(raw_status):
+            value = str(raw_status or 'pending').strip().lower()
+            if value in ['approved', 'accept', 'accepted', 'hired', 'cleared', 'complete', 'completed']:
+                return 'approved'
+            if value in ['rejected', 'reject', 'denied', 'declined', 'returned']:
+                return 'rejected'
+            return 'pending'
+
+        def _format_datetime(raw):
+            if not raw:
+                return 'N/A'
+            if isinstance(raw, str):
+                try:
+                    dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                    return dt.strftime('%b %d, %Y %I:%M %p')
+                except Exception:
+                    return raw
+            if hasattr(raw, 'to_datetime'):
+                try:
+                    raw = raw.to_datetime()
+                except Exception:
+                    pass
+            if hasattr(raw, 'strftime'):
+                return raw.strftime('%b %d, %Y %I:%M %p')
+            return str(raw)
+
+        db = get_firestore_db()
+        docs = db.collection('municipal_denr_applicant_jobs').stream()
+
+        applicants = []
+        region_set = set()
+        candidate_type_set = set()
+
+        total_count = 0
+        approved_count = 0
+        pending_count = 0
+        rejected_count = 0
+        municipal_scope_count = 0
+        regional_scope_count = 0
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+
+            full_name = (
+                data.get('full_name')
+                or data.get('applicant_name')
+                or data.get('fullName')
+                or data.get('name')
+                or 'N/A'
+            )
+            candidate_type = (
+                data.get('candidate_type')
+                or data.get('category')
+                or data.get('applicantCategory')
+                or 'N/A'
+            )
+            job_description = (
+                data.get('job_description')
+                or data.get('jobDescription')
+                or data.get('description')
+                or data.get('project_name')
+                or 'N/A'
+            )
+
+            region_office = (data.get('region_office') or data.get('region') or 'N/A')
+            municipality = data.get('municipality') or ''
+
+            scope_type = str(data.get('scope_type') or '').strip().lower()
+            if scope_type not in ['municipality', 'region']:
+                scope_type = 'municipality' if municipality else 'region'
+            scope = (
+                data.get('scope')
+                or (municipality if scope_type == 'municipality' else region_office)
+                or 'N/A'
+            )
+
+            status = _normalize_status(
+                data.get('status') or data.get('employeeStatus') or data.get('application_status')
+            )
+            reference_id = data.get('reference_id') or data.get('ref_no') or doc.id[:12].upper()
+
+            created_at = data.get('created_at') or data.get('createdAt')
+            created_sort = 0
+            date_filed = 'N/A'
+            if created_at:
+                if isinstance(created_at, str):
+                    try:
+                        dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        created_sort = int(dt.timestamp())
+                        date_filed = dt.strftime('%b %d, %Y')
+                    except Exception:
+                        date_filed = created_at
+                elif hasattr(created_at, 'timestamp') and hasattr(created_at, 'strftime'):
+                    created_sort = int(created_at.timestamp())
+                    date_filed = created_at.strftime('%b %d, %Y')
+
+            applicants.append({
+                'id': doc.id,
+                'reference_id': str(reference_id).upper(),
+                'full_name': str(full_name),
+                'candidate_type': str(candidate_type),
+                'job_description': str(job_description),
+                'region_office': str(region_office),
+                'scope_type': scope_type,
+                'scope': str(scope),
+                'municipality': str(municipality),
+                'status': status,
+                'accepted_by': str(data.get('accepted_by') or data.get('reviewed_by') or 'N/A'),
+                'updated_at': _format_datetime(data.get('updated_at') or data.get('reviewed_at') or data.get('created_at') or data.get('createdAt')),
+                'date_filed': date_filed,
+                'created_sort': created_sort,
+            })
+
+            total_count += 1
+            if status == 'approved':
+                approved_count += 1
+            elif status == 'rejected':
+                rejected_count += 1
+            else:
+                pending_count += 1
+
+            if scope_type == 'municipality':
+                municipal_scope_count += 1
+            else:
+                regional_scope_count += 1
+
+            if region_office and region_office != 'N/A':
+                region_set.add(str(region_office).upper())
+            if candidate_type and candidate_type != 'N/A':
+                candidate_type_set.add(str(candidate_type).upper())
+
+        applicants.sort(key=lambda x: x.get('created_sort', 0), reverse=True)
+
+        return render_template(
+            'national/HRM/applicants.html',
+            applicants=applicants,
+            applicants_json=json.dumps(applicants),
+            total_count=total_count,
+            approved_count=approved_count,
+            pending_count=pending_count,
+            rejected_count=rejected_count,
+            municipal_scope_count=municipal_scope_count,
+            regional_scope_count=regional_scope_count,
+            regions=sorted(region_set),
+            candidate_types=sorted(candidate_type_set),
+        )
+    except Exception as e:
+        print(f"[ERROR] Loading national applicants: {e}")
+        return render_template(
+            'national/HRM/applicants.html',
+            applicants=[],
+            applicants_json='[]',
+            total_count=0,
+            approved_count=0,
+            pending_count=0,
+            rejected_count=0,
+            municipal_scope_count=0,
+            regional_scope_count=0,
+            regions=[],
+            candidate_types=[],
+        )
 
 
 # -----------------------------
@@ -2707,26 +2870,39 @@ def api_get_national_leave_requests():
 @bp.route('/operations/quotation/api/create', methods=['POST'])
 @role_required('national', 'national_admin')
 def quotations_national_create():
-    from quotation_storage import create_quotation
+    from quotation_storage import add_quotation
     data = request.get_json(silent=True) or {}
     try:
         # Map form fields to Firestore schema
         payload = {
-            'number': data.get('number'),
-            'client': data.get('client'),
+            'buyer': data.get('buyer') or data.get('client'),
+            'title': data.get('title'),
+            'category': data.get('category'),
+            'supplier': data.get('supplier'),
+            'deliver_from': data.get('deliver_from'),
+            'deliver_to': data.get('deliver_to'),
+            'deliver_to_type': data.get('deliver_to_type') or data.get('buyer_type') or '',
+            'buyer_type': data.get('buyer_type') or '',
+            'product': data.get('product'),
+            'quantity': data.get('quantity'),
+            'unit_price': data.get('unit_price'),
+            'other_charges': data.get('other_charges'),
+            'other_charges_note': data.get('other_charges_note') or '',
+            'total': data.get('total') or data.get('amount'),
             'amount_value': data.get('amount'),
-            'date': data.get('date'),
+            'issue_date': data.get('issue_date') or data.get('date'),
+            'date': data.get('date') or data.get('issue_date'),
             'status': data.get('status'),
             'region': data.get('region'),
             'municipality': data.get('municipality'),
             'description': data.get('description'),
             'scope': 'national',
-            'created_by_role': 'national_admin',
+            'created_by': 'national_admin',
         }
-        result = create_quotation(payload)
-        if not result:
+        quotation = add_quotation(payload)
+        if not quotation:
             return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
-        return jsonify({'success': True, 'id': result})
+        return jsonify({'success': True, 'quotation': {'id': quotation.get('id')}})
     except Exception as e:
         print(f"[ERROR] quotations_national_create failed: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500

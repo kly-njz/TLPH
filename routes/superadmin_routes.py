@@ -1,8 +1,10 @@
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, session
 from firebase_auth_middleware import role_required
 from firebase_config import get_firestore_db
 from datetime import datetime
 from collections import defaultdict
+import coa_storage
+from firebase_admin import firestore
 
 bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
 
@@ -473,6 +475,62 @@ def quotation_view():
         quotations=quotations
     )
 
+# API: Create quotation (superadmin)
+@bp.route('/api/quotation/create', methods=['POST'])
+@role_required('super-admin','superadmin')
+def api_create_quotation_superadmin():
+    from quotation_storage import add_quotation
+    data = request.get_json(silent=True) or {}
+    required_fields = [
+        'buyer', 'title', 'category', 'supplier',
+        'deliver_from', 'deliver_to', 'product'
+    ]
+    missing = [f for f in required_fields if not str(data.get(f) or '').strip()]
+    if missing:
+        return jsonify({'success': False, 'error': 'Missing required quotation fields'}), 400
+    try:
+        quantity = float(data.get('quantity') or 0)
+    except Exception:
+        quantity = 0.0
+    try:
+        unit_price = float(data.get('unit_price') or 0)
+    except Exception:
+        unit_price = 0.0
+    try:
+        other_charges = float(data.get('other_charges') or 0)
+    except Exception:
+        other_charges = 0.0
+    total = (quantity * unit_price) + other_charges
+    issue_date = str(data.get('issue_date') or '').strip()
+    if not issue_date:
+        issue_date = datetime.utcnow().date().isoformat()
+    payload = {
+        'buyer': data.get('buyer'),
+        'title': data.get('title'),
+        'category': data.get('category'),
+        'supplier': data.get('supplier'),
+        'deliver_from': data.get('deliver_from'),
+        'deliver_to': data.get('deliver_to'),
+        'deliver_to_type': data.get('deliver_to_type') or '',
+        'buyer_type': data.get('buyer_type') or '',
+        'product': data.get('product'),
+        'quantity': quantity,
+        'unit_price': unit_price,
+        'other_charges': other_charges,
+        'other_charges_note': data.get('other_charges_note') or '',
+        'status': data.get('status') or 'pending',
+        'issue_date': issue_date,
+        'date': issue_date,
+        'total': total,
+        'created_by': 'superadmin'
+    }
+    try:
+        quotation = add_quotation(payload)
+        return jsonify({'success': True, 'quotation': {'id': quotation.get('id')}})
+    except Exception as e:
+        print(f"[ERROR] api_create_quotation_superadmin failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create quotation'}), 500
+
 # API: Allocate/forward quotation to region/municipality or update status
 @bp.route('/api/quotation/<quotation_id>/update', methods=['POST'])
 @role_required('super-admin','superadmin')
@@ -480,11 +538,29 @@ def api_update_quotation_superadmin(quotation_id):
     from quotation_storage import update_quotation, update_quotation_status
     data = request.get_json() or {}
     updates = {}
-    # Allow updating deliver_to, deliver_to_type, status, and notes
-    if 'deliver_to' in data:
-        updates['deliver_to'] = data['deliver_to']
-    if 'deliver_to_type' in data:
-        updates['deliver_to_type'] = data['deliver_to_type']
+    # Allow updating full quotation fields
+    for field in [
+        'buyer', 'title', 'category', 'supplier',
+        'deliver_from', 'deliver_to', 'deliver_to_type',
+        'buyer_type', 'product', 'quantity', 'unit_price',
+        'other_charges', 'other_charges_note', 'issue_date', 'date', 'total'
+    ]:
+        if field in data:
+            updates[field] = data[field]
+    if any(key in data for key in ['quantity', 'unit_price', 'other_charges']) and 'total' not in updates:
+        try:
+            quantity = float(data.get('quantity') or 0)
+        except Exception:
+            quantity = 0.0
+        try:
+            unit_price = float(data.get('unit_price') or 0)
+        except Exception:
+            unit_price = 0.0
+        try:
+            other_charges = float(data.get('other_charges') or 0)
+        except Exception:
+            other_charges = 0.0
+        updates['total'] = (quantity * unit_price) + other_charges
     if updates:
         update_quotation(quotation_id, updates)
     if 'status' in data:
@@ -508,6 +584,218 @@ def tasks_view():
 def applicants_view():
     return render_template('super-admin/applicants/applicants.html')
 
+
+def _normalize_superadmin_applicant_status(raw_status):
+    status = str(raw_status or 'pending').strip().lower()
+    if status in ['accepted', 'approve', 'approved', 'hired']:
+        return 'accepted'
+    if status in ['reject', 'rejected', 'denied', 'declined']:
+        return 'rejected'
+    return 'pending'
+
+
+def _is_accepted_status(raw_status):
+    return _normalize_superadmin_applicant_status(raw_status) == 'accepted'
+
+
+def _format_firestore_timestamp(value):
+    if not value:
+        return 'N/A'
+    try:
+        if isinstance(value, str):
+            parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            return parsed.strftime('%b %d, %Y %I:%M %p')
+        if hasattr(value, 'strftime'):
+            return value.strftime('%b %d, %Y %I:%M %p')
+    except Exception:
+        return str(value)
+    return str(value)
+
+
+@bp.route('/api/applicants/data', methods=['GET'])
+@role_required('super-admin', 'superadmin')
+def superadmin_applicants_data():
+    try:
+        db = get_firestore_db()
+        docs = db.collection('municipal_denr_applicant_jobs').stream()
+
+        applicants = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+
+            full_name = (
+                data.get('full_name')
+                or data.get('applicant_name')
+                or data.get('fullName')
+                or data.get('name')
+                or 'N/A'
+            )
+            candidate_type = (
+                data.get('candidate_type')
+                or data.get('category')
+                or data.get('applicantCategory')
+                or 'N/A'
+            )
+            region_office = data.get('region_office') or data.get('region') or 'N/A'
+            status = _normalize_superadmin_applicant_status(
+                data.get('status') or data.get('employeeStatus') or data.get('application_status')
+            )
+
+            applicants.append({
+                'id': doc.id,
+                'full_name': full_name,
+                'candidate_type': candidate_type,
+                'region_office': region_office,
+                'status': status,
+                'is_accepted': status == 'accepted',
+                'can_delete': status == 'rejected',
+                'reference_id': data.get('reference_id') or doc.id[:12].upper(),
+                'accepted_by': data.get('accepted_by') or data.get('reviewed_by') or 'N/A',
+                'updated_at': _format_firestore_timestamp(data.get('updated_at') or data.get('reviewed_at') or data.get('created_at')),
+            })
+
+        applicants.sort(key=lambda row: row.get('full_name', '').lower())
+        return jsonify({'success': True, 'applicants': applicants})
+    except Exception as e:
+        print(f'[ERROR] superadmin_applicants_data: {e}')
+        return jsonify({'success': False, 'error': 'Failed to load applicants'}), 500
+
+
+@bp.route('/api/applicants', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def superadmin_create_applicant():
+    try:
+        payload = request.get_json() or {}
+        full_name = str(payload.get('full_name') or '').strip()
+        candidate_type = str(payload.get('candidate_type') or '').strip()
+        region_office = str(payload.get('region_office') or '').strip()
+        scope_type = str(payload.get('scope_type') or 'region').strip().lower()
+        requested_scope = str(payload.get('scope') or '').strip()
+        status = _normalize_superadmin_applicant_status(payload.get('status'))
+
+        if not full_name or not candidate_type or not region_office:
+            return jsonify({'success': False, 'error': 'full_name, candidate_type, and region_office are required'}), 400
+        if scope_type not in {'region', 'municipality'}:
+            return jsonify({'success': False, 'error': 'scope_type must be region or municipality'}), 400
+
+        scope = requested_scope or (region_office if scope_type == 'region' else '')
+        if not scope:
+            return jsonify({'success': False, 'error': 'scope is required for municipality scope'}), 400
+
+        db = get_firestore_db()
+        doc_ref = db.collection('municipal_denr_applicant_jobs').document()
+        actor = session.get('user_email') or 'superadmin'
+
+        data = {
+            'full_name': full_name,
+            'candidate_type': candidate_type,
+            'category': candidate_type,
+            'region_office': region_office,
+            'region': region_office,
+            'status': status,
+            'employeeStatus': status,
+            'scope_type': scope_type,
+            'scope': scope,
+            'scope_key': scope.strip().lower(),
+            'reference_id': f'SUP-{doc_ref.id[:8].upper()}',
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'created_by': actor,
+            'updated_by': actor,
+            'created_by_role': 'super_admin',
+        }
+
+        if scope_type == 'municipality':
+            data.update({
+                'municipality': scope,
+                'municipality_key': scope,
+            })
+
+        if status == 'accepted':
+            data.update({
+                'accepted_by': actor,
+                'reviewed_by': actor,
+                'reviewed_at': firestore.SERVER_TIMESTAMP,
+            })
+
+        doc_ref.set(data)
+        return jsonify({'success': True, 'id': doc_ref.id})
+    except Exception as e:
+        print(f'[ERROR] superadmin_create_applicant: {e}')
+        return jsonify({'success': False, 'error': 'Failed to create applicant'}), 500
+
+
+@bp.route('/api/applicants/<applicant_id>', methods=['PUT'])
+@role_required('super-admin', 'superadmin')
+def superadmin_update_applicant(applicant_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('municipal_denr_applicant_jobs').document(applicant_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Applicant not found'}), 404
+
+        current = snap.to_dict() or {}
+        if _is_accepted_status(current.get('status') or current.get('employeeStatus')):
+            return jsonify({'success': False, 'error': 'Accepted applicants cannot be edited'}), 400
+        actor = session.get('user_email') or 'superadmin'
+
+        payload = request.get_json() or {}
+        updates = {}
+
+        if 'full_name' in payload:
+            updates['full_name'] = str(payload.get('full_name') or '').strip()
+        if 'candidate_type' in payload:
+            updates['candidate_type'] = str(payload.get('candidate_type') or '').strip()
+            updates['category'] = updates['candidate_type']
+        if 'region_office' in payload:
+            updates['region_office'] = str(payload.get('region_office') or '').strip()
+            updates['region'] = updates['region_office']
+            if str(current.get('scope_type') or '').strip().lower() == 'region':
+                updates['scope'] = updates['region_office']
+                updates['scope_key'] = updates['region_office'].lower()
+        if 'status' in payload:
+            normalized = _normalize_superadmin_applicant_status(payload.get('status'))
+            updates['status'] = normalized
+            updates['employeeStatus'] = normalized
+            if normalized == 'accepted':
+                updates['accepted_by'] = actor
+                updates['reviewed_by'] = actor
+                updates['reviewed_at'] = firestore.SERVER_TIMESTAMP
+
+        updates['updated_at'] = firestore.SERVER_TIMESTAMP
+        updates['updated_by'] = actor
+        if not updates:
+            return jsonify({'success': False, 'error': 'No valid updates provided'}), 400
+
+        doc_ref.update(updates)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_update_applicant: {e}')
+        return jsonify({'success': False, 'error': 'Failed to update applicant'}), 500
+
+
+@bp.route('/api/applicants/<applicant_id>', methods=['DELETE'])
+@role_required('super-admin', 'superadmin')
+def superadmin_delete_applicant(applicant_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('municipal_denr_applicant_jobs').document(applicant_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Applicant not found'}), 404
+
+        current = snap.to_dict() or {}
+        status = _normalize_superadmin_applicant_status(current.get('status') or current.get('employeeStatus'))
+        if status != 'rejected':
+            return jsonify({'success': False, 'error': 'Only rejected applicants can be permanently deleted'}), 400
+
+        doc_ref.delete()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_delete_applicant: {e}')
+        return jsonify({'success': False, 'error': 'Failed to delete applicant'}), 500
+
 # --- Accounting Module Routes ---
 @bp.route('/accounting/dashboard')
 def accounting_dashboard():
@@ -517,9 +805,124 @@ def accounting_dashboard():
 def accounting_entities():
     return render_template('super-admin/accounting/entities.html')
 
+
 @bp.route('/accounting/coa-templates')
+@role_required('super-admin','superadmin')
 def accounting_coa_templates():
-    return render_template('super-admin/accounting/coa-templates.html')
+    db = get_firestore_db()
+    selected_template_id = (request.args.get('template_id') or '').strip()
+    # Fetch all templates
+    templates = []
+    accounts = []
+    stats = {
+        'total_templates': 0,
+        'total_accounts': 0,
+        'total_locked': 0
+    }
+    try:
+        all_templates = db.collection('coa_templates').limit(5000).stream()
+        for doc in all_templates:
+            template = doc.to_dict() or {}
+            template['id'] = doc.id
+            templates.append(template)
+            stats['total_accounts'] += template.get('account_count', 0)
+            stats['total_locked'] += template.get('locked_count', 0)
+        stats['total_templates'] = len(templates)
+
+        if templates and not selected_template_id:
+            selected_template_id = templates[0].get('id', '')
+
+        # Fetch all accounts for all templates
+        if selected_template_id:
+            template_accounts = db.collection('coa_accounts').where('template_id', '==', selected_template_id).limit(1000).stream()
+            for acc_doc in template_accounts:
+                acc = acc_doc.to_dict() or {}
+                acc['id'] = acc_doc.id
+                accounts.append(acc)
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch COA templates/accounts: {e}")
+    return render_template(
+        'super-admin/accounting/coa-templates.html',
+        templates=templates,
+        accounts=accounts,
+        stats=stats,
+        selected_template_id=selected_template_id
+    )
+
+
+@bp.route('/api/accounting/coa/accounts/<template_id>', methods=['GET'])
+@role_required('super-admin','superadmin')
+def api_get_superadmin_coa_accounts(template_id):
+    """Return all COA accounts under the selected template."""
+    try:
+        template = coa_storage.get_coa_template(template_id)
+        if not template:
+            return jsonify({'success': False, 'error': 'Template not found'}), 404
+
+        accounts = coa_storage.list_coa_accounts(template_id)
+        return jsonify({'success': True, 'accounts': accounts, 'count': len(accounts)}), 200
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch COA accounts: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/accounting/coa/accounts/<template_id>', methods=['POST'])
+@role_required('super-admin','superadmin')
+def api_add_superadmin_coa_account(template_id):
+    """Create a COA account under a template for super-admin."""
+    try:
+        payload = request.get_json() or {}
+        code = str(payload.get('code', '')).strip()
+        name = str(payload.get('name', '')).strip()
+        account_type = str(payload.get('account_type', '')).strip().lower()
+        locked = bool(payload.get('locked', False))
+        description = str(payload.get('description', '')).strip()
+
+        if not code or not name or not account_type:
+            return jsonify({'success': False, 'error': 'code, name, and account_type are required'}), 400
+
+        template = coa_storage.get_coa_template(template_id)
+        if not template:
+            return jsonify({'success': False, 'error': 'Template not found'}), 404
+
+        account = coa_storage.add_coa_account(
+            template_id=template_id,
+            code=code,
+            name=name,
+            account_type=account_type,
+            locked=locked,
+            description=description,
+        )
+        return jsonify({'success': True, 'account': account}), 201
+    except Exception as e:
+        print(f"[ERROR] Failed to add COA account: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/accounting/coa/templates', methods=['POST'])
+@role_required('super-admin','superadmin')
+def api_add_superadmin_coa_template():
+    """Create a COA template for super-admin."""
+    try:
+        payload = request.get_json() or {}
+        name = str(payload.get('name', '')).strip()
+        description = str(payload.get('description', '')).strip()
+        status = str(payload.get('status', 'active')).strip().lower() or 'active'
+
+        if not name:
+            return jsonify({'success': False, 'error': 'name is required'}), 400
+
+        # Keep super-admin templates globally visible.
+        template = coa_storage.add_coa_template(
+            municipality='superadmin',
+            name=name,
+            description=description,
+            status=status,
+        )
+        return jsonify({'success': True, 'template': template}), 201
+    except Exception as e:
+        print(f"[ERROR] Failed to add COA template: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @bp.route('/accounting/expense-categories')
 def accounting_expense_categories():
