@@ -163,12 +163,20 @@ def apply_for_hiring_position():
 
         municipality = str(hiring.get('municipality') or '').strip()
         region = str(hiring.get('region') or '').strip()
+        scope_type = str(hiring.get('scope_type') or '').strip().lower()
+        if scope_type not in {'municipality', 'region'}:
+            scope_type = 'region' if region and not municipality else 'municipality'
         position = str(hiring.get('position') or '').strip()
         job_title = str(hiring.get('job_title') or '').strip()
         description = str(hiring.get('description') or '').strip()
 
-        if not municipality:
+        if scope_type == 'municipality' and not municipality:
             return jsonify({'success': False, 'error': 'Hiring position has no municipality scope'}), 400
+        if scope_type == 'region' and not region:
+            return jsonify({'success': False, 'error': 'Hiring position has no region scope'}), 400
+
+        scope_value = municipality if scope_type == 'municipality' else region
+        municipality_value = municipality if scope_type == 'municipality' else ''
 
         application_id = f"HIRE-{hiring_id}-{uuid.uuid4().hex[:8].upper()}"
         reference_id = f"APP-{uuid.uuid4().hex[:8].upper()}"
@@ -187,17 +195,17 @@ def apply_for_hiring_position():
             'candidate_type': position or 'Environmental Management Specialist',
             'category': position or 'Environmental Management Specialist',
             'region_office': region or 'N/A',
-            'scope_type': 'municipality',
-            'scope': municipality,
-            'scope_key': normalize_scope(municipality),
+            'scope_type': scope_type,
+            'scope': scope_value,
+            'scope_key': normalize_scope(scope_value),
             'job_title': job_title or 'DENR Hiring Position',
             'job_description': description or 'No description provided.',
             'status': 'PENDING',
             'employeeStatus': 'pending',
             'reference_id': reference_id,
-            'municipality': municipality,
+            'municipality': municipality_value,
             'region': region or 'N/A',
-            'municipality_key': normalize_scope(municipality),
+            'municipality_key': normalize_scope(municipality_value),
             'region_key': normalize_scope(region),
             'date_filed': datetime.utcnow().strftime('%Y-%m-%d'),
             'created_at': firestore.SERVER_TIMESTAMP,
