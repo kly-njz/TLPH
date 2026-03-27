@@ -4248,6 +4248,92 @@ def applicants_regional():
     return render_template('regional/operations/applicants-regional.html')
 
 
+@bp.route('/operations/applicants/data', methods=['GET'])
+@role_required('regional', 'regional_admin')
+def applicants_regional_data():
+    """Fetch applicant jobs for the current regional office."""
+    db = get_firestore_db()
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+
+    applications = []
+    try:
+        docs = db.collection('municipal_denr_applicant_jobs').stream()
+        for doc in docs:
+            data = doc.to_dict() or {}
+            job_region = _canonical_region(data.get('region_office') or data.get('region') or data.get('region_key'))
+            if canonical_region and job_region != canonical_region:
+                continue
+
+            status = str(data.get('status') or data.get('employeeStatus') or 'PENDING').strip().upper()
+            if status not in {'APPROVED', 'REJECTED', 'PENDING'}:
+                status = 'PENDING'
+
+            created_at = data.get('created_at')
+            created_at_iso = ''
+            if hasattr(created_at, 'to_datetime'):
+                try:
+                    created_at = created_at.to_datetime()
+                except Exception:
+                    created_at = None
+            if isinstance(created_at, datetime):
+                created_at_iso = created_at.isoformat()
+
+            applications.append({
+                'id': doc.id,
+                'full_name': data.get('full_name') or data.get('applicant_name') or 'N/A',
+                'candidate_type': data.get('candidate_type') or data.get('category') or 'N/A',
+                'region_office': data.get('region_office') or data.get('region') or 'N/A',
+                'status': status,
+                'created_at': created_at_iso,
+            })
+
+        applications.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+        return jsonify({'success': True, 'applications': applications, 'count': len(applications)}), 200
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch regional applicant jobs: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/operations/applicants/job/<job_id>/status', methods=['POST'])
+@role_required('regional', 'regional_admin')
+def applicants_regional_update_status(job_id):
+    """Update applicant status from regional view with region scope validation."""
+    db = get_firestore_db()
+    payload = request.get_json(silent=True) or {}
+    new_status = str(payload.get('status') or '').strip().upper()
+    if new_status not in {'APPROVED', 'REJECTED', 'PENDING'}:
+        return jsonify({'success': False, 'error': 'Invalid status value'}), 400
+
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+
+    try:
+        doc_ref = db.collection('municipal_denr_applicant_jobs').document(job_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Applicant job not found'}), 404
+
+        existing = doc.to_dict() or {}
+        job_region = _canonical_region(existing.get('region_office') or existing.get('region') or existing.get('region_key'))
+        if canonical_region and job_region and job_region != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for region'}), 403
+
+        doc_ref.set({
+            'status': new_status,
+            'employeeStatus': new_status.lower(),
+            'regionalReviewedAt': firestore.SERVER_TIMESTAMP,
+            'regionalReviewedBy': session.get('user_email', 'regional_admin'),
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+        return jsonify({'success': True, 'status': new_status}), 200
+    except Exception as e:
+        print(f"[ERROR] Failed to update regional applicant status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 
 @bp.route('/operations/quotation')
 @role_required('regional', 'regional_admin')

@@ -1552,7 +1552,7 @@ def applicants_municipal():
             approved_count=0,
             pending_count=0,
             rejected_count=0,
-            barangay_options=[],
+            region_office_options=[],
             trend_labels_json=json.dumps([]),
             trend_values_json=json.dumps([]),
             status_values_json=json.dumps([0, 0, 0]),

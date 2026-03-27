@@ -309,12 +309,9 @@
     // =============================
     // IMPORTANT DATA REQUIREMENT
     // =============================
-    // Each application MUST have an "assignedEmployeeId" (Firebase auth uid of employee).
-    // Example in applications/{appId}:
-    //   assignedEmployeeId: "<employee_uid>"
-    //   employeeStatus: "pending" | "approved" | "returned" | "rejected"
-    //
-    // This page will only show applications WHERE assignedEmployeeId == currentUser.uid.
+    // Regional applicant jobs are fetched from backend endpoint:
+    //   GET /regional/operations/applicants/data
+    // Required fields: full_name, candidate_type, region_office, status.
 
     // Chart defaults
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
@@ -354,7 +351,7 @@
       statusChart = new Chart(document.getElementById('appsStatusChart'), {
         type: 'doughnut',
         data: {
-          labels: ['Approved', 'Pending', 'Returned/Rejected'],
+          labels: ['Approved', 'Pending', 'Rejected'],
           datasets: [{ data: [0,0,0], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }]
         },
         options: { ...sharedOpts, cutout: '70%' }
@@ -420,94 +417,19 @@
 
         async init() {
           bootCharts();
-
-          // Wait Firebase availability
-          let retries = 0;
-          while (!window.firebaseCollection && retries < 50) {
-            await new Promise(r => setTimeout(r, 100));
-            retries++;
-          }
-          if (!window.firebaseCollection) {
-            alert('Error: Firebase modules failed to load. Please refresh.');
-            this.loading = false;
-            return;
-          }
-
-          window.firebaseOnAuthStateChanged(window.firebaseAuth, async (user) => {
-            if (!user) {
-              this.loading = false;
-              return;
-            }
-            await this.loadApplications(user);
-          });
+          await this.loadApplications();
         },
 
-        async loadApplications(user) {
+        async loadApplications() {
           try {
             this.loading = true;
-
-            // Get the current user's region (from user record)
-            let region = '';
-            if (user) {
-              // Try to get region from user record in 'users' collection
-              const userDocRef = window.firebaseDoc(window.firebaseDB, 'users', user.uid);
-              const userDocSnap = await window.firebaseGetDoc(userDocRef);
-              if (userDocSnap.exists()) {
-                const userData = userDocSnap.data();
-                region = (userData.region || userData.region_key || '').toLowerCase();
-              }
-            }
-            this.debugRegion = region;
-            if (!region) {
-              alert('No region found for current user.');
-              this.loading = false;
-              return;
+            const resp = await fetch('/regional/operations/applicants/data');
+            const payload = await resp.json().catch(() => ({}));
+            if (!resp.ok || !payload.success) {
+              throw new Error(payload.error || 'Failed to load regional applicant jobs');
             }
 
-            // Load users map (for applicant names & locations fallback)
-            const usersRef = window.firebaseCollection(window.firebaseDB, 'users');
-            const usersSnap = await window.firebaseGetDocs(usersRef);
-            const usersMap = {};
-            usersSnap.forEach(u => {
-              const d = u.data();
-              usersMap[u.id] = {
-                name: `${d.firstName || ''} ${d.lastName || ''}`.trim() || d.email || 'Unknown User',
-                province: d.province || '',
-                municipality: d.municipality || ''
-              };
-            });
-
-            // Query all jobs in municipal_denr_applicant_jobs for this region
-            const appsRef = window.firebaseCollection(window.firebaseDB, 'municipal_denr_applicant_jobs');
-            const allAppsSnap = await window.firebaseGetDocs(appsRef);
-            // Canonical region normalization (mimics backend _canonical_region)
-            function canonicalRegion(raw) {
-              raw = String(raw || '').trim().toUpperCase();
-              if (!raw) return '';
-              if (raw.includes('MIMAROPA') || raw.includes('IV-B') || raw.includes('REGION IV-B') || raw.includes('REGION-IV-B')) return 'REGION-IV-B';
-              if (raw.includes('CALABARZON') || raw.includes('IV-A') || raw.includes('REGION IV-A') || raw.includes('REGION-IV-A')) return 'REGION-IV-A';
-              if (raw.includes('BICOL') || raw.includes('REGION-V') || raw.includes('REGION V')) return 'REGION-V';
-              if (raw.includes('NCR')) return 'NCR';
-              if (raw.includes('CARAGA')) return 'REGION-XIII';
-              if (raw.includes('BANGSAMORO') || raw.includes('ARMM')) return 'REGION-BANGSAMORO';
-              return raw.replace(/ |\_|\./g, '');
-            }
-
-            const canonicalUserRegion = canonicalRegion(region);
-            // (debug output removed)
-            const regionJobs = [];
-            const jobRegions = [];
-            allAppsSnap.forEach(a => {
-              const data = a.data();
-              const jobRegionRaw = (data.region || data.region_key || '');
-              const jobRegion = canonicalRegion(jobRegionRaw);
-              jobRegions.push(jobRegion);
-              if (jobRegion && jobRegion === canonicalUserRegion) {
-                regionJobs.push(a);
-              }
-            });
-            // (debug output removed)
-            const appsSnap = regionJobs;
+            const appsSnap = Array.isArray(payload.applications) ? payload.applications : [];
 
             const categoryLabels = {
               'farming': 'Crop & Plant',
@@ -532,9 +454,7 @@
             const catKeys = ['Crop', 'Fish/Agric', 'AgriBiz', 'Trade', 'Infra'];
             const catCounts = { 'Crop':0, 'Fish/Agric':0, 'AgriBiz':0, 'Trade':0, 'Infra':0 };
 
-            appsSnap.forEach(a => {
-              const data = a.data();
-              const userInfo = usersMap[data.userId] || {};
+            appsSnap.forEach((data) => {
 
               const fullName = (data.full_name || data.applicant_name || userInfo.name || data.userName || 'Unknown').trim();
               const candidateType = (data.candidate_type || data.category || 'N/A').trim();
@@ -547,7 +467,7 @@
               else pending++;
 
               // Date filed
-              const submittedDate = data.submittedAt?.toDate ? data.submittedAt.toDate() : null;
+              const submittedDate = data.created_at ? new Date(data.created_at) : null;
               const dateFiled = submittedDate
                 ? submittedDate.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' })
                 : 'N/A';
@@ -570,7 +490,7 @@
               catCounts[bucketName] += 1;
 
               this.apps.push({
-                id: a.id,
+                id: data.id,
                 fullName: (fullName || 'Unknown').toUpperCase(),
                 candidateType: (categoryLabels[rawCat] || candidateType || 'N/A').toUpperCase(),
                 regionOffice: (regionOffice || 'N/A').toUpperCase(),
@@ -612,18 +532,18 @@
           if (!confirm('Approve this application?')) return;
 
           try {
-            await window.firebaseUpdateDoc(
-              window.firebaseDoc(window.firebaseDB, 'municipal_denr_applicant_jobs', appId),
-              {
-                employeeStatus: 'approved',
-                employeeReviewedAt: new Date().toISOString(),
-                employeeReviewedBy: window.firebaseAuth.currentUser?.email || 'employee',
-                status: 'APPROVED'
-              }
-            );
+            const resp = await fetch(`/regional/operations/applicants/job/${encodeURIComponent(appId)}/status`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'APPROVED' })
+            });
+            const payload = await resp.json().catch(() => ({}));
+            if (!resp.ok || !payload.success) {
+              throw new Error(payload.error || 'Failed to update status');
+            }
 
             alert('Application approved.');
-            await this.loadApplications(window.firebaseAuth.currentUser);
+            await this.loadApplications();
           } catch (err) {
             console.error(err);
             alert('Error approving: ' + err.message);
@@ -634,18 +554,18 @@
           if (!confirm('Return/Reject this application?')) return;
 
           try {
-            await window.firebaseUpdateDoc(
-              window.firebaseDoc(window.firebaseDB, 'municipal_denr_applicant_jobs', appId),
-              {
-                employeeStatus: 'rejected',
-                employeeReviewedAt: new Date().toISOString(),
-                employeeReviewedBy: window.firebaseAuth.currentUser?.email || 'employee',
-                status: 'REJECTED'
-              }
-            );
+            const resp = await fetch(`/regional/operations/applicants/job/${encodeURIComponent(appId)}/status`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'REJECTED' })
+            });
+            const payload = await resp.json().catch(() => ({}));
+            if (!resp.ok || !payload.success) {
+              throw new Error(payload.error || 'Failed to update status');
+            }
 
-            alert('Application returned.');
-            await this.loadApplications(window.firebaseAuth.currentUser);
+            alert('Application rejected.');
+            await this.loadApplications();
           } catch (err) {
             console.error(err);
             alert('Error returning: ' + err.message);
