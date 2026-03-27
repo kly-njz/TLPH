@@ -43,11 +43,62 @@ def index():
     main_news = landing_news[0] if landing_news else None
     side_news = landing_news[1:4] if len(landing_news) > 1 else []
 
+    # Fetch active hiring positions (filtered by municipality if logged-in municipal admin)
+    hiring_positions = []
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+        
+        # Determine user's municipality if they are a municipal admin
+        user_municipality = None
+        user_role = session.get('user_role', '').lower()
+        
+        if user_role in ['municipal_admin', 'municipal']:
+            # Try to get municipality from session
+            user_municipality = session.get('municipality') or session.get('user_municipality') or ''
+            if not user_municipality.strip():
+                # Fallback: try to resolve from user document
+                if user_id:
+                    from firebase_config import get_firestore_db
+                    db_temp = get_firestore_db()
+                    user_doc = db_temp.collection('users').document(user_id).get()
+                    if user_doc.exists:
+                        user_data = user_doc.to_dict() or {}
+                        user_municipality = user_data.get('municipality') or user_data.get('municipalAdminMunicipality') or ''
+        
+        # Query hiring positions
+        if user_municipality and user_municipality.strip():
+            # If municipal admin, filter by their municipality
+            query = db.collection('hiring_positions').where('is_active', '==', True).where('municipality', '==', user_municipality.upper())
+        else:
+            # For other users, show all active hirings
+            query = db.collection('hiring_positions').where('is_active', '==', True)
+        
+        docs = query.stream()
+        for doc in docs:
+            item = doc.to_dict() or {}
+            hiring_positions.append({
+                'id': doc.id,
+                'job_title': str(item.get('job_title') or '').strip(),
+                'description': str(item.get('description') or '').strip(),
+                'position': str(item.get('position') or '').strip(),
+                'starting_salary': item.get('starting_salary') or 0,
+                'municipality': str(item.get('municipality') or '').strip(),
+                'scope': str(item.get('scope') or '').strip(),
+                'created_at': str(item.get('created_at') or '').strip(),
+            })
+        
+        # Sort by created_at (newest first)
+        hiring_positions.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    except Exception as e:
+        print(f"[WARN] Could not load hiring positions from Firestore: {e}")
+
     return render_template(
         'home.html',
         landing_news=landing_news,
         main_news=main_news,
         side_news=side_news,
+        hiring_positions=hiring_positions,
     )
 
 @bp.route('/login')
