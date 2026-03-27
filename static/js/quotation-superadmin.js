@@ -71,6 +71,25 @@ function computeTotal(quantity, unitPrice, otherCharges) {
     return (toNumber(quantity) * toNumber(unitPrice)) + toNumber(otherCharges);
 }
 
+function setFieldLock(el, locked) {
+    if (!el) return;
+    if (el.tagName === 'SELECT') {
+        el.disabled = locked;
+    } else {
+        el.readOnly = locked;
+    }
+    if (locked) {
+        el.classList.add('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+    } else {
+        el.classList.remove('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+    }
+}
+
+function toggleEditLocks(locked) {
+    setFieldLock(document.getElementById('newIssueDate'), locked);
+    setFieldLock(document.getElementById('newBuyer'), locked);
+}
+
 function getQuotePayload() {
     const quantity = toNumber(document.getElementById('newQty').value);
     const unitPrice = toNumber(document.getElementById('newPrice').value);
@@ -107,6 +126,7 @@ function showQuoteDrawer() {
 }
 
 function resetQuoteForm() {
+    toggleEditLocks(false);
     document.getElementById('editQuoteId').value = '';
     document.getElementById('editMetaRow').classList.add('hidden');
     document.getElementById('newStatusRow').classList.add('hidden');
@@ -165,6 +185,7 @@ async function openEditDrawer(quoteId) {
     document.getElementById('newOtherChargesNote').value = data.other_charges_note || '';
     document.getElementById('quoteDrawerTitle').textContent = 'Edit Quotation';
     document.getElementById('quoteSubmitBtn').textContent = 'Update Quotation';
+    toggleEditLocks(true);
     // Show modal
     const overlay = document.getElementById('drawerOverlay');
     overlay.classList.remove('hidden');
