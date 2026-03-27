@@ -913,14 +913,14 @@ def submit_application():
                 files = request.files.getlist(field)
                 saved_urls = []
 
-                for file in files:
+                for idx, file in enumerate(files):
                     if not file or not file.filename:
                         continue
 
                     # Secure filename
                     filename = secure_filename(file.filename)
                     timestamp = int(datetime.now().timestamp())
-                    unique_filename = f"{timestamp}_{field}_{filename}"
+                    unique_filename = f"{timestamp}_{field}_{idx}_{filename}"
 
                     web_path = None
                     if _cloudinary_enabled():
