@@ -58,6 +58,11 @@ async function downloadDeliveryDetails(quoteId) {
         return;
     }
     const data = await res.json();
+    const status = String(data.status || '').toLowerCase();
+    if (status !== 'delivered') {
+        alert('Delivery details are only available for delivered quotations.');
+        return;
+    }
     // Use jsPDF to generate a simple PDF
     const doc = new window.jspdf.jsPDF();
     doc.setFontSize(12);
