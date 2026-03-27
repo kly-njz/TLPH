@@ -13,6 +13,16 @@ from firebase_admin import credentials, firestore
 
 TARGET_REGION_OFFICE = "MIMAROPA"
 ALLOWED_MUNICIPAL_SCOPES = {"NAUJAN", "VICTORIA"}
+DENR_WORK_TYPES = [
+    "Forest Ranger",
+    "Protected Area Management Staff",
+    "Wildlife Enforcement Officer",
+    "Biodiversity Conservation Aide",
+    "Environmental Management Specialist",
+    "Coastal and Marine Ecosystem Aide",
+    "Watershed Rehabilitation Worker",
+    "Community Environment Officer",
+]
 
 
 def _normalize_status(raw: str) -> str:
@@ -29,6 +39,38 @@ def _safe_text(value, default="N/A") -> str:
 
 def _norm_key(value: str) -> str:
     return " ".join(str(value or "").strip().upper().split())
+
+
+def _infer_denr_work_type(src: dict, fallback_index: int) -> str:
+    raw = " ".join(
+        [
+            str(src.get("candidate_type") or ""),
+            str(src.get("category") or ""),
+            str(src.get("application_type") or ""),
+            str(src.get("applicantCategory") or ""),
+            str(src.get("job_title") or ""),
+            str(src.get("purpose") or ""),
+        ]
+    ).lower()
+
+    if any(k in raw for k in ["forest", "timber", "reforestation"]):
+        return "Forest Ranger"
+    if any(k in raw for k in ["protected", "park", "sanctuary"]):
+        return "Protected Area Management Staff"
+    if any(k in raw for k in ["wildlife", "poach", "enforcement"]):
+        return "Wildlife Enforcement Officer"
+    if any(k in raw for k in ["biodiversity", "species", "habitat"]):
+        return "Biodiversity Conservation Aide"
+    if any(k in raw for k in ["environment", "compliance", "pollution", "ecc"]):
+        return "Environmental Management Specialist"
+    if any(k in raw for k in ["coast", "marine", "mangrove", "fisher"]):
+        return "Coastal and Marine Ecosystem Aide"
+    if any(k in raw for k in ["watershed", "river", "erosion"]):
+        return "Watershed Rehabilitation Worker"
+    if any(k in raw for k in ["community", "cenro", "municipal", "barangay"]):
+        return "Community Environment Officer"
+
+    return DENR_WORK_TYPES[fallback_index % len(DENR_WORK_TYPES)]
 
 
 def main() -> None:
@@ -48,7 +90,7 @@ def main() -> None:
     source_docs = list(db.collection("applications").stream())
     seeded = 0
 
-    for source_doc in source_docs:
+    for idx, source_doc in enumerate(source_docs):
         src = source_doc.to_dict() or {}
 
         full_name = _safe_text(
@@ -59,13 +101,7 @@ def main() -> None:
             or src.get("name")
             or src.get("userName")
         )
-        candidate_type = _safe_text(
-            src.get("candidate_type")
-            or src.get("category")
-            or src.get("application_type")
-            or src.get("applicantCategory")
-            or "DENR Application"
-        )
+        candidate_type = _infer_denr_work_type(src, idx)
         region_office = TARGET_REGION_OFFICE
         municipality = _safe_text(
             src.get("target_municipality")
