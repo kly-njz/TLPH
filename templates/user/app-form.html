@@ -199,6 +199,8 @@
             const categorySelect = document.getElementById('category');
             const investmentInput = document.getElementById('investmentQty');
             const harvestInput = document.getElementById('harvestQty');
+            const farmerIdInput = document.getElementById('farmerIdNumber');
+            const pinLocationInput = document.getElementById('googlePinLocation');
 
             const fileConfigs = [
                 { id: 'titleFile', name: 'titleName' },
@@ -208,6 +210,7 @@
                 { id: 'cropFile', name: 'cropName' },
                 { id: 'planFile', name: 'planName' },
                 { id: 'productPictureFile', name: 'productPictureName' },
+                { id: 'validIdFile', name: 'validIdName' },
                 { id: 'brgyFile', name: 'brgyName' }
             ]
             ;
@@ -217,9 +220,11 @@
                 const category = categorySelect.value;
                 const inv = investmentInput.value;
                 const har = harvestInput.value;
+                const farmerId = farmerIdInput.value.trim();
+                const pinLocation = pinLocationInput.value.trim();
                 const filesDone = fileConfigs.every(f => document.getElementById(f.id).files.length > 0);
 
-                if (prodName && category && inv && har && filesDone) {
+                if (prodName && category && inv && har && farmerId && pinLocation && filesDone) {
                     submitBtn.disabled = false;
                     submitBtn.classList.replace('bg-gray-200', 'bg-green-700');
                     submitBtn.classList.replace('text-gray-400', 'text-white');
@@ -239,7 +244,11 @@
                 input.addEventListener('change', (e) => {
                     const display = document.getElementById(f.name);
                     if (e.target.files.length > 0) {
-                        display.textContent = "✔ " + e.target.files[0].name;
+                        if (e.target.files.length === 1) {
+                            display.textContent = "✔ " + e.target.files[0].name;
+                        } else {
+                            display.textContent = `✔ ${e.target.files.length} files selected`;
+                        }
                     } else {
                         display.textContent = "";
                     }
@@ -279,6 +288,8 @@
                     const amount = parseInt(document.getElementById('xendit_raw_amount').value) || 2450;
                     const productName = productNameInput.value.trim();
                     const category = categorySelect.value;
+                    const farmerIdNumber = farmerIdInput.value.trim();
+                    const googlePinLocation = pinLocationInput.value.trim();
 
                     // Upload files first so we can store real URLs in Firestore after payment.
                     const uploadFormData = new FormData();
@@ -287,11 +298,15 @@
                     uploadFormData.append('category', category);
                     uploadFormData.append('investmentQty', investmentInput.value || '0');
                     uploadFormData.append('harvestQty', harvestInput.value || '0');
+                    uploadFormData.append('farmerIdNumber', farmerIdNumber);
+                    uploadFormData.append('googlePinLocation', googlePinLocation);
 
                     fileConfigs.forEach((f) => {
                         const input = document.getElementById(f.id);
-                        if (input?.files?.[0]) {
-                            uploadFormData.append(f.id, input.files[0]);
+                        if (input?.files?.length) {
+                            Array.from(input.files).forEach((file) => {
+                                uploadFormData.append(f.id, file);
+                            });
                         }
                     });
 
@@ -337,9 +352,11 @@
                         province: userData.province || 'Oriental Mindoro',
                         productName: productName,
                         category: category,
+                        farmerIdNumber,
+                        googlePinLocation,
                         investmentQty: parseFloat(investmentInput.value) || 0,
                         harvestQty: parseFloat(harvestInput.value) || 0,
-                        imageUrl: uploadData.filePaths?.productPicture || uploadData.filePaths?.crop || uploadData.filePaths?.land || '',
+                        imageUrl: uploadData.filePaths?.productPicture || uploadData.filePaths?.crop?.[0] || uploadData.filePaths?.crop || uploadData.filePaths?.land?.[0] || uploadData.filePaths?.land || '',
                         files: uploadData.filePaths || {},
                         status: 'pending',
                         invoiceId: invoiceData.invoice_id,
@@ -348,11 +365,12 @@
                             barangayCert: document.getElementById('brgyFile').files[0].name,
                             landTitle: document.getElementById('titleFile').files[0].name,
                             taxReceipt: document.getElementById('taxFile').files[0].name,
-                            blueprint: document.getElementById('blueprintFile').files[0].name,
-                            landPhoto: document.getElementById('landFile').files[0].name,
-                            cropPhoto: document.getElementById('cropFile').files[0].name,
+                            blueprint: Array.from(document.getElementById('blueprintFile').files || []).map(f => f.name),
+                            landPhoto: Array.from(document.getElementById('landFile').files || []).map(f => f.name),
+                            cropPhoto: Array.from(document.getElementById('cropFile').files || []).map(f => f.name),
                             businessPlan: document.getElementById('planFile').files[0].name,
-                            productPicture: document.getElementById('productPictureFile').files[0].name
+                            productPicture: document.getElementById('productPictureFile').files[0].name,
+                            validId: document.getElementById('validIdFile').files[0].name
                         }
                     };
                     
