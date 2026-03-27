@@ -524,6 +524,8 @@
         const cancelApplyBtn = document.getElementById('cancelApplyBtn');
         const applyStatus = document.getElementById('applyStatus');
         const submitApplyBtn = document.getElementById('submitApplyBtn');
+        const applyResumeFileInput = document.getElementById('applyResumeFile');
+        const applyResumeFileStatus = document.getElementById('applyResumeFileStatus');
 
         function openApplyModal(dataset) {
             document.getElementById('applyHiringId').value = dataset.hiringId || '';
@@ -541,6 +543,33 @@
             applyForm.reset();
             applyStatus.classList.add('hidden');
             applyStatus.textContent = '';
+            if (applyResumeFileStatus) {
+                applyResumeFileStatus.textContent = 'Required for submission.';
+                applyResumeFileStatus.className = 'mt-1 text-[11px] text-gray-500';
+            }
+        }
+
+        if (applyResumeFileInput) {
+            applyResumeFileInput.addEventListener('change', () => {
+                const file = applyResumeFileInput.files && applyResumeFileInput.files[0];
+                if (!file) {
+                    applyResumeFileStatus.textContent = 'Required for submission.';
+                    applyResumeFileStatus.className = 'mt-1 text-[11px] text-gray-500';
+                    return;
+                }
+
+                const allowed = ['pdf', 'doc', 'docx'];
+                const ext = (file.name.split('.').pop() || '').toLowerCase();
+                if (!allowed.includes(ext)) {
+                    applyResumeFileStatus.textContent = 'Invalid file type. Use PDF, DOC, or DOCX.';
+                    applyResumeFileStatus.className = 'mt-1 text-[11px] text-rose-600';
+                    applyResumeFileInput.value = '';
+                    return;
+                }
+
+                applyResumeFileStatus.textContent = `Selected: ${file.name}`;
+                applyResumeFileStatus.className = 'mt-1 text-[11px] text-emerald-700';
+            });
         }
 
         applyButtons.forEach((btn) => {
@@ -567,6 +596,15 @@
         if (applyForm) {
             applyForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
+
+                const resumeFile = applyResumeFileInput && applyResumeFileInput.files ? applyResumeFileInput.files[0] : null;
+                if (!resumeFile) {
+                    applyStatus.className = 'md:col-span-2 text-sm rounded-lg px-3 py-2 bg-rose-50 text-rose-700 border border-rose-200';
+                    applyStatus.textContent = 'Resume file is required (PDF/DOC/DOCX).';
+                    applyStatus.classList.remove('hidden');
+                    return;
+                }
+
                 const payload = {
                     hiring_id: document.getElementById('applyHiringId').value.trim(),
                     full_name: document.getElementById('applyFullName').value.trim(),
@@ -588,7 +626,6 @@
                     expected_salary: document.getElementById('applyExpectedSalary').value.trim(),
                     available_start_date: document.getElementById('applyAvailableStartDate').value.trim(),
                     preferred_work_type: document.getElementById('applyPreferredWorkType').value.trim(),
-                    resume_link: document.getElementById('applyResumeLink').value.trim(),
                     cover_letter: document.getElementById('applyCoverLetter').value.trim(),
                     notes: document.getElementById('applyNotes').value.trim(),
                 };
@@ -597,6 +634,28 @@
                 submitApplyBtn.textContent = 'Submitting...';
 
                 try {
+                    // 1) Upload resume file to Cloudinary
+                    applyStatus.className = 'md:col-span-2 text-sm rounded-lg px-3 py-2 bg-slate-50 text-slate-700 border border-slate-200';
+                    applyStatus.textContent = 'Uploading resume...';
+                    applyStatus.classList.remove('hidden');
+
+                    const uploadFd = new FormData();
+                    uploadFd.append('resume', resumeFile);
+                    const uploadRes = await fetch('/api/hiring/upload-resume', {
+                        method: 'POST',
+                        body: uploadFd,
+                    });
+                    const uploadData = await uploadRes.json().catch(() => ({}));
+                    if (!uploadRes.ok || !uploadData.success || !uploadData.resume_url) {
+                        applyStatus.className = 'md:col-span-2 text-sm rounded-lg px-3 py-2 bg-rose-50 text-rose-700 border border-rose-200';
+                        applyStatus.textContent = uploadData.error || 'Resume upload failed';
+                        applyStatus.classList.remove('hidden');
+                        return;
+                    }
+
+                    payload.resume_url = uploadData.resume_url;
+
+                    // 2) Submit application record
                     const res = await fetch('/api/hiring/apply', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
