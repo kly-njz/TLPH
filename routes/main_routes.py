@@ -636,3 +636,35 @@ def news_main():
 @bp.route('/programs')
 def programs_main():
     return render_template('programs.html')
+
+@bp.route('/forest')
+def forest_main():
+    return render_template('forest.html')
+
+@bp.route('/coastal')
+def coastal_main():
+    return render_template('coastal.html')
+
+@bp.route('/biodiversity')
+def biodiversity_main():
+    return render_template('biodiversity.html')
+
+@bp.route('/climate')
+def climate_main():
+    return render_template('climate.html')
+
+@bp.route('/education')
+def education_main():
+    return render_template('education.html')
+
+@bp.route('/environmental')
+def environmental_main():
+    return render_template('environmental.html')
+
+@bp.route('/land')
+def land_main():    
+    return render_template('land.html')
+
+@bp.route('/river')
+def river_main():
+    return render_template('river.html')

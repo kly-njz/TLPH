@@ -971,7 +971,170 @@ def tasks():
 @bp.route('/applicants')
 @role_required('national', 'national_admin')
 def applicants():
-    return render_template('national/HRM/applicants.html')
+    try:
+        import json
+
+        def _normalize_status(raw_status):
+            value = str(raw_status or 'pending').strip().lower()
+            if value in ['approved', 'accept', 'accepted', 'hired', 'cleared', 'complete', 'completed']:
+                return 'approved'
+            if value in ['rejected', 'reject', 'denied', 'declined', 'returned']:
+                return 'rejected'
+            return 'pending'
+
+        def _format_datetime(raw):
+            if not raw:
+                return 'N/A'
+            if isinstance(raw, str):
+                try:
+                    dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                    return dt.strftime('%b %d, %Y %I:%M %p')
+                except Exception:
+                    return raw
+            if hasattr(raw, 'to_datetime'):
+                try:
+                    raw = raw.to_datetime()
+                except Exception:
+                    pass
+            if hasattr(raw, 'strftime'):
+                return raw.strftime('%b %d, %Y %I:%M %p')
+            return str(raw)
+
+        db = get_firestore_db()
+        docs = db.collection('municipal_denr_applicant_jobs').stream()
+
+        applicants = []
+        region_set = set()
+        candidate_type_set = set()
+
+        total_count = 0
+        approved_count = 0
+        pending_count = 0
+        rejected_count = 0
+        municipal_scope_count = 0
+        regional_scope_count = 0
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+
+            full_name = (
+                data.get('full_name')
+                or data.get('applicant_name')
+                or data.get('fullName')
+                or data.get('name')
+                or 'N/A'
+            )
+            candidate_type = (
+                data.get('candidate_type')
+                or data.get('category')
+                or data.get('applicantCategory')
+                or 'N/A'
+            )
+            job_description = (
+                data.get('job_description')
+                or data.get('jobDescription')
+                or data.get('description')
+                or data.get('project_name')
+                or 'N/A'
+            )
+
+            region_office = (data.get('region_office') or data.get('region') or 'N/A')
+            municipality = data.get('municipality') or ''
+
+            scope_type = str(data.get('scope_type') or '').strip().lower()
+            if scope_type not in ['municipality', 'region']:
+                scope_type = 'municipality' if municipality else 'region'
+            scope = (
+                data.get('scope')
+                or (municipality if scope_type == 'municipality' else region_office)
+                or 'N/A'
+            )
+
+            status = _normalize_status(
+                data.get('status') or data.get('employeeStatus') or data.get('application_status')
+            )
+            reference_id = data.get('reference_id') or data.get('ref_no') or doc.id[:12].upper()
+
+            created_at = data.get('created_at') or data.get('createdAt')
+            created_sort = 0
+            date_filed = 'N/A'
+            if created_at:
+                if isinstance(created_at, str):
+                    try:
+                        dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        created_sort = int(dt.timestamp())
+                        date_filed = dt.strftime('%b %d, %Y')
+                    except Exception:
+                        date_filed = created_at
+                elif hasattr(created_at, 'timestamp') and hasattr(created_at, 'strftime'):
+                    created_sort = int(created_at.timestamp())
+                    date_filed = created_at.strftime('%b %d, %Y')
+
+            applicants.append({
+                'id': doc.id,
+                'reference_id': str(reference_id).upper(),
+                'full_name': str(full_name),
+                'candidate_type': str(candidate_type),
+                'job_description': str(job_description),
+                'region_office': str(region_office),
+                'scope_type': scope_type,
+                'scope': str(scope),
+                'municipality': str(municipality),
+                'status': status,
+                'accepted_by': str(data.get('accepted_by') or data.get('reviewed_by') or 'N/A'),
+                'updated_at': _format_datetime(data.get('updated_at') or data.get('reviewed_at') or data.get('created_at') or data.get('createdAt')),
+                'date_filed': date_filed,
+                'created_sort': created_sort,
+            })
+
+            total_count += 1
+            if status == 'approved':
+                approved_count += 1
+            elif status == 'rejected':
+                rejected_count += 1
+            else:
+                pending_count += 1
+
+            if scope_type == 'municipality':
+                municipal_scope_count += 1
+            else:
+                regional_scope_count += 1
+
+            if region_office and region_office != 'N/A':
+                region_set.add(str(region_office).upper())
+            if candidate_type and candidate_type != 'N/A':
+                candidate_type_set.add(str(candidate_type).upper())
+
+        applicants.sort(key=lambda x: x.get('created_sort', 0), reverse=True)
+
+        return render_template(
+            'national/HRM/applicants.html',
+            applicants=applicants,
+            applicants_json=json.dumps(applicants),
+            total_count=total_count,
+            approved_count=approved_count,
+            pending_count=pending_count,
+            rejected_count=rejected_count,
+            municipal_scope_count=municipal_scope_count,
+            regional_scope_count=regional_scope_count,
+            regions=sorted(region_set),
+            candidate_types=sorted(candidate_type_set),
+        )
+    except Exception as e:
+        print(f"[ERROR] Loading national applicants: {e}")
+        return render_template(
+            'national/HRM/applicants.html',
+            applicants=[],
+            applicants_json='[]',
+            total_count=0,
+            approved_count=0,
+            pending_count=0,
+            rejected_count=0,
+            municipal_scope_count=0,
+            regional_scope_count=0,
+            regions=[],
+            candidate_types=[],
+        )
 
 
 # -----------------------------

@@ -1540,6 +1540,47 @@ def applicants_municipal():
     def normalize_scope(value):
         return ' '.join(str(value or '').strip().upper().split())
 
+    denr_roles = [
+        'Forest Ranger',
+        'Protected Area Management Staff',
+        'Wildlife Enforcement Officer',
+        'Biodiversity Conservation Aide',
+        'Environmental Management Specialist',
+        'Coastal and Marine Ecosystem Aide',
+        'Watershed Rehabilitation Worker',
+        'Community Environment Officer',
+    ]
+
+    def normalize_denr_role(raw_value, fallback='Environmental Management Specialist'):
+        raw = str(raw_value or '').strip()
+        if raw in denr_roles:
+            return raw
+
+        key = raw.lower()
+        if any(k in key for k in ['forest', 'timber', 'reforestation']):
+            return 'Forest Ranger'
+        if any(k in key for k in ['protected', 'park', 'sanctuary']):
+            return 'Protected Area Management Staff'
+        if any(k in key for k in ['wildlife', 'poach', 'enforcement']):
+            return 'Wildlife Enforcement Officer'
+        if any(k in key for k in ['biodiversity', 'species', 'habitat']):
+            return 'Biodiversity Conservation Aide'
+        if any(k in key for k in ['environment', 'compliance', 'pollution', 'ecc']):
+            return 'Environmental Management Specialist'
+        if any(k in key for k in ['coast', 'marine', 'mangrove', 'fisher']):
+            return 'Coastal and Marine Ecosystem Aide'
+        if any(k in key for k in ['watershed', 'river', 'erosion', 'farming']):
+            return 'Watershed Rehabilitation Worker'
+        if any(k in key for k in ['community', 'cenro', 'municipal', 'barangay', 'trade']):
+            return 'Community Environment Officer'
+        if any(k in key for k in ['livestock']):
+            return 'Coastal and Marine Ecosystem Aide'
+        if any(k in key for k in ['agribusiness']):
+            return 'Environmental Management Specialist'
+        if any(k in key for k in ['infrastructure']):
+            return 'Protected Area Management Staff'
+        return fallback
+
     municipality_key = normalize_scope(user_municipality)
     region_key = normalize_scope(user_region)
 
@@ -1552,7 +1593,7 @@ def applicants_municipal():
             approved_count=0,
             pending_count=0,
             rejected_count=0,
-            barangay_options=[],
+            region_office_options=[],
             trend_labels_json=json.dumps([]),
             trend_values_json=json.dumps([]),
             status_values_json=json.dumps([0, 0, 0]),
@@ -1585,20 +1626,37 @@ def applicants_municipal():
 
         for source_doc in source_docs:
             src = source_doc.to_dict() or {}
+            src_scope_type = str(
+                src.get('scope_type')
+                or src.get('scopeType')
+                or src.get('scope_level')
+                or src.get('scopeLevel')
+                or src.get('deliver_to_type')
+                or src.get('directed_to_type')
+                or src.get('target_type')
+                or ''
+            ).strip().lower()
+
+            if src_scope_type == 'region':
+                continue
+
             src_municipality = normalize_scope(
-                src.get('municipality')
+                src.get('target_municipality')
+                or src.get('municipality')
                 or src.get('municipality_name')
                 or src.get('municipalityName')
-                or src.get('target_municipality')
             )
             src_region = normalize_scope(
-                src.get('region')
+                src.get('target_region')
+                or src.get('region')
                 or src.get('region_name')
                 or src.get('regionName')
-                or src.get('target_region')
             )
 
-            if src_municipality and src_municipality != municipality_key:
+            # Municipal page should only materialize jobs explicitly scoped to this municipality.
+            if not src_municipality:
+                continue
+            if src_municipality != municipality_key:
                 continue
             if src_region and src_region != region_key:
                 continue
@@ -1635,14 +1693,30 @@ def applicants_municipal():
             created_raw = src.get('date_filed') or src.get('created_at') or src.get('timestamp')
             created_dt = _safe_datetime(created_raw)
 
+            if status not in {'APPROVED', 'REJECTED', 'PENDING'}:
+                status = 'PENDING'
+
+            full_name = str(applicant_name).strip() or 'N/A'
+            candidate_type = normalize_denr_role(category)
+            region_office = str(user_region).strip() or str(src.get('region') or '').strip() or 'N/A'
+            scope_type = 'municipality'
+            scope = str(src.get('target_municipality') or src.get('municipality') or user_municipality).strip() or user_municipality
+
             denr_job = {
                 'source_id': source_doc.id,
                 'source_collection': 'applications',
+                'full_name': full_name,
+                'candidate_type': candidate_type,
+                'region_office': region_office,
+                'scope_type': scope_type,
+                'scope': scope,
+                'scope_key': normalize_scope(scope),
                 'applicant_name': str(applicant_name).strip(),
-                'category': str(category).strip(),
+                'category': candidate_type,
                 'job_title': f"{str(category).strip()} Review",
                 'job_description': 'Validate DENR applicant documents and requirements for municipal processing.',
                 'status': status,
+                'employeeStatus': status.lower(),
                 'barangay': str(barangay).strip(),
                 'reference_id': reference_id,
                 'municipality': user_municipality,
@@ -1669,6 +1743,12 @@ def applicants_municipal():
         for doc in query:
             item = doc.to_dict() or {}
             item['id'] = doc.id
+            item_scope_type = str(item.get('scope_type') or '').strip().lower()
+            item_scope_key = normalize_scope(item.get('scope_key') or item.get('scope') or item.get('municipality'))
+            if item_scope_type and item_scope_type != 'municipality':
+                continue
+            if item_scope_key and item_scope_key != municipality_key:
+                continue
             raw_created = item.get('created_at')
             created_dt = _safe_datetime(raw_created)
             item['created_at_dt'] = created_dt
@@ -1677,10 +1757,15 @@ def applicants_municipal():
             if ref_value.upper().startswith('APP-'):
                 ref_value = ref_value[4:]
             item['reference_id'] = ref_value
-            item['applicant_name'] = item.get('applicant_name') or 'N/A'
-            item['category'] = item.get('category') or 'DENR Application'
+            item['full_name'] = item.get('full_name') or item.get('applicant_name') or 'N/A'
+            item['candidate_type'] = normalize_denr_role(item.get('candidate_type') or item.get('category') or '')
+            item['region_office'] = item.get('region_office') or item.get('region') or user_region or 'N/A'
+            item['applicant_name'] = item.get('applicant_name') or item.get('full_name') or 'N/A'
+            item['category'] = item['candidate_type']
             item['barangay'] = item.get('barangay') or 'N/A'
             item['status'] = str(item.get('status') or 'PENDING').upper()
+            if item['status'] not in {'APPROVED', 'REJECTED', 'PENDING'}:
+                item['status'] = 'PENDING'
             applications.append(item)
     except Exception as e:
         print(f"[WARN] Scoped query failed, fallback filtering in-memory: {e}")
@@ -1693,6 +1778,12 @@ def applicants_municipal():
                     continue
                 if normalize_scope(item.get('region_key') or item.get('region')) != region_key:
                     continue
+                item_scope_type = str(item.get('scope_type') or '').strip().lower()
+                item_scope_key = normalize_scope(item.get('scope_key') or item.get('scope') or item.get('municipality'))
+                if item_scope_type and item_scope_type != 'municipality':
+                    continue
+                if item_scope_key and item_scope_key != municipality_key:
+                    continue
                 raw_created = item.get('created_at')
                 created_dt = _safe_datetime(raw_created)
                 item['created_at_dt'] = created_dt
@@ -1701,10 +1792,15 @@ def applicants_municipal():
                 if ref_value.upper().startswith('APP-'):
                     ref_value = ref_value[4:]
                 item['reference_id'] = ref_value
-                item['applicant_name'] = item.get('applicant_name') or 'N/A'
-                item['category'] = item.get('category') or 'DENR Application'
+                item['full_name'] = item.get('full_name') or item.get('applicant_name') or 'N/A'
+                item['candidate_type'] = normalize_denr_role(item.get('candidate_type') or item.get('category') or '')
+                item['region_office'] = item.get('region_office') or item.get('region') or user_region or 'N/A'
+                item['applicant_name'] = item.get('applicant_name') or item.get('full_name') or 'N/A'
+                item['category'] = item['candidate_type']
                 item['barangay'] = item.get('barangay') or 'N/A'
                 item['status'] = str(item.get('status') or 'PENDING').upper()
+                if item['status'] not in {'APPROVED', 'REJECTED', 'PENDING'}:
+                    item['status'] = 'PENDING'
                 applications.append(item)
         except Exception as fallback_error:
             print(f"[ERROR] Fallback query failed for municipal_denr_applicant_jobs: {fallback_error}")
@@ -1716,8 +1812,8 @@ def applicants_municipal():
     pending_count = len([a for a in applications if a.get('status') == 'PENDING'])
     rejected_count = len([a for a in applications if a.get('status') == 'REJECTED'])
 
-    barangay_counts = Counter([(a.get('barangay') or 'N/A') for a in applications])
-    barangay_options = sorted([b for b in barangay_counts.keys() if b and b != 'N/A'])
+    region_office_counts = Counter([(a.get('region_office') or 'N/A') for a in applications])
+    region_office_options = sorted([r for r in region_office_counts.keys() if r and r != 'N/A'])
 
     monthly_counts = Counter()
     for app in applications:
@@ -1735,9 +1831,9 @@ def applicants_municipal():
 
     status_values = [approved_count, pending_count, rejected_count]
 
-    top_barangays = barangay_counts.most_common(5)
-    barangay_labels = [x[0] for x in top_barangays] if top_barangays else ['No Data']
-    barangay_values = [x[1] for x in top_barangays] if top_barangays else [0]
+    top_region_offices = region_office_counts.most_common(5)
+    barangay_labels = [x[0] for x in top_region_offices] if top_region_offices else ['No Data']
+    barangay_values = [x[1] for x in top_region_offices] if top_region_offices else [0]
 
     return render_template(
         'municipal/operations/applicants-municipal.html',
@@ -1746,7 +1842,7 @@ def applicants_municipal():
         approved_count=approved_count,
         pending_count=pending_count,
         rejected_count=rejected_count,
-        barangay_options=barangay_options,
+        region_office_options=region_office_options,
         trend_labels_json=json.dumps(trend_labels),
         trend_values_json=json.dumps(trend_values),
         status_values_json=json.dumps(status_values),
@@ -1767,12 +1863,57 @@ def applicants_municipal_job_detail(job_id):
     def normalize_scope(value):
         return ' '.join(str(value or '').strip().upper().split())
 
+    denr_roles = {
+        'Forest Ranger',
+        'Protected Area Management Staff',
+        'Wildlife Enforcement Officer',
+        'Biodiversity Conservation Aide',
+        'Environmental Management Specialist',
+        'Coastal and Marine Ecosystem Aide',
+        'Watershed Rehabilitation Worker',
+        'Community Environment Officer',
+    }
+
+    def normalize_denr_role(raw_value, fallback='Environmental Management Specialist'):
+        raw = str(raw_value or '').strip()
+        if raw in denr_roles:
+            return raw
+
+        key = raw.lower()
+        if any(k in key for k in ['forest', 'timber', 'reforestation']):
+            return 'Forest Ranger'
+        if any(k in key for k in ['protected', 'park', 'sanctuary']):
+            return 'Protected Area Management Staff'
+        if any(k in key for k in ['wildlife', 'poach', 'enforcement']):
+            return 'Wildlife Enforcement Officer'
+        if any(k in key for k in ['biodiversity', 'species', 'habitat']):
+            return 'Biodiversity Conservation Aide'
+        if any(k in key for k in ['environment', 'compliance', 'pollution', 'ecc']):
+            return 'Environmental Management Specialist'
+        if any(k in key for k in ['coast', 'marine', 'mangrove', 'fisher', 'livestock']):
+            return 'Coastal and Marine Ecosystem Aide'
+        if any(k in key for k in ['watershed', 'river', 'erosion', 'farming']):
+            return 'Watershed Rehabilitation Worker'
+        if any(k in key for k in ['community', 'cenro', 'municipal', 'barangay', 'trade']):
+            return 'Community Environment Officer'
+        if any(k in key for k in ['agribusiness']):
+            return 'Environmental Management Specialist'
+        if any(k in key for k in ['infrastructure']):
+            return 'Protected Area Management Staff'
+        return fallback
+
     try:
         doc = db.collection('municipal_denr_applicant_jobs').document(job_id).get()
         if not doc.exists:
             return jsonify({'success': False, 'error': 'Applicant job not found'}), 404
 
         data = doc.to_dict() or {}
+        scope_type = str(data.get('scope_type') or '').strip().lower()
+        scope_key = normalize_scope(data.get('scope_key') or data.get('scope') or data.get('municipality'))
+        if scope_type and scope_type != 'municipality':
+            return jsonify({'success': False, 'error': 'Access denied: application is not scoped to municipality'}), 403
+        if scope_key and scope_key != normalize_scope(user_municipality):
+            return jsonify({'success': False, 'error': 'Access denied for municipality scope'}), 403
         if normalize_scope(data.get('municipality_key') or data.get('municipality')) != normalize_scope(user_municipality):
             return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
         if normalize_scope(data.get('region_key') or data.get('region')) != normalize_scope(user_region):
@@ -1781,8 +1922,11 @@ def applicants_municipal_job_detail(job_id):
         return jsonify({'success': True, 'job': {
             'id': doc.id,
             'reference_id': data.get('reference_id') or doc.id,
-            'applicant_name': data.get('applicant_name') or 'N/A',
-            'category': data.get('category') or 'DENR Application',
+            'full_name': data.get('full_name') or data.get('applicant_name') or 'N/A',
+            'candidate_type': normalize_denr_role(data.get('candidate_type') or data.get('category') or ''),
+            'region_office': data.get('region_office') or data.get('region') or 'N/A',
+            'applicant_name': data.get('applicant_name') or data.get('full_name') or 'N/A',
+            'category': normalize_denr_role(data.get('candidate_type') or data.get('category') or ''),
             'barangay': data.get('barangay') or 'N/A',
             'status': str(data.get('status') or 'PENDING').upper(),
             'date_filed': data.get('date_filed') or 'N/A',
@@ -1810,6 +1954,7 @@ def applicants_municipal_job_update_status(job_id):
     new_status = str(data.get('status') or '').strip().upper()
     if new_status not in {'APPROVED', 'REJECTED', 'PENDING'}:
         return jsonify({'success': False, 'error': 'Invalid status value'}), 400
+    actor_email = session.get('user_email', 'municipal_admin')
 
     try:
         doc_ref = db.collection('municipal_denr_applicant_jobs').document(job_id)
@@ -1818,15 +1963,38 @@ def applicants_municipal_job_update_status(job_id):
             return jsonify({'success': False, 'error': 'Applicant job not found'}), 404
 
         existing = doc.to_dict() or {}
+        scope_type = str(existing.get('scope_type') or '').strip().lower()
+        scope_key = normalize_scope(existing.get('scope_key') or existing.get('scope') or existing.get('municipality'))
+        if scope_type and scope_type != 'municipality':
+            return jsonify({'success': False, 'error': 'Access denied: application is not scoped to municipality'}), 403
+        if scope_key and scope_key != normalize_scope(user_municipality):
+            return jsonify({'success': False, 'error': 'Access denied for municipality scope'}), 403
         if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
             return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
         if normalize_scope(existing.get('region_key') or existing.get('region')) != normalize_scope(user_region):
             return jsonify({'success': False, 'error': 'Access denied for region'}), 403
 
-        doc_ref.set({
+        update_payload = {
             'status': new_status,
-            'updated_at': firestore.SERVER_TIMESTAMP
-        }, merge=True)
+            'employeeStatus': new_status.lower(),
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': actor_email,
+        }
+
+        if new_status == 'APPROVED':
+            update_payload.update({
+                'accepted_by': actor_email,
+                'reviewed_by': actor_email,
+                'reviewed_at': firestore.SERVER_TIMESTAMP,
+            })
+        else:
+            update_payload.update({
+                'accepted_by': firestore.DELETE_FIELD,
+                'reviewed_by': firestore.DELETE_FIELD,
+                'reviewed_at': firestore.DELETE_FIELD,
+            })
+
+        doc_ref.set(update_payload, merge=True)
 
         return jsonify({'success': True, 'status': new_status})
     except Exception as e:
