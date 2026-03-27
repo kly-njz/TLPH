@@ -11,6 +11,9 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 
+TARGET_REGION_OFFICE = "MIMAROPA"
+
+
 def _normalize_status(raw: str) -> str:
     value = str(raw or "").strip().upper()
     if value in {"APPROVED", "REJECTED", "PENDING"}:
@@ -58,13 +61,7 @@ def main() -> None:
             or src.get("applicantCategory")
             or "DENR Application"
         )
-        region_office = _safe_text(
-            src.get("region_office")
-            or src.get("region")
-            or src.get("region_name")
-            or src.get("regionName")
-            or src.get("target_region")
-        )
+        region_office = TARGET_REGION_OFFICE
         municipality = _safe_text(
             src.get("municipality")
             or src.get("municipality_name")
