@@ -6,30 +6,44 @@ async function openDraftPreview(quoteId) {
         return;
     }
     const data = await res.json();
+    const buyer = data.buyer || data.buyer_entity || data.client || '';
+    const buyerType = data.buyer_type || data.buyerType || data.buyer_category || '';
+    const title = data.title || data.description || '';
+    const category = data.category || '';
+    const supplier = data.supplier || '';
+    const product = data.product || data.item || '';
+    const quantity = toNumber(data.quantity ?? data.qty ?? 0);
+    const unitPrice = toNumber(data.unit_price ?? data.unitPrice ?? 0);
+    const otherCharges = toNumber(data.other_charges ?? data.otherCharges ?? 0);
+    const subtotal = quantity * unitPrice;
+    const total = toNumber(data.total ?? (subtotal + otherCharges));
+    const issueDate = data.issue_date || data.date || data.created_at || '';
+    const statusLabel = formatStatus(data.status);
     // Populate preview modal fields
     document.getElementById('draftPrevId').textContent = data.id || '—';
-    document.getElementById('draftPrevDate').textContent = data.issue_date || '—';
-    document.getElementById('draftPrevBuyer').textContent = data.buyer || '—';
-    document.getElementById('draftPrevTitle').textContent = data.title || '—';
-    document.getElementById('draftPrevType').textContent = data.buyer_type || '—';
-    document.getElementById('draftPrevCategory').textContent = data.category || '—';
-    document.getElementById('draftPrevSupplier').textContent = data.supplier || '—';
-    document.getElementById('draftPrevProduct').textContent = data.product || '—';
-    document.getElementById('draftPrevQty').textContent = data.quantity || '—';
-    document.getElementById('draftPrevUnitPrice').textContent = data.unit_price || '—';
-    document.getElementById('draftPrevSubtotal').textContent = (data.quantity && data.unit_price) ? (data.quantity * data.unit_price).toFixed(2) : '—';
-    document.getElementById('draftPrevOtherCharges').textContent = data.other_charges || '—';
-    document.getElementById('draftPrevOtherChargesNote').textContent = data.other_charges_note || '—';
-    document.getElementById('draftPrevTotal').textContent = (data.quantity && data.unit_price ? (data.quantity * data.unit_price) : 0) + (parseFloat(data.other_charges) || 0);
+    document.getElementById('draftPrevDate').textContent = issueDate ? formatDate(issueDate) : '—';
+    document.getElementById('draftPrevBuyer').textContent = buyer || '—';
+    document.getElementById('draftPrevTitle').textContent = title || '—';
+    document.getElementById('draftPrevType').textContent = buyerType || '—';
+    document.getElementById('draftPrevCategory').textContent = category || '—';
+    document.getElementById('draftPrevSupplier').textContent = supplier || '—';
+    document.getElementById('draftPrevProduct').textContent = product || '—';
+    document.getElementById('draftPrevQty').textContent = quantity ? String(quantity) : '—';
+    document.getElementById('draftPrevUnitPrice').textContent = formatMoney(unitPrice);
+    document.getElementById('draftPrevSubtotal').textContent = formatMoney(subtotal);
+    document.getElementById('draftPrevOtherCharges').textContent = formatMoney(otherCharges);
+    document.getElementById('draftPrevOtherChargesNote').textContent = data.other_charges_note || data.otherChargesNote || '—';
+    document.getElementById('draftPrevTotal').textContent = formatMoney(total);
     document.getElementById('draftPrevDeliverFrom').textContent = data.deliver_from || '—';
     document.getElementById('draftPrevDeliverTo').textContent = data.deliver_to || '—';
-    document.getElementById('draftPrevStatus').textContent = data.status || '—';
+    const statusEl = document.getElementById('draftPrevStatus');
+    statusEl.textContent = statusLabel || '—';
+    applyStatusBadge(statusEl, data.status);
     // Show modal
     const modal = document.getElementById('draftPreviewModal');
     modal.classList.remove('hidden');
     setTimeout(() => modal.classList.add('opacity-100'), 10);
 }
-
 function closeDraftPreview() {
     const modal = document.getElementById('draftPreviewModal');
     modal.classList.remove('opacity-100');
@@ -69,6 +83,35 @@ function toNumber(value) {
 
 function computeTotal(quantity, unitPrice, otherCharges) {
     return (toNumber(quantity) * toNumber(unitPrice)) + toNumber(otherCharges);
+}
+
+function formatDate(value) {
+    if (!value) return '';
+    const text = String(value);
+    return text.split('T')[0];
+}
+
+function formatMoney(value) {
+    const num = toNumber(value);
+    return `₱${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatStatus(value) {
+    if (!value) return '';
+    return String(value)
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function applyStatusBadge(el, status) {
+    if (!el) return;
+    const key = String(status || '').toLowerCase();
+    let cls = 'status-badge bg-amber-100 text-amber-700 border border-amber-300';
+    if (key === 'delivered') cls = 'status-badge bg-emerald-100 text-emerald-700 border border-emerald-300';
+    if (key === 'in-transit') cls = 'status-badge bg-blue-100 text-blue-700 border border-blue-300';
+    if (key === 'for-delivery') cls = 'status-badge bg-indigo-100 text-indigo-700 border border-indigo-300';
+    if (key === 'cancelled') cls = 'status-badge bg-rose-100 text-rose-700 border border-rose-300';
+    el.className = cls;
 }
 
 function setFieldLock(el, locked) {
