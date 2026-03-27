@@ -1585,20 +1585,37 @@ def applicants_municipal():
 
         for source_doc in source_docs:
             src = source_doc.to_dict() or {}
+            src_scope_type = str(
+                src.get('scope_type')
+                or src.get('scopeType')
+                or src.get('scope_level')
+                or src.get('scopeLevel')
+                or src.get('deliver_to_type')
+                or src.get('directed_to_type')
+                or src.get('target_type')
+                or ''
+            ).strip().lower()
+
+            if src_scope_type == 'region':
+                continue
+
             src_municipality = normalize_scope(
-                src.get('municipality')
+                src.get('target_municipality')
+                or src.get('municipality')
                 or src.get('municipality_name')
                 or src.get('municipalityName')
-                or src.get('target_municipality')
             )
             src_region = normalize_scope(
-                src.get('region')
+                src.get('target_region')
+                or src.get('region')
                 or src.get('region_name')
                 or src.get('regionName')
-                or src.get('target_region')
             )
 
-            if src_municipality and src_municipality != municipality_key:
+            # Municipal page should only materialize jobs explicitly scoped to this municipality.
+            if not src_municipality:
+                continue
+            if src_municipality != municipality_key:
                 continue
             if src_region and src_region != region_key:
                 continue
@@ -1641,6 +1658,8 @@ def applicants_municipal():
             full_name = str(applicant_name).strip() or 'N/A'
             candidate_type = str(category).strip() or 'DENR Application'
             region_office = str(user_region).strip() or str(src.get('region') or '').strip() or 'N/A'
+            scope_type = 'municipality'
+            scope = str(src.get('target_municipality') or src.get('municipality') or user_municipality).strip() or user_municipality
 
             denr_job = {
                 'source_id': source_doc.id,
@@ -1648,6 +1667,9 @@ def applicants_municipal():
                 'full_name': full_name,
                 'candidate_type': candidate_type,
                 'region_office': region_office,
+                'scope_type': scope_type,
+                'scope': scope,
+                'scope_key': normalize_scope(scope),
                 'applicant_name': str(applicant_name).strip(),
                 'category': str(category).strip(),
                 'job_title': f"{str(category).strip()} Review",
@@ -1680,6 +1702,12 @@ def applicants_municipal():
         for doc in query:
             item = doc.to_dict() or {}
             item['id'] = doc.id
+            item_scope_type = str(item.get('scope_type') or '').strip().lower()
+            item_scope_key = normalize_scope(item.get('scope_key') or item.get('scope') or item.get('municipality'))
+            if item_scope_type and item_scope_type != 'municipality':
+                continue
+            if item_scope_key and item_scope_key != municipality_key:
+                continue
             raw_created = item.get('created_at')
             created_dt = _safe_datetime(raw_created)
             item['created_at_dt'] = created_dt
@@ -1708,6 +1736,12 @@ def applicants_municipal():
                 if normalize_scope(item.get('municipality_key') or item.get('municipality')) != municipality_key:
                     continue
                 if normalize_scope(item.get('region_key') or item.get('region')) != region_key:
+                    continue
+                item_scope_type = str(item.get('scope_type') or '').strip().lower()
+                item_scope_key = normalize_scope(item.get('scope_key') or item.get('scope') or item.get('municipality'))
+                if item_scope_type and item_scope_type != 'municipality':
+                    continue
+                if item_scope_key and item_scope_key != municipality_key:
                     continue
                 raw_created = item.get('created_at')
                 created_dt = _safe_datetime(raw_created)
@@ -1794,6 +1828,12 @@ def applicants_municipal_job_detail(job_id):
             return jsonify({'success': False, 'error': 'Applicant job not found'}), 404
 
         data = doc.to_dict() or {}
+        scope_type = str(data.get('scope_type') or '').strip().lower()
+        scope_key = normalize_scope(data.get('scope_key') or data.get('scope') or data.get('municipality'))
+        if scope_type and scope_type != 'municipality':
+            return jsonify({'success': False, 'error': 'Access denied: application is not scoped to municipality'}), 403
+        if scope_key and scope_key != normalize_scope(user_municipality):
+            return jsonify({'success': False, 'error': 'Access denied for municipality scope'}), 403
         if normalize_scope(data.get('municipality_key') or data.get('municipality')) != normalize_scope(user_municipality):
             return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
         if normalize_scope(data.get('region_key') or data.get('region')) != normalize_scope(user_region):
@@ -1842,6 +1882,12 @@ def applicants_municipal_job_update_status(job_id):
             return jsonify({'success': False, 'error': 'Applicant job not found'}), 404
 
         existing = doc.to_dict() or {}
+        scope_type = str(existing.get('scope_type') or '').strip().lower()
+        scope_key = normalize_scope(existing.get('scope_key') or existing.get('scope') or existing.get('municipality'))
+        if scope_type and scope_type != 'municipality':
+            return jsonify({'success': False, 'error': 'Access denied: application is not scoped to municipality'}), 403
+        if scope_key and scope_key != normalize_scope(user_municipality):
+            return jsonify({'success': False, 'error': 'Access denied for municipality scope'}), 403
         if normalize_scope(existing.get('municipality_key') or existing.get('municipality')) != normalize_scope(user_municipality):
             return jsonify({'success': False, 'error': 'Access denied for municipality'}), 403
         if normalize_scope(existing.get('region_key') or existing.get('region')) != normalize_scope(user_region):

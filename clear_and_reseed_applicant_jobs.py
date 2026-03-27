@@ -26,6 +26,10 @@ def _safe_text(value, default="N/A") -> str:
     return text if text else default
 
 
+def _norm_key(value: str) -> str:
+    return " ".join(str(value or "").strip().upper().split())
+
+
 def main() -> None:
     if not firebase_admin._apps:
         cred = credentials.Certificate("firebase-credentials.json")
@@ -63,11 +67,61 @@ def main() -> None:
         )
         region_office = TARGET_REGION_OFFICE
         municipality = _safe_text(
-            src.get("municipality")
+            src.get("target_municipality")
+            or src.get("municipality")
             or src.get("municipality_name")
             or src.get("municipalityName")
-            or src.get("target_municipality")
         )
+
+        directed_municipality = str(
+            src.get("target_municipality")
+            or src.get("municipality")
+            or src.get("municipality_name")
+            or src.get("municipalityName")
+            or ""
+        ).strip()
+        directed_region = str(
+            src.get("target_region")
+            or src.get("region_office")
+            or src.get("region")
+            or src.get("region_name")
+            or src.get("regionName")
+            or TARGET_REGION_OFFICE
+        ).strip() or TARGET_REGION_OFFICE
+
+        raw_scope_type = str(
+            src.get("scope_type")
+            or src.get("scopeType")
+            or src.get("scope_level")
+            or src.get("scopeLevel")
+            or ""
+        ).strip().lower()
+        raw_scope = str(src.get("scope") or src.get("scope_value") or src.get("scopeValue") or "").strip()
+        delivery_type = str(
+            src.get("deliver_to_type")
+            or src.get("directed_to_type")
+            or src.get("target_type")
+            or ""
+        ).strip().lower()
+
+        if raw_scope_type in {"municipality", "region"}:
+            scope_type = raw_scope_type
+            if scope_type == "municipality":
+                scope = raw_scope or directed_municipality
+            else:
+                scope = raw_scope or directed_region
+        elif delivery_type == "region":
+            scope_type = "region"
+            scope = raw_scope or directed_region
+        elif delivery_type in {"municipality", "muni"}:
+            scope_type = "municipality"
+            scope = raw_scope or directed_municipality
+        elif directed_municipality:
+            scope_type = "municipality"
+            scope = directed_municipality
+        else:
+            scope_type = "region"
+            scope = directed_region
 
         status = _normalize_status(src.get("status") or src.get("employeeStatus"))
 
@@ -81,15 +135,15 @@ def main() -> None:
         if reference_id.upper().startswith("APP-"):
             reference_id = reference_id[4:]
 
-        def norm_key(v: str) -> str:
-            return " ".join(str(v or "").strip().upper().split())
-
         payload = {
             "source_id": source_doc.id,
             "source_collection": "applications",
             "full_name": full_name,
             "candidate_type": candidate_type,
             "region_office": region_office,
+            "scope_type": scope_type,
+            "scope": scope,
+            "scope_key": _norm_key(scope),
             "status": status,
             "employeeStatus": status.lower(),
             # Backward-compatible fields
@@ -97,8 +151,8 @@ def main() -> None:
             "category": candidate_type,
             "region": region_office,
             "municipality": municipality,
-            "municipality_key": norm_key(municipality),
-            "region_key": norm_key(region_office),
+            "municipality_key": _norm_key(municipality),
+            "region_key": _norm_key(region_office),
             "reference_id": reference_id,
             "created_at": src.get("created_at") or src.get("submittedAt") or firestore.SERVER_TIMESTAMP,
             "updated_at": firestore.SERVER_TIMESTAMP,

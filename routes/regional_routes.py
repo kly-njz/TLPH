@@ -4262,6 +4262,14 @@ def applicants_regional_data():
         docs = db.collection('municipal_denr_applicant_jobs').stream()
         for doc in docs:
             data = doc.to_dict() or {}
+            scope_type = str(data.get('scope_type') or '').strip().lower()
+            if scope_type and scope_type != 'region':
+                continue
+
+            scope_key = _canonical_region(data.get('scope_key') or data.get('scope'))
+            if scope_key and canonical_region and scope_key != canonical_region:
+                continue
+
             job_region = _canonical_region(data.get('region_office') or data.get('region') or data.get('region_key'))
             if canonical_region and job_region != canonical_region:
                 continue
@@ -4317,6 +4325,14 @@ def applicants_regional_update_status(job_id):
             return jsonify({'success': False, 'error': 'Applicant job not found'}), 404
 
         existing = doc.to_dict() or {}
+        scope_type = str(existing.get('scope_type') or '').strip().lower()
+        if scope_type and scope_type != 'region':
+            return jsonify({'success': False, 'error': 'Access denied: application is not scoped to region'}), 403
+
+        scope_key = _canonical_region(existing.get('scope_key') or existing.get('scope'))
+        if scope_key and canonical_region and scope_key != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for region scope'}), 403
+
         job_region = _canonical_region(existing.get('region_office') or existing.get('region') or existing.get('region_key'))
         if canonical_region and job_region and job_region != canonical_region:
             return jsonify({'success': False, 'error': 'Access denied for region'}), 403
