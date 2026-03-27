@@ -343,6 +343,7 @@
         let currentRecordType = 'application';
         let actionLocked = false;
         let previewDocuments = [];
+        let previewDocumentGroups = [];
         let isSubmittingRejection = false;
         let rejectionMessage = '';
 
@@ -658,7 +659,7 @@
                         documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No files uploaded.</p>';
                     }
                 } else {
-                    const appDocs = [];
+                    const groupedDocsMap = new Map();
 
                     const labelMap = {
                         brgy: 'Barangay Certificate',
@@ -675,16 +676,34 @@
                         validId: 'Any Valid ID'
                     };
 
+                    const addGroupedDocument = (groupKey, label, url, fileName) => {
+                        if (!url || typeof url !== 'string' || !url.trim()) return;
+
+                        const safeGroupKey = groupKey || label || 'document';
+                        if (!groupedDocsMap.has(safeGroupKey)) {
+                            groupedDocsMap.set(safeGroupKey, {
+                                key: safeGroupKey,
+                                name: label || 'Document',
+                                files: []
+                            });
+                        }
+
+                        const targetGroup = groupedDocsMap.get(safeGroupKey);
+                        const alreadyExists = targetGroup.files.some((item) => item.url === url);
+                        if (alreadyExists) return;
+
+                        targetGroup.files.push({
+                            url,
+                            fileName: fileName || (url.split('/').pop() || 'file')
+                        });
+                    };
+
                     // 1) New format: files object with direct URLs
                     if (applicationData.files && typeof applicationData.files === 'object') {
                         Object.entries(applicationData.files).forEach(([key, value]) => {
                             if (typeof value === 'string' && value.trim()) {
                                 const filename = value.split('/').pop() || key;
-                                appDocs.push({
-                                    name: labelMap[key] || key,
-                                    fileName: filename,
-                                    url: value
-                                });
+                                addGroupedDocument(key, labelMap[key] || key, value, filename);
                                 return;
                             }
 
@@ -692,11 +711,7 @@
                                 value.forEach((itemUrl, idx) => {
                                     if (typeof itemUrl !== 'string' || !itemUrl.trim()) return;
                                     const filename = itemUrl.split('/').pop() || `${key}-${idx + 1}`;
-                                    appDocs.push({
-                                        name: `${labelMap[key] || key} ${idx + 1}`,
-                                        fileName: filename,
-                                        url: itemUrl
-                                    });
+                                    addGroupedDocument(key, labelMap[key] || key, itemUrl, filename);
                                 });
                             }
                         });
@@ -704,13 +719,10 @@
 
                     // 2) Legacy format: documents array
                     if (Array.isArray(applicationData.documents)) {
-                        applicationData.documents.forEach((docItem) => {
+                        applicationData.documents.forEach((docItem, docIndex) => {
                             if (docItem && docItem.url) {
-                                appDocs.push({
-                                    name: docItem.name || 'Document',
-                                    fileName: docItem.fileName || (docItem.url.split('/').pop() || 'file'),
-                                    url: docItem.url
-                                });
+                                const groupLabel = docItem.name || 'Document';
+                                addGroupedDocument(`legacy-document-${docIndex}-${groupLabel}`, groupLabel, docItem.url, docItem.fileName || (docItem.url.split('/').pop() || 'file'));
                             }
                         });
                     }
@@ -721,38 +733,30 @@
                             const items = Array.isArray(val) ? val : [val];
                             items.forEach((fileObj) => {
                                 if (fileObj && fileObj.downloadUrl) {
-                                    appDocs.push({
-                                        name: labelMap[key] || key,
-                                        fileName: fileObj.name || (fileObj.downloadUrl.split('/').pop() || key),
-                                        url: fileObj.downloadUrl
-                                    });
+                                    addGroupedDocument(key, labelMap[key] || key, fileObj.downloadUrl, fileObj.name || (fileObj.downloadUrl.split('/').pop() || key));
                                 }
                             });
                         });
                     }
 
-                    // Remove duplicates by URL
-                    const seen = new Set();
-                    const uniqueDocs = appDocs.filter((d) => {
-                        if (!d.url || seen.has(d.url)) return false;
-                        seen.add(d.url);
-                        return true;
-                    });
+                    const groupedDocs = Array.from(groupedDocsMap.values()).filter((group) => group.files.length > 0);
 
-                    if (uniqueDocs.length > 0) {
-                        previewDocuments = uniqueDocs;
-                        documentsContainer.innerHTML = uniqueDocs.map(doc => `
+                    if (groupedDocs.length > 0) {
+                        previewDocuments = [];
+                        previewDocumentGroups = groupedDocs;
+                        documentsContainer.innerHTML = groupedDocs.map((docGroup, groupIndex) => `
                             <div class="doc-box">
                                 <i class="fa-solid fa-file text-blue-600 text-xl"></i>
                                 <div class="flex-grow min-w-0">
-                                    <p class="text-[9px] font-black uppercase m-0">${doc.name || 'Document'}</p>
-                                    <p class="text-[10px] font-bold text-slate-700 m-0 truncate">${doc.fileName || 'file'}</p>
+                                    <p class="text-[9px] font-black uppercase m-0">${docGroup.name || 'Document'}</p>
+                                    <p class="text-[10px] font-bold text-slate-700 m-0 truncate">${docGroup.files.length} FILE${docGroup.files.length > 1 ? 'S' : ''}</p>
                                 </div>
-                                <button onclick="openDocumentPreviewByIndex(${uniqueDocs.indexOf(doc)})" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
+                                <button onclick="openDocumentGroupByIndex(${groupIndex})" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>
                             </div>
                         `).join('');
                     } else {
                         previewDocuments = [];
+                        previewDocumentGroups = [];
                         documentsContainer.innerHTML = '<p class="text-slate-600 text-sm col-span-2">No documents uploaded.</p>';
                     }
                 }
@@ -796,6 +800,15 @@
 
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
+        };
+
+        window.openDocumentGroupByIndex = function(index) {
+            const group = previewDocumentGroups[index];
+            if (!group || !Array.isArray(group.files) || group.files.length === 0) return;
+
+            const firstFile = group.files[0];
+            previewDocuments = [{ name: group.name || 'Document', fileName: firstFile.fileName || 'file', url: firstFile.url }];
+            openDocumentPreviewByIndex(0);
         };
 
         window.closeDocumentPreview = function(event) {
