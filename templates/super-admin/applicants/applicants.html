@@ -408,30 +408,70 @@
     </div>
 
     <script>
-        // 1. DATA REPOSITORY
         let applicantData = [];
         let filteredApplicantData = [];
+        let hiringData = [];
+        let filteredHiringData = [];
+        let editingHiringId = null;
 
         const statusMap = {pending:'Pending', accepted:'Accepted', rejected:'Rejected'};
 
-        // 2. LIVE SEARCH & FILTERING
+        function switchSuperadminTab(tab) {
+            const applicantsTab = document.getElementById('saApplicantsTab');
+            const hiringTab = document.getElementById('saHiringTab');
+            const applicantsMetrics = document.getElementById('saApplicantsMetrics');
+            const hiringMetrics = document.getElementById('saHiringMetrics');
+            const applicantsCharts = document.getElementById('saApplicantsCharts');
+            const applicantsSection = document.getElementById('saApplicantsSection');
+            const hiringSection = document.getElementById('saHiringSection');
+            const headerIcon = document.getElementById('saHeaderIcon');
+            const headerTitle = document.getElementById('saHeaderTitle');
+            const headerSubtitle = document.getElementById('saHeaderSubtitle');
+
+            if (tab === 'hiring') {
+                applicantsTab.className = 'px-3 py-1.5 bg-white text-slate-700 font-bold text-[9px] uppercase rounded-[2px] border border-slate-300 hover:bg-slate-50';
+                hiringTab.className = 'px-3 py-1.5 bg-denr-green text-white font-bold text-[9px] uppercase rounded-[2px] border border-denr-green';
+                applicantsMetrics.classList.add('hidden');
+                applicantsCharts.classList.add('hidden');
+                applicantsSection.classList.add('hidden');
+                hiringMetrics.classList.remove('hidden');
+                hiringSection.classList.remove('hidden');
+                headerIcon.textContent = 'work';
+                headerTitle.textContent = 'Hiring Positions';
+                headerSubtitle.textContent = 'National, Regional, and Municipal Hiring Scope Management';
+                renderHiringTable();
+                return;
+            }
+
+            applicantsTab.className = 'px-3 py-1.5 bg-denr-green text-white font-bold text-[9px] uppercase rounded-[2px] border border-denr-green';
+            hiringTab.className = 'px-3 py-1.5 bg-white text-slate-700 font-bold text-[9px] uppercase rounded-[2px] border border-slate-300 hover:bg-slate-50';
+            applicantsMetrics.classList.remove('hidden');
+            applicantsCharts.classList.remove('hidden');
+            applicantsSection.classList.remove('hidden');
+            hiringMetrics.classList.add('hidden');
+            hiringSection.classList.add('hidden');
+            headerIcon.textContent = 'person_add';
+            headerTitle.textContent = 'Applicants & Trainees';
+            headerSubtitle.textContent = 'OJT & Human Resource Pipeline';
+        }
+
         function filterApplicants() {
             const query = document.getElementById('appSearch').value.toLowerCase();
             const status = document.getElementById('statusFilter').value;
             const region = document.getElementById('regionFilter').value;
 
-            const filtered = applicantData.filter(a => {
+            filteredApplicantData = applicantData.filter((a) => {
                 const matchSearch = a.name.toLowerCase().includes(query) || a.type.toLowerCase().includes(query) || a.region.toLowerCase().includes(query);
                 const matchStatus = !status || a.status === status;
                 const matchRegion = !region || a.region.includes(region);
                 return matchSearch && matchStatus && matchRegion;
             });
-            filteredApplicantData = filtered;
-            renderTable(filtered);
-            updateStats(applicantData);
+
+            renderApplicantsTable(filteredApplicantData);
+            updateApplicantStats(applicantData);
         }
 
-        function renderTable(data) {
+        function renderApplicantsTable(data) {
             const tbody = document.getElementById('appTable');
             tbody.innerHTML = data.length ? data.map((a) => `
                 <tr class="hover:bg-slate-50 transition-colors">
@@ -439,17 +479,13 @@
                     <td class="px-4 py-2 text-center border-r border-slate-100"><span class="status-badge bg-indigo-50 text-indigo-700 border-indigo-200">${a.type}</span></td>
                     <td class="px-4 py-2 text-slate-700 font-bold uppercase tracking-widest text-center border-r border-slate-100">${a.region}</td>
                     <td class="px-4 py-2 text-center border-r border-slate-100">
-                        <span class="status-badge ${getStatusColor(a.status)}">
-                            ${statusMap[a.status]}
-                        </span>
+                        <span class="status-badge ${getApplicantStatusColor(a.status)}">${statusMap[a.status]}</span>
                     </td>
                     <td class="px-4 py-2 text-center border-r border-slate-100 text-[9px] font-bold text-slate-600">${a.acceptedBy || 'N/A'}</td>
                     <td class="px-4 py-2 text-center border-r border-slate-100 text-[9px] font-mono text-slate-500">${a.updatedAt || 'N/A'}</td>
                     <td class="px-4 py-2 text-center no-print">
                         ${a.status === 'rejected' ? `
-                            <button class="delete-btn text-[9px] font-bold uppercase text-rose-700 hover:underline tracking-widest cursor-pointer" data-id="${a.id}">
-                                Delete Permanently
-                            </button>
+                            <button class="delete-btn text-[9px] font-bold uppercase text-rose-700 hover:underline tracking-widest cursor-pointer" data-id="${a.id}">Delete Permanently</button>
                         ` : (a.status === 'accepted' ? `
                             <span class="text-[9px] font-bold uppercase text-slate-400 tracking-widest">Locked</span>
                         ` : `
@@ -461,22 +497,20 @@
             `).join('') : '<tr><td colspan="7" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No results found.</td></tr>';
 
             const label = document.getElementById('rowCountLabel');
-            if (label) {
-                label.textContent = `Showing ${data.length} of ${applicantData.length} records`;
-            }
+            if (label) label.textContent = `Showing ${data.length} of ${applicantData.length} records`;
         }
 
-        function getStatusColor(s) {
-            if(s === 'accepted') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-            if(s === 'rejected') return 'bg-rose-50 text-rose-700 border-rose-200';
+        function getApplicantStatusColor(status) {
+            if (status === 'accepted') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            if (status === 'rejected') return 'bg-rose-50 text-rose-700 border-rose-200';
             return 'bg-yellow-50 text-yellow-700 border-yellow-200';
         }
 
-        function updateStats(data) {
+        function updateApplicantStats(data) {
             document.getElementById('statTotal').innerText = data.length;
-            document.getElementById('statHired').innerText = data.filter(a => a.status === 'accepted').length;
-            document.getElementById('statInterview').innerText = data.filter(a => a.status === 'rejected').length;
-            document.getElementById('statPending').innerText = data.filter(a => a.status === 'pending').length;
+            document.getElementById('statHired').innerText = data.filter((a) => a.status === 'accepted').length;
+            document.getElementById('statInterview').innerText = data.filter((a) => a.status === 'rejected').length;
+            document.getElementById('statPending').innerText = data.filter((a) => a.status === 'pending').length;
         }
 
         async function loadApplicants() {
@@ -509,7 +543,227 @@
             filterApplicants();
         }
 
-        // 3. UI CONTROLS (DRAWER & MODALS)
+        function normalizeHiringRows(rows) {
+            return (rows || []).map((row) => {
+                const scopeType = String(row.scope_type || '').toLowerCase() || (row.municipality ? 'municipality' : (row.region ? 'region' : 'national'));
+                const scopeValue = row.scope || (scopeType === 'municipality' ? row.municipality : (scopeType === 'region' ? row.region : 'NATIONAL'));
+                return {
+                    id: row.id,
+                    job_title: row.job_title || 'N/A',
+                    description: row.description || 'N/A',
+                    position: row.position || 'N/A',
+                    starting_salary: Number(row.starting_salary || 0),
+                    scope_type: scopeType,
+                    scope: String(scopeValue || 'N/A').toUpperCase(),
+                    region: String(row.region || '').toUpperCase(),
+                    municipality: String(row.municipality || '').toUpperCase(),
+                    is_active: !!row.is_active,
+                };
+            });
+        }
+
+        function hiringScopeLabel(row) {
+            if (row.scope_type === 'municipality') return `Municipality: ${row.scope}`;
+            if (row.scope_type === 'region') return `Region: ${row.scope}`;
+            return 'National';
+        }
+
+        function updateHiringStats() {
+            const total = hiringData.length;
+            const active = hiringData.filter((r) => r.is_active).length;
+            document.getElementById('saHiringTotal').innerText = String(total);
+            document.getElementById('saHiringActive').innerText = String(active);
+            document.getElementById('saHiringInactive').innerText = String(total - active);
+        }
+
+        function filterHiring() {
+            const query = (document.getElementById('saHSearch').value || '').trim().toLowerCase();
+            const status = document.getElementById('saHStatusFilter').value;
+            const scope = document.getElementById('saHScopeFilter').value;
+
+            filteredHiringData = hiringData.filter((row) => {
+                const searchable = [row.job_title, row.position, row.description, row.scope, row.region, row.municipality].join(' ').toLowerCase();
+                const matchSearch = !query || searchable.includes(query);
+                const rowStatus = row.is_active ? 'ACTIVE' : 'INACTIVE';
+                const matchStatus = status === 'ALL' || rowStatus === status;
+                const matchScope = scope === 'ALL' || row.scope_type === scope;
+                return matchSearch && matchStatus && matchScope;
+            });
+
+            renderHiringTable();
+        }
+
+        function renderHiringTable() {
+            const tbody = document.getElementById('saHTableBody');
+            const rows = filteredHiringData.length || document.getElementById('saHSearch').value || document.getElementById('saHStatusFilter').value !== 'ALL' || document.getElementById('saHScopeFilter').value !== 'ALL'
+                ? filteredHiringData
+                : hiringData;
+
+            tbody.innerHTML = rows.length ? rows.map((row) => {
+                const salary = Number(row.starting_salary || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+                const statusBadge = row.is_active
+                    ? '<span class="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">Active</span>'
+                    : '<span class="status-badge bg-slate-100 text-slate-600 border-slate-200">Inactive</span>';
+                const archiveBtn = row.is_active
+                    ? `<button type="button" class="text-[9px] font-bold uppercase text-amber-700 hover:underline tracking-widest cursor-pointer" data-action="archive" data-id="${row.id}">Archive</button>`
+                    : `<button type="button" class="text-[9px] font-bold uppercase text-emerald-700 hover:underline tracking-widest cursor-pointer" data-action="unarchive" data-id="${row.id}">Unarchive</button>`;
+
+                return `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-4 py-2 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight">${row.job_title}</td>
+                        <td class="px-4 py-2 text-center border-r border-slate-100 font-bold uppercase">${row.position}</td>
+                        <td class="px-4 py-2 text-center border-r border-slate-100 font-mono text-[9px]">PHP ${salary}</td>
+                        <td class="px-4 py-2 text-center border-r border-slate-100 text-[9px] font-bold uppercase">${hiringScopeLabel(row)}</td>
+                        <td class="px-4 py-2 text-center border-r border-slate-100">${statusBadge}</td>
+                        <td class="px-4 py-2 text-center no-print">
+                            <div class="flex items-center justify-center gap-2">
+                                <button type="button" class="text-[9px] font-bold uppercase text-denr-green hover:underline tracking-widest cursor-pointer" data-action="edit" data-id="${row.id}">Edit</button>
+                                ${archiveBtn}
+                                <button type="button" class="text-[9px] font-bold uppercase text-rose-700 hover:underline tracking-widest cursor-pointer" data-action="delete" data-id="${row.id}">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="6" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No hiring positions found.</td></tr>';
+
+            document.getElementById('saHCountLabel').textContent = `Showing ${rows.length} of ${hiringData.length} positions`;
+        }
+
+        async function loadHiring() {
+            try {
+                const res = await fetch('/superadmin/api/hiring');
+                const json = await res.json();
+                if (!res.ok || !json.success) throw new Error(json.error || 'Failed to load hiring positions');
+                hiringData = normalizeHiringRows(json.positions || []);
+                filteredHiringData = hiringData;
+                updateHiringStats();
+                renderHiringTable();
+            } catch (err) {
+                console.error(err);
+                alert('Failed to load hiring positions.');
+            }
+        }
+
+        function setHiringFormStatus(message, ok) {
+            const el = document.getElementById('saHFormStatus');
+            el.textContent = message || '';
+            el.className = ok ? 'text-[9px] font-bold text-emerald-700' : 'text-[9px] font-bold text-rose-700';
+        }
+
+        function resetHiringForm() {
+            document.getElementById('saHiringForm').reset();
+            editingHiringId = null;
+            document.getElementById('saHSubmitBtn').textContent = 'Create Position';
+            setHiringFormStatus('', true);
+        }
+
+        function collectHiringPayload() {
+            const scopeType = document.getElementById('saHScopeType').value;
+            const region = document.getElementById('saHRegion').value.trim().toUpperCase();
+            const municipality = document.getElementById('saHMunicipality').value.trim().toUpperCase();
+            return {
+                job_title: document.getElementById('saHJobTitle').value.trim(),
+                description: document.getElementById('saHDescription').value.trim(),
+                position: document.getElementById('saHPosition').value.trim(),
+                starting_salary: document.getElementById('saHSalary').value.trim(),
+                scope_type: scopeType,
+                scope: scopeType === 'municipality' ? municipality : (scopeType === 'region' ? region : 'NATIONAL'),
+                region,
+                municipality,
+            };
+        }
+
+        async function submitHiringForm(e) {
+            e.preventDefault();
+            const payload = collectHiringPayload();
+
+            if (!payload.job_title || !payload.description || !payload.position || !payload.starting_salary) {
+                setHiringFormStatus('Please complete all required fields.', false);
+                return;
+            }
+
+            if (payload.scope_type === 'region' && !payload.region) {
+                setHiringFormStatus('Region is required for region scope.', false);
+                return;
+            }
+            if (payload.scope_type === 'municipality' && (!payload.region || !payload.municipality)) {
+                setHiringFormStatus('Region and municipality are required for municipality scope.', false);
+                return;
+            }
+
+            const submitBtn = document.getElementById('saHSubmitBtn');
+            const isEditing = !!editingHiringId;
+            submitBtn.disabled = true;
+            submitBtn.textContent = isEditing ? 'Updating...' : 'Creating...';
+
+            try {
+                const url = isEditing ? `/superadmin/api/hiring/${encodeURIComponent(editingHiringId)}` : '/superadmin/api/hiring';
+                const method = isEditing ? 'PUT' : 'POST';
+                const res = await fetch(url, {
+                    method,
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload),
+                });
+                const json = await res.json();
+                if (!res.ok || !json.success) throw new Error(json.error || 'Failed to save hiring position');
+
+                resetHiringForm();
+                await loadHiring();
+                setHiringFormStatus(isEditing ? 'Position updated.' : 'Position created.', true);
+            } catch (err) {
+                setHiringFormStatus(err.message || 'Unexpected error while saving.', false);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = editingHiringId ? 'Update Position' : 'Create Position';
+            }
+        }
+
+        async function handleHiringAction(action, id) {
+            if (!id) return;
+
+            if (action === 'edit') {
+                const row = hiringData.find((item) => item.id === id);
+                if (!row) return;
+                editingHiringId = id;
+                document.getElementById('saHJobTitle').value = row.job_title;
+                document.getElementById('saHDescription').value = row.description;
+                document.getElementById('saHPosition').value = row.position;
+                document.getElementById('saHSalary').value = row.starting_salary;
+                document.getElementById('saHScopeType').value = row.scope_type;
+                document.getElementById('saHRegion').value = row.region;
+                document.getElementById('saHMunicipality').value = row.municipality;
+                document.getElementById('saHSubmitBtn').textContent = 'Update Position';
+                setHiringFormStatus('Editing selected hiring record.', true);
+                return;
+            }
+
+            let endpoint = `/superadmin/api/hiring/${encodeURIComponent(id)}`;
+            let method = 'DELETE';
+            let confirmMessage = 'Delete this hiring position?';
+
+            if (action === 'archive') {
+                endpoint = `/superadmin/api/hiring/${encodeURIComponent(id)}/archive`;
+                method = 'POST';
+                confirmMessage = 'Archive this hiring position?';
+            } else if (action === 'unarchive') {
+                endpoint = `/superadmin/api/hiring/${encodeURIComponent(id)}/unarchive`;
+                method = 'POST';
+                confirmMessage = 'Reactivate this archived hiring position?';
+            }
+
+            if (!confirm(confirmMessage)) return;
+
+            try {
+                const res = await fetch(endpoint, { method });
+                const json = await res.json();
+                if (!res.ok || !json.success) throw new Error(json.error || 'Action failed');
+                if (editingHiringId === id) resetHiringForm();
+                await loadHiring();
+            } catch (err) {
+                alert(err.message || 'Failed to process hiring action');
+            }
+        }
+
         function openAppDrawer() {
             const overlay = document.getElementById('drawerOverlay');
             const drawer = document.getElementById('appDrawer');
@@ -571,14 +825,15 @@
             }
         }
 
-        // 4. CHARTS
         let modalChart;
         const trendData = { labels:['Sep','Oct','Nov','Dec','Jan','Feb'], datasets:[{label:'Hired', data:[5, 12, 8, 15, 11, 48], borderColor:'#15803d', backgroundColor:'rgba(21, 128, 61, 0.1)', fill:true, tension:0.4, borderWidth: 2}]};
         const typeDist = { labels:['OJT','Employee','Contractor'], datasets:[{data:[65, 55, 25], backgroundColor:['#15803d','#0ea5e9','#6366f1'], borderWidth: 0}]};
 
         window.onload = async () => {
-            await loadApplicants();
+            await Promise.all([loadApplicants(), loadHiring()]);
             bindScopeControls();
+            switchSuperadminTab('applicants');
+
             const chartFont = { size: 9, weight: 'bold' };
             new Chart(document.getElementById('hiringChart').getContext('2d'), { type:'line', data:trendData, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{display:false}, x:{grid:{display:false}, ticks:{font:chartFont}}}} });
             new Chart(document.getElementById('typeChart').getContext('2d'), { type:'doughnut', data:typeDist, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right', labels:{boxWidth:10, font:chartFont}}}, cutout:'75%'} });
@@ -643,6 +898,26 @@
         document.getElementById('appSearch').addEventListener('input', filterApplicants);
         document.getElementById('statusFilter').addEventListener('change', filterApplicants);
         document.getElementById('regionFilter').addEventListener('change', filterApplicants);
+        document.getElementById('saApplicantsTab').addEventListener('click', () => switchSuperadminTab('applicants'));
+        document.getElementById('saHiringTab').addEventListener('click', () => switchSuperadminTab('hiring'));
+
+        document.getElementById('saHSearch').addEventListener('input', filterHiring);
+        document.getElementById('saHStatusFilter').addEventListener('change', filterHiring);
+        document.getElementById('saHScopeFilter').addEventListener('change', filterHiring);
+        document.getElementById('saHClearFilters').addEventListener('click', () => {
+            document.getElementById('saHSearch').value = '';
+            document.getElementById('saHStatusFilter').value = 'ALL';
+            document.getElementById('saHScopeFilter').value = 'ALL';
+            filterHiring();
+        });
+        document.getElementById('saHiringForm').addEventListener('submit', submitHiringForm);
+        document.getElementById('saHResetBtn').addEventListener('click', resetHiringForm);
+
+        document.getElementById('saHTableBody').addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            handleHiringAction(btn.dataset.action, btn.dataset.id);
+        });
 
         document.getElementById('appTable').addEventListener('click', (e) => {
             const btn = e.target.closest('.review-btn');
@@ -660,9 +935,7 @@
             const deleteBtn = e.target.closest('.delete-btn');
             if (deleteBtn) {
                 const id = deleteBtn.dataset.id;
-                if (id) {
-                    deleteApplicant(id);
-                }
+                if (id) deleteApplicant(id);
             }
         });
 
@@ -717,9 +990,7 @@
         }
 
         async function deleteApplicant(id) {
-            if (!confirm('Delete this rejected applicant permanently? This cannot be undone.')) {
-                return;
-            }
+            if (!confirm('Delete this rejected applicant permanently? This cannot be undone.')) return;
             try {
                 const res = await fetch(`/superadmin/api/applicants/${id}`, { method: 'DELETE' });
                 const json = await res.json();
