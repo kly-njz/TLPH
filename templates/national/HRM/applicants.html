@@ -39,7 +39,12 @@
               x-text="new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}).toUpperCase()"></span>
       </header>
 
-      <section class="grid grid-cols-2 lg:grid-cols-6 gap-2">
+      <div class="flex gap-2">
+        <button id="nApplicantsTab" type="button" class="px-3 py-1.5 bg-blue-900 text-white font-bold text-[9px] uppercase rounded-[2px] border border-blue-900">Applications</button>
+        <button id="nHiringTab" type="button" class="px-3 py-1.5 bg-white text-slate-700 font-bold text-[9px] uppercase rounded-[2px] border border-slate-300 hover:bg-slate-50">Hiring</button>
+      </div>
+
+      <section id="nApplicantsMetrics" class="grid grid-cols-2 lg:grid-cols-6 gap-2">
         <div class="gov-card p-2 border-l-4 border-l-slate-600">
           <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Total Applicants</p>
           <p class="text-[17px] leading-none font-black text-slate-900 mt-1">{{ total_count }}</p>
@@ -66,7 +71,22 @@
         </div>
       </section>
 
-      <section class="gov-card flex-1 flex flex-col min-h-[420px] overflow-hidden">
+      <section id="nHiringMetrics" class="grid grid-cols-2 lg:grid-cols-3 gap-2 hidden">
+        <div class="gov-card p-2 border-l-4 border-l-slate-600">
+          <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Total Positions</p>
+          <p id="nHiringMetricTotal" class="text-[17px] leading-none font-black text-slate-900 mt-1">{{ hiring_total_count }}</p>
+        </div>
+        <div class="gov-card p-2 border-l-4 border-l-emerald-600 bg-emerald-50/40">
+          <p class="text-[8px] font-black uppercase tracking-widest text-emerald-700 m-0">Active</p>
+          <p id="nHiringMetricActive" class="text-[17px] leading-none font-black text-emerald-700 mt-1">{{ hiring_active_count }}</p>
+        </div>
+        <div class="gov-card p-2 border-l-4 border-l-slate-500 bg-slate-50/40">
+          <p class="text-[8px] font-black uppercase tracking-widest text-slate-600 m-0">Inactive</p>
+          <p id="nHiringMetricInactive" class="text-[17px] leading-none font-black text-slate-700 mt-1">{{ hiring_inactive_count }}</p>
+        </div>
+      </section>
+
+      <section id="nApplicantsSection" class="gov-card flex-1 flex flex-col min-h-[420px] overflow-hidden">
         <div class="bg-slate-50 border-b border-slate-300 p-2 flex flex-wrap items-center gap-1.5">
           <div class="relative min-w-[220px] flex-1">
             <span class="material-icons-round absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-[12px]">search</span>
@@ -159,7 +179,7 @@
         </div>
       </section>
 
-      <section class="gov-card flex-1 flex flex-col min-h-[420px] overflow-hidden">
+      <section id="nHiringSection" class="gov-card flex-1 flex flex-col min-h-[420px] overflow-hidden hidden">
         <div class="bg-blue-50 border-b border-slate-300 p-2 flex items-center justify-between">
           <h2 class="text-[10px] font-black uppercase tracking-widest text-blue-900 m-0">National Hiring Registry</h2>
           <div class="text-[9px] font-bold uppercase text-slate-600">
@@ -468,6 +488,7 @@
         throw new Error(data.error || 'Failed to refresh hiring rows');
       }
       nationalHiringRows = nNormalizeHiringRows(data.positions || []);
+      nUpdateHiringMetrics();
       nRenderHiringTable();
     }
 
@@ -487,6 +508,42 @@
       };
     }
 
+    function nUpdateHiringMetrics() {
+      const total = nationalHiringRows.length;
+      const active = nationalHiringRows.filter((row) => row.is_active).length;
+      const inactive = total - active;
+      document.getElementById('nHiringMetricTotal').textContent = String(total);
+      document.getElementById('nHiringMetricActive').textContent = String(active);
+      document.getElementById('nHiringMetricInactive').textContent = String(inactive);
+    }
+
+    function nSwitchTab(tab) {
+      const applicantsTab = document.getElementById('nApplicantsTab');
+      const hiringTab = document.getElementById('nHiringTab');
+      const applicantsMetrics = document.getElementById('nApplicantsMetrics');
+      const hiringMetrics = document.getElementById('nHiringMetrics');
+      const applicantsSection = document.getElementById('nApplicantsSection');
+      const hiringSection = document.getElementById('nHiringSection');
+
+      if (tab === 'hiring') {
+        applicantsTab.className = 'px-3 py-1.5 bg-white text-slate-700 font-bold text-[9px] uppercase rounded-[2px] border border-slate-300 hover:bg-slate-50';
+        hiringTab.className = 'px-3 py-1.5 bg-blue-900 text-white font-bold text-[9px] uppercase rounded-[2px] border border-blue-900';
+        applicantsMetrics.classList.add('hidden');
+        hiringMetrics.classList.remove('hidden');
+        applicantsSection.classList.add('hidden');
+        hiringSection.classList.remove('hidden');
+        nRenderHiringTable();
+        return;
+      }
+
+      applicantsTab.className = 'px-3 py-1.5 bg-blue-900 text-white font-bold text-[9px] uppercase rounded-[2px] border border-blue-900';
+      hiringTab.className = 'px-3 py-1.5 bg-white text-slate-700 font-bold text-[9px] uppercase rounded-[2px] border border-slate-300 hover:bg-slate-50';
+      applicantsMetrics.classList.remove('hidden');
+      hiringMetrics.classList.add('hidden');
+      applicantsSection.classList.remove('hidden');
+      hiringSection.classList.add('hidden');
+    }
+
     document.addEventListener('DOMContentLoaded', async () => {
       const hiringDataEl = document.getElementById('national-hiring-data');
       try {
@@ -494,6 +551,9 @@
       } catch (e) {
         nationalHiringRows = [];
       }
+
+      document.getElementById('nApplicantsTab').addEventListener('click', () => nSwitchTab('applicants'));
+      document.getElementById('nHiringTab').addEventListener('click', () => nSwitchTab('hiring'));
 
       document.getElementById('nHiringSearch').addEventListener('input', nRenderHiringTable);
       document.getElementById('nHiringStatusFilter').addEventListener('change', nRenderHiringTable);
@@ -551,7 +611,9 @@
         }
       });
 
+      nUpdateHiringMetrics();
       nRenderHiringTable();
+      nSwitchTab('applicants');
     });
   </script>
 </body>
