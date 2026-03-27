@@ -51,6 +51,11 @@
             <div>
               <label for="imageUrl" class="block text-[9px] font-bold text-slate-500 uppercase tracking-wide">Image URL</label>
               <input id="imageUrl" type="text" title="Image URL" placeholder="/static/images/news1.jpg or https://..." class="w-full h-8 px-2 border border-slate-300 rounded-[2px] text-[11px]" />
+              <div class="mt-2 flex items-center gap-2 flex-wrap">
+                <input id="imageFile" type="file" title="News image file" accept="image/*" class="text-[10px] text-slate-600" />
+                <button id="uploadImageBtn" type="button" class="px-2 py-1 border border-slate-300 bg-white rounded-[2px] text-[9px] font-bold uppercase tracking-widest hover:bg-slate-100">Upload to Cloudinary</button>
+                <span id="imageUploadStatus" class="text-[9px] font-bold uppercase tracking-wide text-slate-500"></span>
+              </div>
             </div>
             <div class="flex items-end">
               <label class="inline-flex items-center gap-2 text-[10px] font-bold text-slate-600 uppercase tracking-wide">
@@ -93,6 +98,9 @@
     const summaryInput = document.getElementById('summary');
     const publishedDateInput = document.getElementById('publishedDate');
     const imageUrlInput = document.getElementById('imageUrl');
+    const imageFileInput = document.getElementById('imageFile');
+    const uploadImageBtn = document.getElementById('uploadImageBtn');
+    const imageUploadStatus = document.getElementById('imageUploadStatus');
     const isPublishedInput = document.getElementById('isPublished');
 
     let items = [];
@@ -112,6 +120,8 @@
       summaryInput.value = '';
       publishedDateInput.value = '';
       imageUrlInput.value = '';
+      imageFileInput.value = '';
+      imageUploadStatus.textContent = '';
       isPublishedInput.checked = true;
     }
 
@@ -121,8 +131,41 @@
       summaryInput.value = item.summary || '';
       publishedDateInput.value = item.published_date || '';
       imageUrlInput.value = item.image_url || '';
+      imageFileInput.value = '';
+      imageUploadStatus.textContent = '';
       isPublishedInput.checked = !!item.is_published;
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function uploadSelectedImage() {
+      const file = imageFileInput.files && imageFileInput.files[0];
+      if (!file) {
+        alert('Select an image file first.');
+        return;
+      }
+
+      uploadImageBtn.disabled = true;
+      imageUploadStatus.textContent = 'Uploading...';
+
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const res = await fetch('/superadmin/api/hrm/news/upload-image', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to upload image');
+
+        imageUrlInput.value = (data.image_url || '').trim();
+        imageUploadStatus.textContent = 'Uploaded';
+      } catch (err) {
+        imageUploadStatus.textContent = 'Upload failed';
+        alert(err.message || 'Failed to upload image');
+      } finally {
+        uploadImageBtn.disabled = false;
+      }
     }
 
     function renderRows() {
@@ -220,6 +263,7 @@
 
     newBtn.addEventListener('click', resetForm);
     resetBtn.addEventListener('click', resetForm);
+    uploadImageBtn.addEventListener('click', uploadSelectedImage);
     newsForm.addEventListener('submit', saveItem);
 
     loadItems();

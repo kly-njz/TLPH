@@ -5,8 +5,131 @@ from datetime import datetime
 from collections import defaultdict
 import coa_storage
 from firebase_admin import firestore
+import hashlib
+import os
+import requests
+import time
 
 bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
+
+
+def _cloudinary_enabled() -> bool:
+    return all([
+        os.environ.get('CLOUDINARY_CLOUD_NAME'),
+        os.environ.get('CLOUDINARY_API_KEY'),
+        os.environ.get('CLOUDINARY_API_SECRET')
+    ])
+
+
+def _cloudinary_signature(params: dict, api_secret: str) -> str:
+    filtered = {k: v for k, v in params.items() if v is not None and v != ''}
+    base = '&'.join([f"{k}={filtered[k]}" for k in sorted(filtered.keys())])
+    return hashlib.sha1(f"{base}{api_secret}".encode('utf-8')).hexdigest()
+
+
+def _upload_to_cloudinary(file_obj, folder: str):
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '').strip()
+    api_key = os.environ.get('CLOUDINARY_API_KEY', '').strip()
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET', '').strip()
+
+    if not cloud_name or not api_key or not api_secret:
+        return None
+
+    timestamp = int(time.time())
+    params_to_sign = {
+        'folder': folder,
+        'timestamp': timestamp
+    }
+    signature = _cloudinary_signature(params_to_sign, api_secret)
+
+    endpoint = f"https://api.cloudinary.com/v1_1/{cloud_name}/auto/upload"
+    try:
+        file_obj.stream.seek(0)
+    except Exception:
+        pass
+
+    resp = requests.post(
+        endpoint,
+        data={
+            'api_key': api_key,
+            'timestamp': timestamp,
+            'folder': folder,
+            'signature': signature
+        },
+        files={
+            'file': (file_obj.filename, file_obj.stream, file_obj.mimetype or 'application/octet-stream')
+        },
+        timeout=45
+    )
+
+    if not resp.ok:
+        raise RuntimeError(f"Cloudinary upload failed: {resp.status_code} {resp.text[:300]}")
+
+    payload = resp.json() or {}
+    return payload.get('secure_url') or payload.get('url')
+
+
+def _delete_from_cloudinary(image_url: str):
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '').strip()
+    api_key = os.environ.get('CLOUDINARY_API_KEY', '').strip()
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET', '').strip()
+
+    if not image_url or not cloud_name or not api_key or not api_secret:
+        return
+
+    prefix = f"https://res.cloudinary.com/{cloud_name}/"
+    if not image_url.startswith(prefix):
+        return
+
+    marker = '/upload/'
+    idx = image_url.find(marker)
+    if idx < 0:
+        return
+
+    remainder = image_url[idx + len(marker):]
+    if not remainder:
+        return
+
+    parts = [p for p in remainder.split('/') if p]
+    if not parts:
+        return
+
+    if parts[0].startswith('v') and parts[0][1:].isdigit():
+        parts = parts[1:]
+    if not parts:
+        return
+
+    public_path = '/'.join(parts)
+    dot = public_path.rfind('.')
+    if dot > public_path.rfind('/'):
+        public_id = public_path[:dot]
+    else:
+        public_id = public_path
+
+    if not public_id:
+        return
+
+    timestamp = int(time.time())
+    signature = _cloudinary_signature(
+        {'public_id': public_id, 'timestamp': timestamp},
+        api_secret
+    )
+    endpoint = f"https://api.cloudinary.com/v1_1/{cloud_name}/image/destroy"
+
+    try:
+        requests.post(
+            endpoint,
+            data={
+                'api_key': api_key,
+                'public_id': public_id,
+                'timestamp': timestamp,
+                'signature': signature,
+            },
+            timeout=20,
+        )
+    except Exception:
+        # Do not block the delete request if Cloudinary cleanup fails.
+        pass
 
 @bp.route('/inventory')
 @role_required('super-admin','superadmin')
@@ -1177,6 +1300,27 @@ def get_superadmin_news():
         return jsonify({'success': False, 'error': 'Failed to load news'}), 500
 
 
+@bp.route('/api/hrm/news/upload-image', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def upload_superadmin_news_image():
+    try:
+        file = request.files.get('image')
+        if not file:
+            return jsonify({'success': False, 'error': 'No image file uploaded'}), 400
+
+        if not _cloudinary_enabled():
+            return jsonify({'success': False, 'error': 'Cloudinary is not configured on server'}), 500
+
+        image_url = _upload_to_cloudinary(file, 'tlph/news-updates')
+        if not image_url:
+            return jsonify({'success': False, 'error': 'Cloudinary upload did not return URL'}), 500
+
+        return jsonify({'success': True, 'image_url': image_url})
+    except Exception as e:
+        print(f'[ERROR] upload_superadmin_news_image: {e}')
+        return jsonify({'success': False, 'error': 'Failed to upload image'}), 500
+
+
 @bp.route('/api/hrm/news', methods=['POST'])
 @role_required('super-admin', 'superadmin')
 def create_superadmin_news():
@@ -1221,6 +1365,7 @@ def update_superadmin_news(news_id):
         existing = doc_ref.get()
         if not existing.exists:
             return jsonify({'success': False, 'error': 'News item not found'}), 404
+        existing_data = existing.to_dict() or {}
 
         payload = request.get_json() or {}
         updates = {}
@@ -1242,6 +1387,12 @@ def update_superadmin_news(news_id):
         updates['updated_by'] = session.get('user_email') or 'superadmin'
         doc_ref.update(updates)
 
+        if 'image_url' in updates:
+            old_image = str(existing_data.get('image_url') or '').strip()
+            new_image = str(updates.get('image_url') or '').strip()
+            if old_image and new_image and old_image != new_image:
+                _delete_from_cloudinary(old_image)
+
         return jsonify({'success': True})
     except Exception as e:
         print(f'[ERROR] update_superadmin_news: {e}')
@@ -1258,6 +1409,8 @@ def delete_superadmin_news(news_id):
         if not existing.exists:
             return jsonify({'success': False, 'error': 'News item not found'}), 404
 
+        data = existing.to_dict() or {}
+        _delete_from_cloudinary(str(data.get('image_url') or '').strip())
         doc_ref.delete()
         return jsonify({'success': True})
     except Exception as e:
