@@ -169,6 +169,26 @@
                         </div>
                     </div>
 
+                    <!-- Compensation Details Panel -->
+                    <div class="gov-card p-3 shadow-sm" x-show="compensationDetails.show" x-cloak>
+                        <h3 class="label-text border-b pb-1 mb-2 flex items-center gap-2 text-orange-700">
+                            <span class="material-icons-round text-[14px]">warning</span> Form-Specific Details
+                        </h3>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <template x-for="field in compensationDetails.fields" :key="field.label">
+                                <div>
+                                    <p class="label-text" x-text="field.label"></p>
+                                    <template x-if="!field.isLink">
+                                        <p class="data-text break-words" x-text="field.value"></p>
+                                    </template>
+                                    <template x-if="field.isLink">
+                                        <a :href="field.value" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline font-bold text-[11px]">🗺️ View on Map</a>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
                     <!-- Seminar-specific details panel -->
                     <div class="gov-card p-3 shadow-sm" x-show="seminarFields.length > 0" x-cloak>
                         <h3 class="label-text border-b pb-1 mb-2 flex items-center gap-2 text-indigo-800">
@@ -398,19 +418,34 @@
                 },
 
                 buildDocFiles(data) {
+                    // First try to get compensation documents using priority order
+                    if (Array.isArray(data?.supportingDocuments) && data.supportingDocuments.length) {
+                        return data.supportingDocuments.map(d => typeof d === 'string' ? { url: d, name: `Document` } : d);
+                    }
+                    if (Array.isArray(data?.supportingFiles) && data.supportingFiles.length) {
+                        return data.supportingFiles.map(d => typeof d === 'string' ? { url: d, name: `Document` } : d);
+                    }
+                    if (Array.isArray(data?.attachments) && data.attachments.length) {
+                        return data.attachments.map(d => typeof d === 'string' ? { url: d, name: `Document` } : d);
+                    }
+                    if (Array.isArray(data?.files) && data.files.length) {
+                        return data.files.map(d => typeof d === 'string' ? { url: d, name: `Document` } : d);
+                    }
+
+                    // Fallback to scanning all object entries for attachment keys
                     const result = [];
                     const seen = new Set();
                     const userId = data?.userId || data?.userID || data?.uid || '';
 
                     const isApplicantAttachmentKey = (key) => {
                         const k = String(key || '').toLowerCase();
-                        // Only keep fields that are intended as uploaded attachments from applicant forms.
                         return /(file|files|photo|photos|image|images|document|documents|attachment|attachments|report|permit|certificate|proposal|plan|record|history|result|picture)/i.test(k);
                     };
 
-                    const isApplicantUploadUrl = (url) => {
+                    const isValidUploadUrl = (url) => {
                         const u = String(url || '').toLowerCase();
-                        return u.includes('/static/uploads/service_requests/') || u.includes('static/uploads/service_requests/');
+                        // Accept cloudinary URLs, static uploads, or any http(s) URL
+                        return /^https?:\/\//i.test(u) || u.includes('/static/uploads/') || u.includes('cloudinary');
                     };
 
                     for (const [key, val] of Object.entries(data || {})) {
@@ -422,7 +457,7 @@
                         files.forEach(raw => {
                             const url = this.normalizeFileUrl(raw, userId);
                             if (!url) return;
-                            if (!isApplicantUploadUrl(url)) return;
+                            if (!isValidUploadUrl(url)) return;
                             const marker = `${key}|${url}`;
                             if (seen.has(marker)) return;
                             seen.add(marker);
@@ -540,7 +575,12 @@
                         'forwardedAt', 'forwardedBy', 'forwardedByEmail',
                         'forwardedToNationalAt', 'forwardedToNationalBy',
                         'municipality', 'province', 'barangay', 'region',
-                        'amount', 'invoiceId', 'externalId', 'paymentUrl'
+                        'amount', 'invoiceId', 'externalId', 'paymentUrl',
+                        // Compensation-specific fields (shown in Form-Specific Details panel)
+                        'farmerIdNumber', 'costOfDamage', 'googlePinLocation', 'farmLatitude', 'farmLongitude',
+                        // Document fields
+                        'supportingDocuments', 'supportingFiles', 'attachments', 'files',
+                        'productPhoto', 'registrationDocuments', 'emergencyPhotos', 'fieldPhotos', 'damagePhotos'
                     ]);
 
                     const rows = [];
@@ -567,6 +607,37 @@
                         rows.push({ key, label: this.formatFieldLabel(key), value: this.formatFieldValue(key, val) });
                     }
                     return rows.sort((a, b) => a.label.localeCompare(b.label));
+                },
+
+                get compensationDetails() {
+                    if (!this.serviceData) return { show: false, fields: [] };
+                    const d = this.serviceData;
+                    const svc = (d.serviceType || '').toLowerCase();
+                    const fmt = (val) => val ? String(val).charAt(0).toUpperCase() + String(val).slice(1) : 'N/A';
+                    const fmtCurrency = (val) => val ? '₱ ' + Number(val).toLocaleString('en-PH', {minimumFractionDigits: 2}) : 'N/A';
+                    
+                    // Check if this is a compensation request
+                    const isCompensation = svc.includes('typhoon') || svc.includes('pest damage') || svc.includes('damage report');
+                    
+                    if (!isCompensation) return { show: false, fields: [] };
+                    
+                    const fields = [];
+                    
+                    // Common compensation fields
+                    if (d.farmerIdNumber) {
+                        fields.push({ label: 'Farmer ID', value: d.farmerIdNumber, isLink: false });
+                    }
+                    if (d.costOfDamage) {
+                        fields.push({ label: 'Cost of Damage', value: fmtCurrency(d.costOfDamage), isLink: false });
+                    }
+                    if (d.googlePinLocation) {
+                        fields.push({ label: 'Pin Location', value: d.googlePinLocation, isLink: true });
+                    }
+                    
+                    return {
+                        show: fields.length > 0,
+                        fields: fields
+                    };
                 },
 
                 formatFieldLabel(key) {

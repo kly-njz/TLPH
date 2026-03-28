@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pest Damage Report | DENR</title>
+
+    {% set required_role = 'user' %}
+    {% include 'auth_check.html' %}
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+</head>
+
+<body class="bg-gray-50 min-h-screen text-slate-900 text-sm font-sans">
+    {% include 'user/header.html' %}
+
+    <div class="container mx-auto px-2 lg:px-8 mt-3 sm:mt-4">
+        
+        <div class="max-w-6xl mx-auto text-center mb-3 sm:mb-4">
+            <h1 class="text-xl sm:text-2xl font-black uppercase tracking-tight text-green-800">Pest Damage Report</h1>
+            <p class="text-gray-500 font-bold uppercase tracking-widest text-[8px] sm:text-[9px] mt-0.5">Submitted Report - DENR • Agricultural Protection Bureau</p>
+        </div>
+
+        <div class="max-w-6xl mx-auto bg-white border border-gray-200 rounded-xl shadow-sm p-3 sm:p-5 mb-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4">
+                
+                <div class="space-y-3">
+                    <h3 class="text-green-800 font-black text-[10px] uppercase tracking-widest border-b pb-1 flex items-center gap-2">
+                        <i class="fa-solid fa-file-lines"></i> Assessment Details
+                    </h3>
+                    
+                    <div class="space-y-2 text-[9px]">
+                        <div>
+                            <p class="text-gray-500 font-black uppercase">Crop / Species</p>
+                            <p class="text-gray-800 font-bold text-[11px]" id="cropSpecies">-</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 font-black uppercase">Pest Type</p>
+                            <p class="text-gray-800 font-bold text-[11px]" id="pestType">-</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 font-black uppercase">Area Damaged (ha)</p>
+                            <p class="text-gray-800 font-bold text-[11px]" id="areaDamaged">-</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 font-black uppercase">Estimated Loss (₱)</p>
+                            <p class="text-green-700 font-black text-[12px]" id="lossValue">-</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 font-black uppercase">Date Observed</p>
+                            <p class="text-gray-800 font-bold text-[11px]" id="dateObserved">-</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 font-black uppercase">Last Spray Date</p>
+                            <p class="text-gray-800 font-bold text-[11px]" id="lastSpray">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <h3 class="text-green-800 font-black text-[10px] uppercase tracking-widest border-b pb-1 flex items-center gap-2">
+                        <i class="fa-solid fa-location-dot"></i> Farmer & Location Details
+                    </h3>
+                    
+                    <div class="space-y-2 text-[9px]">
+                        <div>
+                            <p class="text-gray-500 font-black uppercase">Farmer ID Number</p>
+                            <p class="text-gray-800 font-bold text-[11px]" id="farmerIdNumber">-</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 font-black uppercase">Estimated Cost of Damage (₱)</p>
+                            <p class="text-green-700 font-black text-[12px]" id="costOfDamage">-</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 font-black uppercase">Location</p>
+                            <p class="text-gray-800 font-bold text-[11px]" id="location">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t">
+                <h3 class="text-green-800 font-black text-[10px] uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Supporting Documents & Photos
+                </h3>
+                
+                <div id="attachmentGalleryContainer"></div>
+                
+                <div id="attachmentPreviewModal" class="hidden fixed inset-0 bg-black/60 z-[9998] flex items-center justify-center p-4">
+                    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden">
+                        <div class="flex items-center justify-between bg-green-800 text-white px-4 py-3">
+                            <p class="text-[11px] font-black uppercase tracking-widest m-0" id="previewTitle">Document</p>
+                            <button type="button" id="closePreviewBtn" class="text-white bg-transparent border-0 text-2xl leading-none cursor-pointer">&times;</button>
+                        </div>
+                        <div class="p-4 max-h-[70vh] overflow-y-auto">
+                            <div id="previewContent"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t flex flex-col lg:flex-row justify-between items-center gap-4">
+                <div class="text-[9px] text-gray-400 font-medium italic text-center lg:text-left" id="submissionDate">
+                    Submitted on -
+                </div>
+                
+                <div class="flex flex-row gap-2 w-full lg:w-auto">
+                    <a href="/user/dashboard" class="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-600 font-bold uppercase no-underline text-center text-[9px] hover:bg-gray-100 transition-all flex items-center justify-center lg:flex-none">
+                        Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+        <p class="text-center text-[8px] text-gray-300 uppercase tracking-[0.4em] mb-6">DENR APB • Compensation Division 2026</p>
+    </div>
+
+    <script type="module">
+        import { auth, db } from '/static/js/firebase-config.js';
+        import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+        import { collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const requestId = urlParams.get('id');
+
+            if (!requestId) {
+                document.body.innerHTML = '<div class="text-center mt-10"><p class="text-red-600 font-bold">Request ID not found</p></div>';
+                return;
+            }
+
+            try {
+                onAuthStateChanged(auth, async (user) => {
+                    if (!user) {
+                        window.location.href = '/login';
+                        return;
+                    }
+
+                    const docRef = collection(db, 'serviceRequests');
+                    const q = query(
+                        docRef, 
+                        where('id', '==', requestId),
+                        where('userId', '==', user.uid),
+                        where('serviceType', '==', 'Pest Damage Compensation')
+                    );
+
+                    const querySnapshot = await getDocs(q);
+
+                    if (querySnapshot.empty) {
+                        document.body.innerHTML = '<div class="text-center mt-10"><p class="text-red-600 font-bold">Request not found</p></div>';
+                        return;
+                    }
+
+                    const doc = querySnapshot.docs[0];
+                    const data = doc.data();
+
+                    // Populate fields
+                    document.getElementById('cropSpecies').textContent = data.cropSpecies || '-';
+                    document.getElementById('pestType').textContent = (data.pestType || '-').charAt(0).toUpperCase() + (data.pestType || '-').slice(1);
+                    document.getElementById('areaDamaged').textContent = `${data.areaDamaged || 0} hectares`;
+                    document.getElementById('lossValue').textContent = data.lossValue ? `₱ ${Number(data.lossValue).toLocaleString()}` : '-';
+                    document.getElementById('dateObserved').textContent = data.dateObserved ? new Date(data.dateObserved).toLocaleDateString() : '-';
+                    document.getElementById('lastSpray').textContent = data.lastSpray ? new Date(data.lastSpray).toLocaleDateString() : '-';
+                    document.getElementById('farmerIdNumber').textContent = data.farmerIdNumber || '-';
+                    document.getElementById('costOfDamage').textContent = data.costOfDamage ? `₱ ${Number(data.costOfDamage).toLocaleString()}` : '-';
+                    document.getElementById('location').textContent = data.barangay ? `${data.barangay}, ${data.municipality}, ${data.province}` : '-';
+                    document.getElementById('submissionDate').textContent = data.submittedAt ? `Submitted on ${new Date(data.submittedAt).toLocaleDateString()}` : 'Submitted on -';
+
+                    // Process attachments
+                    const attachments = data.supportingDocuments || [];
+                    renderAttachmentGallery(attachments);
+                });
+            } catch (err) {
+                console.error('Error loading request:', err);
+                document.body.innerHTML = '<div class="text-center mt-10"><p class="text-red-600 font-bold">Error loading request details</p></div>';
+            }
+
+            function renderAttachmentGallery(attachments) {
+                const container = document.getElementById('attachmentGalleryContainer');
+                
+                if (!attachments || attachments.length === 0) {
+                    container.innerHTML = '<p class="text-[9px] text-gray-500 italic">No attachments</p>';
+                    return;
+                }
+
+                // Group attachments by normalized key
+                const aliasMap = {
+                    'blueprintprimary': 'blueprint',
+                    'blueprintscondary': 'blueprint',
+                    'validid': 'valid_id',
+                    'brgycert': 'barangay_cert'
+                };
+
+                const groups = {};
+                const seenUrls = new Set();
+
+                attachments.forEach(att => {
+                    if (!att || !att.url) return;
+                    if (seenUrls.has(att.url)) return;
+                    seenUrls.add(att.url);
+
+                    let key = (att.name || 'document').toLowerCase().replace(/\s+/g, '');
+                    key = aliasMap[key] || key;
+
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(att);
+                });
+
+                const groupKeys = Object.keys(groups);
+                let html = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">';
+
+                groupKeys.forEach((key, idx) => {
+                    const group = groups[key];
+                    const displayName = key.replace(/_/g, ' ').toUpperCase();
+                    const count = group.length;
+
+                    html += `
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all cursor-pointer" onclick="openAttachmentGroup(${idx})">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-file text-green-700 text-lg"></i>
+                                    <div>
+                                        <p class="text-[9px] font-black text-gray-700 uppercase">${displayName}</p>
+                                        <p class="text-[8px] text-gray-500">${count} file${count !== 1 ? 's' : ''}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="w-full h-20 bg-white rounded border border-gray-200 flex items-center justify-center overflow-hidden">
+                                ${group[0].url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? 
+                                    `<img src="${group[0].url}" alt="preview" class="w-full h-full object-cover">` :
+                                    `<i class="fa-solid fa-file-pdf text-red-600 text-3xl"></i>`
+                                }
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+                container.innerHTML = html;
+                
+                // Store group data globally for preview
+                window.ATTACHMENT_GROUPS = Object.values(groups);
+            }
+
+            window.openAttachmentGroup = function(groupIdx) {
+                const group = window.ATTACHMENT_GROUPS[groupIdx];
+                if (!group) return;
+
+                const modal = document.getElementById('attachmentPreviewModal');
+                const content = document.getElementById('previewContent');
+                const title = document.getElementById('previewTitle');
+
+                if (group.length === 1) {
+                    // Single file - open directly
+                    renderSinglePreview(group[0], title, content);
+                } else {
+                    // Multiple files - show gallery grid
+                    renderGalleryGrid(group, groupIdx, title, content);
+                }
+
+                modal.classList.remove('hidden');
+            };
+
+            function renderSinglePreview(file, title, content) {
+                const isImage = file.url.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                title.textContent = file.name || 'Document';
+                
+                if (isImage) {
+                    content.innerHTML = `<img src="${file.url}" alt="${file.name}" class="w-full rounded-lg" />`;
+                } else {
+                    content.innerHTML = `
+                        <div class="text-center py-12">
+                            <i class="fa-solid fa-file-pdf text-red-600 text-6xl mb-4"></i>
+                            <p class="text-gray-700 font-bold mb-4">${file.name || 'Document'}</p>
+                            <a href="${file.url}" target="_blank" class="px-6 py-2 bg-green-700 text-white font-bold rounded-lg hover:bg-green-800">
+                                <i class="fa-solid fa-download mr-2"></i> Download
+                            </a>
+                        </div>
+                    `;
+                }
+            }
+
+            function renderGalleryGrid(group, groupIdx, title, content) {
+                const displayName = (group[0].name || 'Documents').toUpperCase();
+                title.textContent = `${displayName} (${group.length} files)`;
+
+                let html = '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">';
+                
+                group.forEach((file, idx) => {
+                    const isImage = file.url.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                    html += `
+                        <div class="relative group cursor-pointer rounded-lg overflow-hidden h-24 sm:h-28" onclick="openSingleFromGallery(${groupIdx}, ${idx})">
+                            ${isImage ? 
+                                `<img src="${file.url}" alt="${file.name}" class="w-full h-full object-cover group-hover:scale-110 transition-transform">` :
+                                `<div class="w-full h-full bg-gray-200 flex items-center justify-center"><i class="fa-solid fa-file-pdf text-red-600 text-2xl"></i></div>`
+                            }
+                            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                                <i class="fa-solid fa-eye text-white text-xl opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+                content.innerHTML = html;
+            }
+
+            window.openSingleFromGallery = function(groupIdx, fileIdx) {
+                const group = window.ATTACHMENT_GROUPS[groupIdx];
+                const file = group[fileIdx];
+                const title = document.getElementById('previewTitle');
+                const content = document.getElementById('previewContent');
+                renderSinglePreview(file, title, content);
+            };
+
+            document.getElementById('closePreviewBtn').addEventListener('click', () => {
+                document.getElementById('attachmentPreviewModal').classList.add('hidden');
+            });
+
+            document.getElementById('attachmentPreviewModal').addEventListener('click', (e) => {
+                if (e.target.id === 'attachmentPreviewModal') {
+                    document.getElementById('attachmentPreviewModal').classList.add('hidden');
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

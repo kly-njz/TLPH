@@ -262,10 +262,15 @@
                     return;
                 }
 
-                // Fetch service data
+                // Fetch service data (with legacy collection fallback)
                 console.log('Fetching from Firestore: service_requests/', currentServiceId);
-                const serviceDoc = await getDoc(doc(db, 'service_requests', currentServiceId));
-                
+                let serviceDoc = await getDoc(doc(db, 'service_requests', currentServiceId));
+
+                if (!serviceDoc.exists()) {
+                    console.warn('Not found in service_requests, trying legacy serviceRequests collection:', currentServiceId);
+                    serviceDoc = await getDoc(doc(db, 'serviceRequests', currentServiceId));
+                }
+
                 if (!serviceDoc.exists()) {
                     console.error('Service request not found:', currentServiceId);
                     alert('Service request not found');
@@ -408,12 +413,18 @@
                             <p class="info-value">${serviceData.occurrenceTime ? new Date(serviceData.occurrenceTime).toLocaleString('en-US') : 'N/A'}</p>
                             <p class="info-label">Crop / Species</p>
                             <p class="info-value">${serviceData.cropSpecies || 'N/A'}</p>
+                            <p class="info-label" style="margin-top: 15px; border-top: 1px solid #cbd5e1; padding-top: 15px;">Farmer ID</p>
+                            <p class="info-value">${serviceData.farmerIdNumber || 'N/A'}</p>
+                            <p class="info-label">Pin Location</p>
+                            <p class="info-value">${serviceData.farmAddress || 'N/A'} ${serviceData.googlePinLocation ? `<a href="${serviceData.googlePinLocation}" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-bold" style="font-size:11px;">🗺️ View Map</a>` : ''}</p>
                         </div>
                         <div class="col-md-6">
                             <p class="info-label">Area Affected (ha)</p>
                             <p class="info-value">${serviceData.areaAffected || 'N/A'}</p>
                             <p class="info-label">Type of Damage</p>
                             <p class="info-value">${serviceData.damageType || 'N/A'}</p>
+                            <p class="info-label" style="margin-top: 15px; border-top: 1px solid #cbd5e1; padding-top: 15px;">Cost of Damage</p>
+                            <p class="info-value" style="color: #16a34a; font-weight: 900;">${serviceData.costOfDamage ? '₱ ' + Number(serviceData.costOfDamage).toLocaleString('en-US', {minimumFractionDigits: 2}) : 'N/A'}</p>
                         </div>
                     `;
                 } else if (svcType.includes('pest') && !svcType.includes('emergency') && !svcType.includes('pesticide') && !(svcType.includes('pest & disease') || svcType.includes('pest disease management'))) {
@@ -426,14 +437,20 @@
                             <p class="info-value">${serviceData.pestType || 'N/A'}</p>
                             <p class="info-label">Date Observed</p>
                             <p class="info-value">${serviceData.dateObserved || 'N/A'}</p>
+                            <p class="info-label" style="margin-top: 15px; border-top: 1px solid #cbd5e1; padding-top: 15px;">Farmer ID</p>
+                            <p class="info-value">${serviceData.farmerIdNumber || 'N/A'}</p>
+                            <p class="info-label">Pin Location</p>
+                            <p class="info-value">${serviceData.farmAddress || 'N/A'} ${serviceData.googlePinLocation ? `<a href="${serviceData.googlePinLocation}" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-bold" style="font-size:11px;">🗺️ View Map</a>` : ''}</p>
                         </div>
                         <div class="col-md-6">
                             <p class="info-label">Area Damaged (ha)</p>
                             <p class="info-value">${serviceData.areaDamaged || 'N/A'}</p>
                             <p class="info-label">Estimated Loss</p>
-                            <p class="info-value">${serviceData.lossValue ? '\u20b1' + Number(serviceData.lossValue).toLocaleString() : 'N/A'}</p>
+                            <p class="info-value">${serviceData.lossValue ? '₱' + Number(serviceData.lossValue).toLocaleString() : 'N/A'}</p>
                             <p class="info-label">Last Spray Date</p>
                             <p class="info-value">${serviceData.lastSpray || 'N/A'}</p>
+                            <p class="info-label" style="margin-top: 15px; border-top: 1px solid #cbd5e1; padding-top: 15px;">Cost of Damage</p>
+                            <p class="info-value" style="color: #16a34a; font-weight: 900;">${serviceData.costOfDamage ? '₱ ' + Number(serviceData.costOfDamage).toLocaleString('en-US', {minimumFractionDigits: 2}) : 'N/A'}</p>
                         </div>
                     `;
                 } else if (svcType.includes('good agricultural') || svcType.includes('gap training')) {
@@ -693,7 +710,13 @@
                 const docsSection = document.getElementById('documentsSection');
                 const docsGrid = document.getElementById('documentsGrid');
                 const isImageFile = (path) => /\.(jpg|jpeg|png|avif|webp|gif|bmp|svg)(\?|$)/i.test(String(path || ''));
+                const isOpenableUrl = (url) => /^https?:\/\//i.test(String(url || '')) || String(url || '').startsWith('/');
+                const escapeHtml = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                 const labelMap = {
+                    supportingDocuments: 'Supporting Documents & Photos',
+                    supportingFiles: 'Supporting Documents & Photos',
+                    attachments: 'Supporting Documents & Photos',
+                    files: 'Supporting Documents & Photos',
                     productPhoto: 'Product Photo', registrationDocuments: 'Registration Documents',
                     emergencyPhotos: 'Emergency Photos', fieldPhotos: 'Field Photos',
                     damagePhotos: 'Damage Photos', issueReport: 'Issues Report',
@@ -709,37 +732,82 @@
                     farmPermits: 'Farm Permits', businessPlanFile: 'Business Proposal',
                     quotesFile: 'Quotes / Budget',
                 };
-                const docFields = Object.entries(serviceData).filter(([key, val]) => {
-                    if (!Array.isArray(val) || val.length === 0) return false;
-                    return val.some(item => typeof item === 'string' && /(\.\w{2,5})(\?|$)/.test(item));
-                });
+
+                const normalizeFileEntries = (value) => {
+                    const raw = Array.isArray(value) ? value : (value ? [value] : []);
+                    return raw
+                        .map((item, idx) => {
+                            if (typeof item === 'string') {
+                                const url = item.trim();
+                                if (!url) return null;
+                                const name = decodeURIComponent(url.split('/').pop()?.split('?')[0] || `File ${idx + 1}`);
+                                return { url, name };
+                            }
+                            if (item && typeof item === 'object') {
+                                const url = String(item.url || item.webUrl || item.path || '').trim();
+                                if (!url) return null;
+                                const name = String(item.name || item.fileName || decodeURIComponent(url.split('/').pop()?.split('?')[0] || `File ${idx + 1}`));
+                                return { url, name };
+                            }
+                            return null;
+                        })
+                        .filter(Boolean);
+                };
+
+                const docFields = Object.entries(serviceData)
+                    .filter(([key]) => {
+                        // Only include known document field keys
+                        const docKeys = ['supportingDocuments', 'supportingFiles', 'attachments', 'files',
+                            'productPhoto', 'registrationDocuments', 'emergencyPhotos', 'fieldPhotos',
+                            'damagePhotos', 'issueReport', 'closeUpPhoto', 'sprayRecord',
+                            'fertilizationHistory', 'soilTestResult', 'farmPhotos', 'revisedDocuments',
+                            'latestSitePhoto', 'documents', 'previousPermit', 'supportingPermits',
+                            'budgetEstimate', 'projectProposal', 'budgetBreakdown', 'workFinancialPlan',
+                            'legalCertificate', 'incomeFile', 'existingFile', 'riskHistory',
+                            'farmPermits', 'businessPlanFile', 'quotesFile'];
+                        return docKeys.includes(key);
+                    })
+                    .map(([key, val]) => ({ key, files: normalizeFileEntries(val) }))
+                    .filter(({ files }) => files.length > 0);
+
                 if (docFields.length > 0) {
                     docsSection.style.display = '';
-                    docsGrid.innerHTML = docFields.map(([key, files]) => {
+                    docsGrid.innerHTML = docFields.map(({ key, files }) => {
                         const label = labelMap[key] || key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
-                        const ext2icon = (f) => {
-                            const e = f.split('.').pop().toLowerCase();
-                            if (['jpg','jpeg','png','avif','webp'].includes(e)) return 'fa-file-image text-green-600';
+                        const ext2icon = (url) => {
+                            const e = String(url || '').split('?')[0].split('.').pop().toLowerCase();
+                            if (['jpg','jpeg','png','avif','webp','gif','bmp','svg'].includes(e)) return 'fa-file-image text-green-600';
                             if (e === 'pdf') return 'fa-file-pdf text-red-600';
                             if (['doc','docx'].includes(e)) return 'fa-file-word text-blue-700';
                             if (['xls','xlsx'].includes(e)) return 'fa-file-excel text-emerald-700';
                             return 'fa-file text-slate-500';
                         };
-                        const fileList = files.map(f => {
-                            const safeUrl = String(f || '');
-                            const displayName = safeUrl.split('/').pop().split('?')[0] || safeUrl;
-                            const canOpen = /^https?:\/\//i.test(safeUrl) || safeUrl.startsWith('/');
+
+                        const fileList = files.map((f) => {
+                            const safeUrl = String(f.url || '');
+                            const displayName = String(f.name || 'Document');
+                            const canOpen = isOpenableUrl(safeUrl);
                             const encodedUrl = encodeURIComponent(safeUrl);
+
+                            if (isImageFile(safeUrl)) {
+                                return `
+                                <div class="doc-box rounded mb-2 align-items-start">
+                                    <img src="${escapeHtml(safeUrl)}" alt="${escapeHtml(displayName)}" class="rounded border border-slate-200 object-cover" style="width:70px;height:70px;" loading="lazy"/>
+                                    <div class="flex-grow-1 min-w-0">
+                                        <div class="text-xs font-bold text-slate-700 text-break">${escapeHtml(displayName)}</div>
+                                        ${canOpen ? `<button type="button" onclick="openMunicipalImageViewer('${encodedUrl}')" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold mt-1">VIEW</button>` : ''}
+                                    </div>
+                                </div>`;
+                            }
+
                             return `
-                            <div class="doc-box rounded mb-1">
-                                <i class="fa-solid ${ext2icon(f)} text-sm"></i>
-                                <span class="text-xs font-bold text-slate-700 text-truncate">${displayName}</span>
-                                ${canOpen ? (isImageFile(safeUrl)
-                                    ? `<button type="button" onclick="openMunicipalImageViewer('${encodedUrl}')" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</button>`
-                                    : `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</a>`)
-                                : ''}
+                            <div class="doc-box rounded mb-2">
+                                <i class="fa-solid ${ext2icon(safeUrl)} text-sm"></i>
+                                <span class="text-xs font-bold text-slate-700 text-truncate flex-grow-1">${escapeHtml(displayName)}</span>
+                                ${canOpen ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary py-0 px-2 text-[9px] font-bold">VIEW</a>` : ''}
                             </div>`;
                         }).join('');
+
                         return `<div class="col-md-6 mb-3"><p class="info-label">${label}</p>${fileList}</div>`;
                     }).join('');
                 }
