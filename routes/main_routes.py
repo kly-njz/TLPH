@@ -1,7 +1,69 @@
-from flask import Blueprint, render_template, redirect, url_for, session
+from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify
+import uuid
+from datetime import datetime
+import os
+import time
+import hashlib
+import requests
 from firebase_auth_middleware import role_required, firebase_auth_required
 
 bp = Blueprint('main', __name__)
+
+
+def _cloudinary_enabled() -> bool:
+    return all([
+        os.environ.get('CLOUDINARY_CLOUD_NAME'),
+        os.environ.get('CLOUDINARY_API_KEY'),
+        os.environ.get('CLOUDINARY_API_SECRET')
+    ])
+
+
+def _cloudinary_signature(params: dict, api_secret: str) -> str:
+    filtered = {k: v for k, v in params.items() if v is not None and v != ''}
+    base = '&'.join([f"{k}={filtered[k]}" for k in sorted(filtered.keys())])
+    return hashlib.sha1(f"{base}{api_secret}".encode('utf-8')).hexdigest()
+
+
+def _upload_to_cloudinary(file_obj, folder: str):
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '').strip()
+    api_key = os.environ.get('CLOUDINARY_API_KEY', '').strip()
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET', '').strip()
+
+    if not cloud_name or not api_key or not api_secret:
+        return None
+
+    timestamp = int(time.time())
+    params_to_sign = {
+        'folder': folder,
+        'timestamp': timestamp,
+    }
+    signature = _cloudinary_signature(params_to_sign, api_secret)
+
+    endpoint = f"https://api.cloudinary.com/v1_1/{cloud_name}/auto/upload"
+    try:
+        file_obj.stream.seek(0)
+    except Exception:
+        pass
+
+    resp = requests.post(
+        endpoint,
+        data={
+            'api_key': api_key,
+            'timestamp': timestamp,
+            'folder': folder,
+            'signature': signature,
+        },
+        files={
+            'file': (file_obj.filename, file_obj.stream, file_obj.mimetype or 'application/octet-stream')
+        },
+        timeout=60,
+    )
+
+    if not resp.ok:
+        raise RuntimeError(f"Cloudinary upload failed: {resp.status_code} {resp.text[:300]}")
+
+    payload = resp.json() or {}
+    return payload.get('secure_url') or payload.get('url')
 
 @bp.route('/')
 def index():
@@ -16,7 +78,283 @@ def index():
             data = user_doc.to_dict()
             if data.get('status', '').lower() == 'disabled':
                 return redirect(url_for('account_disabled'))
-    return render_template('home.html')
+
+    landing_news = []
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+        docs = db.collection('news_updates').stream()
+        for doc in docs:
+            item = doc.to_dict() or {}
+            if not bool(item.get('is_published', True)):
+                continue
+            landing_news.append({
+                'id': doc.id,
+                'title': str(item.get('title') or '').strip(),
+                'summary': str(item.get('summary') or '').strip(),
+                'published_date': str(item.get('published_date') or '').strip(),
+                'image_url': str(item.get('image_url') or '').strip(),
+                'is_published': True,
+            })
+
+        landing_news = [n for n in landing_news if n.get('title')]
+        landing_news.sort(key=lambda row: row.get('published_date') or '', reverse=True)
+    except Exception as e:
+        print(f"[WARN] Could not load landing news from Firestore: {e}")
+
+    main_news = landing_news[0] if landing_news else None
+    side_news = landing_news[1:4] if len(landing_news) > 1 else []
+
+    # Fetch active hiring positions (municipal viewers see own municipality + own region-scoped posts)
+    hiring_positions = []
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+        
+        # Determine user's municipality if they are a municipal admin
+        user_municipality = None
+        user_region = None
+        user_role = session.get('user_role', '').lower()
+        
+        if user_role in ['municipal_admin', 'municipal']:
+            # Try to get municipality from session
+            user_municipality = session.get('municipality') or session.get('user_municipality') or ''
+            user_region = session.get('region') or session.get('user_region') or ''
+            if not user_municipality.strip():
+                # Fallback: try to resolve from user document
+                if user_id:
+                    from firebase_config import get_firestore_db
+                    db_temp = get_firestore_db()
+                    user_doc = db_temp.collection('users').document(user_id).get()
+                    if user_doc.exists:
+                        user_data = user_doc.to_dict() or {}
+                        user_municipality = user_data.get('municipality') or user_data.get('municipalAdminMunicipality') or ''
+                        user_region = user_region or user_data.get('region') or user_data.get('regionalAdminRegion') or ''
+        
+        # Query all active hirings, then scope-filter in memory for flexibility.
+        docs = db.collection('hiring_positions').where('is_active', '==', True).stream()
+
+        def normalize_scope(value):
+            return ' '.join(str(value or '').strip().upper().split())
+
+        muni_key = normalize_scope(user_municipality)
+        region_key = normalize_scope(user_region)
+
+        for doc in docs:
+            item = doc.to_dict() or {}
+            item_muni = normalize_scope(item.get('municipality'))
+            item_region = normalize_scope(item.get('region'))
+            item_scope_type = str(item.get('scope_type') or '').strip().lower()
+
+            if user_role in ['municipal_admin', 'municipal'] and muni_key:
+                is_same_municipality = item_muni and item_muni == muni_key
+                is_same_region_scope = (
+                    item_scope_type == 'region' and
+                    region_key and
+                    item_region == region_key
+                )
+                if not (is_same_municipality or is_same_region_scope):
+                    continue
+
+            hiring_positions.append({
+                'id': doc.id,
+                'job_title': str(item.get('job_title') or '').strip(),
+                'description': str(item.get('description') or '').strip(),
+                'position': str(item.get('position') or '').strip(),
+                'starting_salary': item.get('starting_salary') or 0,
+                'municipality': str(item.get('municipality') or '').strip(),
+                'region': str(item.get('region') or '').strip(),
+                'scope_type': str(item.get('scope_type') or '').strip(),
+                'scope': str(item.get('scope') or '').strip(),
+                'created_at': str(item.get('created_at') or '').strip(),
+            })
+        
+        # Sort by created_at (newest first)
+        hiring_positions.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    except Exception as e:
+        print(f"[WARN] Could not load hiring positions from Firestore: {e}")
+
+    return render_template(
+        'home.html',
+        landing_news=landing_news,
+        main_news=main_news,
+        side_news=side_news,
+        hiring_positions=hiring_positions,
+    )
+
+
+@bp.route('/api/hiring/apply', methods=['POST'])
+def apply_for_hiring_position():
+    """Public endpoint for submitting a hiring application.
+
+    Creates a municipal applicant record directly in municipal_denr_applicant_jobs
+    so it appears in applicants-municipal with PENDING status.
+    """
+    from firebase_config import get_firestore_db
+    from firebase_admin import firestore
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    db = get_firestore_db()
+    data = request.get_json(silent=True) or {}
+
+    hiring_id = str(data.get('hiring_id') or '').strip()
+    full_name = str(data.get('full_name') or '').strip()
+    email = str(data.get('email') or '').strip()
+    phone = str(data.get('phone') or '').strip()
+    gender = str(data.get('gender') or '').strip()
+    birth_date = str(data.get('birth_date') or '').strip()
+    civil_status = str(data.get('civil_status') or '').strip()
+    barangay = str(data.get('barangay') or '').strip()
+    applicant_address = str(data.get('address') or '').strip()
+    education_level = str(data.get('education_level') or '').strip()
+    school_name = str(data.get('school_name') or '').strip()
+    course = str(data.get('course') or '').strip()
+    years_experience = str(data.get('years_experience') or '').strip()
+    current_employer = str(data.get('current_employer') or '').strip()
+    employment_status = str(data.get('employment_status') or '').strip()
+    skills = str(data.get('skills') or '').strip()
+    certifications = str(data.get('certifications') or '').strip()
+    expected_salary = str(data.get('expected_salary') or '').strip()
+    available_start_date = str(data.get('available_start_date') or '').strip()
+    preferred_work_type = str(data.get('preferred_work_type') or '').strip()
+    cover_letter = str(data.get('cover_letter') or '').strip()
+    notes = str(data.get('notes') or '').strip()
+    resume_url = str(data.get('resume_url') or '').strip()
+
+    if not hiring_id:
+        return jsonify({'success': False, 'error': 'Missing hiring position reference'}), 400
+    if not full_name:
+        return jsonify({'success': False, 'error': 'Full name is required'}), 400
+    if not email:
+        return jsonify({'success': False, 'error': 'Email is required'}), 400
+    if not phone:
+        return jsonify({'success': False, 'error': 'Phone is required'}), 400
+    if not resume_url:
+        return jsonify({'success': False, 'error': 'Resume upload is required'}), 400
+
+    try:
+        hiring_doc = db.collection('hiring_positions').document(hiring_id).get()
+        if not hiring_doc.exists:
+            return jsonify({'success': False, 'error': 'Hiring position not found'}), 404
+
+        hiring = hiring_doc.to_dict() or {}
+        if not bool(hiring.get('is_active', True)):
+            return jsonify({'success': False, 'error': 'This hiring position is no longer active'}), 400
+
+        municipality = str(hiring.get('municipality') or '').strip()
+        region = str(hiring.get('region') or '').strip()
+        scope_type = str(hiring.get('scope_type') or '').strip().lower()
+        if scope_type not in {'municipality', 'region'}:
+            scope_type = 'region' if region and not municipality else 'municipality'
+        position = str(hiring.get('position') or '').strip()
+        job_title = str(hiring.get('job_title') or '').strip()
+        description = str(hiring.get('description') or '').strip()
+
+        if scope_type == 'municipality' and not municipality:
+            return jsonify({'success': False, 'error': 'Hiring position has no municipality scope'}), 400
+        if scope_type == 'region' and not region:
+            return jsonify({'success': False, 'error': 'Hiring position has no region scope'}), 400
+
+        scope_value = municipality if scope_type == 'municipality' else region
+        municipality_value = municipality if scope_type == 'municipality' else ''
+
+        application_id = f"HIRE-{hiring_id}-{uuid.uuid4().hex[:8].upper()}"
+        reference_id = f"APP-{uuid.uuid4().hex[:8].upper()}"
+
+        payload = {
+            'source_id': hiring_id,
+            'source_collection': 'hiring_positions',
+            'full_name': full_name,
+            'applicant_name': full_name,
+            'email': email,
+            'phone': phone,
+            'contact_number': phone,
+            'address': applicant_address or 'N/A',
+            'barangay': barangay or 'N/A',
+            'gender': gender or 'N/A',
+            'birth_date': birth_date or 'N/A',
+            'civil_status': civil_status or 'N/A',
+            'education_level': education_level or 'N/A',
+            'school_name': school_name or 'N/A',
+            'course': course or 'N/A',
+            'years_experience': years_experience or '0',
+            'current_employer': current_employer or 'N/A',
+            'employment_status': employment_status or 'N/A',
+            'skills': skills or 'N/A',
+            'certifications': certifications or 'N/A',
+            'expected_salary': expected_salary or 'N/A',
+            'available_start_date': available_start_date or 'N/A',
+            'preferred_work_type': preferred_work_type or 'N/A',
+            'resume_link': resume_url,
+            'resume_url': resume_url,
+            'cover_letter': cover_letter or 'N/A',
+            'notes': notes or 'N/A',
+            'candidate_type': position or 'Environmental Management Specialist',
+            'category': position or 'Environmental Management Specialist',
+            'region_office': region or 'N/A',
+            'scope_type': scope_type,
+            'scope': scope_value,
+            'scope_key': normalize_scope(scope_value),
+            'job_title': job_title or 'DENR Hiring Position',
+            'job_description': description or 'No description provided.',
+            'status': 'PENDING',
+            'employeeStatus': 'pending',
+            'reference_id': reference_id,
+            'municipality': municipality_value,
+            'region': region or 'N/A',
+            'municipality_key': normalize_scope(municipality_value),
+            'region_key': normalize_scope(region),
+            'date_filed': datetime.utcnow().strftime('%Y-%m-%d'),
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'created_via': 'home_hiring_modal',
+        }
+
+        db.collection('municipal_denr_applicant_jobs').document(application_id).set(payload, merge=True)
+
+        return jsonify({
+            'success': True,
+            'message': 'Application submitted successfully',
+            'application_id': application_id,
+            'reference_id': reference_id,
+            'status': 'PENDING'
+        })
+    except Exception as e:
+        print(f"[ERROR] apply_for_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to submit application'}), 500
+
+
+@bp.route('/api/hiring/upload-resume', methods=['POST'])
+def upload_hiring_resume():
+    """Upload applicant resume (PDF/DOC/DOCX) to Cloudinary."""
+    if not _cloudinary_enabled():
+        return jsonify({'success': False, 'error': 'Resume upload service is not configured'}), 500
+
+    file_obj = request.files.get('resume')
+    if not file_obj or not getattr(file_obj, 'filename', ''):
+        return jsonify({'success': False, 'error': 'Resume file is required'}), 400
+
+    filename = str(file_obj.filename or '').strip()
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    allowed_ext = {'pdf', 'doc', 'docx'}
+    if ext not in allowed_ext:
+        return jsonify({'success': False, 'error': 'Only PDF, DOC, and DOCX files are allowed'}), 400
+
+    content_length = request.content_length or 0
+    max_size = 8 * 1024 * 1024  # 8 MB
+    if content_length > max_size:
+        return jsonify({'success': False, 'error': 'Resume file is too large (max 8MB)'}), 400
+
+    try:
+        uploaded_url = _upload_to_cloudinary(file_obj, 'tlph/applications/resumes')
+        if not uploaded_url:
+            return jsonify({'success': False, 'error': 'Failed to upload resume'}), 500
+        return jsonify({'success': True, 'resume_url': uploaded_url}), 200
+    except Exception as e:
+        print(f"[ERROR] upload_hiring_resume failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to upload resume'}), 500
 
 @bp.route('/login')
 def login():
@@ -631,7 +969,30 @@ def announcement_main():
 
 @bp.route('/news')
 def news_main():
-    return render_template('news.html')
+    news_items = []
+    try:
+        from firebase_config import get_firestore_db
+        db = get_firestore_db()
+        docs = db.collection('news_updates').stream()
+        for doc in docs:
+            item = doc.to_dict() or {}
+            if not bool(item.get('is_published', True)):
+                continue
+            title = str(item.get('title') or '').strip()
+            if not title:
+                continue
+            news_items.append({
+                'id': doc.id,
+                'title': title,
+                'summary': str(item.get('summary') or '').strip(),
+                'published_date': str(item.get('published_date') or '').strip(),
+                'image_url': str(item.get('image_url') or '').strip(),
+            })
+        news_items.sort(key=lambda row: row.get('published_date') or '', reverse=True)
+    except Exception as e:
+        print(f"[WARN] Could not load news page items from Firestore: {e}")
+
+    return render_template('news.html', news_items=news_items)
 
 @bp.route('/programs')
 def programs_main():

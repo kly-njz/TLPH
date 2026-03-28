@@ -5,8 +5,131 @@ from datetime import datetime
 from collections import defaultdict
 import coa_storage
 from firebase_admin import firestore
+import hashlib
+import os
+import requests
+import time
 
 bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
+
+
+def _cloudinary_enabled() -> bool:
+    return all([
+        os.environ.get('CLOUDINARY_CLOUD_NAME'),
+        os.environ.get('CLOUDINARY_API_KEY'),
+        os.environ.get('CLOUDINARY_API_SECRET')
+    ])
+
+
+def _cloudinary_signature(params: dict, api_secret: str) -> str:
+    filtered = {k: v for k, v in params.items() if v is not None and v != ''}
+    base = '&'.join([f"{k}={filtered[k]}" for k in sorted(filtered.keys())])
+    return hashlib.sha1(f"{base}{api_secret}".encode('utf-8')).hexdigest()
+
+
+def _upload_to_cloudinary(file_obj, folder: str):
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '').strip()
+    api_key = os.environ.get('CLOUDINARY_API_KEY', '').strip()
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET', '').strip()
+
+    if not cloud_name or not api_key or not api_secret:
+        return None
+
+    timestamp = int(time.time())
+    params_to_sign = {
+        'folder': folder,
+        'timestamp': timestamp
+    }
+    signature = _cloudinary_signature(params_to_sign, api_secret)
+
+    endpoint = f"https://api.cloudinary.com/v1_1/{cloud_name}/auto/upload"
+    try:
+        file_obj.stream.seek(0)
+    except Exception:
+        pass
+
+    resp = requests.post(
+        endpoint,
+        data={
+            'api_key': api_key,
+            'timestamp': timestamp,
+            'folder': folder,
+            'signature': signature
+        },
+        files={
+            'file': (file_obj.filename, file_obj.stream, file_obj.mimetype or 'application/octet-stream')
+        },
+        timeout=45
+    )
+
+    if not resp.ok:
+        raise RuntimeError(f"Cloudinary upload failed: {resp.status_code} {resp.text[:300]}")
+
+    payload = resp.json() or {}
+    return payload.get('secure_url') or payload.get('url')
+
+
+def _delete_from_cloudinary(image_url: str):
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '').strip()
+    api_key = os.environ.get('CLOUDINARY_API_KEY', '').strip()
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET', '').strip()
+
+    if not image_url or not cloud_name or not api_key or not api_secret:
+        return
+
+    prefix = f"https://res.cloudinary.com/{cloud_name}/"
+    if not image_url.startswith(prefix):
+        return
+
+    marker = '/upload/'
+    idx = image_url.find(marker)
+    if idx < 0:
+        return
+
+    remainder = image_url[idx + len(marker):]
+    if not remainder:
+        return
+
+    parts = [p for p in remainder.split('/') if p]
+    if not parts:
+        return
+
+    if parts[0].startswith('v') and parts[0][1:].isdigit():
+        parts = parts[1:]
+    if not parts:
+        return
+
+    public_path = '/'.join(parts)
+    dot = public_path.rfind('.')
+    if dot > public_path.rfind('/'):
+        public_id = public_path[:dot]
+    else:
+        public_id = public_path
+
+    if not public_id:
+        return
+
+    timestamp = int(time.time())
+    signature = _cloudinary_signature(
+        {'public_id': public_id, 'timestamp': timestamp},
+        api_secret
+    )
+    endpoint = f"https://api.cloudinary.com/v1_1/{cloud_name}/image/destroy"
+
+    try:
+        requests.post(
+            endpoint,
+            data={
+                'api_key': api_key,
+                'public_id': public_id,
+                'timestamp': timestamp,
+                'signature': signature,
+            },
+            timeout=20,
+        )
+    except Exception:
+        # Do not block the delete request if Cloudinary cleanup fails.
+        pass
 
 @bp.route('/inventory')
 @role_required('super-admin','superadmin')
@@ -796,6 +919,227 @@ def superadmin_delete_applicant(applicant_id):
         print(f'[ERROR] superadmin_delete_applicant: {e}')
         return jsonify({'success': False, 'error': 'Failed to delete applicant'}), 500
 
+
+def _normalize_hiring_scope_type(raw_scope_type):
+    scope_type = str(raw_scope_type or 'national').strip().lower()
+    return scope_type if scope_type in {'national', 'region', 'municipality'} else 'national'
+
+
+def _normalize_hiring_payload(payload):
+    scope_type = _normalize_hiring_scope_type(payload.get('scope_type'))
+    region = str(payload.get('region') or '').strip().upper()
+    municipality = str(payload.get('municipality') or '').strip().upper()
+    scope = str(payload.get('scope') or '').strip().upper()
+
+    if scope_type == 'national':
+        scope = 'NATIONAL'
+        region = ''
+        municipality = ''
+    elif scope_type == 'region':
+        scope = scope or region
+        region = region or scope
+        municipality = ''
+    else:
+        scope = scope or municipality
+        municipality = municipality or scope
+
+    return {
+        'job_title': str(payload.get('job_title') or '').strip(),
+        'description': str(payload.get('description') or '').strip(),
+        'position': str(payload.get('position') or '').strip(),
+        'starting_salary': payload.get('starting_salary'),
+        'scope_type': scope_type,
+        'scope': scope,
+        'region': region,
+        'municipality': municipality,
+    }
+
+
+@bp.route('/api/hiring', methods=['GET'])
+@role_required('super-admin', 'superadmin')
+def superadmin_get_hiring_positions():
+    try:
+        db = get_firestore_db()
+        docs = db.collection('hiring_positions').stream()
+
+        positions = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            scope_type = _normalize_hiring_scope_type(data.get('scope_type'))
+            positions.append({
+                'id': doc.id,
+                'job_title': data.get('job_title') or 'N/A',
+                'description': data.get('description') or 'N/A',
+                'position': data.get('position') or 'N/A',
+                'starting_salary': data.get('starting_salary') or 0,
+                'scope_type': scope_type,
+                'scope': data.get('scope') or ('NATIONAL' if scope_type == 'national' else (data.get('region') if scope_type == 'region' else data.get('municipality'))),
+                'region': data.get('region') or '',
+                'municipality': data.get('municipality') or '',
+                'is_active': bool(data.get('is_active', True)),
+                'created_at': _format_firestore_timestamp(data.get('created_at')),
+                'updated_at': _format_firestore_timestamp(data.get('updated_at')),
+            })
+
+        positions.sort(key=lambda row: (not row.get('is_active', True), str(row.get('job_title') or '').lower()))
+        return jsonify({'success': True, 'positions': positions})
+    except Exception as e:
+        print(f'[ERROR] superadmin_get_hiring_positions: {e}')
+        return jsonify({'success': False, 'error': 'Failed to load hiring positions'}), 500
+
+
+@bp.route('/api/hiring', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def superadmin_create_hiring_position():
+    try:
+        payload = _normalize_hiring_payload(request.get_json() or {})
+
+        if not payload['job_title'] or not payload['description'] or not payload['position']:
+            return jsonify({'success': False, 'error': 'job_title, description, and position are required'}), 400
+
+        try:
+            salary = float(payload['starting_salary'])
+        except Exception:
+            return jsonify({'success': False, 'error': 'starting_salary must be a valid number'}), 400
+        if salary < 0:
+            return jsonify({'success': False, 'error': 'starting_salary must be non-negative'}), 400
+
+        if payload['scope_type'] == 'region' and not payload['region']:
+            return jsonify({'success': False, 'error': 'region is required for region scope'}), 400
+        if payload['scope_type'] == 'municipality' and (not payload['region'] or not payload['municipality']):
+            return jsonify({'success': False, 'error': 'region and municipality are required for municipality scope'}), 400
+
+        db = get_firestore_db()
+        doc_ref = db.collection('hiring_positions').document()
+        actor = session.get('user_email') or 'superadmin'
+
+        doc_ref.set({
+            'job_title': payload['job_title'],
+            'description': payload['description'],
+            'position': payload['position'],
+            'starting_salary': salary,
+            'scope_type': payload['scope_type'],
+            'scope': payload['scope'],
+            'region': payload['region'],
+            'municipality': payload['municipality'],
+            'is_active': True,
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'created_by': actor,
+            'updated_by': actor,
+            'created_by_role': 'super_admin',
+        })
+
+        return jsonify({'success': True, 'id': doc_ref.id}), 201
+    except Exception as e:
+        print(f'[ERROR] superadmin_create_hiring_position: {e}')
+        return jsonify({'success': False, 'error': 'Failed to create hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>', methods=['PUT'])
+@role_required('super-admin', 'superadmin')
+def superadmin_update_hiring_position(hiring_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('hiring_positions').document(hiring_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Hiring position not found'}), 404
+
+        payload = _normalize_hiring_payload(request.get_json() or {})
+        if not payload['job_title'] or not payload['description'] or not payload['position']:
+            return jsonify({'success': False, 'error': 'job_title, description, and position are required'}), 400
+
+        try:
+            salary = float(payload['starting_salary'])
+        except Exception:
+            return jsonify({'success': False, 'error': 'starting_salary must be a valid number'}), 400
+        if salary < 0:
+            return jsonify({'success': False, 'error': 'starting_salary must be non-negative'}), 400
+
+        if payload['scope_type'] == 'region' and not payload['region']:
+            return jsonify({'success': False, 'error': 'region is required for region scope'}), 400
+        if payload['scope_type'] == 'municipality' and (not payload['region'] or not payload['municipality']):
+            return jsonify({'success': False, 'error': 'region and municipality are required for municipality scope'}), 400
+
+        actor = session.get('user_email') or 'superadmin'
+        doc_ref.update({
+            'job_title': payload['job_title'],
+            'description': payload['description'],
+            'position': payload['position'],
+            'starting_salary': salary,
+            'scope_type': payload['scope_type'],
+            'scope': payload['scope'],
+            'region': payload['region'],
+            'municipality': payload['municipality'],
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': actor,
+        })
+
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_update_hiring_position: {e}')
+        return jsonify({'success': False, 'error': 'Failed to update hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>', methods=['DELETE'])
+@role_required('super-admin', 'superadmin')
+def superadmin_delete_hiring_position(hiring_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('hiring_positions').document(hiring_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Hiring position not found'}), 404
+
+        doc_ref.delete()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_delete_hiring_position: {e}')
+        return jsonify({'success': False, 'error': 'Failed to delete hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>/archive', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def superadmin_archive_hiring_position(hiring_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('hiring_positions').document(hiring_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Hiring position not found'}), 404
+
+        doc_ref.update({
+            'is_active': False,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': session.get('user_email') or 'superadmin'
+        })
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_archive_hiring_position: {e}')
+        return jsonify({'success': False, 'error': 'Failed to archive hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>/unarchive', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def superadmin_unarchive_hiring_position(hiring_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('hiring_positions').document(hiring_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return jsonify({'success': False, 'error': 'Hiring position not found'}), 404
+
+        doc_ref.update({
+            'is_active': True,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': session.get('user_email') or 'superadmin'
+        })
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] superadmin_unarchive_hiring_position: {e}')
+        return jsonify({'success': False, 'error': 'Failed to reactivate hiring position'}), 500
+
 # --- Accounting Module Routes ---
 @bp.route('/accounting/dashboard')
 def accounting_dashboard():
@@ -1132,6 +1476,167 @@ def hrm_shift_superadmin():
         return render_template('super-admin/human-resource-superadmin/shift-superadmin.html')
     except Exception:
         abort(404)
+
+@bp.route('/human-resource/news-management')
+@bp.route('/hrm/news-management')
+@role_required('super-admin','superadmin')
+def hrm_news_management_superadmin():
+    try:
+        return render_template('super-admin/human-resource-superadmin/news-management/news-management-superadmin.html')
+    except Exception:
+        abort(404)
+
+
+def _parse_bool(value, default=True):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+@bp.route('/api/hrm/news', methods=['GET'])
+@role_required('super-admin', 'superadmin')
+def get_superadmin_news():
+    try:
+        db = get_firestore_db()
+        docs = db.collection('news_updates').stream()
+        items = []
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+            items.append({
+                'id': doc.id,
+                'title': str(data.get('title') or '').strip(),
+                'summary': str(data.get('summary') or '').strip(),
+                'published_date': str(data.get('published_date') or '').strip(),
+                'image_url': str(data.get('image_url') or '').strip(),
+                'is_published': _parse_bool(data.get('is_published'), True),
+            })
+
+        items.sort(key=lambda row: row.get('published_date') or '', reverse=True)
+        return jsonify({'success': True, 'items': items})
+    except Exception as e:
+        print(f'[ERROR] get_superadmin_news: {e}')
+        return jsonify({'success': False, 'error': 'Failed to load news'}), 500
+
+
+@bp.route('/api/hrm/news/upload-image', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def upload_superadmin_news_image():
+    try:
+        file = request.files.get('image')
+        if not file:
+            return jsonify({'success': False, 'error': 'No image file uploaded'}), 400
+
+        if not _cloudinary_enabled():
+            return jsonify({'success': False, 'error': 'Cloudinary is not configured on server'}), 500
+
+        image_url = _upload_to_cloudinary(file, 'tlph/news-updates')
+        if not image_url:
+            return jsonify({'success': False, 'error': 'Cloudinary upload did not return URL'}), 500
+
+        return jsonify({'success': True, 'image_url': image_url})
+    except Exception as e:
+        print(f'[ERROR] upload_superadmin_news_image: {e}')
+        return jsonify({'success': False, 'error': 'Failed to upload image'}), 500
+
+
+@bp.route('/api/hrm/news', methods=['POST'])
+@role_required('super-admin', 'superadmin')
+def create_superadmin_news():
+    try:
+        payload = request.get_json() or {}
+        title = str(payload.get('title') or '').strip()
+        summary = str(payload.get('summary') or '').strip()
+        published_date = str(payload.get('published_date') or '').strip()
+        image_url = str(payload.get('image_url') or '').strip()
+        is_published = _parse_bool(payload.get('is_published'), True)
+
+        if not title or not summary:
+            return jsonify({'success': False, 'error': 'Title and summary are required'}), 400
+
+        db = get_firestore_db()
+        doc_ref = db.collection('news_updates').document()
+        actor = session.get('user_email') or 'superadmin'
+        doc_ref.set({
+            'title': title,
+            'summary': summary,
+            'published_date': published_date,
+            'image_url': image_url,
+            'is_published': is_published,
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'created_by': actor,
+            'updated_by': actor,
+        })
+
+        return jsonify({'success': True, 'id': doc_ref.id})
+    except Exception as e:
+        print(f'[ERROR] create_superadmin_news: {e}')
+        return jsonify({'success': False, 'error': 'Failed to create news'}), 500
+
+
+@bp.route('/api/hrm/news/<news_id>', methods=['PUT'])
+@role_required('super-admin', 'superadmin')
+def update_superadmin_news(news_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('news_updates').document(news_id)
+        existing = doc_ref.get()
+        if not existing.exists:
+            return jsonify({'success': False, 'error': 'News item not found'}), 404
+        existing_data = existing.to_dict() or {}
+
+        payload = request.get_json() or {}
+        updates = {}
+        if 'title' in payload:
+            updates['title'] = str(payload.get('title') or '').strip()
+        if 'summary' in payload:
+            updates['summary'] = str(payload.get('summary') or '').strip()
+        if 'published_date' in payload:
+            updates['published_date'] = str(payload.get('published_date') or '').strip()
+        if 'image_url' in payload:
+            updates['image_url'] = str(payload.get('image_url') or '').strip()
+        if 'is_published' in payload:
+            updates['is_published'] = _parse_bool(payload.get('is_published'), True)
+
+        if not updates:
+            return jsonify({'success': False, 'error': 'No valid updates provided'}), 400
+
+        updates['updated_at'] = firestore.SERVER_TIMESTAMP
+        updates['updated_by'] = session.get('user_email') or 'superadmin'
+        doc_ref.update(updates)
+
+        if 'image_url' in updates:
+            old_image = str(existing_data.get('image_url') or '').strip()
+            new_image = str(updates.get('image_url') or '').strip()
+            if old_image and new_image and old_image != new_image:
+                _delete_from_cloudinary(old_image)
+
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] update_superadmin_news: {e}')
+        return jsonify({'success': False, 'error': 'Failed to update news'}), 500
+
+
+@bp.route('/api/hrm/news/<news_id>', methods=['DELETE'])
+@role_required('super-admin', 'superadmin')
+def delete_superadmin_news(news_id):
+    try:
+        db = get_firestore_db()
+        doc_ref = db.collection('news_updates').document(news_id)
+        existing = doc_ref.get()
+        if not existing.exists:
+            return jsonify({'success': False, 'error': 'News item not found'}), 404
+
+        data = existing.to_dict() or {}
+        _delete_from_cloudinary(str(data.get('image_url') or '').strip())
+        doc_ref.delete()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f'[ERROR] delete_superadmin_news: {e}')
+        return jsonify({'success': False, 'error': 'Failed to delete news'}), 500
 
 @bp.route('/api/hrm/holidays', methods=['GET'])
 @role_required('super-admin','superadmin')

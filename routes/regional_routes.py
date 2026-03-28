@@ -4388,6 +4388,300 @@ def applicants_regional_update_status(job_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/hiring/context', methods=['GET'])
+@role_required('regional', 'regional_admin')
+def regional_hiring_context():
+    """Return region context for regional hiring UI."""
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+    return jsonify({
+        'success': True,
+        'region': str(user_region or '').strip(),
+        'scope': 'REGION',
+        'scope_key': canonical_region,
+    }), 200
+
+
+@bp.route('/api/hiring', methods=['GET'])
+@role_required('regional', 'regional_admin')
+def regional_get_hiring_positions():
+    """Fetch hiring positions scoped to the logged-in regional admin's region."""
+    db = get_firestore_db()
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+
+    if not canonical_region:
+        return jsonify({'success': False, 'error': 'Region context not found'}), 400
+
+    positions = []
+    try:
+        docs = db.collection('hiring_positions').stream()
+        for doc in docs:
+            item = doc.to_dict() or {}
+            scope_type = str(item.get('scope_type') or '').strip().lower()
+            scope_key = _canonical_region(item.get('scope_key') or item.get('scope'))
+            item_region = _canonical_region(item.get('region') or item.get('region_key'))
+
+            if scope_type and scope_type != 'region':
+                continue
+            if scope_key and scope_key != canonical_region:
+                continue
+            if item_region and item_region != canonical_region:
+                continue
+
+            item['id'] = doc.id
+            positions.append(item)
+
+        positions.sort(key=lambda row: str(row.get('created_at') or ''), reverse=True)
+        return jsonify({'success': True, 'positions': positions}), 200
+    except Exception as e:
+        print(f"[ERROR] regional_get_hiring_positions failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to fetch regional hiring positions'}), 500
+
+
+@bp.route('/api/hiring', methods=['POST'])
+@role_required('regional', 'regional_admin')
+def regional_create_hiring_position():
+    """Create a hiring position scoped to region."""
+    db = get_firestore_db()
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+
+    if not canonical_region:
+        return jsonify({'success': False, 'error': 'Region context not found'}), 400
+
+    data = request.get_json(silent=True) or {}
+    job_title = str(data.get('job_title') or '').strip()
+    description = str(data.get('description') or '').strip()
+    position = str(data.get('position') or '').strip()
+    starting_salary = str(data.get('starting_salary') or '').strip()
+
+    if not job_title or not description or not position or not starting_salary:
+        return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+    try:
+        salary_value = float(starting_salary)
+    except Exception:
+        return jsonify({'success': False, 'error': 'Invalid salary format'}), 400
+
+    try:
+        payload = {
+            'job_title': job_title,
+            'description': description,
+            'position': position,
+            'starting_salary': salary_value,
+            'municipality': '',
+            'region': str(user_region or '').strip().upper(),
+            'scope': str(user_region or '').strip(),
+            'scope_key': canonical_region,
+            'scope_type': 'region',
+            'is_active': True,
+            'created_by': session.get('user_email', ''),
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }
+        ref = db.collection('hiring_positions').document()
+        ref.set(payload)
+
+        return jsonify({
+            'success': True,
+            'position': {
+                'id': ref.id,
+                'job_title': job_title,
+                'description': description,
+                'position': position,
+                'starting_salary': salary_value,
+                'region': str(user_region or '').strip(),
+                'scope': str(user_region or '').strip(),
+                'scope_type': 'region',
+                'is_active': True
+            }
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] regional_create_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create regional hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>', methods=['PUT'])
+@role_required('regional', 'regional_admin')
+def regional_update_hiring_position(hiring_id):
+    """Update a region-scoped hiring position."""
+    db = get_firestore_db()
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+
+    if not canonical_region:
+        return jsonify({'success': False, 'error': 'Region context not found'}), 400
+
+    data = request.get_json(silent=True) or {}
+    job_title = str(data.get('job_title') or '').strip()
+    description = str(data.get('description') or '').strip()
+    position = str(data.get('position') or '').strip()
+    starting_salary = str(data.get('starting_salary') or '').strip()
+
+    if not job_title or not description or not position or not starting_salary:
+        return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+    try:
+        salary_value = float(starting_salary)
+    except Exception:
+        return jsonify({'success': False, 'error': 'Invalid salary format'}), 400
+
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+
+        existing = doc.to_dict() or {}
+        existing_scope_type = str(existing.get('scope_type') or '').strip().lower()
+        existing_scope_key = _canonical_region(existing.get('scope_key') or existing.get('scope'))
+        existing_region = _canonical_region(existing.get('region') or existing.get('region_key'))
+        if existing_scope_type and existing_scope_type != 'region':
+            return jsonify({'success': False, 'error': 'Access denied: not a region-scoped position'}), 403
+        if existing_scope_key and existing_scope_key != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for this region'}), 403
+        if existing_region and existing_region != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for this region'}), 403
+
+        ref.set({
+            'job_title': job_title,
+            'description': description,
+            'position': position,
+            'starting_salary': salary_value,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+
+        return jsonify({'success': True, 'message': 'Position updated successfully'}), 200
+    except Exception as e:
+        print(f"[ERROR] regional_update_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update regional hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>', methods=['DELETE'])
+@role_required('regional', 'regional_admin')
+def regional_delete_hiring_position(hiring_id):
+    """Delete a region-scoped hiring position."""
+    db = get_firestore_db()
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+
+    if not canonical_region:
+        return jsonify({'success': False, 'error': 'Region context not found'}), 400
+
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+
+        existing = doc.to_dict() or {}
+        existing_scope_type = str(existing.get('scope_type') or '').strip().lower()
+        existing_scope_key = _canonical_region(existing.get('scope_key') or existing.get('scope'))
+        existing_region = _canonical_region(existing.get('region') or existing.get('region_key'))
+        if existing_scope_type and existing_scope_type != 'region':
+            return jsonify({'success': False, 'error': 'Access denied: not a region-scoped position'}), 403
+        if existing_scope_key and existing_scope_key != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for this region'}), 403
+        if existing_region and existing_region != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for this region'}), 403
+
+        ref.delete()
+        return jsonify({'success': True, 'message': 'Position deleted successfully'}), 200
+    except Exception as e:
+        print(f"[ERROR] regional_delete_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to delete regional hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>/archive', methods=['POST'])
+@role_required('regional', 'regional_admin')
+def regional_archive_hiring_position(hiring_id):
+    """Archive (deactivate) a region-scoped hiring position without deleting it."""
+    db = get_firestore_db()
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+
+    if not canonical_region:
+        return jsonify({'success': False, 'error': 'Region context not found'}), 400
+
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+
+        existing = doc.to_dict() or {}
+        existing_scope_type = str(existing.get('scope_type') or '').strip().lower()
+        existing_scope_key = _canonical_region(existing.get('scope_key') or existing.get('scope'))
+        existing_region = _canonical_region(existing.get('region') or existing.get('region_key'))
+        if existing_scope_type and existing_scope_type != 'region':
+            return jsonify({'success': False, 'error': 'Access denied: not a region-scoped position'}), 403
+        if existing_scope_key and existing_scope_key != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for this region'}), 403
+        if existing_region and existing_region != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for this region'}), 403
+
+        ref.set({
+            'is_active': False,
+            'archived_at': firestore.SERVER_TIMESTAMP,
+            'archived_by': session.get('user_email', ''),
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+
+        return jsonify({'success': True, 'message': 'Position archived successfully'}), 200
+    except Exception as e:
+        print(f"[ERROR] regional_archive_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to archive regional hiring position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>/unarchive', methods=['POST'])
+@role_required('regional', 'regional_admin')
+def regional_unarchive_hiring_position(hiring_id):
+    """Reactivate an archived region-scoped hiring position."""
+    db = get_firestore_db()
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+
+    if not canonical_region:
+        return jsonify({'success': False, 'error': 'Region context not found'}), 400
+
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        doc = ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+
+        existing = doc.to_dict() or {}
+        existing_scope_type = str(existing.get('scope_type') or '').strip().lower()
+        existing_scope_key = _canonical_region(existing.get('scope_key') or existing.get('scope'))
+        existing_region = _canonical_region(existing.get('region') or existing.get('region_key'))
+        if existing_scope_type and existing_scope_type != 'region':
+            return jsonify({'success': False, 'error': 'Access denied: not a region-scoped position'}), 403
+        if existing_scope_key and existing_scope_key != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for this region'}), 403
+        if existing_region and existing_region != canonical_region:
+            return jsonify({'success': False, 'error': 'Access denied for this region'}), 403
+
+        ref.set({
+            'is_active': True,
+            'archived_at': firestore.DELETE_FIELD,
+            'archived_by': firestore.DELETE_FIELD,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+
+        return jsonify({'success': True, 'message': 'Position reactivated successfully'}), 200
+    except Exception as e:
+        print(f"[ERROR] regional_unarchive_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to reactivate regional hiring position'}), 500
+
+
 
 @bp.route('/operations/quotation')
 @role_required('regional', 'regional_admin')

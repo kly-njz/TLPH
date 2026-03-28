@@ -2168,6 +2168,263 @@ def accounting_dashboard_municipal():
     except Exception as e:
         print(f"[WARN] Failed syncing dashboard total_expenses from expenses source: {e}")
 
+
+# Hiring/Job Positions Routes
+# Routes are integrated into /operations/applicants page with tab system
+# API endpoints follow below
+
+@bp.route('/api/hiring', methods=['GET'])
+@role_required('municipal', 'municipal_admin')
+def get_hiring_positions():
+    """Fetch all hiring positions for the municipal admin's municipality."""
+    from firebase_admin import firestore
+    
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+    
+    if not user_municipality:
+        return jsonify({'success': False, 'error': 'Municipality context not found'}), 400
+    
+    try:
+        query = db.collection('hiring_positions').where('municipality', '==', user_municipality.upper())
+        docs = query.stream()
+        
+        positions = []
+        for doc in docs:
+            data = doc.to_dict()
+            data['id'] = doc.id
+            positions.append(data)
+        
+        return jsonify({'success': True, 'positions': positions})
+    except Exception as e:
+        print(f"[ERROR] get_hiring_positions failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to fetch positions'}), 500
+
+
+@bp.route('/api/hiring', methods=['POST'])
+@role_required('municipal', 'municipal_admin')
+def create_hiring_position():
+    """Create a new hiring position."""
+    from firebase_admin import firestore
+    
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+    user_region = (_resolve_region_from_user_context() or session.get('region') or session.get('user_region') or '').strip()
+    
+    if not user_municipality:
+        return jsonify({'success': False, 'error': 'Municipality context not found'}), 400
+    
+    data = request.get_json(silent=True) or {}
+    job_title = str(data.get('job_title') or '').strip()
+    description = str(data.get('description') or '').strip()
+    position = str(data.get('position') or '').strip()
+    starting_salary = str(data.get('starting_salary') or '').strip()
+    
+    if not job_title or not description or not position or not starting_salary:
+        return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+    
+    try:
+        # Convert salary to float
+        try:
+            salary_value = float(starting_salary)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Invalid salary format'}), 400
+        
+        payload = {
+            'job_title': job_title,
+            'description': description,
+            'position': position,
+            'starting_salary': salary_value,
+            'municipality': user_municipality.upper(),
+            'region': user_region.upper(),
+            'scope': user_municipality.upper(),  # Auto-detected scope
+            'is_active': True,
+            'created_by': session.get('user_email', ''),
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }
+        
+        ref = db.collection('hiring_positions').document()
+        ref.set(payload)
+        
+        return jsonify({
+            'success': True,
+            'position': {
+                'id': ref.id,
+                'job_title': job_title,
+                'description': description,
+                'position': position,
+                'starting_salary': salary_value,
+                'municipality': user_municipality,
+                'scope': user_municipality,
+                'is_active': True
+            }
+        })
+    except Exception as e:
+        print(f"[ERROR] create_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>', methods=['PUT'])
+@role_required('municipal', 'municipal_admin')
+def update_hiring_position(hiring_id):
+    """Update an existing hiring position."""
+    from firebase_admin import firestore
+    
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+    
+    if not user_municipality:
+        return jsonify({'success': False, 'error': 'Municipality context not found'}), 400
+    
+    data = request.get_json(silent=True) or {}
+    job_title = str(data.get('job_title') or '').strip()
+    description = str(data.get('description') or '').strip()
+    position = str(data.get('position') or '').strip()
+    starting_salary = str(data.get('starting_salary') or '').strip()
+    
+    if not job_title or not description or not position or not starting_salary:
+        return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+    
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        doc = ref.get()
+        
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+        
+        existing = doc.to_dict() or {}
+        
+        # Verify ownership (only update own municipality's positions)
+        if existing.get('municipality', '').upper() != user_municipality.upper():
+            return jsonify({'success': False, 'error': 'Access denied for this position'}), 403
+        
+        # Convert salary to float
+        try:
+            salary_value = float(starting_salary)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Invalid salary format'}), 400
+        
+        update_payload = {
+            'job_title': job_title,
+            'description': description,
+            'position': position,
+            'starting_salary': salary_value,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }
+        
+        ref.set(update_payload, merge=True)
+        
+        return jsonify({'success': True, 'message': 'Position updated successfully'})
+    except Exception as e:
+        print(f"[ERROR] update_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>', methods=['DELETE'])
+@role_required('municipal', 'municipal_admin')
+def delete_hiring_position(hiring_id):
+    """Delete a hiring position."""
+    from firebase_admin import firestore
+    
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+    
+    if not user_municipality:
+        return jsonify({'success': False, 'error': 'Municipality context not found'}), 400
+    
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        doc = ref.get()
+        
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+        
+        existing = doc.to_dict() or {}
+        
+        # Verify ownership (only delete own municipality's positions)
+        if existing.get('municipality', '').upper() != user_municipality.upper():
+            return jsonify({'success': False, 'error': 'Access denied for this position'}), 403
+        
+        ref.delete()
+        
+        return jsonify({'success': True, 'message': 'Position deleted successfully'})
+    except Exception as e:
+        print(f"[ERROR] delete_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to delete position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>/archive', methods=['POST'])
+@role_required('municipal', 'municipal_admin')
+def archive_hiring_position(hiring_id):
+    """Archive (deactivate) a hiring position without deleting it."""
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+
+    if not user_municipality:
+        return jsonify({'success': False, 'error': 'Municipality context not found'}), 400
+
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        doc = ref.get()
+
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+
+        existing = doc.to_dict() or {}
+        if existing.get('municipality', '').upper() != user_municipality.upper():
+            return jsonify({'success': False, 'error': 'Access denied for this position'}), 403
+
+        ref.set({
+            'is_active': False,
+            'archived_at': firestore.SERVER_TIMESTAMP,
+            'archived_by': session.get('user_email', ''),
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+
+        return jsonify({'success': True, 'message': 'Position archived successfully'})
+    except Exception as e:
+        print(f"[ERROR] archive_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to archive position'}), 500
+
+
+@bp.route('/api/hiring/<hiring_id>/unarchive', methods=['POST'])
+@role_required('municipal', 'municipal_admin')
+def unarchive_hiring_position(hiring_id):
+    """Reactivate an archived hiring position."""
+    from firebase_admin import firestore
+
+    db = get_firestore_db()
+    user_municipality = (_resolve_municipality_from_user_context() or session.get('municipality') or session.get('user_municipality') or '').strip()
+
+    if not user_municipality:
+        return jsonify({'success': False, 'error': 'Municipality context not found'}), 400
+
+    try:
+        ref = db.collection('hiring_positions').document(hiring_id)
+        doc = ref.get()
+
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Position not found'}), 404
+
+        existing = doc.to_dict() or {}
+        if existing.get('municipality', '').upper() != user_municipality.upper():
+            return jsonify({'success': False, 'error': 'Access denied for this position'}), 403
+
+        ref.set({
+            'is_active': True,
+            'archived_at': firestore.DELETE_FIELD,
+            'archived_by': firestore.DELETE_FIELD,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+
+        return jsonify({'success': True, 'message': 'Position reactivated successfully'})
+    except Exception as e:
+        print(f"[ERROR] unarchive_hiring_position failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to reactivate position'}), 500
+
     revenue_mix = []
     try:
         if municipality_name:
