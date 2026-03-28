@@ -890,8 +890,6 @@ def superadmin_update_applicant(applicant_id):
             return jsonify({'success': False, 'error': 'Applicant not found'}), 404
 
         current = snap.to_dict() or {}
-        if _is_accepted_status(current.get('status') or current.get('employeeStatus')):
-            return jsonify({'success': False, 'error': 'Accepted applicants cannot be edited'}), 400
         actor = session.get('user_email') or 'superadmin'
 
         payload = request.get_json() or {}
@@ -912,10 +910,12 @@ def superadmin_update_applicant(applicant_id):
             normalized = _normalize_superadmin_applicant_status(payload.get('status'))
             updates['status'] = normalized
             updates['employeeStatus'] = normalized
+            updates['reviewed_by'] = actor
+            updates['reviewed_at'] = firestore.SERVER_TIMESTAMP
             if normalized == 'accepted':
                 updates['accepted_by'] = actor
-                updates['reviewed_by'] = actor
-                updates['reviewed_at'] = firestore.SERVER_TIMESTAMP
+            else:
+                updates['accepted_by'] = 'N/A'
 
         updates['updated_at'] = firestore.SERVER_TIMESTAMP
         updates['updated_by'] = actor
