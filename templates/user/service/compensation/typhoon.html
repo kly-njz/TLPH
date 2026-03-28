@@ -388,29 +388,67 @@
                 }
             });
 
-            // Setup free service submission (no payment required)
-            submitFreeServiceRequest({
-                formId: 'typhoonDamageForm',
-                submitBtnId: 'submitBtn',
-                serviceType: 'Typhoon Damage Compensation',
-                formData: {
-                    'typhoonName': 'typhoonName',
-                    'areaAffected': 'areaAffected',
-                    'province': 'province',
-                    'municipality': 'municipality',
-                    'barangay': 'barangay',
-                    'occurrenceTime': 'occurrenceTime',
-                    'cropSpecies': 'cropSpecies',
-                    'damageType': 'damageType',
-                    'narrative': 'narrative',
-                    'farmerIdNumber': 'farmerIdNumber',
-                    'costOfDamage': 'costOfDamage',
-                    'farmLatitude': 'farmLatitude',
-                    'farmLongitude': 'farmLongitude',
-                    'farmAddress': 'farmAddress',
-                    'supportingFiles': 'supportingDocuments'
-                },
-                redirectUrl: '/user/dashboard'
+            // Setup custom compensation submission handler
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                if (form.dataset.submitting === '1') return;
+                form.dataset.submitting = '1';
+                
+                try {
+                    submitBtn.textContent = 'Submitting...';
+                    submitBtn.disabled = true;
+                    
+                    // Build FormData for multipart submission
+                    const formDataObj = new FormData();
+                    formDataObj.append('serviceType', 'Typhoon Damage Compensation');
+                    
+                    // Add all form fields
+                    const fields = ['typhoonName', 'areaAffected', 'province', 'municipality', 'barangay', 
+                        'occurrenceTime', 'cropSpecies', 'damageType', 'narrative', 'farmerIdNumber', 
+                        'costOfDamage', 'farmLatitude', 'farmLongitude', 'farmAddress', 'googlePinLocation'];
+                    
+                    fields.forEach(fieldId => {
+                        const el = document.getElementById(fieldId);
+                        if (el && el.value) {
+                            formDataObj.append(fieldId, el.value);
+                        }
+                    });
+                    
+                    // Add files
+                    const filesInput = document.getElementById('supportingFiles');
+                    if (filesInput && filesInput.files.length > 0) {
+                        Array.from(filesInput.files).forEach(file => {
+                            formDataObj.append('supportingFiles', file);
+                        });
+                    }
+                    
+                    // Submit to API
+                    const res = await fetch('/api/service/compensation/submit', {
+                        method: 'POST',
+                        body: formDataObj
+                    });
+                    
+                    const result = await res.json();
+                    
+                    if (!res.ok || !result.success) {
+                        alert(result.error || 'Failed to submit request');
+                        submitBtn.textContent = 'Submit';
+                        submitBtn.disabled = false;
+                        form.dataset.submitting = '0';
+                        return;
+                    }
+                    
+                    alert('Typhoon damage report submitted successfully!');
+                    window.location.href = '/user/dashboard';
+                    
+                } catch (err) {
+                    console.error('Submission error:', err);
+                    alert('Error submitting form: ' + err.message);
+                    submitBtn.textContent = 'Submit';
+                    submitBtn.disabled = false;
+                    form.dataset.submitting = '0';
+                }
             });
 
             // Text input validation listeners
