@@ -4248,6 +4248,119 @@ def applicants_regional():
     return render_template('regional/operations/applicants-regional.html')
 
 
+@bp.route('/operations/applicants/view/<job_id>')
+@role_required('regional', 'regional_admin')
+def applicants_regional_view(job_id):
+    """Render detailed applicant form data for regional-scoped hiring applications."""
+    db = get_firestore_db()
+    session_region = session.get('region') or session.get('user_region')
+    user_region = get_firestore_region_name(session_region) or session_region or ''
+    canonical_region = _canonical_region(user_region)
+
+    def _format_datetime(raw):
+        if not raw:
+            return 'N/A'
+        if hasattr(raw, 'to_datetime'):
+            try:
+                raw = raw.to_datetime()
+            except Exception:
+                pass
+        if isinstance(raw, datetime):
+            return raw.strftime('%b %d, %Y %I:%M %p')
+        if isinstance(raw, str):
+            try:
+                dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                return dt.strftime('%b %d, %Y %I:%M %p')
+            except Exception:
+                return raw
+        return str(raw)
+
+    try:
+        doc = db.collection('municipal_denr_applicant_jobs').document(job_id).get()
+        if not doc.exists:
+            return render_template(
+                'regional/operations/applicant-detail-regional.html',
+                error='Applicant record not found.',
+                applicant={}
+            ), 404
+
+        data = doc.to_dict() or {}
+
+        scope_type = str(data.get('scope_type') or '').strip().lower()
+        if scope_type and scope_type != 'region':
+            return render_template(
+                'regional/operations/applicant-detail-regional.html',
+                error='Access denied: this record is not region-scoped.',
+                applicant={}
+            ), 403
+
+        scope_key = _canonical_region(data.get('scope_key') or data.get('scope'))
+        if scope_key and canonical_region and scope_key != canonical_region:
+            return render_template(
+                'regional/operations/applicant-detail-regional.html',
+                error='Access denied for this region scope.',
+                applicant={}
+            ), 403
+
+        job_region = _canonical_region(data.get('region_office') or data.get('region') or data.get('region_key'))
+        if canonical_region and job_region and job_region != canonical_region:
+            return render_template(
+                'regional/operations/applicant-detail-regional.html',
+                error='Access denied for this region.',
+                applicant={}
+            ), 403
+
+        applicant = {
+            'id': doc.id,
+            'reference_id': data.get('reference_id') or doc.id[:12].upper(),
+            'status': str(data.get('status') or data.get('employeeStatus') or 'PENDING').upper(),
+            'date_filed': data.get('date_filed') or 'N/A',
+            'updated_at': _format_datetime(data.get('updated_at') or data.get('reviewed_at') or data.get('created_at')),
+            'job_title': data.get('job_title') or 'N/A',
+            'job_description': data.get('job_description') or 'N/A',
+            'candidate_type': data.get('candidate_type') or data.get('category') or 'N/A',
+            'scope_type': scope_type or 'region',
+            'scope': data.get('scope') or 'N/A',
+            'region': data.get('region') or data.get('region_office') or 'N/A',
+            'municipality': data.get('municipality') or 'N/A',
+            'full_name': data.get('full_name') or data.get('applicant_name') or 'N/A',
+            'email': data.get('email') or 'N/A',
+            'phone': data.get('phone') or data.get('contact_number') or 'N/A',
+            'gender': data.get('gender') or 'N/A',
+            'birth_date': data.get('birth_date') or 'N/A',
+            'civil_status': data.get('civil_status') or 'N/A',
+            'barangay': data.get('barangay') or 'N/A',
+            'address': data.get('address') or 'N/A',
+            'education_level': data.get('education_level') or 'N/A',
+            'school_name': data.get('school_name') or 'N/A',
+            'course': data.get('course') or 'N/A',
+            'years_experience': data.get('years_experience') or 'N/A',
+            'current_employer': data.get('current_employer') or 'N/A',
+            'employment_status': data.get('employment_status') or 'N/A',
+            'skills': data.get('skills') or 'N/A',
+            'certifications': data.get('certifications') or 'N/A',
+            'expected_salary': data.get('expected_salary') or 'N/A',
+            'available_start_date': data.get('available_start_date') or 'N/A',
+            'preferred_work_type': data.get('preferred_work_type') or 'N/A',
+            'cover_letter': data.get('cover_letter') or 'N/A',
+            'notes': data.get('notes') or 'N/A',
+            'resume_url': data.get('resume_url') or data.get('resume_link') or '',
+        }
+
+        return render_template(
+            'regional/operations/applicant-detail-regional.html',
+            applicant=applicant,
+            error=''
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to render regional applicant detail: {e}")
+        return render_template(
+            'regional/operations/applicant-detail-regional.html',
+            applicant={},
+            error='Failed to load applicant details.'
+        ), 500
+
+
 @bp.route('/operations/applicants/data', methods=['GET'])
 @role_required('regional', 'regional_admin')
 def applicants_regional_data():
