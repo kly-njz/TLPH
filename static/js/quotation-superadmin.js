@@ -50,6 +50,74 @@ function closeDraftPreview() {
     setTimeout(() => modal.classList.add('hidden'), 300);
 }
 
+let pendingDeleteQuoteId = '';
+
+function openDeleteModal(quoteId) {
+    pendingDeleteQuoteId = quoteId || '';
+    const idEl = document.getElementById('deleteQuoteIdDisplay');
+    if (idEl) idEl.textContent = pendingDeleteQuoteId || '—';
+    const modal = document.getElementById('deleteConfirmModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.add('opacity-100'), 10);
+    const body = modal.querySelector('.bg-white');
+    if (body) body.classList.replace('scale-95', 'scale-100');
+}
+
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteConfirmModal');
+    if (!modal) return;
+    modal.classList.remove('opacity-100');
+    const body = modal.querySelector('.bg-white');
+    if (body) body.classList.replace('scale-100', 'scale-95');
+    setTimeout(() => modal.classList.add('hidden'), 300);
+    pendingDeleteQuoteId = '';
+}
+
+async function confirmDeleteQuotation() {
+    if (!pendingDeleteQuoteId) {
+        closeDeleteModal();
+        return;
+    }
+    try {
+        const tryDelete = async (url, method) => {
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' } });
+            const contentType = res.headers.get('content-type') || '';
+            let data = null;
+            if (contentType.includes('application/json')) {
+                data = await res.json();
+            } else {
+                const text = await res.text();
+                const snippet = text.replace(/\s+/g, ' ').slice(0, 160);
+                const statusText = res.status ? ` (HTTP ${res.status})` : '';
+                throw new Error(`Server returned a non-JSON response${statusText}. ${snippet ? 'Response: ' + snippet : ''}`);
+            }
+            if (!res.ok || !data.success) {
+                const statusText = res.status ? ` (HTTP ${res.status})` : '';
+                throw new Error((data && data.error) ? data.error : `Failed to delete quotation.${statusText}`);
+            }
+            return res;
+        };
+
+        const baseUrl = `/superadmin/api/quotation/${pendingDeleteQuoteId}`;
+        try {
+            await tryDelete(baseUrl, 'DELETE');
+        } catch (err) {
+            const msg = String(err && err.message ? err.message : err);
+            if (msg.includes('HTTP 405')) {
+                await tryDelete(`${baseUrl}/delete`, 'POST');
+            } else {
+                throw err;
+            }
+        }
+        closeDeleteModal();
+        alert('Quotation deleted successfully.');
+        window.location.reload();
+    } catch (error) {
+        alert(error.message || 'Failed to delete quotation.');
+    }
+}
+
 function exportCSV() {
     const table = document.querySelector('#quotTable');
     if (!table) {
