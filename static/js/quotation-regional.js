@@ -126,7 +126,7 @@
     wrapper.appendChild(createActionButton('View', 'visibility', function () { viewQuotation(this); }));
     wrapper.appendChild(
       createActionButton('Mark as Received', 'task_alt', function () {
-        markAsReceived(this);
+        openReceiveModal(this);
       })
     );
     return wrapper;
@@ -355,6 +355,37 @@
     filterTable();
   }
 
+  // --- Receive Modal ---
+  let currentReceiveRow = null;
+  function openReceiveModal(btn) {
+    currentReceiveRow = btn?.closest('tr') || null;
+    const data = readRowData(currentReceiveRow);
+    const modal = byId('receiveModal');
+    if (!modal) return;
+    const quoteId = byId('receiveQuoteId');
+    const client = byId('receiveClient');
+    const amount = byId('receiveAmount');
+    if (quoteId) quoteId.textContent = data?.number || data?.id || 'N/A';
+    if (client) client.textContent = data?.client || 'N/A';
+    if (amount) amount.textContent = `${peso} ${formatMoney(data?.amount || 0)}`;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function closeReceiveModal() {
+    const modal = byId('receiveModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    currentReceiveRow = null;
+  }
+
+  function confirmReceive() {
+    if (!currentReceiveRow) return;
+    markAsReceived(currentReceiveRow);
+    closeReceiveModal();
+  }
+
   // --- History Modal ---
   function showHistoryModal(btn) {
     const row = btn?.closest('tr');
@@ -471,8 +502,8 @@
     closeQuoteDrawer();
   }
 
-  function markAsReceived(btn) {
-    const row = btn?.closest('tr');
+  function markAsReceived(rowOrBtn) {
+    const row = rowOrBtn?.closest ? rowOrBtn.closest('tr') : rowOrBtn;
     const data = readRowData(row);
     if (!data) return;
     data.status = 'RECEIVED';
@@ -639,6 +670,9 @@
   window.submitQuotation = submitQuotation;
   window.viewQuotation = viewQuotation;
   window.closeViewModal = closeViewModal;
+  window.openReceiveModal = openReceiveModal;
+  window.closeReceiveModal = closeReceiveModal;
+  window.confirmReceive = confirmReceive;
   window.markAsReceived = markAsReceived;
   window.filterTable = filterTable;
   window.resetFilters = resetFilters;
