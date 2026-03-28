@@ -2335,6 +2335,31 @@ def accounting_dashboard_municipal():
     except Exception as e:
         print(f"[WARN] Failed syncing dashboard total_expenses from expenses source: {e}")
 
+    try:
+        print(f"[DEBUG] Rendering dashboard with municipality_name={municipality_name}, province_name={province_name}")
+        print(f"[DEBUG] Finance data being passed to template: {finance_data}")
+        return render_template(
+            'municipal/accounting/dashboard-municipal.html',
+            finance=finance_data,
+            revenue_mix=[],
+            municipality_name=municipality_name,
+            region_name=region_name,
+            province_name=province_name,
+            fund_activity=None
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to render dashboard: {e}")
+        return render_template(
+            'municipal/accounting/dashboard-municipal.html',
+            finance={},
+            revenue_mix=[],
+            municipality_name=municipality_name,
+            region_name=region_name,
+            province_name=province_name,
+            fund_activity=None,
+            error_message="An error occurred while loading the dashboard."
+        )
+
 
 # Hiring/Job Positions Routes
 # Routes are integrated into /operations/applicants page with tab system
