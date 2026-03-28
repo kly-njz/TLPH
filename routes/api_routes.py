@@ -58,25 +58,39 @@ def _upload_to_cloudinary(file_obj, folder: str):
     except Exception:
         pass
 
-    resp = requests.post(
-        endpoint,
-        data={
-            'api_key': api_key,
-            'timestamp': timestamp,
-            'folder': folder,
-            'signature': signature
-        },
-        files={
-            'file': (file_obj.filename, file_obj.stream, file_obj.mimetype or 'application/octet-stream')
-        },
-        timeout=45
-    )
+    try:
+        resp = requests.post(
+            endpoint,
+            data={
+                'api_key': api_key,
+                'timestamp': timestamp,
+                'folder': folder,
+                'signature': signature
+            },
+            files={
+                'file': (file_obj.filename, file_obj.stream, file_obj.mimetype or 'application/octet-stream')
+            },
+            timeout=30
+        )
 
-    if not resp.ok:
-        raise RuntimeError(f"Cloudinary upload failed: {resp.status_code} {resp.text[:300]}")
+        if not resp.ok:
+            print(f"[WARN] Cloudinary upload failed ({resp.status_code}). Falling back to local storage.")
+            return None
 
-    payload = resp.json() or {}
-    return payload.get('secure_url') or payload.get('url')
+        payload = resp.json() or {}
+        return payload.get('secure_url') or payload.get('url')
+
+    except requests.RequestException as e:
+        print(f"[WARN] Cloudinary request error: {e}. Falling back to local storage.")
+        return None
+    except Exception as e:
+        print(f"[WARN] Cloudinary unexpected error: {e}. Falling back to local storage.")
+        return None
+    finally:
+        try:
+            file_obj.stream.seek(0)
+        except Exception:
+            pass
 
 
 def _normalize_muni_name(name: str) -> str:
