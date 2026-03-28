@@ -5,6 +5,7 @@ from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required
 
 from datetime import datetime
+from urllib.parse import quote, urlparse
 import pytz
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -4274,6 +4275,26 @@ def applicants_regional_view(job_id):
             except Exception:
                 return raw
         return str(raw)
+    def _resolve_resume_preview(url):
+        """Return a preview type and Office embed URL for common resume formats."""
+        raw_url = str(url or '').strip()
+        if not raw_url:
+            return '', ''
+
+        try:
+            path = (urlparse(raw_url).path or '').lower()
+        except Exception:
+            path = raw_url.lower()
+
+        if path.endswith('.pdf'):
+            return 'pdf', ''
+        if path.endswith('.jpg') or path.endswith('.jpeg') or path.endswith('.png') or path.endswith('.webp'):
+            return 'image', ''
+        if path.endswith('.doc') or path.endswith('.docx') or path.endswith('.ppt') or path.endswith('.pptx'):
+            return 'office', f"https://view.officeapps.live.com/op/embed.aspx?src={quote(raw_url, safe='')}"
+        if path.endswith('.txt'):
+            return 'text', ''
+        return 'other', ''
 
     try:
         doc = db.collection('municipal_denr_applicant_jobs').document(job_id).get()
@@ -4310,6 +4331,9 @@ def applicants_regional_view(job_id):
                 applicant={}
             ), 403
 
+        resume_url = data.get('resume_url') or data.get('resume_link') or ''
+        resume_preview_type, resume_office_embed_url = _resolve_resume_preview(resume_url)
+
         applicant = {
             'id': doc.id,
             'reference_id': data.get('reference_id') or doc.id[:12].upper(),
@@ -4344,7 +4368,9 @@ def applicants_regional_view(job_id):
             'preferred_work_type': data.get('preferred_work_type') or 'N/A',
             'cover_letter': data.get('cover_letter') or 'N/A',
             'notes': data.get('notes') or 'N/A',
-            'resume_url': data.get('resume_url') or data.get('resume_link') or '',
+            'resume_url': resume_url,
+            'resume_preview_type': resume_preview_type,
+            'resume_office_embed_url': resume_office_embed_url,
             'photo_url': (
                 data.get('photo_url')
                 or data.get('photo')
