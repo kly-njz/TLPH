@@ -4279,7 +4279,19 @@ def applicants_regional_view(job_id):
         """Return a preview type and Office embed URL for common resume formats."""
         raw_url = str(url or '').strip()
         if not raw_url:
-            return '', ''
+            return '', '', ''
+
+        def _cloudinary_first_page_image(src_url):
+            try:
+                parsed = urlparse(src_url)
+                if 'res.cloudinary.com' not in (parsed.netloc or '').lower():
+                    return ''
+                base_url = src_url.split('?', 1)[0]
+                if '/upload/' not in base_url:
+                    return ''
+                return base_url.replace('/upload/', '/upload/pg_1,f_png,w_1200/', 1)
+            except Exception:
+                return ''
 
         try:
             path = (urlparse(raw_url).path or '').lower()
@@ -4287,14 +4299,14 @@ def applicants_regional_view(job_id):
             path = raw_url.lower()
 
         if path.endswith('.pdf'):
-            return 'pdf', ''
+            return 'pdf', '', _cloudinary_first_page_image(raw_url)
         if path.endswith('.jpg') or path.endswith('.jpeg') or path.endswith('.png') or path.endswith('.webp'):
-            return 'image', ''
+            return 'image', '', ''
         if path.endswith('.doc') or path.endswith('.docx') or path.endswith('.ppt') or path.endswith('.pptx'):
-            return 'office', f"https://view.officeapps.live.com/op/embed.aspx?src={quote(raw_url, safe='')}"
+            return 'office', f"https://view.officeapps.live.com/op/embed.aspx?src={quote(raw_url, safe='')}", _cloudinary_first_page_image(raw_url)
         if path.endswith('.txt'):
-            return 'text', ''
-        return 'other', ''
+            return 'text', '', ''
+        return 'other', '', ''
 
     try:
         doc = db.collection('municipal_denr_applicant_jobs').document(job_id).get()
@@ -4332,7 +4344,7 @@ def applicants_regional_view(job_id):
             ), 403
 
         resume_url = data.get('resume_url') or data.get('resume_link') or ''
-        resume_preview_type, resume_office_embed_url = _resolve_resume_preview(resume_url)
+        resume_preview_type, resume_office_embed_url, resume_preview_image_url = _resolve_resume_preview(resume_url)
 
         applicant = {
             'id': doc.id,
@@ -4371,6 +4383,7 @@ def applicants_regional_view(job_id):
             'resume_url': resume_url,
             'resume_preview_type': resume_preview_type,
             'resume_office_embed_url': resume_office_embed_url,
+            'resume_preview_image_url': resume_preview_image_url,
             'photo_url': (
                 data.get('photo_url')
                 or data.get('photo')
