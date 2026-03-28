@@ -34,6 +34,7 @@ def submit_compensation_request():
             'userId': user_id,
             'serviceType': service_type,
             'submittedAt': datetime.now().isoformat(),
+            'createdAt': datetime.now(),
             'status': 'pending',  # pending, approved, rejected
             'supportingDocuments': []
         }
