@@ -9,10 +9,12 @@ NOTIFICATION_TYPES = [
     "system", "user", "transactional", "promotional", "reminder", "security", "administrative"
 ]
 
-def create_notification(type, content, post_date, end_date, created_by, target_users=None):
+def create_notification(type, content, post_date, end_date, created_by, scope, target_users=None):
     assert type in NOTIFICATION_TYPES, "Invalid notification type"
+    assert scope in ["user", "end-user", "municipal", "regional", "national", "all"], "Invalid scope"
     doc = {
         "type": type,
+        "scope": scope,
         "content": content,
         "post_date": post_date,
         "end_date": end_date,
