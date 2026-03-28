@@ -161,8 +161,8 @@
                         <select id="statusFilter" title="Filter by status" class="gov-input w-32 cursor-pointer h-7 uppercase">
                             <option value="">All Status</option>
                             <option value="pending">Pending</option>
-                            <option value="interview">Interview</option>
-                            <option value="hired">Hired</option>
+                            <option value="accepted">Approved</option>
+                            <option value="rejected">Rejected</option>
                         </select>
                         <select id="regionFilter" title="Filter by region" class="gov-input w-40 cursor-pointer h-7 uppercase">
                             <option value="">All Regions</option>
@@ -361,49 +361,6 @@
         </div>
     </div>
 
-    <div id="reviewModal" class="gov-modal no-print hidden">
-        <div class="absolute inset-0 cursor-pointer" onclick="closeReviewModal()"></div>
-        <div id="reviewBody" class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-200 overflow-hidden relative z-10 flex flex-col">
-            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-slate-900 text-white shrink-0">
-                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
-                    <i class="fa-solid fa-clipboard-check text-denr-green"></i> Applicant Review
-                </h3>
-                <button onclick="closeReviewModal()" class="text-slate-400 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
-                    <span class="material-icons-round text-sm">close</span>
-                </button>
-            </div>
-            <div class="p-4 bg-slate-50 space-y-3">
-                <input type="hidden" id="reviewIndex" value="">
-                <div>
-                    <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Full Name</p>
-                    <input id="reviewName" class="gov-input w-full h-8 mt-1" placeholder="Last Name, First Name">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Type</p>
-                        <input id="reviewType" class="gov-input w-full h-8 mt-1 uppercase" placeholder="Forest Ranger">
-                    </div>
-                    <div>
-                        <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Region</p>
-                        <input id="reviewRegion" class="gov-input w-full h-8 uppercase font-bold mt-1" placeholder="MIMAROPA">
-                    </div>
-                </div>
-                <div>
-                    <p class="text-[8px] font-black uppercase tracking-widest text-slate-500 m-0">Status</p>
-                    <select id="reviewStatus" class="gov-input w-full h-8 cursor-pointer mt-1 uppercase font-bold">
-                        <option value="pending">Pending</option>
-                        <option value="accepted">Accepted</option>
-                        <option value="rejected">Rejected</option>
-                    </select>
-                </div>
-                <div class="pt-2 border-t border-slate-200 flex gap-2 justify-end">
-                    <button onclick="closeReviewModal()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Close</button>
-                    <button onclick="saveReviewChanges()" class="gov-btn bg-denr-green text-white hover:bg-green-800">Save Changes</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
         let applicantData = [];
         let filteredApplicantData = [];
@@ -411,7 +368,7 @@
         let filteredHiringData = [];
         let editingHiringId = null;
 
-        const statusMap = {pending:'Pending', accepted:'Accepted', rejected:'Rejected'};
+        const statusMap = {pending:'Pending', accepted:'Approved', rejected:'Rejected'};
 
         function switchSuperadminTab(tab) {
             const applicantsTab = document.getElementById('saApplicantsTab');
@@ -481,14 +438,24 @@
                     <td class="px-4 py-2 text-center border-r border-slate-100 text-[9px] font-bold text-slate-600">${a.acceptedBy || 'N/A'}</td>
                     <td class="px-4 py-2 text-center border-r border-slate-100 text-[9px] font-mono text-slate-500">${a.updatedAt || 'N/A'}</td>
                     <td class="px-4 py-2 text-center no-print">
-                        ${a.status === 'rejected' ? `
-                            <button class="delete-btn text-[9px] font-bold uppercase text-rose-700 hover:underline tracking-widest cursor-pointer" data-id="${a.id}">Delete Permanently</button>
-                        ` : (a.status === 'accepted' ? `
-                            <span class="text-[9px] font-bold uppercase text-slate-400 tracking-widest">Locked</span>
-                        ` : `
-                            <button class="review-btn text-[9px] font-bold uppercase text-denr-green hover:underline tracking-widest cursor-pointer"
-                                data-id="${a.id}" data-name="${a.name}" data-type="${a.type}" data-region="${a.region}" data-status="${a.status}">Edit</button>
-                        `)}
+                        <div class="flex items-center justify-center gap-2">
+                            <button type="button" title="View" class="app-action-btn w-7 h-7 inline-flex items-center justify-center rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100" data-action="view" data-id="${a.id}">
+                                <i class="fa-solid fa-eye text-[10px]"></i>
+                            </button>
+                            ${a.status === 'pending' ? `
+                                <button type="button" title="Approve" class="app-action-btn w-7 h-7 inline-flex items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" data-action="accept" data-id="${a.id}">
+                                    <i class="fa-solid fa-check text-[10px]"></i>
+                                </button>
+                                <button type="button" title="Reject" class="app-action-btn w-7 h-7 inline-flex items-center justify-center rounded border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100" data-action="reject" data-id="${a.id}">
+                                    <i class="fa-solid fa-xmark text-[10px]"></i>
+                                </button>
+                            ` : ''}
+                            ${a.status === 'rejected' ? `
+                                <button type="button" title="Delete" class="app-action-btn w-7 h-7 inline-flex items-center justify-center rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" data-action="delete" data-id="${a.id}">
+                                    <i class="fa-solid fa-trash text-[10px]"></i>
+                                </button>
+                            ` : ''}
+                        </div>
                     </td>
                 </tr>
             `).join('') : '<tr><td colspan="7" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No results found.</td></tr>';
@@ -603,8 +570,8 @@
                     ? '<span class="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">Active</span>'
                     : '<span class="status-badge bg-slate-100 text-slate-600 border-slate-200">Inactive</span>';
                 const archiveBtn = row.is_active
-                    ? `<button type="button" class="text-[9px] font-bold uppercase text-amber-700 hover:underline tracking-widest cursor-pointer" data-action="archive" data-id="${row.id}">Archive</button>`
-                    : `<button type="button" class="text-[9px] font-bold uppercase text-emerald-700 hover:underline tracking-widest cursor-pointer" data-action="unarchive" data-id="${row.id}">Unarchive</button>`;
+                    ? `<button type="button" title="Archive" class="w-7 h-7 inline-flex items-center justify-center rounded border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100" data-action="archive" data-id="${row.id}"><i class="fa-solid fa-box-archive text-[10px]"></i></button>`
+                    : `<button type="button" title="Unarchive" class="w-7 h-7 inline-flex items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" data-action="unarchive" data-id="${row.id}"><i class="fa-solid fa-box-open text-[10px]"></i></button>`;
 
                 return `
                     <tr class="hover:bg-slate-50 transition-colors">
@@ -615,9 +582,13 @@
                         <td class="px-4 py-2 text-center border-r border-slate-100">${statusBadge}</td>
                         <td class="px-4 py-2 text-center no-print">
                             <div class="flex items-center justify-center gap-2">
-                                <button type="button" class="text-[9px] font-bold uppercase text-denr-green hover:underline tracking-widest cursor-pointer" data-action="edit" data-id="${row.id}">Edit</button>
+                                <button type="button" title="Edit" class="w-7 h-7 inline-flex items-center justify-center rounded border border-denr-green/30 bg-emerald-50 text-denr-green hover:bg-emerald-100" data-action="edit" data-id="${row.id}">
+                                    <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                                </button>
                                 ${archiveBtn}
-                                <button type="button" class="text-[9px] font-bold uppercase text-rose-700 hover:underline tracking-widest cursor-pointer" data-action="delete" data-id="${row.id}">Delete</button>
+                                <button type="button" title="Delete" class="w-7 h-7 inline-flex items-center justify-center rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100" data-action="delete" data-id="${row.id}">
+                                    <i class="fa-solid fa-trash text-[10px]"></i>
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -918,72 +889,51 @@
         });
 
         document.getElementById('appTable').addEventListener('click', (e) => {
-            const btn = e.target.closest('.review-btn');
-            if (btn) {
-                openReviewModal({
-                    id: btn.dataset.id,
-                    name: btn.dataset.name || '-',
-                    type: btn.dataset.type || '-',
-                    region: btn.dataset.region || '-',
-                    status: btn.dataset.status || 'pending'
-                });
+            const btn = e.target.closest('.app-action-btn');
+            if (!btn) return;
+
+            const id = btn.dataset.id;
+            const action = btn.dataset.action;
+            if (!id || !action) return;
+
+            if (action === 'view') {
+                viewApplicant(id);
                 return;
             }
 
-            const deleteBtn = e.target.closest('.delete-btn');
-            if (deleteBtn) {
-                const id = deleteBtn.dataset.id;
-                if (id) deleteApplicant(id);
+            if (action === 'accept') {
+                updateApplicantStatus(id, 'accepted');
+                return;
+            }
+
+            if (action === 'reject') {
+                updateApplicantStatus(id, 'rejected');
+                return;
+            }
+
+            if (action === 'delete') {
+                deleteApplicant(id);
             }
         });
 
-        function openReviewModal(data) {
-            const modal = document.getElementById('reviewModal');
-            const body = document.getElementById('reviewBody');
-            document.getElementById('reviewIndex').value = data.id || '';
-            document.getElementById('reviewName').value = data.name;
-            document.getElementById('reviewType').value = data.type;
-            document.getElementById('reviewRegion').value = data.region;
-            document.getElementById('reviewStatus').value = data.status;
-            modal.classList.remove('hidden');
-            setTimeout(() => { modal.classList.add('active'); body.classList.replace('scale-95', 'scale-100'); }, 10);
+        function viewApplicant(id) {
+            window.location.href = `/superadmin/applicants/view/${encodeURIComponent(id)}`;
         }
 
-        function closeReviewModal() {
-            const modal = document.getElementById('reviewModal');
-            const body = document.getElementById('reviewBody');
-            modal.classList.remove('active');
-            body.classList.replace('scale-100', 'scale-95');
-            setTimeout(() => modal.classList.add('hidden'), 200);
-        }
-
-        async function saveReviewChanges() {
-            const id = document.getElementById('reviewIndex').value;
-            if (!id) {
-                closeReviewModal();
-                return;
-            }
-
+        async function updateApplicantStatus(id, status) {
+            const actionLabel = status === 'accepted' ? 'approve' : 'reject';
+            if (!confirm(`Are you sure you want to ${actionLabel} this application?`)) return;
             try {
-                const payload = {
-                    full_name: document.getElementById('reviewName').value.trim(),
-                    candidate_type: document.getElementById('reviewType').value.trim(),
-                    region_office: document.getElementById('reviewRegion').value.trim(),
-                    status: document.getElementById('reviewStatus').value,
-                };
-
-                const res = await fetch(`/superadmin/api/applicants/${id}`, {
-                    method: 'PUT',
+                const res = await fetch(`/superadmin/api/applicants/${id}/status`, {
+                    method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({ status })
                 });
                 const json = await res.json();
-                if (!res.ok || !json.success) throw new Error(json.error || 'Update failed');
-
-                closeReviewModal();
+                if (!res.ok || !json.success) throw new Error(json.error || 'Status update failed');
                 await loadApplicants();
             } catch (err) {
-                alert(err.message || 'Failed to update applicant');
+                alert(err.message || 'Failed to update applicant status');
             }
         }
 

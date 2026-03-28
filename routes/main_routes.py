@@ -1004,7 +1004,6 @@ def inventory_stock_info(app_id):
 def user_inventory_history():
     return render_template('user/inventory/stock-history.html')
 
-
 @bp.route('/national/accounting/accounting-dashboard')
 @role_required('national','national_admin')
 def national_accounting_dashboard():
@@ -1148,3 +1147,8 @@ def land_main():
 @bp.route('/river')
 def river_main():
     return render_template('river.html')
+
+@bp.route('/user/notification')
+@role_required('user')
+def user_notification():
+    return render_template('user/notification.html')
