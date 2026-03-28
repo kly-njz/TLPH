@@ -169,6 +169,26 @@
                         </div>
                     </div>
 
+                    <!-- Compensation Details Panel -->
+                    <div class="gov-card p-3 shadow-sm" x-show="compensationDetails.show" x-cloak>
+                        <h3 class="label-text border-b pb-1 mb-2 flex items-center gap-2 text-orange-700">
+                            <span class="material-icons-round text-[14px]">warning</span> Form-Specific Details
+                        </h3>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <template x-for="field in compensationDetails.fields" :key="field.label">
+                                <div>
+                                    <p class="label-text" x-text="field.label"></p>
+                                    <template x-if="!field.isLink">
+                                        <p class="data-text break-words" x-text="field.value"></p>
+                                    </template>
+                                    <template x-if="field.isLink">
+                                        <a :href="field.value" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline font-bold text-[11px]">🗺️ View on Map</a>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
                     <!-- Seminar-specific details panel -->
                     <div class="gov-card p-3 shadow-sm" x-show="seminarFields.length > 0" x-cloak>
                         <h3 class="label-text border-b pb-1 mb-2 flex items-center gap-2 text-indigo-800">
@@ -567,6 +587,37 @@
                         rows.push({ key, label: this.formatFieldLabel(key), value: this.formatFieldValue(key, val) });
                     }
                     return rows.sort((a, b) => a.label.localeCompare(b.label));
+                },
+
+                get compensationDetails() {
+                    if (!this.serviceData) return { show: false, fields: [] };
+                    const d = this.serviceData;
+                    const svc = (d.serviceType || '').toLowerCase();
+                    const fmt = (val) => val ? String(val).charAt(0).toUpperCase() + String(val).slice(1) : 'N/A';
+                    const fmtCurrency = (val) => val ? '₱ ' + Number(val).toLocaleString('en-PH', {minimumFractionDigits: 2}) : 'N/A';
+                    
+                    // Check if this is a compensation request
+                    const isCompensation = svc.includes('typhoon') || svc.includes('pest damage') || svc.includes('damage report');
+                    
+                    if (!isCompensation) return { show: false, fields: [] };
+                    
+                    const fields = [];
+                    
+                    // Common compensation fields
+                    if (d.farmerIdNumber) {
+                        fields.push({ label: 'Farmer ID', value: d.farmerIdNumber, isLink: false });
+                    }
+                    if (d.costOfDamage) {
+                        fields.push({ label: 'Cost of Damage', value: fmtCurrency(d.costOfDamage), isLink: false });
+                    }
+                    if (d.googlePinLocation) {
+                        fields.push({ label: 'Pin Location', value: d.googlePinLocation, isLink: true });
+                    }
+                    
+                    return {
+                        show: fields.length > 0,
+                        fields: fields
+                    };
                 },
 
                 formatFieldLabel(key) {
