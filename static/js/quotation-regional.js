@@ -604,6 +604,63 @@
     });
   }
 
+  function escapeCsv(value) {
+    const raw = value == null ? '' : String(value);
+    const needsQuote = /[",\n]/.test(raw);
+    const escaped = raw.replace(/"/g, '""');
+    return needsQuote ? `"${escaped}"` : escaped;
+  }
+
+  function exportCsvReport() {
+    const rows = Array.from(document.querySelectorAll('.quote-row'));
+    const visible = rows.filter((row) => row.style.display !== 'none');
+    if (!visible.length) {
+      alert('No records to export.');
+      return;
+    }
+
+    const headers = [
+      'Quotation #',
+      'Client / Office Entity',
+      'Municipality',
+      'Total Amount',
+      'Filing Date',
+      'Status',
+      'Deliver From',
+      'Deliver To',
+      'Deliver To Type'
+    ];
+
+    const lines = [headers.map(escapeCsv).join(',')];
+    visible.forEach((row) => {
+      const data = readRowData(row);
+      const line = [
+        data.number || '',
+        data.client || '',
+        data.municipality || '',
+        formatMoney(data.amount || 0),
+        data.date || '',
+        statusLabel(data.status),
+        data.deliverFrom || '',
+        data.deliverTo || '',
+        data.deliverToType || ''
+      ];
+      lines.push(line.map(escapeCsv).join(','));
+    });
+
+    const csv = lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const today = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `quotation-report-${today}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   function initCharts() {
     if (!window.Chart) return;
     Chart.defaults.font.family = 'Verdana, Arial, sans-serif';
@@ -674,6 +731,7 @@
   window.closeReceiveModal = closeReceiveModal;
   window.confirmReceive = confirmReceive;
   window.markAsReceived = markAsReceived;
+  window.exportCsvReport = exportCsvReport;
   window.filterTable = filterTable;
   window.resetFilters = resetFilters;
   window.initRegionalQuotation = initRegionalQuotation;
