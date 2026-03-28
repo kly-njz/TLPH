@@ -418,19 +418,34 @@
                 },
 
                 buildDocFiles(data) {
+                    // First try to get compensation documents using priority order
+                    if (Array.isArray(data?.supportingDocuments) && data.supportingDocuments.length) {
+                        return data.supportingDocuments.map(d => typeof d === 'string' ? { url: d, name: `Document` } : d);
+                    }
+                    if (Array.isArray(data?.supportingFiles) && data.supportingFiles.length) {
+                        return data.supportingFiles.map(d => typeof d === 'string' ? { url: d, name: `Document` } : d);
+                    }
+                    if (Array.isArray(data?.attachments) && data.attachments.length) {
+                        return data.attachments.map(d => typeof d === 'string' ? { url: d, name: `Document` } : d);
+                    }
+                    if (Array.isArray(data?.files) && data.files.length) {
+                        return data.files.map(d => typeof d === 'string' ? { url: d, name: `Document` } : d);
+                    }
+
+                    // Fallback to scanning all object entries for attachment keys
                     const result = [];
                     const seen = new Set();
                     const userId = data?.userId || data?.userID || data?.uid || '';
 
                     const isApplicantAttachmentKey = (key) => {
                         const k = String(key || '').toLowerCase();
-                        // Only keep fields that are intended as uploaded attachments from applicant forms.
                         return /(file|files|photo|photos|image|images|document|documents|attachment|attachments|report|permit|certificate|proposal|plan|record|history|result|picture)/i.test(k);
                     };
 
-                    const isApplicantUploadUrl = (url) => {
+                    const isValidUploadUrl = (url) => {
                         const u = String(url || '').toLowerCase();
-                        return u.includes('/static/uploads/service_requests/') || u.includes('static/uploads/service_requests/');
+                        // Accept cloudinary URLs, static uploads, or any http(s) URL
+                        return /^https?:\/\//i.test(u) || u.includes('/static/uploads/') || u.includes('cloudinary');
                     };
 
                     for (const [key, val] of Object.entries(data || {})) {
@@ -442,7 +457,7 @@
                         files.forEach(raw => {
                             const url = this.normalizeFileUrl(raw, userId);
                             if (!url) return;
-                            if (!isApplicantUploadUrl(url)) return;
+                            if (!isValidUploadUrl(url)) return;
                             const marker = `${key}|${url}`;
                             if (seen.has(marker)) return;
                             seen.add(marker);
@@ -560,7 +575,12 @@
                         'forwardedAt', 'forwardedBy', 'forwardedByEmail',
                         'forwardedToNationalAt', 'forwardedToNationalBy',
                         'municipality', 'province', 'barangay', 'region',
-                        'amount', 'invoiceId', 'externalId', 'paymentUrl'
+                        'amount', 'invoiceId', 'externalId', 'paymentUrl',
+                        // Compensation-specific fields (shown in Form-Specific Details panel)
+                        'farmerIdNumber', 'costOfDamage', 'googlePinLocation', 'farmLatitude', 'farmLongitude',
+                        // Document fields
+                        'supportingDocuments', 'supportingFiles', 'attachments', 'files',
+                        'productPhoto', 'registrationDocuments', 'emergencyPhotos', 'fieldPhotos', 'damagePhotos'
                     ]);
 
                     const rows = [];
