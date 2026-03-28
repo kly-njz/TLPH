@@ -65,6 +65,89 @@ def _upload_to_cloudinary(file_obj, folder: str):
     payload = resp.json() or {}
     return payload.get('secure_url') or payload.get('url')
 
+
+def _load_active_hiring_positions(*, apply_municipal_scope_filter: bool = True):
+    """Load active hiring positions and optionally scope-filter for municipal users."""
+    from firebase_config import get_firestore_db
+
+    db = get_firestore_db()
+
+    user_id = session.get('user_id')
+    user_role = (session.get('user_role') or '').lower()
+    user_municipality = ''
+    user_region = ''
+
+    if apply_municipal_scope_filter and user_role in ['municipal_admin', 'municipal']:
+        user_municipality = session.get('municipality') or session.get('user_municipality') or ''
+        user_region = session.get('region') or session.get('user_region') or ''
+        if not str(user_municipality).strip() and user_id:
+            try:
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    user_municipality = user_data.get('municipality') or user_data.get('municipalAdminMunicipality') or ''
+                    user_region = user_region or user_data.get('region') or user_data.get('regionalAdminRegion') or ''
+            except Exception as e:
+                print(f"[WARN] Could not resolve municipal scope from user doc: {e}")
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    def is_active_hiring(value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if value is None:
+            return True
+        key = str(value).strip().lower()
+        if key in {'false', '0', 'inactive', 'archived', 'disabled', 'no'}:
+            return False
+        if key in {'true', '1', 'active', 'enabled', 'yes'}:
+            return True
+        return True
+
+    muni_key = normalize_scope(user_municipality)
+    region_key = normalize_scope(user_region)
+    rows = []
+
+    docs = db.collection('hiring_positions').stream()
+    for doc in docs:
+        item = doc.to_dict() or {}
+        if not is_active_hiring(item.get('is_active')):
+            continue
+
+        item_muni = normalize_scope(item.get('municipality'))
+        item_region = normalize_scope(item.get('region'))
+        item_scope_type = str(item.get('scope_type') or '').strip().lower()
+
+        if apply_municipal_scope_filter and user_role in ['municipal_admin', 'municipal'] and muni_key:
+            is_same_municipality = item_muni and item_muni == muni_key
+            is_same_region_scope = (
+                item_scope_type == 'region' and
+                region_key and
+                item_region == region_key
+            )
+            is_national_scope = item_scope_type == 'national'
+            if not (is_same_municipality or is_same_region_scope or is_national_scope):
+                continue
+
+        rows.append({
+            'id': doc.id,
+            'job_title': str(item.get('job_title') or '').strip(),
+            'description': str(item.get('description') or '').strip(),
+            'position': str(item.get('position') or '').strip(),
+            'starting_salary': item.get('starting_salary') or 0,
+            'municipality': str(item.get('municipality') or '').strip(),
+            'region': str(item.get('region') or '').strip(),
+            'scope_type': str(item.get('scope_type') or '').strip(),
+            'scope': str(item.get('scope') or '').strip(),
+            'created_at': str(item.get('created_at') or '').strip(),
+        })
+
+    rows.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    return rows
+
 @bp.route('/')
 def index():
     print("HOME.HTML IS BEING RENDERED")  # Debug line
@@ -105,100 +188,40 @@ def index():
     main_news = landing_news[0] if landing_news else None
     side_news = landing_news[1:4] if len(landing_news) > 1 else []
 
-    # Fetch active hiring positions (municipal viewers see own municipality + own region-scoped posts)
+    # Fetch active hiring positions (home shows latest; full list is in /jobs).
     hiring_positions = []
     try:
-        from firebase_config import get_firestore_db
-        db = get_firestore_db()
-        
-        # Determine user's municipality if they are a municipal admin
-        user_municipality = None
-        user_region = None
-        user_role = session.get('user_role', '').lower()
-        
-        if user_role in ['municipal_admin', 'municipal']:
-            # Try to get municipality from session
-            user_municipality = session.get('municipality') or session.get('user_municipality') or ''
-            user_region = session.get('region') or session.get('user_region') or ''
-            if not user_municipality.strip():
-                # Fallback: try to resolve from user document
-                if user_id:
-                    from firebase_config import get_firestore_db
-                    db_temp = get_firestore_db()
-                    user_doc = db_temp.collection('users').document(user_id).get()
-                    if user_doc.exists:
-                        user_data = user_doc.to_dict() or {}
-                        user_municipality = user_data.get('municipality') or user_data.get('municipalAdminMunicipality') or ''
-                        user_region = user_region or user_data.get('region') or user_data.get('regionalAdminRegion') or ''
-        
-        # Query all hirings and determine active rows in-memory.
-        # Some historical rows may be missing is_active or store it as a string.
-        docs = db.collection('hiring_positions').stream()
-
-        def normalize_scope(value):
-            return ' '.join(str(value or '').strip().upper().split())
-
-        def is_active_hiring(value):
-            if isinstance(value, bool):
-                return value
-            if isinstance(value, (int, float)):
-                return value != 0
-            if value is None:
-                return True
-            key = str(value).strip().lower()
-            if key in {'false', '0', 'inactive', 'archived', 'disabled', 'no'}:
-                return False
-            if key in {'true', '1', 'active', 'enabled', 'yes'}:
-                return True
-            return True
-
-        muni_key = normalize_scope(user_municipality)
-        region_key = normalize_scope(user_region)
-
-        for doc in docs:
-            item = doc.to_dict() or {}
-            if not is_active_hiring(item.get('is_active')):
-                continue
-
-            item_muni = normalize_scope(item.get('municipality'))
-            item_region = normalize_scope(item.get('region'))
-            item_scope_type = str(item.get('scope_type') or '').strip().lower()
-
-            if user_role in ['municipal_admin', 'municipal'] and muni_key:
-                is_same_municipality = item_muni and item_muni == muni_key
-                is_same_region_scope = (
-                    item_scope_type == 'region' and
-                    region_key and
-                    item_region == region_key
-                )
-                is_national_scope = item_scope_type == 'national'
-                if not (is_same_municipality or is_same_region_scope or is_national_scope):
-                    continue
-
-            hiring_positions.append({
-                'id': doc.id,
-                'job_title': str(item.get('job_title') or '').strip(),
-                'description': str(item.get('description') or '').strip(),
-                'position': str(item.get('position') or '').strip(),
-                'starting_salary': item.get('starting_salary') or 0,
-                'municipality': str(item.get('municipality') or '').strip(),
-                'region': str(item.get('region') or '').strip(),
-                'scope_type': str(item.get('scope_type') or '').strip(),
-                'scope': str(item.get('scope') or '').strip(),
-                'created_at': str(item.get('created_at') or '').strip(),
-            })
-        
-        # Sort by created_at (newest first)
-        hiring_positions.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        hiring_positions = _load_active_hiring_positions(apply_municipal_scope_filter=True)
     except Exception as e:
         print(f"[WARN] Could not load hiring positions from Firestore: {e}")
+
+    total_hiring_positions = len(hiring_positions)
+    latest_hiring_positions = hiring_positions[:4]
 
     return render_template(
         'home.html',
         landing_news=landing_news,
         main_news=main_news,
         side_news=side_news,
+        hiring_positions=latest_hiring_positions,
+        total_hiring_positions=total_hiring_positions,
+        has_more_hiring=(total_hiring_positions > len(latest_hiring_positions)),
+    )
+
+
+@bp.route('/jobs')
+def jobs_list():
+    """Public page showing all currently active hiring positions."""
+    hiring_positions = []
+    try:
+        hiring_positions = _load_active_hiring_positions(apply_municipal_scope_filter=False)
+    except Exception as e:
+        print(f"[WARN] Could not load jobs list: {e}")
+
+    return render_template(
+        'jobs.html',
         hiring_positions=hiring_positions,
+        total_hiring_positions=len(hiring_positions),
     )
 
 
