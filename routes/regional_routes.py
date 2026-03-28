@@ -1,9 +1,3 @@
-@bp.route('/notification')
-@role_required('regional','regional_admin')
-def notification_view():
-    return render_template('regional/notification.html')
-
-
 from flask import Blueprint, render_template, jsonify, request, session
 from firebase_config import get_firestore_db
 from firebase_auth_middleware import role_required
@@ -5449,3 +5443,9 @@ def api_get_quotation_regional(quotation_id):
     except Exception as e:
         print(f"[ERROR] api_get_quotation_regional failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to fetch quotation'}), 500
+    
+
+@bp.route('/notification')
+@role_required('regional','regional_admin')
+def notification_view():
+    return render_template('regional/notification.html')
