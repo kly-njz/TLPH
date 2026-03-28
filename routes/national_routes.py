@@ -19,6 +19,7 @@ def delete_project_national(project_id):
 from flask import Blueprint, render_template, jsonify, session
 from firebase_config import get_firestore_db
 from datetime import datetime
+from urllib.parse import quote, urlparse
 from firebase_auth_middleware import role_required
 from entities_storage import list_entities
 
@@ -1217,6 +1218,137 @@ def applicants():
             hiring_regions=[],
             hiring_municipalities=[],
         )
+
+
+@bp.route('/applicants/view/<job_id>')
+@role_required('national', 'national_admin')
+def applicants_view_detail(job_id):
+    db = get_firestore_db()
+
+    def _format_datetime(raw):
+        if not raw:
+            return 'N/A'
+        if hasattr(raw, 'to_datetime'):
+            try:
+                raw = raw.to_datetime()
+            except Exception:
+                pass
+        if isinstance(raw, datetime):
+            return raw.strftime('%b %d, %Y %I:%M %p')
+        if isinstance(raw, str):
+            try:
+                dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                return dt.strftime('%b %d, %Y %I:%M %p')
+            except Exception:
+                return raw
+        return str(raw)
+
+    def _resolve_resume_preview(url):
+        raw_url = str(url or '').strip()
+        if not raw_url:
+            return '', '', ''
+
+        def _cloudinary_first_page_image(src_url):
+            try:
+                parsed = urlparse(src_url)
+                if 'res.cloudinary.com' not in (parsed.netloc or '').lower():
+                    return ''
+                base_url = src_url.split('?', 1)[0]
+                if '/upload/' not in base_url:
+                    return ''
+                return base_url.replace('/upload/', '/upload/pg_1,f_png,w_1200/', 1)
+            except Exception:
+                return ''
+
+        try:
+            path = (urlparse(raw_url).path or '').lower()
+        except Exception:
+            path = raw_url.lower()
+
+        if path.endswith('.pdf'):
+            return 'pdf', '', _cloudinary_first_page_image(raw_url)
+        if path.endswith('.jpg') or path.endswith('.jpeg') or path.endswith('.png') or path.endswith('.webp'):
+            return 'image', '', ''
+        if path.endswith('.doc') or path.endswith('.docx') or path.endswith('.ppt') or path.endswith('.pptx'):
+            return 'office', f"https://view.officeapps.live.com/op/embed.aspx?src={quote(raw_url, safe='')}", _cloudinary_first_page_image(raw_url)
+        if path.endswith('.txt'):
+            return 'text', '', ''
+        return 'other', '', ''
+
+    try:
+        doc = db.collection('municipal_denr_applicant_jobs').document(job_id).get()
+        if not doc.exists:
+            return render_template(
+                'national/HRM/applicant-detail-national.html',
+                error='Applicant record not found.',
+                applicant={}
+            ), 404
+
+        data = doc.to_dict() or {}
+        scope_type = str(data.get('scope_type') or '').strip().lower()
+        resume_url = data.get('resume_url') or data.get('resume_link') or ''
+        resume_preview_type, resume_office_embed_url, resume_preview_image_url = _resolve_resume_preview(resume_url)
+
+        applicant = {
+            'id': doc.id,
+            'reference_id': data.get('reference_id') or doc.id[:12].upper(),
+            'status': str(data.get('status') or data.get('employeeStatus') or 'PENDING').upper(),
+            'date_filed': data.get('date_filed') or 'N/A',
+            'updated_at': _format_datetime(data.get('updated_at') or data.get('reviewed_at') or data.get('created_at')),
+            'job_title': data.get('job_title') or 'N/A',
+            'job_description': data.get('job_description') or 'N/A',
+            'candidate_type': data.get('candidate_type') or data.get('category') or 'N/A',
+            'scope_type': scope_type or ('municipality' if data.get('municipality') else 'region'),
+            'scope': data.get('scope') or data.get('municipality') or data.get('region') or 'N/A',
+            'region': data.get('region') or data.get('region_office') or 'N/A',
+            'municipality': data.get('municipality') or 'N/A',
+            'full_name': data.get('full_name') or data.get('applicant_name') or 'N/A',
+            'email': data.get('email') or 'N/A',
+            'phone': data.get('phone') or data.get('contact_number') or 'N/A',
+            'gender': data.get('gender') or 'N/A',
+            'birth_date': data.get('birth_date') or 'N/A',
+            'civil_status': data.get('civil_status') or 'N/A',
+            'barangay': data.get('barangay') or 'N/A',
+            'address': data.get('address') or 'N/A',
+            'education_level': data.get('education_level') or 'N/A',
+            'school_name': data.get('school_name') or 'N/A',
+            'course': data.get('course') or 'N/A',
+            'years_experience': data.get('years_experience') or 'N/A',
+            'current_employer': data.get('current_employer') or 'N/A',
+            'employment_status': data.get('employment_status') or 'N/A',
+            'skills': data.get('skills') or 'N/A',
+            'certifications': data.get('certifications') or 'N/A',
+            'expected_salary': data.get('expected_salary') or 'N/A',
+            'available_start_date': data.get('available_start_date') or 'N/A',
+            'preferred_work_type': data.get('preferred_work_type') or 'N/A',
+            'cover_letter': data.get('cover_letter') or 'N/A',
+            'notes': data.get('notes') or 'N/A',
+            'resume_url': resume_url,
+            'resume_preview_type': resume_preview_type,
+            'resume_office_embed_url': resume_office_embed_url,
+            'resume_preview_image_url': resume_preview_image_url,
+            'photo_url': (
+                data.get('photo_url')
+                or data.get('photo')
+                or data.get('profile_photo')
+                or data.get('profilePhoto')
+                or data.get('photoURL')
+                or ''
+            ),
+        }
+
+        return render_template(
+            'national/HRM/applicant-detail-national.html',
+            applicant=applicant,
+            error=''
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to render national applicant detail: {e}")
+        return render_template(
+            'national/HRM/applicant-detail-national.html',
+            applicant={},
+            error='Failed to load applicant details.'
+        ), 500
 
 
 @bp.route('/api/hiring', methods=['GET'])
