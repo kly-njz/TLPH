@@ -383,6 +383,12 @@
                 <p id="applyResumeFileStatus" class="mt-1 text-[11px] text-gray-500">Required for submission.</p>
             </div>
 
+            <div>
+                <label for="applyPhotoFile" class="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">Applicant Photo (JPG/PNG/WEBP) *</label>
+                <input id="applyPhotoFile" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-700 bg-white" required>
+                <p id="applyPhotoFileStatus" class="mt-1 text-[11px] text-gray-500">Required for submission.</p>
+            </div>
+
             <div class="md:col-span-2">
                 <label for="applyCoverLetter" class="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">Cover Letter / Motivation</label>
                 <textarea id="applyCoverLetter" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-700" placeholder="Tell us why you're fit for this role"></textarea>
@@ -541,6 +547,8 @@
         const submitApplyBtn = document.getElementById('submitApplyBtn');
         const applyResumeFileInput = document.getElementById('applyResumeFile');
         const applyResumeFileStatus = document.getElementById('applyResumeFileStatus');
+        const applyPhotoFileInput = document.getElementById('applyPhotoFile');
+        const applyPhotoFileStatus = document.getElementById('applyPhotoFileStatus');
 
         function openApplyModal(dataset) {
             document.getElementById('applyHiringId').value = dataset.hiringId || '';
@@ -561,6 +569,10 @@
             if (applyResumeFileStatus) {
                 applyResumeFileStatus.textContent = 'Required for submission.';
                 applyResumeFileStatus.className = 'mt-1 text-[11px] text-gray-500';
+            }
+            if (applyPhotoFileStatus) {
+                applyPhotoFileStatus.textContent = 'Required for submission.';
+                applyPhotoFileStatus.className = 'mt-1 text-[11px] text-gray-500';
             }
         }
 
@@ -584,6 +596,29 @@
 
                 applyResumeFileStatus.textContent = `Selected: ${file.name}`;
                 applyResumeFileStatus.className = 'mt-1 text-[11px] text-emerald-700';
+            });
+        }
+
+        if (applyPhotoFileInput) {
+            applyPhotoFileInput.addEventListener('change', () => {
+                const file = applyPhotoFileInput.files && applyPhotoFileInput.files[0];
+                if (!file) {
+                    applyPhotoFileStatus.textContent = 'Required for submission.';
+                    applyPhotoFileStatus.className = 'mt-1 text-[11px] text-gray-500';
+                    return;
+                }
+
+                const allowed = ['jpg', 'jpeg', 'png', 'webp'];
+                const ext = (file.name.split('.').pop() || '').toLowerCase();
+                if (!allowed.includes(ext)) {
+                    applyPhotoFileStatus.textContent = 'Invalid file type. Use JPG, PNG, or WEBP.';
+                    applyPhotoFileStatus.className = 'mt-1 text-[11px] text-rose-600';
+                    applyPhotoFileInput.value = '';
+                    return;
+                }
+
+                applyPhotoFileStatus.textContent = `Selected: ${file.name}`;
+                applyPhotoFileStatus.className = 'mt-1 text-[11px] text-emerald-700';
             });
         }
 
@@ -613,9 +648,16 @@
                 e.preventDefault();
 
                 const resumeFile = applyResumeFileInput && applyResumeFileInput.files ? applyResumeFileInput.files[0] : null;
+                const photoFile = applyPhotoFileInput && applyPhotoFileInput.files ? applyPhotoFileInput.files[0] : null;
                 if (!resumeFile) {
                     applyStatus.className = 'md:col-span-2 text-sm rounded-lg px-3 py-2 bg-rose-50 text-rose-700 border border-rose-200';
                     applyStatus.textContent = 'Resume file is required (PDF/DOC/DOCX).';
+                    applyStatus.classList.remove('hidden');
+                    return;
+                }
+                if (!photoFile) {
+                    applyStatus.className = 'md:col-span-2 text-sm rounded-lg px-3 py-2 bg-rose-50 text-rose-700 border border-rose-200';
+                    applyStatus.textContent = 'Applicant photo is required (JPG/PNG/WEBP).';
                     applyStatus.classList.remove('hidden');
                     return;
                 }
@@ -649,7 +691,28 @@
                 submitApplyBtn.textContent = 'Submitting...';
 
                 try {
-                    // 1) Upload resume file to Cloudinary
+                    // 1) Upload applicant photo to Cloudinary
+                    applyStatus.className = 'md:col-span-2 text-sm rounded-lg px-3 py-2 bg-slate-50 text-slate-700 border border-slate-200';
+                    applyStatus.textContent = 'Uploading applicant photo...';
+                    applyStatus.classList.remove('hidden');
+
+                    const photoFd = new FormData();
+                    photoFd.append('photo', photoFile);
+                    const photoRes = await fetch('/api/hiring/upload-photo', {
+                        method: 'POST',
+                        body: photoFd,
+                    });
+                    const photoData = await photoRes.json().catch(() => ({}));
+                    if (!photoRes.ok || !photoData.success || !photoData.photo_url) {
+                        applyStatus.className = 'md:col-span-2 text-sm rounded-lg px-3 py-2 bg-rose-50 text-rose-700 border border-rose-200';
+                        applyStatus.textContent = photoData.error || 'Photo upload failed';
+                        applyStatus.classList.remove('hidden');
+                        return;
+                    }
+
+                    payload.photo_url = photoData.photo_url;
+
+                    // 2) Upload resume file to Cloudinary
                     applyStatus.className = 'md:col-span-2 text-sm rounded-lg px-3 py-2 bg-slate-50 text-slate-700 border border-slate-200';
                     applyStatus.textContent = 'Uploading resume...';
                     applyStatus.classList.remove('hidden');
@@ -670,7 +733,7 @@
 
                     payload.resume_url = uploadData.resume_url;
 
-                    // 2) Submit application record
+                    // 3) Submit application record
                     const res = await fetch('/api/hiring/apply', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },

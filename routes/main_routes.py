@@ -222,6 +222,7 @@ def apply_for_hiring_position():
     cover_letter = str(data.get('cover_letter') or '').strip()
     notes = str(data.get('notes') or '').strip()
     resume_url = str(data.get('resume_url') or '').strip()
+    photo_url = str(data.get('photo_url') or '').strip()
 
     if not hiring_id:
         return jsonify({'success': False, 'error': 'Missing hiring position reference'}), 400
@@ -233,6 +234,8 @@ def apply_for_hiring_position():
         return jsonify({'success': False, 'error': 'Phone is required'}), 400
     if not resume_url:
         return jsonify({'success': False, 'error': 'Resume upload is required'}), 400
+    if not photo_url:
+        return jsonify({'success': False, 'error': 'Applicant photo upload is required'}), 400
 
     try:
         hiring_doc = db.collection('hiring_positions').document(hiring_id).get()
@@ -289,6 +292,8 @@ def apply_for_hiring_position():
             'preferred_work_type': preferred_work_type or 'N/A',
             'resume_link': resume_url,
             'resume_url': resume_url,
+            'photo_url': photo_url,
+            'photo': photo_url,
             'cover_letter': cover_letter or 'N/A',
             'notes': notes or 'N/A',
             'candidate_type': position or 'Environmental Management Specialist',
@@ -355,6 +360,37 @@ def upload_hiring_resume():
     except Exception as e:
         print(f"[ERROR] upload_hiring_resume failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to upload resume'}), 500
+
+
+@bp.route('/api/hiring/upload-photo', methods=['POST'])
+def upload_hiring_photo():
+    """Upload applicant photo (JPG/PNG/WEBP) to Cloudinary."""
+    if not _cloudinary_enabled():
+        return jsonify({'success': False, 'error': 'Photo upload service is not configured'}), 500
+
+    file_obj = request.files.get('photo')
+    if not file_obj or not getattr(file_obj, 'filename', ''):
+        return jsonify({'success': False, 'error': 'Applicant photo file is required'}), 400
+
+    filename = str(file_obj.filename or '').strip()
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    allowed_ext = {'jpg', 'jpeg', 'png', 'webp'}
+    if ext not in allowed_ext:
+        return jsonify({'success': False, 'error': 'Only JPG, PNG, and WEBP files are allowed'}), 400
+
+    content_length = request.content_length or 0
+    max_size = 8 * 1024 * 1024  # 8 MB
+    if content_length > max_size:
+        return jsonify({'success': False, 'error': 'Photo file is too large (max 8MB)'}), 400
+
+    try:
+        uploaded_url = _upload_to_cloudinary(file_obj, 'tlph/applications/photos')
+        if not uploaded_url:
+            return jsonify({'success': False, 'error': 'Failed to upload photo'}), 500
+        return jsonify({'success': True, 'photo_url': uploaded_url}), 200
+    except Exception as e:
+        print(f"[ERROR] upload_hiring_photo failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to upload photo'}), 500
 
 @bp.route('/login')
 def login():
