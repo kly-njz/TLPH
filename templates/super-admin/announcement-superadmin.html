@@ -486,6 +486,7 @@
 
         <script>
         // --- Notification Form AJAX Submission ---
+        // --- Notification Form AJAX Submission ---
         document.getElementById('notificationForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const type = document.getElementById('notificationType').value;
@@ -512,6 +513,7 @@
                     statusDiv.style.color = '#15803d';
                     statusDiv.style.display = 'block';
                     document.getElementById('notificationForm').reset();
+                    await fetchAndRenderNotifications();
                 } else {
                     statusDiv.innerText = 'Failed to save notification.';
                     statusDiv.style.color = '#dc2626';
@@ -523,6 +525,49 @@
                 statusDiv.style.display = 'block';
             }
         });
+
+        // Fetch and render notifications
+        async function fetchAndRenderNotifications() {
+            const tbody = document.getElementById('tbody');
+            const recordCount = document.getElementById('recordCount');
+            tbody.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
+            try {
+                const resp = await fetch('/api/notifications/list');
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.message || 'Failed to load notifications');
+                const notifications = data.notifications || [];
+                if (notifications.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400">No notifications found.</td></tr>';
+                } else {
+                    tbody.innerHTML = notifications.map(n => `
+                        <tr>
+                            <td>${n.type}</td>
+                            <td>${n.scope}</td>
+                            <td>${n.content}</td>
+                            <td>${formatDate(n.post_date)}</td>
+                            <td>${formatDate(n.end_date)}</td>
+                            <td>${n.status || ''}</td>
+                            <td class="text-center">-</td>
+                        </tr>
+                    `).join('');
+                }
+                recordCount.innerText = notifications.length + ' Notifications';
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error loading notifications.</td></tr>';
+                recordCount.innerText = '0 Notifications';
+            }
+        }
+
+        // Helper to format ISO date string
+        function formatDate(dt) {
+            if (!dt) return '';
+            const d = new Date(dt);
+            if (isNaN(d)) return dt;
+            return d.toLocaleString();
+        }
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', fetchAndRenderNotifications);
         </script>
     
     <script>

@@ -2511,7 +2511,8 @@ def get_projects_pending_approval():
 
 
 
-from notification_storage import create_notification
+from notification_storage import create_notification, get_active_notifications
+
 # --- Notification API ---
 @bp.route('/notifications/create', methods=['POST'])
 def api_create_notification():
@@ -2535,3 +2536,12 @@ def api_create_notification():
         return jsonify({'success': False, 'message': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {e}'}), 500
+
+# List notifications (active)
+@bp.route('/notifications/list', methods=['GET'])
+def api_list_notifications():
+    try:
+        notifications = get_active_notifications()
+        return jsonify({'success': True, 'notifications': notifications})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
