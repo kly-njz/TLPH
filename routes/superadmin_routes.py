@@ -743,6 +743,7 @@ def superadmin_applicants_data():
         docs = db.collection('municipal_denr_applicant_jobs').stream()
 
         applicants = []
+        hiring_description_cache = {}
         for doc in docs:
             data = doc.to_dict() or {}
 
@@ -759,6 +760,35 @@ def superadmin_applicants_data():
                 or data.get('applicantCategory')
                 or 'N/A'
             )
+            job_description = (
+                data.get('job_description')
+                or data.get('jobDescription')
+                or data.get('description')
+                or data.get('project_name')
+                or 'N/A'
+            )
+
+            if str(job_description).strip().upper() in {'', 'N/A'}:
+                source_collection = str(data.get('source_collection') or '').strip().lower()
+                source_id = str(data.get('source_id') or '').strip()
+                if source_collection == 'hiring_positions' and source_id:
+                    if source_id not in hiring_description_cache:
+                        try:
+                            src_doc = db.collection('hiring_positions').document(source_id).get()
+                            if src_doc.exists:
+                                src_data = src_doc.to_dict() or {}
+                                hiring_description_cache[source_id] = str(
+                                    src_data.get('description')
+                                    or src_data.get('job_description')
+                                    or src_data.get('jobDescription')
+                                    or 'N/A'
+                                ).strip() or 'N/A'
+                            else:
+                                hiring_description_cache[source_id] = 'N/A'
+                        except Exception:
+                            hiring_description_cache[source_id] = 'N/A'
+                    job_description = hiring_description_cache.get(source_id) or 'N/A'
+
             region_office = data.get('region_office') or data.get('region') or 'N/A'
             status = _normalize_superadmin_applicant_status(
                 data.get('status') or data.get('employeeStatus') or data.get('application_status')
@@ -768,6 +798,7 @@ def superadmin_applicants_data():
                 'id': doc.id,
                 'full_name': full_name,
                 'candidate_type': candidate_type,
+                'job_description': job_description,
                 'region_office': region_office,
                 'status': status,
                 'is_accepted': status == 'accepted',
