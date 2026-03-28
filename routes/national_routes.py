@@ -1,3 +1,7 @@
+@bp.route('/notification')
+@role_required('national', 'national_admin')
+def notification_national_view():
+    return render_template('national/notification.html')
 
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
