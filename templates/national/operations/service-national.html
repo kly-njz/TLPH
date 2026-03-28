@@ -449,6 +449,12 @@
               <div id="mSubmittedFields" class="row g-2"></div>
             </div>
 
+            <!-- Form-Specific Details (Compensation) -->
+            <div class="border p-2 mb-3" id="mCompensationBlock" style="display:none; border-radius:2px;">
+              <div class="text-muted fw-bold text-uppercase mb-2" style="font-size:0.55rem; letter-spacing:1px; color:#b45309;">📋 Form-Specific Details</div>
+              <div id="mCompensationFields" class="row g-2"></div>
+            </div>
+
             <!-- Documents -->
             <div class="border p-2 mb-3" style="border-radius:2px;">
               <div class="text-muted fw-bold text-uppercase mb-2" style="font-size:0.55rem; letter-spacing:1px;">Attached Documents</div>
@@ -742,7 +748,12 @@
         'forwardedToNationalAt', 'forwardedToNationalBy',
         'amount', 'invoiceId', 'externalId', 'paymentUrl',
         'province', 'municipality', 'barangay', 'region',
-        'photoURL', 'photoUrl', 'profilePhoto', 'profile_photo', 'photo'
+        'photoURL', 'photoUrl', 'profilePhoto', 'profile_photo', 'photo',
+        // Compensation-specific fields (shown in separate Form-Specific Details)
+        'farmerIdNumber', 'costOfDamage', 'googlePinLocation', 'farmLatitude', 'farmLongitude', 'farmAddress',
+        // Document fields
+        'supportingDocuments', 'supportingFiles', 'attachments', 'files',
+        'productPhoto', 'registrationDocuments', 'emergencyPhotos', 'fieldPhotos', 'damagePhotos'
       ]);
 
       let submittedCount = 0;
@@ -791,9 +802,10 @@
         const k = String(key || '').toLowerCase();
         return /(file|files|photo|photos|image|images|document|documents|attachment|attachments|report|permit|certificate|proposal|plan|record|history|result|picture)/i.test(k);
       };
-      const isApplicantUploadUrl = (url) => {
+      const isValidUploadUrl = (url) => {
         const u = String(url || '').toLowerCase();
-        return u.includes('/static/uploads/service_requests/') || u.includes('static/uploads/service_requests/');
+        // Accept cloudinary URLs, static uploads, or any http(s) URL
+        return /^https?:\/\//i.test(u) || u.includes('/static/uploads/') || u.includes('cloudinary');
       };
       const normalizeFileUrl = (raw, userId) => {
         const str = String(raw || '').trim();
@@ -801,6 +813,47 @@
         if (/^(https?:\/\/|\/static\/|static\/)/i.test(str)) {
           return str.startsWith('static/') ? `/${str}` : str;
         }
+              // Form-Specific Details (Compensation)
+              const compensationBlock = document.getElementById('mCompensationBlock');
+              const compensationEl = document.getElementById('mCompensationFields');
+              compensationEl.innerHTML = '';
+              const svcType = (d.serviceType || '').toLowerCase();
+              const isCompensation = svcType.includes('typhoon') || svcType.includes('pest damage') || svcType.includes('damage');
+      
+              if (isCompensation) {
+                const compFields = [];
+                if (d.farmerIdNumber) {
+                  compFields.push({ label: 'Farmer ID', value: d.farmerIdNumber });
+                }
+                if (d.costOfDamage) {
+                  const cost = Number(d.costOfDamage).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+                  compFields.push({ label: 'Cost of Damage', value: '₱ ' + cost, color: 'text-success' });
+                }
+                if (d.googlePinLocation) {
+                  compFields.push({ label: 'Pin Location', value: d.googlePinLocation, isLink: true });
+                }
+                if (d.farmAddress) {
+                  compFields.push({ label: 'Farm Address', value: d.farmAddress });
+                }
+        
+                compFields.forEach(field => {
+                  let content = '';
+                  if (field.isLink) {
+                    content = `<a href="${field.value}" target="_blank" rel="noopener" class="text-primary fw-bold" style="font-size:0.68rem;">🗺️ View on Map</a>`;
+                  } else {
+                    content = `<div class="fw-bold ${field.color || ''}" style="font-size:0.68rem;">${field.value}</div>`;
+                  }
+                  compensationEl.innerHTML += `
+                    <div class="col-md-6">
+                      <div class="text-muted" style="font-size:0.55rem;">${field.label}</div>
+                      ${content}
+                    </div>`;
+                });
+        
+                compensationBlock.style.display = compFields.length > 0 ? '' : 'none';
+              } else {
+                compensationBlock.style.display = 'none';
+              }
         if (!fileExts.test(str) || !userId) return '';
         const encoded = str.split('/').map(part => encodeURIComponent(part)).join('/');
         return `/static/uploads/service_requests/${encodeURIComponent(userId)}/${encoded}`;
@@ -817,6 +870,35 @@
       docsEl.innerHTML = '';
       let fileCount = 0;
       const seenDocs = new Set();
+      
+      // First check for supportingDocuments/supportingFiles arrays (Cloudinary uploads)
+      const docArrays = [d.supportingDocuments, d.supportingFiles, d.attachments, d.files];
+      for (const docArray of docArrays) {
+        if (!Array.isArray(docArray) || !docArray.length) continue;
+        docArray.forEach(item => {
+          const url = typeof item === 'string' ? item : item?.url;
+          if (!url || !fileExts.test(url)) return;
+          const marker = `auto|${url}`;
+          if (seenDocs.has(marker)) return;
+          seenDocs.add(marker);
+          fileCount++;
+          const fileName = typeof item === 'string' ? displayFileName(item) : (item?.name || displayFileName(url));
+          const icon = /\.(jpg|jpeg|png|gif|webp|bmp|svg|avif)$/i.test(url) ? 'image' : /\.pdf$/i.test(url) ? 'picture_as_pdf' : 'attach_file';
+          const encodedUrl = encodeURIComponent(url);
+          docsEl.innerHTML += `
+            <div class="col-md-6">
+              <div class="d-flex align-items-center gap-2 border p-2" style="border-radius:2px; background:#f8fafc;">
+                <span class="material-icons-round text-primary" style="font-size:18px;">${icon}</span>
+                <div class="min-w-0 flex-fill">
+                  <div class="fw-bold text-uppercase" style="font-size:0.6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${fileName}</div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary fw-bold py-0 px-2" style="font-size:0.58rem;border-radius:2px;" onclick="openNationalAttachmentPreview('${encodedUrl}', '${encodeURIComponent(fileName)}')">VIEW</button>
+              </div>
+            </div>`;
+        });
+      }
+      
+      // Fallback: scan all object entries for attachment keys
       for (const [key, val] of Object.entries(d)) {
         if (!isApplicantAttachmentKey(key)) continue;
         const items = Array.isArray(val) ? val : [val];
@@ -824,12 +906,12 @@
           if (typeof item === 'string' && fileExts.test(item)) {
             const fileUrl = normalizeFileUrl(item, d.userId || d.userID || d.uid || '');
             if (!fileUrl) return;
-            if (!isApplicantUploadUrl(fileUrl)) return;
+            if (!isValidUploadUrl(fileUrl)) return;
             const marker = `${key}|${fileUrl}`;
             if (seenDocs.has(marker)) return;
             seenDocs.add(marker);
             fileCount++;
-            const label = key.replace(/File$|Files$/i,'').replace(/([A-Z])/g,' $1').trim();
+            const label  = key.replace(/File$|Files$/i,'').replace(/([A-Z])/g,' $1').trim();
             const icon  = /\.(jpg|jpeg|png|gif)$/i.test(item) ? 'image' : /\.pdf$/i.test(item) ? 'picture_as_pdf' : 'attach_file';
             const encodedUrl = encodeURIComponent(fileUrl);
             const fileName = displayFileName(item);
