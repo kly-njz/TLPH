@@ -1,3 +1,7 @@
+@bp.route('/notification')
+@role_required('regional','regional_admin')
+def notification_view():
+    return render_template('regional/notification.html')
 
 
 from flask import Blueprint, render_template, jsonify, request, session
