@@ -83,7 +83,7 @@
         </div>
       </header>
 
-      <section class="grid grid-cols-2 md:grid-cols-4 gap-2 shrink-0">
+      <section class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 shrink-0">
         <div class="gov-card border-t-2 border-t-amber-500 p-2 bg-amber-50/30 transition-colors hover:bg-amber-50">
           <div class="flex items-center justify-between">
             <p class="text-[8px] font-black uppercase tracking-widest text-amber-800 m-0">Pending Review</p>
@@ -95,15 +95,21 @@
 
         <div class="gov-card border-t-2 border-t-emerald-700 p-2 bg-emerald-50/30 transition-colors hover:bg-emerald-50">
           <div class="flex items-center justify-between">
-            <p class="text-[8px] font-black uppercase tracking-widest text-emerald-800 m-0">Approved / Ready</p>
-            <span class="material-icons-round text-emerald-600 text-[14px]">check_circle</span>
+            <p class="text-[8px] font-black uppercase tracking-widest text-emerald-800 m-0">Received / Issued</p>
+            <span class="material-icons-round text-emerald-600 text-[14px]">assignment_turned_in</span>
           </div>
-          <div class="mt-1 text-[16px] font-black text-emerald-700 leading-none">{{ approved_count or 0 }}</div>
-          <p class="text-[8px] text-emerald-600 mt-1 uppercase font-bold tracking-widest">For issuance</p>
+          <div class="mt-1 text-[16px] font-black text-emerald-700 leading-none">{{ received_count or 0 }}</div>
+          <p class="text-[8px] text-emerald-600 mt-1 uppercase font-bold tracking-widest">Issued / Received</p>
         </div>
-        
-        <div class="gov-card border-t-2 border-t-transparent p-2 bg-transparent opacity-0 pointer-events-none hidden md:flex"></div>
-        <div class="gov-card border-t-2 border-t-transparent p-2 bg-transparent opacity-0 pointer-events-none hidden md:flex"></div>
+
+        <div class="gov-card border-t-2 border-t-slate-600 p-2 bg-slate-50/40 transition-colors hover:bg-slate-50">
+          <div class="flex items-center justify-between">
+            <p class="text-[8px] font-black uppercase tracking-widest text-slate-700 m-0">Total Quotations</p>
+            <span class="material-icons-round text-slate-500 text-[14px]">receipt_long</span>
+          </div>
+          <div class="mt-1 text-[16px] font-black text-slate-700 leading-none">{{ total_count or (pending_count or 0) + (received_count or 0) }}</div>
+          <p class="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">All records</p>
+        </div>
       </section>
 
       <div class="flex-1 flex flex-col gap-2 min-h-0">
@@ -158,8 +164,7 @@
               <select id="statusFilter" class="gov-input cursor-pointer bg-white h-7" onchange="filterTable()" title="Filter by Status">
                 <option value="ALL">All Status</option>
                 <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Rejected">Rejected</option>
+                <option value="Received">Received</option>
               </select>
 
               <button onclick="resetFilters()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm h-7">
@@ -193,7 +198,8 @@
                   data-municipality="{{ q.municipality or '' }}"
                   data-amount="{{ q.amount|float if q.amount is defined else 0 }}"
                   data-date="{{ q.date or q.created_at or '' }}"
-                  data-status="{{ q.status|upper }}"
+                  data-status="{{ (q.status or 'PENDING')|upper }}"
+                  data-title="{{ q.title or '' }}"
                   data-deliver_from="{{ q.deliver_from or '' }}"
                   data-deliver_to="{{ q.deliver_to or '' }}"
                   data-deliver_to_type="{{ q.deliver_to_type or '' }}"
@@ -211,18 +217,22 @@
                   <td class="font-bold text-slate-700 border-r border-slate-100 uppercase">{{ q.municipality or '' }}</td>
                   <td class="font-mono font-bold text-emerald-800 border-r border-slate-100 text-right text-[11px]">₱{{ '{:,.2f}'.format(q.amount|float if q.amount is defined else 0) }}</td>
                   <td class="font-mono text-slate-500 border-r border-slate-100 text-center">{{ q.date or q.created_at or '' }}</td>
+                  <td class="text-center border-r border-slate-100">
+                    {% set status = (q.status or 'PENDING')|upper %}
+                    {% if status == 'RECEIVED' %}
+                      <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border w-20 text-center bg-emerald-50 text-emerald-700 border-emerald-200">Received</span>
+                    {% else %}
+                      <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border w-20 text-center bg-amber-50 text-amber-700 border-amber-200">Pending</span>
+                    {% endif %}
+                  </td>
                   <td class="text-center border-r border-slate-100">{{ q.deliver_from }}</td>
                   <td class="text-center border-r border-slate-100">{{ q.deliver_to }}</td>
                   <td class="text-center border-r border-slate-100">{{ q.deliver_to_type }}</td>
                   <td class="text-center">
                     <div class="flex flex-wrap gap-1 justify-center">
                       <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-slate-100 px-1 py-0.5" title="View" onclick="viewQuotation(this)"><span class="material-icons-round text-[12px]">visibility</span></button>
-                      <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-blue-100 px-1 py-0.5" title="History" onclick="showHistoryModal(this)"><span class="material-icons-round text-[12px]">history</span></button>
-                      {% if q.status|upper == 'PENDING' %}
-                        <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-blue-100 px-1 py-0.5" title="Forward" onclick="openForwardModal(this)"><span class="material-icons-round text-[12px]">forward_to_inbox</span></button>
-                        <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-emerald-100 px-1 py-0.5" title="Change Status" onclick="openStatusModal(this)"><span class="material-icons-round text-[12px]">sync_alt</span></button>
-                        <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-yellow-100 px-1 py-0.5" title="Edit" onclick="editQuotation(this)"><span class="material-icons-round text-[12px]">edit</span></button>
-                        <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-slate-200 px-1 py-0.5" title="Draft" onclick="draftQuotation(this)"><span class="material-icons-round text-[12px]">description</span></button>
+                      {% if (q.status or 'PENDING')|upper != 'RECEIVED' %}
+                        <button class="gov-btn text-[8px] border border-slate-300 bg-white hover:bg-emerald-100 px-1 py-0.5" title="Mark as Received" onclick="openReceiveModal(this)"><span class="material-icons-round text-[12px]">task_alt</span></button>
                       {% endif %}
                     </div>
                   </td>
@@ -289,6 +299,33 @@
                 </div>
               </div>
 
+              <!-- Receive Confirmation Modal -->
+              <div id="receiveModal" class="gov-modal no-print">
+                <div class="absolute inset-0 cursor-pointer" onclick="closeReceiveModal()"></div>
+                <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-xs flex flex-col max-h-[90vh] relative z-10" onclick="event.stopPropagation()">
+                  <div class="bg-emerald-900 text-white px-4 py-3 flex justify-between items-center shrink-0 border-b border-emerald-800">
+                    <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                      <span class="material-icons-round text-emerald-200">task_alt</span> Confirm Receipt
+                    </h3>
+                    <button onclick="closeReceiveModal()" class="text-slate-300 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                      <span class="material-icons-round text-sm">close</span>
+                    </button>
+                  </div>
+                  <div class="p-4 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar space-y-2">
+                    <p class="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Mark this quotation as received?</p>
+                    <div class="text-[10px] text-slate-700 space-y-1">
+                      <div><span class="font-black">Quotation #:</span> <span id="receiveQuoteId"></span></div>
+                      <div><span class="font-black">Client:</span> <span id="receiveClient"></span></div>
+                      <div><span class="font-black">Amount:</span> <span id="receiveAmount"></span></div>
+                    </div>
+                  </div>
+                  <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+                    <button onclick="closeReceiveModal()" type="button" class="gov-btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 py-1.5 px-4">Cancel</button>
+                    <button onclick="confirmReceive()" type="button" class="gov-btn bg-emerald-800 text-white hover:bg-emerald-900 py-1.5 px-4">Confirm</button>
+                  </div>
+                </div>
+              </div>
+
               <!-- History Modal -->
               <div id="historyModal" class="gov-modal no-print">
                 <div class="absolute inset-0 cursor-pointer" onclick="closeHistoryModal()"></div>
@@ -314,7 +351,7 @@
             <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">
               Showing <span id="visibleCount">0</span> records • <span id="fyLabel">All Fiscal Years</span>
             </span>
-            <button class="font-bold uppercase text-emerald-800 hover:underline text-[9px] flex items-center gap-1">
+            <button onclick="exportCsvReport()" class="font-bold uppercase text-emerald-800 hover:underline text-[9px] flex items-center gap-1">
               <span class="material-icons-round text-[14px]">file_download</span> Export CSV Report
             </button>
           </div>
@@ -383,8 +420,7 @@
               <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
               <select id="qStatus" name="qStatus" class="gov-input w-full h-8 cursor-pointer" required>
                 <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
+                <option value="received">Received</option>
               </select>
             </div>
           </div>
@@ -616,195 +652,9 @@
   </div>
 
   <script>
-    // --- Approve Quotation Logic ---
-    async function approveQuotation(btn) {
-      const row = btn.closest('tr');
-      if (!row) return;
-      const quotationId = row.dataset.id;
-      if (!quotationId) return;
-      
-      // CONFIRMATION DIALOG 
-      if (!confirm('Are you sure you want to approve this quotation?')) return;
-      
-      try {
-        // BACKEND POST REQUEST PRESERVED
-        const res = await fetch(`/regional/operations/quotation/api/${quotationId}/status`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'APPROVED' })
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to approve quotation');
-        
-        // Update status cell in UI dynamically
-        const statusCell = row.children[5];
-        if (statusCell) {
-          let badge = statusCell.querySelector('span');
-          if (badge) {
-            badge.textContent = 'Approved';
-            badge.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 w-20 text-center';
-          }
-        }
-        
-        // Remove approve button after action
-        const actionCell = row.children[6];
-        if(actionCell) {
-            const approveBtn = actionCell.querySelector('button:nth-child(2)');
-            if(approveBtn) approveBtn.remove();
-        }
-        
-        alert('Quotation successfully approved.');
-      } catch (err) {
-        alert(err.message || 'Unable to approve quotation.');
-      }
-    }
-
-    // --- Chart Implementations ---
-    Chart.defaults.font.family = "Verdana, Arial, sans-serif";
-    Chart.defaults.font.size = 8;
-    Chart.defaults.color = "#64748b";
-
-    const chartOpt = {
-      responsive: true,
-      maintainAspectRatio: false,
-      layout: { padding: 5 }
-    };
-
-    // 1. Status Mix (Doughnut)
-    new Chart(document.getElementById('quoteStatusChart'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Approved', 'Pending', 'Rejected'],
-        datasets: [{
-          data: [42, 6, 2],
-          backgroundColor: ['#10b981', '#f59e0b', '#be123c'],
-          borderWidth: 0
-        }]
-      },
-      options: {
-        ...chartOpt,
-        cutout: '65%',
-        plugins: {
-          legend: { position: 'right', labels: { boxWidth: 8, font: { weight: 'bold' } } }
-        }
-      }
-    });
-
-    // 2. Trend (Bar Chart - Values)
-    new Chart(document.getElementById('quoteTrendChart'), {
-      type: 'bar',
-      data: {
-        labels: ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'],
-        datasets: [{
-          label: 'Value (PHP)',
-          data: [150000, 200000, 180000, 320000, 250000, 420000],
-          backgroundColor: '#065f46',
-          borderRadius: 2
-        }]
-      },
-      options: {
-        ...chartOpt,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { grid: { display: false }, ticks: { font: { weight: 'bold' } } },
-          y: {
-            beginAtZero: true,
-            grid: { color: '#f1f5f9' },
-            ticks: { font: { weight: 'bold' }, callback: function(value) { return '₱' + (value/1000) + 'k'; } }
-          }
-        }
-      }
-    });
-
-    // --- Modal Logic ---
-    function openCreateModal() {
-      const modal = document.getElementById('createQuotationModal');
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-    }
-
-    function closeCreateModal() {
-      const modal = document.getElementById('createQuotationModal');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-    }
-
-    function submitQuotation(e) {
-      e.preventDefault();
-      alert('Quotation submitted successfully!');
-      closeCreateModal();
-    }
-
-    // --- VIEW QUOTATION MODAL LOGIC ---
-    function viewQuotation(btn) {
-      const row = btn.closest('tr');
-      
-      // Extract data attributes from the TR
-      document.getElementById('vqNumber').textContent = row.getAttribute('data-number') || 'N/A';
-      document.getElementById('vqClient').textContent = row.getAttribute('data-client') || 'N/A';
-      document.getElementById('vqMunicipality').textContent = row.getAttribute('data-municipality') || 'N/A';
-      document.getElementById('vqStatus').textContent = row.getAttribute('data-status') || 'N/A';
-      document.getElementById('vqDate').textContent = row.getAttribute('data-date') || 'N/A';
-      
-      // Format the amount for display
-      let amt = row.getAttribute('data-amount') || '0';
-      let formattedAmt = parseFloat(amt).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      document.getElementById('vqAmount').textContent = '₱ ' + formattedAmt;
-      
-      const modal = document.getElementById('viewQuotationModal');
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-    }
-
-    function closeViewModal() {
-      const modal = document.getElementById('viewQuotationModal');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-    }
-
-    // --- Search & Filter Logic ---
-    function filterTable() {
-      const q = document.getElementById('searchQuote').value.toLowerCase().trim();
-      const status = (document.getElementById('statusFilter').value || 'ALL').toUpperCase();
-      const mun = (document.getElementById('municipalityFilter').value || 'ALL').toUpperCase();
-      const fy = (document.getElementById('fyFilter').value || 'ALL').toUpperCase();
-
-      const rows = document.querySelectorAll('.quote-row');
-      let count = 0;
-
-      rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        const rowStatus = (row.getAttribute('data-status') || '').toUpperCase();
-        const rowMun = (row.getAttribute('data-municipality') || '').toUpperCase();
-        const rowFY = (row.getAttribute('data-fy') || 'ALL').toUpperCase();
-
-        const matchQ = text.includes(q);
-        const matchStatus = (status === 'ALL' || rowStatus.includes(status));
-        const matchMun = (mun === 'ALL' || rowMun.includes(mun));
-        const matchFY = (fy === 'ALL' || rowFY.includes(fy));
-
-        if (matchQ && matchStatus && matchMun && matchFY) {
-          row.style.display = '';
-          count++;
-        } else {
-          row.style.display = 'none';
-        }
-      });
-
-      document.getElementById('visibleCount').innerText = count;
-      document.getElementById('fyLabel').innerText = (fy === 'ALL') ? 'All Fiscal Years' : fy;
-    }
-
-    function resetFilters() {
-      document.getElementById('searchQuote').value = '';
-      document.getElementById('statusFilter').value = 'ALL';
-      document.getElementById('municipalityFilter').value = 'ALL';
-      document.getElementById('fyFilter').value = 'ALL';
-      filterTable();
-    }
-
-    // init
-    filterTable();
+    window.initRegionalQuotation?.();
   </script>
 </body>
 </html>
+
+
