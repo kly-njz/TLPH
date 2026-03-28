@@ -43,8 +43,11 @@ def _upload_to_cloudinary(file_obj, folder: str):
     api_secret = os.environ.get('CLOUDINARY_API_SECRET', '').strip()
 
     if not cloud_name or not api_key or not api_secret:
+        print(f"❌ [CLOUDINARY] Missing credentials - cloud_name: {bool(cloud_name)}, api_key: {bool(api_key)}, api_secret: {bool(api_secret)}")
         return None
 
+    print(f"🔵 [CLOUDINARY] Starting upload for {file_obj.filename} to folder: {folder}")
+    
     timestamp = int(time.time())
     params_to_sign = {
         'folder': folder,
@@ -53,6 +56,8 @@ def _upload_to_cloudinary(file_obj, folder: str):
     signature = _cloudinary_signature(params_to_sign, api_secret)
 
     endpoint = f"https://api.cloudinary.com/v1_1/{cloud_name}/auto/upload"
+    print(f"🔵 [CLOUDINARY] Endpoint: {endpoint}")
+    
     try:
         file_obj.stream.seek(0)
     except Exception:
@@ -74,17 +79,19 @@ def _upload_to_cloudinary(file_obj, folder: str):
         )
 
         if not resp.ok:
-            print(f"[WARN] Cloudinary upload failed ({resp.status_code}). Falling back to local storage.")
+            print(f"❌ [CLOUDINARY] Upload failed ({resp.status_code}). Response: {resp.text[:200]}")
             return None
 
         payload = resp.json() or {}
-        return payload.get('secure_url') or payload.get('url')
+        url = payload.get('secure_url') or payload.get('url')
+        print(f"✅ [CLOUDINARY] Upload successful: {url}")
+        return url
 
     except requests.RequestException as e:
-        print(f"[WARN] Cloudinary request error: {e}. Falling back to local storage.")
+        print(f"❌ [CLOUDINARY] Request error: {str(e)}")
         return None
     except Exception as e:
-        print(f"[WARN] Cloudinary unexpected error: {e}. Falling back to local storage.")
+        print(f"❌ [CLOUDINARY] Unexpected error: {str(e)}")
         return None
     finally:
         try:

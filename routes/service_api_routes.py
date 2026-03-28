@@ -53,24 +53,43 @@ def submit_compensation_request():
 
         # Handle file uploads
         files_to_upload = request.files.getlist('supportingFiles')
-        print(f'DEBUG: Files received: {len(files_to_upload)} file(s)')
+        print(f'🔵 [COMPENSATION] Files received: {len(files_to_upload)} file(s)')
+        print(f'🔵 [COMPENSATION] Files list: {request.files.keys()}')
+        
         if files_to_upload:
             from routes.api_routes import _upload_to_cloudinary
             for file in files_to_upload:
                 if file and file.filename:
-                    print(f'DEBUG: Uploading file: {file.filename}')
-                    web_url = _upload_to_cloudinary(file, f'service-requests/{service_type}/{user_id}')
-                    print(f'DEBUG: Upload result: {web_url}')
-                    if web_url:
+                    print(f'📤 [COMPENSATION] Uploading file: {file.filename} (size: {file.content_length})')
+                    try:
+                        web_url = _upload_to_cloudinary(file, f'service-requests/{service_type}/{user_id}')
+                        print(f'📥 [COMPENSATION] Upload result: {web_url}')
+                        
+                        if web_url:
+                            submission_data['supportingDocuments'].append({
+                                'url': web_url,
+                                'name': file.filename
+                            })
+                            print(f'✅ [COMPENSATION] File stored: {file.filename} -> {web_url}')
+                        else:
+                            print(f'❌ [COMPENSATION] Cloudinary returned None for {file.filename}')
+                            # Fallback: store filename with error indicator
+                            submission_data['supportingDocuments'].append({
+                                'url': 'ERROR_UPLOAD_FAILED',
+                                'name': file.filename,
+                                'error': 'Cloudinary upload failed'
+                            })
+                    except Exception as file_error:
+                        print(f'❌ [COMPENSATION] Exception uploading {file.filename}: {str(file_error)}')
                         submission_data['supportingDocuments'].append({
-                            'url': web_url,
-                            'name': file.filename
+                            'url': 'ERROR_EXCEPTION',
+                            'name': file.filename,
+                            'error': str(file_error)
                         })
-                        print(f'DEBUG: File stored: {file.filename} -> {web_url}')
-                    else:
-                        print(f'DEBUG: Upload failed for {file.filename}')
         
-        print(f'DEBUG: Final supportingDocuments: {submission_data["supportingDocuments"]}')
+        print(f'🔵 [COMPENSATION] Final supportingDocuments: {len(submission_data["supportingDocuments"])} docs')
+        for doc in submission_data['supportingDocuments']:
+            print(f'  - {doc.get("name")}: {doc.get("url")}')
 
         # Store in Firestore
         db.collection('serviceRequests').document(request_id).set(submission_data)
