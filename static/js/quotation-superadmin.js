@@ -209,6 +209,7 @@ function getQuotePayload() {
     const unitPrice = toNumber(document.getElementById('newPrice').value);
     const otherCharges = toNumber(document.getElementById('newOtherCharges').value);
     const buyerType = document.getElementById('newBuyerType').value;
+    const deliverToType = document.getElementById('newDeliverToType')?.value || '';
     return {
         issue_date: document.getElementById('newIssueDate').value,
         buyer: document.getElementById('newBuyer').value,
@@ -219,13 +220,15 @@ function getQuotePayload() {
         deliver_to: document.getElementById('newDeliverTo').value,
         status: document.getElementById('newStatus').value,
         buyer_type: buyerType,
-        deliver_to_type: buyerType,
+        deliver_to_type: deliverToType || buyerType,
         product: document.getElementById('newProd').value,
         quantity,
         unit_price: unitPrice,
         other_charges: otherCharges,
         other_charges_note: document.getElementById('newOtherChargesNote').value,
-        total: computeTotal(quantity, unitPrice, otherCharges)
+        total: computeTotal(quantity, unitPrice, otherCharges),
+        region: document.getElementById('newRegion')?.value || '',
+        municipality: document.getElementById('newMunicipality')?.value || ''
     };
 }
 
@@ -254,6 +257,9 @@ function resetQuoteForm() {
     document.getElementById('newSupplier').value = '';
     document.getElementById('newDeliverFrom').value = '';
     document.getElementById('newDeliverTo').value = '';
+    if (document.getElementById('newDeliverToType')) document.getElementById('newDeliverToType').value = 'regional';
+    if (document.getElementById('newRegion')) document.getElementById('newRegion').value = '';
+    if (document.getElementById('newMunicipality')) document.getElementById('newMunicipality').value = '';
     document.getElementById('newStatus').value = 'pending';
     document.getElementById('newBuyerType').value = 'company';
     document.getElementById('newProd').value = '';
@@ -289,6 +295,9 @@ async function openEditDrawer(quoteId) {
     document.getElementById('newSupplier').value = data.supplier || '';
     document.getElementById('newDeliverFrom').value = data.deliver_from || '';
     document.getElementById('newDeliverTo').value = data.deliver_to || '';
+    if (document.getElementById('newDeliverToType')) document.getElementById('newDeliverToType').value = data.deliver_to_type || 'regional';
+    if (document.getElementById('newRegion')) document.getElementById('newRegion').value = data.region || '';
+    if (document.getElementById('newMunicipality')) document.getElementById('newMunicipality').value = data.municipality || '';
     document.getElementById('newStatusRow').classList.remove('hidden');
     document.getElementById('newStatus').value = data.status || 'pending';
     document.getElementById('newBuyerType').value = data.buyer_type || 'company';
@@ -329,6 +338,10 @@ if (quoteForm) {
         const quoteId = document.getElementById('editQuoteId').value;
         const payload = getQuotePayload();
         const isEdit = Boolean(quoteId);
+        if (!isEdit) {
+            payload.status = 'PENDING';
+            payload.scope = 'superadmin';
+        }
         const url = isEdit
             ? `/superadmin/api/quotation/${quoteId}/update`
             : '/superadmin/api/quotation/create';
