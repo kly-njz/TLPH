@@ -1,21 +1,54 @@
-from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify
+from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify, current_app
 import uuid
 from datetime import datetime
 import os
 import time
 import hashlib
 import requests
+from urllib.parse import urlparse
 from firebase_auth_middleware import role_required, firebase_auth_required
 
 bp = Blueprint('main', __name__)
 
 
+def _get_cloudinary_credentials():
+    """Resolve Cloudinary credentials from env, app config, or CLOUDINARY_URL."""
+    cloud_name = str(os.environ.get('CLOUDINARY_CLOUD_NAME') or '').strip()
+    api_key = str(os.environ.get('CLOUDINARY_API_KEY') or '').strip()
+    api_secret = str(os.environ.get('CLOUDINARY_API_SECRET') or '').strip()
+
+    # Try Flask app config if env vars are missing.
+    if not (cloud_name and api_key and api_secret):
+        try:
+            cloud_name = cloud_name or str(current_app.config.get('CLOUDINARY_CLOUD_NAME') or '').strip()
+            api_key = api_key or str(current_app.config.get('CLOUDINARY_API_KEY') or '').strip()
+            api_secret = api_secret or str(current_app.config.get('CLOUDINARY_API_SECRET') or '').strip()
+        except Exception:
+            pass
+
+    # Support CLOUDINARY_URL format: cloudinary://<api_key>:<api_secret>@<cloud_name>
+    if not (cloud_name and api_key and api_secret):
+        raw_url = str(
+            os.environ.get('CLOUDINARY_URL')
+            or (current_app.config.get('CLOUDINARY_URL') if current_app else '')
+            or ''
+        ).strip()
+        if raw_url:
+            try:
+                parsed = urlparse(raw_url)
+                if parsed.scheme == 'cloudinary':
+                    api_key = api_key or (parsed.username or '')
+                    api_secret = api_secret or (parsed.password or '')
+                    cloud_name = cloud_name or (parsed.hostname or '')
+            except Exception:
+                pass
+
+    return cloud_name, api_key, api_secret
+
+
 def _cloudinary_enabled() -> bool:
-    return all([
-        os.environ.get('CLOUDINARY_CLOUD_NAME'),
-        os.environ.get('CLOUDINARY_API_KEY'),
-        os.environ.get('CLOUDINARY_API_SECRET')
-    ])
+    cloud_name, api_key, api_secret = _get_cloudinary_credentials()
+    return bool(cloud_name and api_key and api_secret)
 
 
 def _cloudinary_signature(params: dict, api_secret: str) -> str:
@@ -25,9 +58,7 @@ def _cloudinary_signature(params: dict, api_secret: str) -> str:
 
 
 def _upload_to_cloudinary(file_obj, folder: str):
-    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '').strip()
-    api_key = os.environ.get('CLOUDINARY_API_KEY', '').strip()
-    api_secret = os.environ.get('CLOUDINARY_API_SECRET', '').strip()
+    cloud_name, api_key, api_secret = _get_cloudinary_credentials()
 
     if not cloud_name or not api_key or not api_secret:
         return None
@@ -64,6 +95,89 @@ def _upload_to_cloudinary(file_obj, folder: str):
 
     payload = resp.json() or {}
     return payload.get('secure_url') or payload.get('url')
+
+
+def _load_active_hiring_positions(*, apply_municipal_scope_filter: bool = True):
+    """Load active hiring positions and optionally scope-filter for municipal users."""
+    from firebase_config import get_firestore_db
+
+    db = get_firestore_db()
+
+    user_id = session.get('user_id')
+    user_role = (session.get('user_role') or '').lower()
+    user_municipality = ''
+    user_region = ''
+
+    if apply_municipal_scope_filter and user_role in ['municipal_admin', 'municipal']:
+        user_municipality = session.get('municipality') or session.get('user_municipality') or ''
+        user_region = session.get('region') or session.get('user_region') or ''
+        if not str(user_municipality).strip() and user_id:
+            try:
+                user_doc = db.collection('users').document(user_id).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict() or {}
+                    user_municipality = user_data.get('municipality') or user_data.get('municipalAdminMunicipality') or ''
+                    user_region = user_region or user_data.get('region') or user_data.get('regionalAdminRegion') or ''
+            except Exception as e:
+                print(f"[WARN] Could not resolve municipal scope from user doc: {e}")
+
+    def normalize_scope(value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    def is_active_hiring(value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if value is None:
+            return True
+        key = str(value).strip().lower()
+        if key in {'false', '0', 'inactive', 'archived', 'disabled', 'no'}:
+            return False
+        if key in {'true', '1', 'active', 'enabled', 'yes'}:
+            return True
+        return True
+
+    muni_key = normalize_scope(user_municipality)
+    region_key = normalize_scope(user_region)
+    rows = []
+
+    docs = db.collection('hiring_positions').stream()
+    for doc in docs:
+        item = doc.to_dict() or {}
+        if not is_active_hiring(item.get('is_active')):
+            continue
+
+        item_muni = normalize_scope(item.get('municipality'))
+        item_region = normalize_scope(item.get('region'))
+        item_scope_type = str(item.get('scope_type') or '').strip().lower()
+
+        if apply_municipal_scope_filter and user_role in ['municipal_admin', 'municipal'] and muni_key:
+            is_same_municipality = item_muni and item_muni == muni_key
+            is_same_region_scope = (
+                item_scope_type == 'region' and
+                region_key and
+                item_region == region_key
+            )
+            is_national_scope = item_scope_type == 'national'
+            if not (is_same_municipality or is_same_region_scope or is_national_scope):
+                continue
+
+        rows.append({
+            'id': doc.id,
+            'job_title': str(item.get('job_title') or '').strip(),
+            'description': str(item.get('description') or '').strip(),
+            'position': str(item.get('position') or '').strip(),
+            'starting_salary': item.get('starting_salary') or 0,
+            'municipality': str(item.get('municipality') or '').strip(),
+            'region': str(item.get('region') or '').strip(),
+            'scope_type': str(item.get('scope_type') or '').strip(),
+            'scope': str(item.get('scope') or '').strip(),
+            'created_at': str(item.get('created_at') or '').strip(),
+        })
+
+    rows.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    return rows
 
 @bp.route('/')
 def index():
@@ -105,81 +219,40 @@ def index():
     main_news = landing_news[0] if landing_news else None
     side_news = landing_news[1:4] if len(landing_news) > 1 else []
 
-    # Fetch active hiring positions (municipal viewers see own municipality + own region-scoped posts)
+    # Fetch active hiring positions (home shows latest; full list is in /jobs).
     hiring_positions = []
     try:
-        from firebase_config import get_firestore_db
-        db = get_firestore_db()
-        
-        # Determine user's municipality if they are a municipal admin
-        user_municipality = None
-        user_region = None
-        user_role = session.get('user_role', '').lower()
-        
-        if user_role in ['municipal_admin', 'municipal']:
-            # Try to get municipality from session
-            user_municipality = session.get('municipality') or session.get('user_municipality') or ''
-            user_region = session.get('region') or session.get('user_region') or ''
-            if not user_municipality.strip():
-                # Fallback: try to resolve from user document
-                if user_id:
-                    from firebase_config import get_firestore_db
-                    db_temp = get_firestore_db()
-                    user_doc = db_temp.collection('users').document(user_id).get()
-                    if user_doc.exists:
-                        user_data = user_doc.to_dict() or {}
-                        user_municipality = user_data.get('municipality') or user_data.get('municipalAdminMunicipality') or ''
-                        user_region = user_region or user_data.get('region') or user_data.get('regionalAdminRegion') or ''
-        
-        # Query all active hirings, then scope-filter in memory for flexibility.
-        docs = db.collection('hiring_positions').where('is_active', '==', True).stream()
-
-        def normalize_scope(value):
-            return ' '.join(str(value or '').strip().upper().split())
-
-        muni_key = normalize_scope(user_municipality)
-        region_key = normalize_scope(user_region)
-
-        for doc in docs:
-            item = doc.to_dict() or {}
-            item_muni = normalize_scope(item.get('municipality'))
-            item_region = normalize_scope(item.get('region'))
-            item_scope_type = str(item.get('scope_type') or '').strip().lower()
-
-            if user_role in ['municipal_admin', 'municipal'] and muni_key:
-                is_same_municipality = item_muni and item_muni == muni_key
-                is_same_region_scope = (
-                    item_scope_type == 'region' and
-                    region_key and
-                    item_region == region_key
-                )
-                if not (is_same_municipality or is_same_region_scope):
-                    continue
-
-            hiring_positions.append({
-                'id': doc.id,
-                'job_title': str(item.get('job_title') or '').strip(),
-                'description': str(item.get('description') or '').strip(),
-                'position': str(item.get('position') or '').strip(),
-                'starting_salary': item.get('starting_salary') or 0,
-                'municipality': str(item.get('municipality') or '').strip(),
-                'region': str(item.get('region') or '').strip(),
-                'scope_type': str(item.get('scope_type') or '').strip(),
-                'scope': str(item.get('scope') or '').strip(),
-                'created_at': str(item.get('created_at') or '').strip(),
-            })
-        
-        # Sort by created_at (newest first)
-        hiring_positions.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        hiring_positions = _load_active_hiring_positions(apply_municipal_scope_filter=True)
     except Exception as e:
         print(f"[WARN] Could not load hiring positions from Firestore: {e}")
+
+    total_hiring_positions = len(hiring_positions)
+    latest_hiring_positions = hiring_positions[:4]
 
     return render_template(
         'home.html',
         landing_news=landing_news,
         main_news=main_news,
         side_news=side_news,
+        hiring_positions=latest_hiring_positions,
+        total_hiring_positions=total_hiring_positions,
+        has_more_hiring=(total_hiring_positions > len(latest_hiring_positions)),
+    )
+
+
+@bp.route('/jobs')
+def jobs_list():
+    """Public page showing all currently active hiring positions."""
+    hiring_positions = []
+    try:
+        hiring_positions = _load_active_hiring_positions(apply_municipal_scope_filter=False)
+    except Exception as e:
+        print(f"[WARN] Could not load jobs list: {e}")
+
+    return render_template(
+        'jobs.html',
         hiring_positions=hiring_positions,
+        total_hiring_positions=len(hiring_positions),
     )
 
 
@@ -222,6 +295,7 @@ def apply_for_hiring_position():
     cover_letter = str(data.get('cover_letter') or '').strip()
     notes = str(data.get('notes') or '').strip()
     resume_url = str(data.get('resume_url') or '').strip()
+    photo_url = str(data.get('photo_url') or '').strip()
 
     if not hiring_id:
         return jsonify({'success': False, 'error': 'Missing hiring position reference'}), 400
@@ -233,6 +307,8 @@ def apply_for_hiring_position():
         return jsonify({'success': False, 'error': 'Phone is required'}), 400
     if not resume_url:
         return jsonify({'success': False, 'error': 'Resume upload is required'}), 400
+    if not photo_url:
+        return jsonify({'success': False, 'error': 'Applicant photo upload is required'}), 400
 
     try:
         hiring_doc = db.collection('hiring_positions').document(hiring_id).get()
@@ -246,8 +322,13 @@ def apply_for_hiring_position():
         municipality = str(hiring.get('municipality') or '').strip()
         region = str(hiring.get('region') or '').strip()
         scope_type = str(hiring.get('scope_type') or '').strip().lower()
-        if scope_type not in {'municipality', 'region'}:
-            scope_type = 'region' if region and not municipality else 'municipality'
+        if scope_type not in {'municipality', 'region', 'national'}:
+            if municipality:
+                scope_type = 'municipality'
+            elif region:
+                scope_type = 'region'
+            else:
+                scope_type = 'national'
         position = str(hiring.get('position') or '').strip()
         job_title = str(hiring.get('job_title') or '').strip()
         description = str(hiring.get('description') or '').strip()
@@ -257,7 +338,12 @@ def apply_for_hiring_position():
         if scope_type == 'region' and not region:
             return jsonify({'success': False, 'error': 'Hiring position has no region scope'}), 400
 
-        scope_value = municipality if scope_type == 'municipality' else region
+        if scope_type == 'municipality':
+            scope_value = municipality
+        elif scope_type == 'region':
+            scope_value = region
+        else:
+            scope_value = 'NATIONAL OFFICE'
         municipality_value = municipality if scope_type == 'municipality' else ''
 
         application_id = f"HIRE-{hiring_id}-{uuid.uuid4().hex[:8].upper()}"
@@ -289,6 +375,8 @@ def apply_for_hiring_position():
             'preferred_work_type': preferred_work_type or 'N/A',
             'resume_link': resume_url,
             'resume_url': resume_url,
+            'photo_url': photo_url,
+            'photo': photo_url,
             'cover_letter': cover_letter or 'N/A',
             'notes': notes or 'N/A',
             'candidate_type': position or 'Environmental Management Specialist',
@@ -355,6 +443,37 @@ def upload_hiring_resume():
     except Exception as e:
         print(f"[ERROR] upload_hiring_resume failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to upload resume'}), 500
+
+
+@bp.route('/api/hiring/upload-photo', methods=['POST'])
+def upload_hiring_photo():
+    """Upload applicant photo (JPG/PNG/WEBP) to Cloudinary."""
+    if not _cloudinary_enabled():
+        return jsonify({'success': False, 'error': 'Photo upload service is not configured'}), 500
+
+    file_obj = request.files.get('photo')
+    if not file_obj or not getattr(file_obj, 'filename', ''):
+        return jsonify({'success': False, 'error': 'Applicant photo file is required'}), 400
+
+    filename = str(file_obj.filename or '').strip()
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    allowed_ext = {'jpg', 'jpeg', 'png', 'webp'}
+    if ext not in allowed_ext:
+        return jsonify({'success': False, 'error': 'Only JPG, PNG, and WEBP files are allowed'}), 400
+
+    content_length = request.content_length or 0
+    max_size = 8 * 1024 * 1024  # 8 MB
+    if content_length > max_size:
+        return jsonify({'success': False, 'error': 'Photo file is too large (max 8MB)'}), 400
+
+    try:
+        uploaded_url = _upload_to_cloudinary(file_obj, 'tlph/applications/photos')
+        if not uploaded_url:
+            return jsonify({'success': False, 'error': 'Failed to upload photo'}), 500
+        return jsonify({'success': True, 'photo_url': uploaded_url}), 200
+    except Exception as e:
+        print(f"[ERROR] upload_hiring_photo failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to upload photo'}), 500
 
 @bp.route('/login')
 def login():

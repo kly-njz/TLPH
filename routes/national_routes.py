@@ -19,6 +19,7 @@ def delete_project_national(project_id):
 from flask import Blueprint, render_template, jsonify, session
 from firebase_config import get_firestore_db
 from datetime import datetime
+from urllib.parse import quote, urlparse
 from firebase_auth_middleware import role_required
 from entities_storage import list_entities
 
@@ -1013,6 +1014,7 @@ def applicants():
         applicants = []
         region_set = set()
         candidate_type_set = set()
+        hiring_description_cache = {}
 
         total_count = 0
         approved_count = 0
@@ -1020,6 +1022,7 @@ def applicants():
         rejected_count = 0
         municipal_scope_count = 0
         regional_scope_count = 0
+        national_scope_count = 0
 
         for doc in docs:
             data = doc.to_dict() or {}
@@ -1045,15 +1048,46 @@ def applicants():
                 or 'N/A'
             )
 
+            # Backfill description from the source hiring post when applicant doc lacks it.
+            if str(job_description).strip().upper() in {'', 'N/A'}:
+                source_collection = str(data.get('source_collection') or '').strip().lower()
+                source_id = str(data.get('source_id') or '').strip()
+                if source_collection == 'hiring_positions' and source_id:
+                    if source_id not in hiring_description_cache:
+                        try:
+                            src_doc = db.collection('hiring_positions').document(source_id).get()
+                            if src_doc.exists:
+                                src_data = src_doc.to_dict() or {}
+                                hiring_description_cache[source_id] = str(
+                                    src_data.get('description')
+                                    or src_data.get('job_description')
+                                    or src_data.get('jobDescription')
+                                    or 'N/A'
+                                ).strip() or 'N/A'
+                            else:
+                                hiring_description_cache[source_id] = 'N/A'
+                        except Exception:
+                            hiring_description_cache[source_id] = 'N/A'
+                    job_description = hiring_description_cache.get(source_id) or 'N/A'
+
             region_office = (data.get('region_office') or data.get('region') or 'N/A')
             municipality = data.get('municipality') or ''
 
             scope_type = str(data.get('scope_type') or '').strip().lower()
-            if scope_type not in ['municipality', 'region']:
-                scope_type = 'municipality' if municipality else 'region'
+            if scope_type not in ['municipality', 'region', 'national']:
+                if municipality:
+                    scope_type = 'municipality'
+                elif region_office and region_office != 'N/A':
+                    scope_type = 'region'
+                else:
+                    scope_type = 'national'
             scope = (
                 data.get('scope')
-                or (municipality if scope_type == 'municipality' else region_office)
+                or (
+                    municipality
+                    if scope_type == 'municipality'
+                    else (region_office if scope_type == 'region' else 'NATIONAL OFFICE')
+                )
                 or 'N/A'
             )
 
@@ -1104,8 +1138,10 @@ def applicants():
 
             if scope_type == 'municipality':
                 municipal_scope_count += 1
-            else:
+            elif scope_type == 'region':
                 regional_scope_count += 1
+            else:
+                national_scope_count += 1
 
             if region_office and region_office != 'N/A':
                 region_set.add(str(region_office).upper())
@@ -1194,6 +1230,7 @@ def applicants():
             rejected_count=rejected_count,
             municipal_scope_count=municipal_scope_count,
             regional_scope_count=regional_scope_count,
+            national_scope_count=national_scope_count,
             regions=sorted(region_set),
             candidate_types=sorted(candidate_type_set),
             hiring_rows_json=json.dumps(hiring_rows),
@@ -1215,6 +1252,7 @@ def applicants():
             rejected_count=0,
             municipal_scope_count=0,
             regional_scope_count=0,
+            national_scope_count=0,
             regions=[],
             candidate_types=[],
             hiring_rows_json='[]',
@@ -1224,6 +1262,187 @@ def applicants():
             hiring_regions=[],
             hiring_municipalities=[],
         )
+
+
+@bp.route('/applicants/view/<job_id>')
+@role_required('national', 'national_admin')
+def applicants_view_detail(job_id):
+    db = get_firestore_db()
+
+    def _format_datetime(raw):
+        if not raw:
+            return 'N/A'
+        if hasattr(raw, 'to_datetime'):
+            try:
+                raw = raw.to_datetime()
+            except Exception:
+                pass
+        if isinstance(raw, datetime):
+            return raw.strftime('%b %d, %Y %I:%M %p')
+        if isinstance(raw, str):
+            try:
+                dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                return dt.strftime('%b %d, %Y %I:%M %p')
+            except Exception:
+                return raw
+        return str(raw)
+
+    def _resolve_resume_preview(url):
+        raw_url = str(url or '').strip()
+        if not raw_url:
+            return '', '', ''
+
+        def _cloudinary_first_page_image(src_url):
+            try:
+                parsed = urlparse(src_url)
+                if 'res.cloudinary.com' not in (parsed.netloc or '').lower():
+                    return ''
+                base_url = src_url.split('?', 1)[0]
+                if '/upload/' not in base_url:
+                    return ''
+                return base_url.replace('/upload/', '/upload/pg_1,f_png,w_1200/', 1)
+            except Exception:
+                return ''
+
+        try:
+            path = (urlparse(raw_url).path or '').lower()
+        except Exception:
+            path = raw_url.lower()
+
+        if path.endswith('.pdf'):
+            return 'pdf', '', _cloudinary_first_page_image(raw_url)
+        if path.endswith('.jpg') or path.endswith('.jpeg') or path.endswith('.png') or path.endswith('.webp'):
+            return 'image', '', ''
+        if path.endswith('.doc') or path.endswith('.docx') or path.endswith('.ppt') or path.endswith('.pptx'):
+            return 'office', f"https://view.officeapps.live.com/op/embed.aspx?src={quote(raw_url, safe='')}", _cloudinary_first_page_image(raw_url)
+        if path.endswith('.txt'):
+            return 'text', '', ''
+        return 'other', '', ''
+
+    try:
+        doc = db.collection('municipal_denr_applicant_jobs').document(job_id).get()
+        if not doc.exists:
+            return render_template(
+                'national/HRM/applicant-detail-national.html',
+                error='Applicant record not found.',
+                applicant={}
+            ), 404
+
+        data = doc.to_dict() or {}
+        scope_type = str(data.get('scope_type') or '').strip().lower()
+        resume_url = data.get('resume_url') or data.get('resume_link') or ''
+        resume_preview_type, resume_office_embed_url, resume_preview_image_url = _resolve_resume_preview(resume_url)
+
+        applicant = {
+            'id': doc.id,
+            'reference_id': data.get('reference_id') or doc.id[:12].upper(),
+            'status': str(data.get('status') or data.get('employeeStatus') or 'PENDING').upper(),
+            'date_filed': data.get('date_filed') or 'N/A',
+            'updated_at': _format_datetime(data.get('updated_at') or data.get('reviewed_at') or data.get('created_at')),
+            'job_title': data.get('job_title') or 'N/A',
+            'job_description': data.get('job_description') or 'N/A',
+            'candidate_type': data.get('candidate_type') or data.get('category') or 'N/A',
+            'scope_type': scope_type or ('municipality' if data.get('municipality') else 'region'),
+            'scope': data.get('scope') or data.get('municipality') or data.get('region') or 'N/A',
+            'region': data.get('region') or data.get('region_office') or 'N/A',
+            'municipality': data.get('municipality') or 'N/A',
+            'full_name': data.get('full_name') or data.get('applicant_name') or 'N/A',
+            'email': data.get('email') or 'N/A',
+            'phone': data.get('phone') or data.get('contact_number') or 'N/A',
+            'gender': data.get('gender') or 'N/A',
+            'birth_date': data.get('birth_date') or 'N/A',
+            'civil_status': data.get('civil_status') or 'N/A',
+            'barangay': data.get('barangay') or 'N/A',
+            'address': data.get('address') or 'N/A',
+            'education_level': data.get('education_level') or 'N/A',
+            'school_name': data.get('school_name') or 'N/A',
+            'course': data.get('course') or 'N/A',
+            'years_experience': data.get('years_experience') or 'N/A',
+            'current_employer': data.get('current_employer') or 'N/A',
+            'employment_status': data.get('employment_status') or 'N/A',
+            'skills': data.get('skills') or 'N/A',
+            'certifications': data.get('certifications') or 'N/A',
+            'expected_salary': data.get('expected_salary') or 'N/A',
+            'available_start_date': data.get('available_start_date') or 'N/A',
+            'preferred_work_type': data.get('preferred_work_type') or 'N/A',
+            'cover_letter': data.get('cover_letter') or 'N/A',
+            'notes': data.get('notes') or 'N/A',
+            'resume_url': resume_url,
+            'resume_preview_type': resume_preview_type,
+            'resume_office_embed_url': resume_office_embed_url,
+            'resume_preview_image_url': resume_preview_image_url,
+            'photo_url': (
+                data.get('photo_url')
+                or data.get('photo')
+                or data.get('profile_photo')
+                or data.get('profilePhoto')
+                or data.get('photoURL')
+                or ''
+            ),
+        }
+
+        return render_template(
+            'national/HRM/applicant-detail-national.html',
+            applicant=applicant,
+            error=''
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to render national applicant detail: {e}")
+        return render_template(
+            'national/HRM/applicant-detail-national.html',
+            applicant={},
+            error='Failed to load applicant details.'
+        ), 500
+
+
+@bp.route('/api/applicants/<job_id>/status', methods=['POST'])
+@role_required('national', 'national_admin')
+def applicants_update_status(job_id):
+    db = get_firestore_db()
+    payload = request.get_json(silent=True) or {}
+    status = str(payload.get('status') or '').strip().lower()
+    if status not in {'approved', 'rejected', 'pending'}:
+        return jsonify({'success': False, 'error': 'Invalid status value'}), 400
+
+    actor_email = session.get('user_email', 'national_admin')
+
+    try:
+        doc_ref = db.collection('municipal_denr_applicant_jobs').document(job_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Applicant job not found'}), 404
+
+        existing = doc.to_dict() or {}
+        scope_type = str(existing.get('scope_type') or '').strip().lower()
+        if scope_type != 'national':
+            return jsonify({'success': False, 'error': 'Only national-scope applications can be updated here'}), 403
+
+        update_payload = {
+            'status': status.upper(),
+            'employeeStatus': status,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': actor_email,
+        }
+
+        if status == 'approved':
+            update_payload.update({
+                'accepted_by': actor_email,
+                'reviewed_by': actor_email,
+                'reviewed_at': firestore.SERVER_TIMESTAMP,
+            })
+        elif status in {'pending', 'rejected'}:
+            update_payload.update({
+                'reviewed_by': actor_email,
+                'reviewed_at': firestore.SERVER_TIMESTAMP,
+            })
+            if status == 'pending':
+                update_payload['accepted_by'] = 'N/A'
+
+        doc_ref.set(update_payload, merge=True)
+        return jsonify({'success': True, 'status': status}), 200
+    except Exception as e:
+        print(f"[ERROR] applicants_update_status failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update applicant status'}), 500
 
 
 @bp.route('/api/hiring', methods=['GET'])

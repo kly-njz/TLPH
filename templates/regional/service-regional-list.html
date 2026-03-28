@@ -227,19 +227,26 @@
                                 <th class="border-r border-slate-200">Municipality / City</th>
                                 <th class="border-r border-slate-200">Client Name</th>
                                 <th class="border-r border-slate-200">Service Type</th>
+                                <th class="border-r border-slate-200 text-center w-32 cursor-pointer hover:bg-slate-200 transition" @click="sortBy('date')">
+                                    <div class="flex items-center justify-center gap-1">
+                                        Date
+                                        <span class="text-[10px]" x-text="sortField === 'date' ? (sortAsc ? '▲' : '▼') : '─'"></span>
+                                    </div>
+                                </th>
                                 <th class="border-r border-slate-200 text-center w-24">Status</th>
                                 <th class="text-center w-20 no-print">Review</th>
                             </tr>
                         </thead>
                         <tbody class="text-[10px] divide-y divide-slate-100">
                             
-                            <template x-for="app in filteredApps" :key="app.ref">
+                            <template x-for="app in sortedApps" :key="app.ref">
                                 <tr class="transition-all" :class="app.status === 'TO-REVIEW' ? 'bg-indigo-50 hover:bg-indigo-100 border-l-2 border-l-indigo-400' : 'hover:bg-blue-50 bg-white'">
                                     <td class="px-4 py-3 align-middle font-bold text-blue-900 uppercase border-r border-slate-100" x-text="app.ref"></td>
                                     <td class="px-4 py-3 align-middle font-black text-[9px] uppercase text-slate-500 border-r border-slate-100" x-text="app.province"></td>
                                     <td class="px-4 py-3 align-middle font-bold uppercase text-slate-700 border-r border-slate-100" x-text="app.municipality"></td>
                                     <td class="px-4 py-3 align-middle font-black uppercase text-slate-900 border-r border-slate-100" x-text="app.applicant"></td>
                                     <td class="px-4 py-3 align-middle text-slate-600 font-bold uppercase border-r border-slate-100" x-text="app.category || 'N/A'"></td>
+                                    <td class="px-4 py-3 align-middle text-center border-r border-slate-100 font-bold text-[9px]" x-text="app.dateText"></td>
                                     <td class="px-4 py-3 align-middle text-center border-r border-slate-100">
                                         <span class="inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase border w-full text-center" 
                                               :class="app.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
@@ -261,7 +268,7 @@
 
                             <template x-if="loading">
                                 <tr>
-                                    <td colspan="7" class="py-10 text-center bg-white">
+                                    <td colspan="8" class="py-10 text-center bg-white">
                                         <div class="flex flex-col items-center justify-center opacity-60">
                                             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900 mb-3"></div>
                                             <p class="font-black uppercase text-[10px] tracking-widest text-slate-600">Loading Service Requests...</p>
@@ -270,9 +277,9 @@
                                 </tr>
                             </template>
 
-                            <template x-if="!loading && filteredApps.length === 0">
+                            <template x-if="!loading && sortedApps.length === 0">
                                 <tr>
-                                    <td colspan="7" class="py-10 text-center bg-white">
+                                    <td colspan="8" class="py-10 text-center bg-white">
                                         <div class="flex flex-col items-center justify-center opacity-40">
                                             <span class="material-icons-round text-4xl mb-2 text-slate-400">room_service</span>
                                             <p class="font-black uppercase text-[10px] tracking-widest text-slate-600 m-0">No Records Found</p>
@@ -287,7 +294,7 @@
                 
                 <div class="bg-slate-50 border-t border-slate-300 px-3 py-1.5 flex justify-between items-center shrink-0 no-print">
                     <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider italic">
-                        Showing <span class="text-slate-900 font-black" x-text="filteredApps.length"></span> records
+                        Showing <span class="text-slate-900 font-black" x-text="sortedApps.length"></span> records
                     </span>
                 </div>
 
@@ -314,6 +321,8 @@
                 userRegion: '4B',
                 userRegionName: 'MIMAROPA',
                 userProvinces: [],
+                sortField: 'date',
+                sortAsc: false,
                 
                 async init() {
                     setTimeout(async () => {
@@ -382,6 +391,28 @@
                                         else if (data.forwardedAt.seconds) { fDate = new Date(data.forwardedAt.seconds * 1000); }
                                         if (fDate) forwardedOnText = fDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
                                     }
+                                    let dateValue = null;
+                                    let dateText = 'N/A';
+                                    // Try multiple timestamp fields
+                                    const timestamps = [data.createdAt, data.submittedAt, data.forwardedAt, data.updatedAt];
+                                    for (const ts of timestamps) {
+                                        if (!ts) continue;
+                                        try {
+                                            let dateObj = null;
+                                            if (typeof ts.toDate === 'function') { dateObj = ts.toDate(); }
+                                            else if (ts.seconds) { dateObj = new Date(ts.seconds * 1000); }
+                                            else if (ts instanceof Date) { dateObj = ts; }
+                                            else if (typeof ts === 'string') { dateObj = new Date(ts); }
+                                            
+                                            if (dateObj && !isNaN(dateObj)) {
+                                                dateValue = dateObj;
+                                                dateText = dateObj.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' });
+                                                break;
+                                            }
+                                        } catch (e) {
+                                            continue;
+                                        }
+                                    }
                                     this.apps.push({
                                         id: docSnap.id,
                                         ref: docSnap.id.substring(0, 12).toUpperCase(),
@@ -393,7 +424,9 @@
                                         forwardedOn: forwardedOnText,
                                         forwardedByEmail: data.forwardedByEmail || '',
                                         approvedByLevel: data.approvedByLevel || '',
-                                        rejectedByLevel: data.rejectedByLevel || ''
+                                        rejectedByLevel: data.rejectedByLevel || '',
+                                        dateValue: dateValue || new Date(0),
+                                        dateText: dateText
                                     });
                                 }
                             });
@@ -418,6 +451,31 @@
                         const matchesCat = this.filterCategory === 'ALL' || (i.category || '').toLowerCase() === this.filterCategory.toLowerCase();
                         return matchesSearch && matchesProv && matchesStat && matchesCat;
                     });
+                },
+                
+                get sortedApps() {
+                    const sorted = [...this.filteredApps];
+                    sorted.sort((a, b) => {
+                        let aVal = a[this.sortField];
+                        let bVal = b[this.sortField];
+                        if (this.sortField === 'date') {
+                            aVal = a.dateValue || new Date(0);
+                            bVal = b.dateValue || new Date(0);
+                        }
+                        if (aVal < bVal) return this.sortAsc ? -1 : 1;
+                        if (aVal > bVal) return this.sortAsc ? 1 : -1;
+                        return 0;
+                    });
+                    return sorted;
+                },
+                
+                sortBy(field) {
+                    if (this.sortField === field) {
+                        this.sortAsc = !this.sortAsc;
+                    } else {
+                        this.sortField = field;
+                        this.sortAsc = false;
+                    }
                 },
                 
                 getStatusClass(status) {
