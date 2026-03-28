@@ -131,17 +131,35 @@ def index():
                         user_municipality = user_data.get('municipality') or user_data.get('municipalAdminMunicipality') or ''
                         user_region = user_region or user_data.get('region') or user_data.get('regionalAdminRegion') or ''
         
-        # Query all active hirings, then scope-filter in memory for flexibility.
-        docs = db.collection('hiring_positions').where('is_active', '==', True).stream()
+        # Query all hirings and determine active rows in-memory.
+        # Some historical rows may be missing is_active or store it as a string.
+        docs = db.collection('hiring_positions').stream()
 
         def normalize_scope(value):
             return ' '.join(str(value or '').strip().upper().split())
+
+        def is_active_hiring(value):
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, (int, float)):
+                return value != 0
+            if value is None:
+                return True
+            key = str(value).strip().lower()
+            if key in {'false', '0', 'inactive', 'archived', 'disabled', 'no'}:
+                return False
+            if key in {'true', '1', 'active', 'enabled', 'yes'}:
+                return True
+            return True
 
         muni_key = normalize_scope(user_municipality)
         region_key = normalize_scope(user_region)
 
         for doc in docs:
             item = doc.to_dict() or {}
+            if not is_active_hiring(item.get('is_active')):
+                continue
+
             item_muni = normalize_scope(item.get('municipality'))
             item_region = normalize_scope(item.get('region'))
             item_scope_type = str(item.get('scope_type') or '').strip().lower()
@@ -153,7 +171,8 @@ def index():
                     region_key and
                     item_region == region_key
                 )
-                if not (is_same_municipality or is_same_region_scope):
+                is_national_scope = item_scope_type == 'national'
+                if not (is_same_municipality or is_same_region_scope or is_national_scope):
                     continue
 
             hiring_positions.append({
