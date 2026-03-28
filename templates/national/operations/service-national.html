@@ -795,65 +795,66 @@
       }
       submittedBlock.style.display = submittedCount > 0 ? '' : 'none';
 
+      // Form-Specific Details (Compensation)
+      const compensationBlock = document.getElementById('mCompensationBlock');
+      const compensationEl = document.getElementById('mCompensationFields');
+      compensationEl.innerHTML = '';
+      const svcType = (d.serviceType || '').toLowerCase();
+      const isCompensation = svcType.includes('typhoon') || svcType.includes('pest damage') || svcType.includes('damage');
+
+      if (isCompensation) {
+        const compFields = [];
+        const pinUrl = d.googlePinLocation || d.pinLocation || d.mapLocation || d.mapLink || '';
+        const lat = d.farmLatitude ?? d.latitude;
+        const lng = d.farmLongitude ?? d.longitude;
+        const derivedPinUrl = (!pinUrl && lat && lng)
+          ? `https://maps.google.com/?q=${encodeURIComponent(String(lat) + ',' + String(lng))}`
+          : '';
+        const finalPinUrl = pinUrl || derivedPinUrl;
+
+        if (d.farmerIdNumber || d.farmerId) {
+          compFields.push({ label: 'Farmer ID', value: d.farmerIdNumber || d.farmerId });
+        }
+        if (d.costOfDamage || d.lossValue) {
+          const rawCost = d.costOfDamage || d.lossValue;
+          const cost = Number(rawCost).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          compFields.push({ label: 'Cost of Damage', value: '₱ ' + cost, color: 'text-success' });
+        }
+        if (finalPinUrl) {
+          compFields.push({ label: 'Pin Location', value: finalPinUrl, isLink: true });
+        }
+        if (d.farmAddress) {
+          compFields.push({ label: 'Farm Address', value: d.farmAddress });
+        }
+
+        compFields.forEach(field => {
+          let content = '';
+          if (field.isLink) {
+            content = `<a href="${field.value}" target="_blank" rel="noopener" class="text-primary fw-bold" style="font-size:0.68rem;">🗺️ View on Map</a>`;
+          } else {
+            content = `<div class="fw-bold ${field.color || ''}" style="font-size:0.68rem;">${field.value}</div>`;
+          }
+          compensationEl.innerHTML += `
+            <div class="col-md-6">
+              <div class="text-muted" style="font-size:0.55rem;">${field.label}</div>
+              ${content}
+            </div>`;
+        });
+
+        compensationBlock.style.display = compFields.length > 0 ? '' : 'none';
+      } else {
+        compensationBlock.style.display = 'none';
+      }
+
       // Documents — scan all array/string fields with file extensions
       const fileExts = /\.(pdf|jpg|jpeg|png|gif|webp|bmp|svg|avif|doc|docx|xls|xlsx|csv|txt|zip)$/i;
       const docsEl = document.getElementById('mDocs');
-      const isApplicantAttachmentKey = (key) => {
-        const k = String(key || '').toLowerCase();
-        return /(file|files|photo|photos|image|images|document|documents|attachment|attachments|report|permit|certificate|proposal|plan|record|history|result|picture)/i.test(k);
-      };
-      const isValidUploadUrl = (url) => {
-        const u = String(url || '').toLowerCase();
-        // Accept cloudinary URLs, static uploads, or any http(s) URL
-        return /^https?:\/\//i.test(u) || u.includes('/static/uploads/') || u.includes('cloudinary');
-      };
       const normalizeFileUrl = (raw, userId) => {
         const str = String(raw || '').trim();
         if (!str) return '';
         if (/^(https?:\/\/|\/static\/|static\/)/i.test(str)) {
           return str.startsWith('static/') ? `/${str}` : str;
         }
-              // Form-Specific Details (Compensation)
-              const compensationBlock = document.getElementById('mCompensationBlock');
-              const compensationEl = document.getElementById('mCompensationFields');
-              compensationEl.innerHTML = '';
-              const svcType = (d.serviceType || '').toLowerCase();
-              const isCompensation = svcType.includes('typhoon') || svcType.includes('pest damage') || svcType.includes('damage');
-      
-              if (isCompensation) {
-                const compFields = [];
-                if (d.farmerIdNumber) {
-                  compFields.push({ label: 'Farmer ID', value: d.farmerIdNumber });
-                }
-                if (d.costOfDamage) {
-                  const cost = Number(d.costOfDamage).toLocaleString('en-PH', { minimumFractionDigits: 2 });
-                  compFields.push({ label: 'Cost of Damage', value: '₱ ' + cost, color: 'text-success' });
-                }
-                if (d.googlePinLocation) {
-                  compFields.push({ label: 'Pin Location', value: d.googlePinLocation, isLink: true });
-                }
-                if (d.farmAddress) {
-                  compFields.push({ label: 'Farm Address', value: d.farmAddress });
-                }
-        
-                compFields.forEach(field => {
-                  let content = '';
-                  if (field.isLink) {
-                    content = `<a href="${field.value}" target="_blank" rel="noopener" class="text-primary fw-bold" style="font-size:0.68rem;">🗺️ View on Map</a>`;
-                  } else {
-                    content = `<div class="fw-bold ${field.color || ''}" style="font-size:0.68rem;">${field.value}</div>`;
-                  }
-                  compensationEl.innerHTML += `
-                    <div class="col-md-6">
-                      <div class="text-muted" style="font-size:0.55rem;">${field.label}</div>
-                      ${content}
-                    </div>`;
-                });
-        
-                compensationBlock.style.display = compFields.length > 0 ? '' : 'none';
-              } else {
-                compensationBlock.style.display = 'none';
-              }
         if (!fileExts.test(str) || !userId) return '';
         const encoded = str.split('/').map(part => encodeURIComponent(part)).join('/');
         return `/static/uploads/service_requests/${encodeURIComponent(userId)}/${encoded}`;
@@ -870,64 +871,63 @@
       docsEl.innerHTML = '';
       let fileCount = 0;
       const seenDocs = new Set();
-      
-      // First check for supportingDocuments/supportingFiles arrays (Cloudinary uploads)
-      const docArrays = [d.supportingDocuments, d.supportingFiles, d.attachments, d.files];
-      for (const docArray of docArrays) {
-        if (!Array.isArray(docArray) || !docArray.length) continue;
-        docArray.forEach(item => {
-          const url = typeof item === 'string' ? item : item?.url;
-          if (!url || !fileExts.test(url)) return;
-          const marker = `auto|${url}`;
-          if (seenDocs.has(marker)) return;
-          seenDocs.add(marker);
-          fileCount++;
-          const fileName = typeof item === 'string' ? displayFileName(item) : (item?.name || displayFileName(url));
-          const icon = /\.(jpg|jpeg|png|gif|webp|bmp|svg|avif)$/i.test(url) ? 'image' : /\.pdf$/i.test(url) ? 'picture_as_pdf' : 'attach_file';
-          const encodedUrl = encodeURIComponent(url);
-          docsEl.innerHTML += `
-            <div class="col-md-6">
-              <div class="d-flex align-items-center gap-2 border p-2" style="border-radius:2px; background:#f8fafc;">
-                <span class="material-icons-round text-primary" style="font-size:18px;">${icon}</span>
-                <div class="min-w-0 flex-fill">
-                  <div class="fw-bold text-uppercase" style="font-size:0.6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${fileName}</div>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-primary fw-bold py-0 px-2" style="font-size:0.58rem;border-radius:2px;" onclick="openNationalAttachmentPreview('${encodedUrl}', '${encodeURIComponent(fileName)}')">VIEW</button>
+
+      const pushDoc = (url, name = '', label = '') => {
+        const rawUrl = String(url || '').trim();
+        if (!rawUrl || !fileExts.test(rawUrl)) return;
+        const marker = rawUrl.split('?')[0].toLowerCase();
+        if (seenDocs.has(marker)) return;
+        seenDocs.add(marker);
+        fileCount++;
+        const icon = /\.(jpg|jpeg|png|gif|webp|bmp|svg|avif)$/i.test(rawUrl) ? 'image' : /\.pdf$/i.test(rawUrl) ? 'picture_as_pdf' : 'attach_file';
+        const encodedUrl = encodeURIComponent(rawUrl);
+        const fileName = name || displayFileName(rawUrl);
+        docsEl.innerHTML += `
+          <div class="col-md-6">
+            <div class="d-flex align-items-center gap-2 border p-2" style="border-radius:2px; background:#f8fafc;">
+              <span class="material-icons-round text-primary" style="font-size:18px;">${icon}</span>
+              <div class="min-w-0 flex-fill">
+                <div class="fw-bold text-uppercase" style="font-size:0.6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${fileName}</div>
+                ${label ? `<div class="text-muted" style="font-size:0.55rem;">${label}</div>` : ''}
               </div>
-            </div>`;
-        });
-      }
-      
-      // Fallback: scan all object entries for attachment keys
-      for (const [key, val] of Object.entries(d)) {
-        if (!isApplicantAttachmentKey(key)) continue;
-        const items = Array.isArray(val) ? val : [val];
-        items.forEach(item => {
-          if (typeof item === 'string' && fileExts.test(item)) {
-            const fileUrl = normalizeFileUrl(item, d.userId || d.userID || d.uid || '');
-            if (!fileUrl) return;
-            if (!isValidUploadUrl(fileUrl)) return;
-            const marker = `${key}|${fileUrl}`;
-            if (seenDocs.has(marker)) return;
-            seenDocs.add(marker);
-            fileCount++;
-            const label  = key.replace(/File$|Files$/i,'').replace(/([A-Z])/g,' $1').trim();
-            const icon  = /\.(jpg|jpeg|png|gif)$/i.test(item) ? 'image' : /\.pdf$/i.test(item) ? 'picture_as_pdf' : 'attach_file';
-            const encodedUrl = encodeURIComponent(fileUrl);
-            const fileName = displayFileName(item);
-            docsEl.innerHTML += `
-              <div class="col-md-6">
-                <div class="d-flex align-items-center gap-2 border p-2" style="border-radius:2px; background:#f8fafc;">
-                  <span class="material-icons-round text-primary" style="font-size:18px;">${icon}</span>
-                  <div class="min-w-0 flex-fill">
-                    <div class="fw-bold text-uppercase" style="font-size:0.6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${fileName}</div>
-                    <div class="text-muted" style="font-size:0.55rem;">${label}</div>
-                  </div>
-                  <button type="button" class="btn btn-sm btn-outline-primary fw-bold py-0 px-2" style="font-size:0.58rem;border-radius:2px;" onclick="openNationalAttachmentPreview('${encodedUrl}', '${encodeURIComponent(fileName)}')">VIEW</button>
-                </div>
-              </div>`;
+              <button type="button" class="btn btn-sm btn-outline-primary fw-bold py-0 px-2" style="font-size:0.58rem;border-radius:2px;" onclick="openNationalAttachmentPreview('${encodedUrl}', '${encodeURIComponent(fileName)}')">VIEW</button>
+            </div>
+          </div>`;
+      };
+
+      // Show only applicant attachment source (priority order) to avoid duplicates
+      const preferredDocSource = [
+        ['supportingDocuments', d.supportingDocuments],
+        ['supportingFiles', d.supportingFiles],
+        ['attachments', d.attachments],
+        ['files', d.files],
+      ].find(([, arr]) => Array.isArray(arr) && arr.length);
+
+      if (preferredDocSource) {
+        const [sourceKey, sourceVal] = preferredDocSource;
+        sourceVal.forEach(item => {
+          if (item && typeof item === 'object' && item.url) {
+            pushDoc(item.url, item.name || '', sourceKey);
+            return;
+          }
+          if (typeof item === 'string') {
+            const resolved = normalizeFileUrl(item, d.userId || d.userID || d.uid || '');
+            pushDoc(resolved || item, '', sourceKey);
           }
         });
+      } else {
+        // Safe fallback for older records with single URL fields only
+        const fallbackKeys = ['document', 'attachment', 'file', 'photo', 'image'];
+        for (const [key, val] of Object.entries(d || {})) {
+          const lower = String(key || '').toLowerCase();
+          if (!fallbackKeys.some(k => lower.includes(k))) continue;
+          const items = Array.isArray(val) ? val : [val];
+          items.forEach(item => {
+            if (typeof item !== 'string') return;
+            const resolved = normalizeFileUrl(item, d.userId || d.userID || d.uid || '');
+            pushDoc(resolved || item, '', key);
+          });
+        }
       }
       if (fileCount === 0) docsEl.innerHTML = '<div class="col-12 text-muted text-center py-2" style="font-size:0.65rem;">No documents attached.</div>';
 
