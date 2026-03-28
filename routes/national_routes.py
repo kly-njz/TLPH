@@ -1007,6 +1007,7 @@ def applicants():
         applicants = []
         region_set = set()
         candidate_type_set = set()
+        hiring_description_cache = {}
 
         total_count = 0
         approved_count = 0
@@ -1039,6 +1040,28 @@ def applicants():
                 or data.get('project_name')
                 or 'N/A'
             )
+
+            # Backfill description from the source hiring post when applicant doc lacks it.
+            if str(job_description).strip().upper() in {'', 'N/A'}:
+                source_collection = str(data.get('source_collection') or '').strip().lower()
+                source_id = str(data.get('source_id') or '').strip()
+                if source_collection == 'hiring_positions' and source_id:
+                    if source_id not in hiring_description_cache:
+                        try:
+                            src_doc = db.collection('hiring_positions').document(source_id).get()
+                            if src_doc.exists:
+                                src_data = src_doc.to_dict() or {}
+                                hiring_description_cache[source_id] = str(
+                                    src_data.get('description')
+                                    or src_data.get('job_description')
+                                    or src_data.get('jobDescription')
+                                    or 'N/A'
+                                ).strip() or 'N/A'
+                            else:
+                                hiring_description_cache[source_id] = 'N/A'
+                        except Exception:
+                            hiring_description_cache[source_id] = 'N/A'
+                    job_description = hiring_description_cache.get(source_id) or 'N/A'
 
             region_office = (data.get('region_office') or data.get('region') or 'N/A')
             municipality = data.get('municipality') or ''
