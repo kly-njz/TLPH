@@ -24,6 +24,15 @@ def submit_compensation_request():
 
         # Parse form data
         service_type = request.form.get('serviceType')
+            print(f"\n===== COMPENSATION SUBMIT REQUEST =====")
+            print(f"User ID: {user_id}")
+            print(f"Service Type: {service_type}")
+            print(f"Request Method: {request.method}")
+            print(f"Request Content-Type: {request.content_type}")
+            print(f"Form keys: {list(request.form.keys())}")
+            print(f"Files keys: {list(request.files.keys())}")
+            print(f"===== END REQUEST INFO =====\n")
+        
         if not service_type:
             return jsonify({'error': 'Service type is required'}), 400
 
