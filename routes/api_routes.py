@@ -1,27 +1,4 @@
-from notification_storage import create_notification
-# --- Notification API ---
-@bp.route('/notifications/create', methods=['POST'])
-def api_create_notification():
-    data = request.get_json() or {}
-    type_ = data.get('type')
-    scope = data.get('scope')
-    content = data.get('content')
-    post_date = data.get('post_date')
-    end_date = data.get('end_date')
-    created_by = session.get('user_email', 'system')
-    # Parse datetimes if needed
-    try:
-        post_date_dt = datetime.fromisoformat(post_date) if isinstance(post_date, str) else post_date
-        end_date_dt = datetime.fromisoformat(end_date) if isinstance(end_date, str) else end_date
-    except Exception:
-        return jsonify({'success': False, 'message': 'Invalid date format'}), 400
-    try:
-        create_notification(type_, content, post_date_dt, end_date_dt, created_by, scope)
-        return jsonify({'success': True, 'message': 'Notification created'})
-    except AssertionError as e:
-        return jsonify({'success': False, 'message': str(e)}), 400
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'Error: {e}'}), 500
+
 from google.cloud.firestore_v1.base_query import FieldFilter
 from flask import Blueprint, request, jsonify, session
 from flask_mail import Message, Mail
@@ -2531,3 +2508,30 @@ def get_projects_pending_approval():
     except Exception as e:
         print(f'[PROJECT_ERROR] get_projects_pending_approval failed: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+
+from notification_storage import create_notification
+# --- Notification API ---
+@bp.route('/notifications/create', methods=['POST'])
+def api_create_notification():
+    data = request.get_json() or {}
+    type_ = data.get('type')
+    scope = data.get('scope')
+    content = data.get('content')
+    post_date = data.get('post_date')
+    end_date = data.get('end_date')
+    created_by = session.get('user_email', 'system')
+    # Parse datetimes if needed
+    try:
+        post_date_dt = datetime.fromisoformat(post_date) if isinstance(post_date, str) else post_date
+        end_date_dt = datetime.fromisoformat(end_date) if isinstance(end_date, str) else end_date
+    except Exception:
+        return jsonify({'success': False, 'message': 'Invalid date format'}), 400
+    try:
+        create_notification(type_, content, post_date_dt, end_date_dt, created_by, scope)
+        return jsonify({'success': True, 'message': 'Notification created'})
+    except AssertionError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {e}'}), 500
