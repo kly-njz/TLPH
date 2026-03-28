@@ -184,7 +184,6 @@
 
             <tbody id="projectTable" class="text-[10px] divide-y divide-slate-100">
               {% for project in projects %}
-              {# Optional: server-side regional enforcement #}
               {% if (user_region is not defined) or (project.region == user_region) %}
               <tr class="hover:bg-emerald-50 transition project-row"
                   data-id="{{ project.id }}"
@@ -241,7 +240,7 @@
   </main>
 
   <div id="regionalProjectModal" class="fixed inset-0 z-[4000] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-    <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-md mx-4 flex flex-col">
+    <div class="bg-white rounded-[2px] border border-slate-300 shadow-xl w-full max-w-lg mx-4 flex flex-col">
       <div class="px-3 py-2 border-b border-slate-200 flex items-center justify-between bg-emerald-800 text-white">
         <h2 class="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 m-0">
           <span class="material-icons-round text-[14px]">playlist_add</span>
@@ -257,10 +256,17 @@
           <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Project Name *</label>
           <input id="rpName" type="text" class="gov-input w-full h-8" required>
         </div>
-        <div class="grid grid-cols-2 gap-3">
+        
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Province *</label>
+            <select id="rpProvince" class="gov-input w-full h-8 cursor-pointer" required onchange="loadRegionalMunicipalities()">
+              <option value="">Select Province</option>
+            </select>
+          </div>
           <div>
             <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Municipality *</label>
-            <select id="rpMunicipality" class="gov-input w-full h-8 cursor-pointer" required>
+            <select id="rpMunicipality" class="gov-input w-full h-8 cursor-pointer" required onchange="loadRegionalBarangays()">
               <option value="">Select Municipality</option>
             </select>
           </div>
@@ -271,6 +277,7 @@
             </select>
           </div>
         </div>
+
         <div>
           <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Start Date *</label>
           <input id="rpStartDate" type="date" class="gov-input w-full h-8 font-mono" required>
@@ -282,7 +289,7 @@
         <div id="rpError" class="hidden text-[9px] font-bold text-rose-600 uppercase"></div>
         <div class="flex justify-end gap-2 pt-2 mt-1 border-t border-slate-200">
           <button type="button" onclick="closeRegionalProjectModal()" class="gov-btn border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 py-1.5 px-4">Cancel</button>
-          <button type="submit" class="gov-btn bg-emerald-800 hover:bg-emerald-900 text-white py-1.5 px-4">Save</button>
+          <button type="submit" id="rpSaveBtn" class="gov-btn bg-emerald-800 hover:bg-emerald-900 text-white py-1.5 px-4">Save</button>
         </div>
       </form>
     </div>
@@ -331,13 +338,15 @@
   </div>
 
   <script>
-    // --- Chart Implementations ---
     Chart.defaults.font.family = "Verdana, Arial, sans-serif";
     Chart.defaults.font.size = 8;
     Chart.defaults.color = "#64748b";
 
     const projectRows = Array.from(document.querySelectorAll('.project-row'));
     const statusCounts = { completed: 0, inProgress: 0, pending: 0 };
+    
+    // Jinja variable to JS
+    const CURRENT_REGION = "{{ user_region|default('MIMAROPA') }}".trim();
   </script>
 
   <script src="/static/js/projects-regional.js"></script>
@@ -389,15 +398,9 @@
       responsive: true,
       maintainAspectRatio: false,
       layout: { padding: 5 },
-      plugins: {
-        legend: {
-          position: 'right',
-          labels: { boxWidth: 8, font: { weight: 'bold' } }
-        }
-      }
+      plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { weight: 'bold' } } } }
     };
 
-    // 1. Status Mix Chart
     new Chart(document.getElementById('statusMixChart'), {
       type: 'doughnut',
       data: {
@@ -411,7 +414,6 @@
       options: { ...commonOptions, cutout: '70%' }
     });
 
-    // 2. Timeline Trend Chart
     new Chart(document.getElementById('projectTrendChart'), {
       type: 'line',
       data: {
@@ -434,7 +436,7 @@
       }
     });
 
-    // --- Search & Filter Logic ---
+    // --- Modal Logic ---
     const regionalProjectModal = document.getElementById('regionalProjectModal');
 
     function openRegionalProjectModal() {
@@ -442,7 +444,7 @@
       regionalProjectModal.classList.remove('hidden');
       regionalProjectModal.classList.add('flex');
       document.getElementById('rpError')?.classList.add('hidden');
-      loadRegionalMunicipalities();
+      loadRegionalProvinces(); 
     }
 
     function closeRegionalProjectModal() {
@@ -453,109 +455,194 @@
       if (form) form.reset();
     }
 
-    async function loadRegionalMunicipalities() {
-      const municipalitySelect = document.getElementById('rpMunicipality');
-      if (!municipalitySelect) return;
-      municipalitySelect.innerHTML = '<option value="">Loading municipalities...</option>';
+    // =====================================================================
+    // ✅ 100% PURE PUBLIC API (PHILIPPINE STANDARD GEOGRAPHIC CODE)
+    // NO LOCAL BACKEND REQUIRED - PREVENTS 404 ERRORS
+    // =====================================================================
+    
+    const PSGC_API_BASE = 'https://psgc.gitlab.io/api';
+
+    function getPsgcRegionCode() {
+      const name = CURRENT_REGION.toUpperCase().trim();
+      const map = {
+        'REGION I': '010000000', 'ILOCOS': '010000000',
+        'REGION II': '020000000', 'CAGAYAN': '020000000',
+        'REGION III': '030000000', 'CENTRAL LUZON': '030000000',
+        'REGION IV-A': '040000000', 'CALABARZON': '040000000',
+        'REGION IV-B': '170000000', 'MIMAROPA': '170000000',
+        'REGION V': '050000000', 'BICOL': '050000000',
+        'REGION VI': '060000000', 'WESTERN VISAYAS': '060000000',
+        'REGION VII': '070000000', 'CENTRAL VISAYAS': '070000000',
+        'REGION VIII': '080000000', 'EASTERN VISAYAS': '080000000',
+        'REGION IX': '090000000', 'ZAMBOANGA': '090000000',
+        'REGION X': '100000000', 'NORTHERN MINDANAO': '100000000',
+        'REGION XI': '110000000', 'DAVAO': '110000000',
+        'REGION XII': '120000000', 'SOCCSKSARGEN': '120000000',
+        'REGION XIII': '160000000', 'CARAGA': '160000000',
+        'NCR': '130000000', 'NATIONAL CAPITAL REGION': '130000000',
+        'CAR': '140000000', 'CORDILLERA': '140000000',
+        'BARMM': '150000000', 'BANGSAMORO': '150000000'
+      };
+
+      for (const [key, code] of Object.entries(map)) {
+        if (name.includes(key)) return code;
+      }
+      return '170000000'; // Default to MIMAROPA if not matched
+    }
+
+    async function loadRegionalProvinces() {
+      const provSelect = document.getElementById('rpProvince');
+      const muniSelect = document.getElementById('rpMunicipality');
+      const brgySelect = document.getElementById('rpBarangay');
+      
+      provSelect.innerHTML = '<option value="">Loading provinces...</option>';
+      muniSelect.innerHTML = '<option value="">Select Municipality</option>';
+      brgySelect.innerHTML = '<option value="">Select Barangay</option>';
 
       try {
-        const region = String("{{ user_region|default('') }}").toUpperCase();
-        if (region.includes('MIMAROPA') || region.includes('IV-B')) {
-          const res = await fetch('/api/locations/mimaropa/municipalities');
-          const data = await res.json();
-          const municipalities = Array.isArray(data.municipalities) ? data.municipalities : [];
-          municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
-          municipalities.forEach((m) => {
-            const opt = document.createElement('option');
-            opt.value = m;
-            opt.textContent = m;
-            municipalitySelect.appendChild(opt);
-          });
-        } else {
-          municipalitySelect.innerHTML = '<option value="">Select Municipality</option>';
-          const fromRows = [...new Set(projectRows.map((r) => (r.getAttribute('data-municipality') || '').trim()).filter(Boolean))].sort();
-          fromRows.forEach((m) => {
-            const opt = document.createElement('option');
-            opt.value = m;
-            opt.textContent = m;
-            municipalitySelect.appendChild(opt);
-          });
-        }
-      } catch (e) {
-        municipalitySelect.innerHTML = '<option value="">Failed to load municipalities</option>';
+        const regCode = getPsgcRegionCode();
+        const res = await fetch(`${PSGC_API_BASE}/regions/${regCode}/provinces`);
+        if (!res.ok) throw new Error('API Error');
+        const provinces = await res.json();
+
+        provSelect.innerHTML = '<option value="">Select Province</option>';
+        provinces.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.code; // Gamit ang code pang-search sa next api
+          opt.textContent = p.name;
+          provSelect.appendChild(opt);
+        });
+      } catch (error) {
+        console.error('Error fetching provinces:', error);
+        provSelect.innerHTML = '<option value="">Error loading API</option>';
+      }
+    }
+
+    async function loadRegionalMunicipalities() {
+      const provCode = document.getElementById('rpProvince').value;
+      const muniSelect = document.getElementById('rpMunicipality');
+      const brgySelect = document.getElementById('rpBarangay');
+
+      if (!provCode) {
+        muniSelect.innerHTML = '<option value="">Select Municipality</option>';
+        brgySelect.innerHTML = '<option value="">Select Barangay</option>';
+        return;
+      }
+
+      muniSelect.innerHTML = '<option value="">Loading municipalities...</option>';
+      brgySelect.innerHTML = '<option value="">Select Barangay</option>';
+
+      try {
+        const res = await fetch(`${PSGC_API_BASE}/provinces/${provCode}/cities-municipalities`);
+        if (!res.ok) throw new Error('API Error');
+        const municipalities = await res.json();
+
+        muniSelect.innerHTML = '<option value="">Select Municipality</option>';
+        municipalities.sort((a, b) => a.name.localeCompare(b.name)).forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.code; // Gamit ang code pang-search sa next api
+          opt.textContent = m.name;
+          muniSelect.appendChild(opt);
+        });
+      } catch (error) {
+        console.error('Error fetching municipalities:', error);
+        muniSelect.innerHTML = '<option value="">Error loading API</option>';
       }
     }
 
     async function loadRegionalBarangays() {
-      const municipality = (document.getElementById('rpMunicipality')?.value || '').trim();
+      const muniCode = document.getElementById('rpMunicipality').value;
       const barangaySelect = document.getElementById('rpBarangay');
-      if (!barangaySelect) return;
-      barangaySelect.innerHTML = '<option value="">Loading barangays...</option>';
-      if (!municipality) {
+      
+      if (!muniCode) {
         barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
         return;
       }
+
+      barangaySelect.innerHTML = '<option value="">Loading barangays...</option>';
+
       try {
-        const res = await fetch(`/api/locations/mimaropa/barangays?municipality=${encodeURIComponent(municipality)}`);
-        const data = await res.json();
-        const barangays = Array.isArray(data.barangays) ? data.barangays : [];
+        const res = await fetch(`${PSGC_API_BASE}/cities-municipalities/${muniCode}/barangays`);
+        if (!res.ok) throw new Error('API Error');
+        const barangays = await res.json();
+
         barangaySelect.innerHTML = '<option value="">Select Barangay</option>';
-        barangays.forEach((b) => {
+        barangays.sort((a, b) => a.name.localeCompare(b.name)).forEach(b => {
           const opt = document.createElement('option');
-          opt.value = b;
-          opt.textContent = b;
+          opt.value = b.name; 
+          opt.textContent = b.name;
           barangaySelect.appendChild(opt);
         });
-      } catch (e) {
-        barangaySelect.innerHTML = '<option value="">Failed to load barangays</option>';
+      } catch (error) {
+         console.error('Error fetching barangays:', error);
+         barangaySelect.innerHTML = '<option value="">Error loading API</option>';
       }
     }
 
+    // ==========================================
+
     async function submitRegionalProject(event) {
       event.preventDefault();
+      
+      const provSelect = document.getElementById('rpProvince');
+      const muniSelect = document.getElementById('rpMunicipality');
+      const brgySelect = document.getElementById('rpBarangay');
+
       const name = (document.getElementById('rpName')?.value || '').trim();
-      const municipality = (document.getElementById('rpMunicipality')?.value || '').trim();
-      const barangay = (document.getElementById('rpBarangay')?.value || '').trim();
+      
+      // Pinapasa sa backend ang PANGALAN, hindi yung PSGC code
+      const province = provSelect.options[provSelect.selectedIndex]?.text || '';
+      const municipality = muniSelect.options[muniSelect.selectedIndex]?.text || '';
+      const barangay = brgySelect.value || '';
+      
       const startDate = (document.getElementById('rpStartDate')?.value || '').trim();
       const description = (document.getElementById('rpDescription')?.value || '').trim();
-      const region = String("{{ user_region|default('') }}").trim();
+      const region = CURRENT_REGION;
 
-      if (!name || !municipality || !barangay || !startDate || !region) {
+      const btn = document.getElementById('rpSaveBtn');
+      btn.textContent = 'Saving...';
+      btn.disabled = true;
+
+      if (!name || !province || !municipality || !barangay || !startDate || !region) {
         const err = document.getElementById('rpError');
         if (err) {
           err.textContent = 'Please complete required fields.';
           err.classList.remove('hidden');
         }
+        btn.textContent = 'Save';
+        btn.disabled = false;
         return;
       }
 
-      const res = await fetch('/api/projects/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          region,
-          municipality,
-          barangay,
-          start_date: startDate,
-          description
-        })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      try {
+        const res = await fetch('/api/projects/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            region,
+            province,
+            municipality,
+            barangay,
+            start_date: startDate,
+            description
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Failed to create project.');
+        
+        closeRegionalProjectModal();
+        location.reload();
+      } catch (error) {
         const err = document.getElementById('rpError');
         if (err) {
-          err.textContent = data.error || 'Failed to create project.';
+          err.textContent = error.message;
           err.classList.remove('hidden');
         }
-        return;
+        btn.textContent = 'Save';
+        btn.disabled = false;
       }
-
-      closeRegionalProjectModal();
-      location.reload();
     }
-
-    document.getElementById('rpMunicipality')?.addEventListener('change', loadRegionalBarangays);
 
     function filterTable() {
       const q = (document.getElementById('searchProject').value || '').toLowerCase().trim();
@@ -606,16 +693,12 @@
         row.remove();
         filterTable(); // Recalculate totals
         alert('Project deleted successfully.');
-        
-        // --- Backend Integration Note ---
-        // fetch(`/api/projects/${row.getAttribute('data-id')}`, { method: 'DELETE' });
       }
     }
 
     function openEditProjectModal(btn) {
       const row = btn.closest('tr');
       
-      // Populate data
       document.getElementById('epId').value = row.getAttribute('data-id') || '';
       document.getElementById('epName').value = row.getAttribute('data-name') || '';
       
@@ -631,7 +714,6 @@
       } catch(e) {}
       document.getElementById('epStartDate').value = startDate;
 
-      // Show modal
       const modal = document.getElementById('editProjectModal');
       modal.classList.remove('hidden');
       modal.classList.add('flex');
@@ -645,10 +727,6 @@
 
     function submitEditProject(e) {
       e.preventDefault();
-      
-      // --- Backend Integration Note ---
-      // fetch(`/api/projects/${document.getElementById('epId').value}`, { method: 'PUT', body: ... });
-
       alert('Changes saved successfully! (Backend integration required)');
       closeEditProjectModal();
     }

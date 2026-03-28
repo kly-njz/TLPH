@@ -1981,3 +1981,16 @@ def api_get_quotation_superadmin(quotation_id):
         return jsonify(quotation)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# API: Delete quotation (superadmin)
+@bp.route('/api/quotation/<quotation_id>', methods=['DELETE'])
+@role_required('super-admin','superadmin')
+def api_delete_quotation_superadmin(quotation_id):
+    from quotation_storage import delete_quotation
+    try:
+        delete_quotation(quotation_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] api_delete_quotation_superadmin failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to delete quotation'}), 500

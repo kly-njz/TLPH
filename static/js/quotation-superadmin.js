@@ -50,6 +50,74 @@ function closeDraftPreview() {
     setTimeout(() => modal.classList.add('hidden'), 300);
 }
 
+let pendingDeleteQuoteId = '';
+
+function openDeleteModal(quoteId) {
+    pendingDeleteQuoteId = quoteId || '';
+    const idEl = document.getElementById('deleteQuoteIdDisplay');
+    if (idEl) idEl.textContent = pendingDeleteQuoteId || '—';
+    const modal = document.getElementById('deleteConfirmModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.add('opacity-100'), 10);
+    const body = modal.querySelector('.bg-white');
+    if (body) body.classList.replace('scale-95', 'scale-100');
+}
+
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteConfirmModal');
+    if (!modal) return;
+    modal.classList.remove('opacity-100');
+    const body = modal.querySelector('.bg-white');
+    if (body) body.classList.replace('scale-100', 'scale-95');
+    setTimeout(() => modal.classList.add('hidden'), 300);
+    pendingDeleteQuoteId = '';
+}
+
+async function confirmDeleteQuotation() {
+    if (!pendingDeleteQuoteId) {
+        closeDeleteModal();
+        return;
+    }
+    try {
+        const tryDelete = async (url, method) => {
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' } });
+            const contentType = res.headers.get('content-type') || '';
+            let data = null;
+            if (contentType.includes('application/json')) {
+                data = await res.json();
+            } else {
+                const text = await res.text();
+                const snippet = text.replace(/\s+/g, ' ').slice(0, 160);
+                const statusText = res.status ? ` (HTTP ${res.status})` : '';
+                throw new Error(`Server returned a non-JSON response${statusText}. ${snippet ? 'Response: ' + snippet : ''}`);
+            }
+            if (!res.ok || !data.success) {
+                const statusText = res.status ? ` (HTTP ${res.status})` : '';
+                throw new Error((data && data.error) ? data.error : `Failed to delete quotation.${statusText}`);
+            }
+            return res;
+        };
+
+        const baseUrl = `/superadmin/api/quotation/${pendingDeleteQuoteId}`;
+        try {
+            await tryDelete(baseUrl, 'DELETE');
+        } catch (err) {
+            const msg = String(err && err.message ? err.message : err);
+            if (msg.includes('HTTP 405')) {
+                await tryDelete(`${baseUrl}/delete`, 'POST');
+            } else {
+                throw err;
+            }
+        }
+        closeDeleteModal();
+        alert('Quotation deleted successfully.');
+        window.location.reload();
+    } catch (error) {
+        alert(error.message || 'Failed to delete quotation.');
+    }
+}
+
 function exportCSV() {
     const table = document.querySelector('#quotTable');
     if (!table) {
@@ -209,6 +277,7 @@ function getQuotePayload() {
     const unitPrice = toNumber(document.getElementById('newPrice').value);
     const otherCharges = toNumber(document.getElementById('newOtherCharges').value);
     const buyerType = document.getElementById('newBuyerType').value;
+    const deliverToType = document.getElementById('newDeliverToType')?.value || '';
     return {
         issue_date: document.getElementById('newIssueDate').value,
         buyer: document.getElementById('newBuyer').value,
@@ -219,13 +288,15 @@ function getQuotePayload() {
         deliver_to: document.getElementById('newDeliverTo').value,
         status: document.getElementById('newStatus').value,
         buyer_type: buyerType,
-        deliver_to_type: buyerType,
+        deliver_to_type: deliverToType || buyerType,
         product: document.getElementById('newProd').value,
         quantity,
         unit_price: unitPrice,
         other_charges: otherCharges,
         other_charges_note: document.getElementById('newOtherChargesNote').value,
-        total: computeTotal(quantity, unitPrice, otherCharges)
+        total: computeTotal(quantity, unitPrice, otherCharges),
+        region: document.getElementById('newRegion')?.value || '',
+        municipality: document.getElementById('newMunicipality')?.value || ''
     };
 }
 
@@ -254,6 +325,9 @@ function resetQuoteForm() {
     document.getElementById('newSupplier').value = '';
     document.getElementById('newDeliverFrom').value = '';
     document.getElementById('newDeliverTo').value = '';
+    if (document.getElementById('newDeliverToType')) document.getElementById('newDeliverToType').value = 'regional';
+    if (document.getElementById('newRegion')) document.getElementById('newRegion').value = '';
+    if (document.getElementById('newMunicipality')) document.getElementById('newMunicipality').value = '';
     document.getElementById('newStatus').value = 'pending';
     document.getElementById('newBuyerType').value = 'company';
     document.getElementById('newProd').value = '';
@@ -289,6 +363,9 @@ async function openEditDrawer(quoteId) {
     document.getElementById('newSupplier').value = data.supplier || '';
     document.getElementById('newDeliverFrom').value = data.deliver_from || '';
     document.getElementById('newDeliverTo').value = data.deliver_to || '';
+    if (document.getElementById('newDeliverToType')) document.getElementById('newDeliverToType').value = data.deliver_to_type || 'regional';
+    if (document.getElementById('newRegion')) document.getElementById('newRegion').value = data.region || '';
+    if (document.getElementById('newMunicipality')) document.getElementById('newMunicipality').value = data.municipality || '';
     document.getElementById('newStatusRow').classList.remove('hidden');
     document.getElementById('newStatus').value = data.status || 'pending';
     document.getElementById('newBuyerType').value = data.buyer_type || 'company';
@@ -329,6 +406,10 @@ if (quoteForm) {
         const quoteId = document.getElementById('editQuoteId').value;
         const payload = getQuotePayload();
         const isEdit = Boolean(quoteId);
+        if (!isEdit) {
+            payload.status = 'PENDING';
+            payload.scope = 'superadmin';
+        }
         const url = isEdit
             ? `/superadmin/api/quotation/${quoteId}/update`
             : '/superadmin/api/quotation/create';

@@ -55,6 +55,7 @@
         .btn-edit:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
         .btn-draft:hover { color: white; background: #0f172a; border-color: #0f172a; }
         .btn-delivery:hover { color: white; background: #15803d; border-color: #15803d; }
+        .btn-delete:hover { color: white; background: #b91c1c; border-color: #b91c1c; }
         .btn-locked { background: #0f172a; border-color: #0f172a; color: #cbd5e1; cursor: not-allowed; }
 
         /* PRINT STYLES FOR CLEAN EXPORT */
@@ -179,7 +180,11 @@
                                 <th class="border-r border-slate-200 text-right">Total Amount</th>
                                 <th class="border-r border-slate-200">Deliver From</th>
                                 <th class="border-r border-slate-200">Deliver To</th>
+                                <th class="border-r border-slate-200">Deliver To Type</th>
+                                <th class="border-r border-slate-200">Region</th>
+                                <th class="border-r border-slate-200">Municipality</th>
                                 <th class="border-r border-slate-200 text-center">Status</th>
+                                <th class="border-r border-slate-200 text-center">Scope</th>
                                 <th class="text-center no-print">Action</th>
                             </tr>
                         </thead>
@@ -200,7 +205,30 @@
                                 <td class="px-3 py-1.5 font-mono text-slate-700 text-right border-r border-slate-100">&#8369;{{ '%.2f' % (q.otherCharges or q.other_charges or 0) }}</td>
                                 <td class="px-3 py-1.5 font-mono font-black text-emerald-700 text-right border-r border-slate-100">&#8369;{{ '%.2f' % (q.total or 0) }}</td>
                                 <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ q.deliver_from }}</td>
-                                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ q.deliver_to }}<br><span class="text-[8px] text-slate-400">({{ q.deliver_to_type }})</span></td>
+                                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ q.deliver_to }}</td>
+                                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">
+                                    {% set raw_type = (q.deliver_to_type or '')|string %}
+                                    {% set raw_type_lower = raw_type|lower %}
+                                    {% if raw_type_lower in ['national','nation','central','national admin','national office'] %}
+                                        National
+                                    {% elif raw_type_lower in ['regional','region','regional admin','regional office'] %}
+                                        Regional
+                                    {% elif raw_type_lower in ['municipal','municipality','city','lgu','local'] %}
+                                        Municipal
+                                    {% elif q.region and not q.municipality %}
+                                        Regional
+                                    {% elif q.municipality %}
+                                        Municipal
+                                    {% elif not raw_type_lower and (q.deliver_from and q.deliver_from|string|lower == 'national') %}
+                                        National
+                                    {% elif not raw_type_lower and (q.scope and q.scope|string|lower == 'superadmin') and not q.region and not q.municipality %}
+                                        National
+                                    {% else %}
+                                        {{ raw_type }}
+                                    {% endif %}
+                                </td>
+                                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ q.region or '' }}</td>
+                                <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ q.municipality or '' }}</td>
                                 <td class="px-3 py-1.5 text-center border-r border-slate-100">
                                     <span class="status-badge border {{ 'bg-emerald-100 text-emerald-700 border-emerald-300' if q.status == 'delivered' else
                                         'bg-blue-100 text-blue-700 border-blue-300' if q.status == 'in-transit' else
@@ -210,6 +238,7 @@
                                         {{ q.status|capitalize }}
                                     </span>
                                 </td>
+                                <td class="px-3 py-1.5 text-center border-r border-slate-100 font-bold uppercase text-[9px] text-slate-600">{{ q.scope or 'superadmin' }}</td>
                                 <td class="px-3 py-1.5 text-center no-print">
                                     <div class="flex justify-center gap-1 flex-nowrap">
                                         <button type="button" class="btn-action btn-edit" onclick="openEditDrawer('{{ q.id }}')" title="Edit">
@@ -217,6 +246,9 @@
                                         </button>
                                         <button type="button" class="btn-action btn-draft" onclick="openDraftPreview('{{ q.id }}')" title="Draft">
                                             <span class="material-icons-round text-[12px]">description</span>
+                                        </button>
+                                        <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{{ q.id }}')" title="Delete">
+                                            <span class="material-icons-round text-[12px]">delete</span>
                                         </button>
                                         {% if q.status == 'delivered' %}
                                         <button type="button" class="btn-action btn-delivery" onclick="downloadDeliveryDetails('{{ q.id }}')" title="Delivery Details">
@@ -227,7 +259,7 @@
                                 </td>
                             </tr>
                         {% else %}
-                            <tr><td colspan="17" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No quotation records found.</td></tr>
+                            <tr><td colspan="21" class="py-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[9px]">No quotation records found.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
@@ -289,6 +321,24 @@
                         <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Deliver To *</label>
                         <input type="text" id="newDeliverTo" placeholder="e.g. Region IV-A Office" class="gov-input w-full h-8" required>
                     </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Deliver To Type *</label>
+                        <select id="newDeliverToType" class="gov-input w-full h-8 cursor-pointer" required title="Deliver To Type">
+                            <option value="national">National</option>
+                            <option value="regional">Regional</option>
+                            <option value="municipal">Municipal</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Region *</label>
+                        <input type="text" id="newRegion" placeholder="e.g. Region IV-A" class="gov-input w-full h-8" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Municipality *</label>
+                    <input type="text" id="newMunicipality" placeholder="e.g. Calamba City" class="gov-input w-full h-8" required>
                 </div>
                 <div id="newStatusRow" class="hidden">
                     <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
@@ -441,6 +491,31 @@
             </div>
             <div class="p-6 bg-slate-50 flex-1 h-[400px] relative">
                 <canvas id="modalCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div id="deleteConfirmModal" class="hidden fixed inset-0 z-[2080] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300 opacity-0 no-print">
+        <div class="absolute inset-0 cursor-pointer" onclick="closeDeleteModal()"></div>
+        <div class="bg-white rounded-[2px] border border-slate-400 shadow-2xl w-full max-w-sm transform scale-95 transition-transform duration-300 overflow-hidden relative z-10 flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-800 px-4 py-3 bg-rose-700 text-white shrink-0">
+                <h3 class="text-[11px] font-black uppercase tracking-widest m-0 flex items-center gap-2">
+                    <i class="fa-solid fa-trash-can text-white"></i> Delete Quotation
+                </h3>
+                <button onclick="closeDeleteModal()" class="text-rose-100 hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer">
+                    <span class="material-icons-round text-sm">close</span>
+                </button>
+            </div>
+            <div class="p-4 bg-slate-50">
+                <p class="text-[10px] font-bold text-slate-700 uppercase tracking-widest m-0">This action will permanently remove the quotation.</p>
+                <div class="mt-3 border border-slate-200 bg-white p-2">
+                    <div class="text-[9px] font-black uppercase tracking-widest text-slate-400">Quotation ID</div>
+                    <div id="deleteQuoteIdDisplay" class="text-[12px] font-black text-slate-900 font-mono">—</div>
+                </div>
+                <div class="mt-4 flex justify-end gap-2">
+                    <button onclick="closeDeleteModal()" class="gov-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Cancel</button>
+                    <button onclick="confirmDeleteQuotation()" class="gov-btn bg-rose-700 text-white hover:bg-rose-800">Delete</button>
+                </div>
             </div>
         </div>
     </div>

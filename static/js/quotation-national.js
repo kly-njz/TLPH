@@ -144,12 +144,9 @@ function setDraftStatusColor(el, statusText, badgeEl) {
             return;
         }
     }
-    if (status === 'delivered') return el.classList.add('text-emerald-700');
-    if (status === 'in-transit') return el.classList.add('text-blue-700');
-    if (status === 'for-delivery') return el.classList.add('text-indigo-700');
-    if (status === 'cancelled') return el.classList.add('text-rose-700');
+    if (status === 'forwarded') return el.classList.add('text-indigo-700');
     if (status === 'pending') return el.classList.add('text-amber-700');
-    if (status === 'approved') return el.classList.add('text-blue-700');
+    if (status === 'approved') return el.classList.add('text-emerald-700');
     if (status === 'rejected') return el.classList.add('text-rose-700');
     return el.classList.add('text-slate-600');
 }

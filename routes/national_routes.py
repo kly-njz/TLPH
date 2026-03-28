@@ -884,10 +884,12 @@ def transfer_products():
 @role_required('national', 'national_admin')
 def quotation():
     from quotation_storage import get_quotations
+    from quotation_storage import update_quotation
     import json
     from collections import Counter
     from quotation_storage import get_all_quotations
     quotations = get_all_quotations()
+    allowed_statuses = {'PENDING', 'APPROVED', 'REJECTED', 'FORWARDED'}
     def to_float(value):
         try:
             return float(value)
@@ -896,10 +898,17 @@ def quotation():
     for q in quotations:
         q['amount_value'] = to_float(q.get('amount'))
         q['amount'] = f"{q['amount_value']:,.2f}"
-        q['status'] = str(q.get('status') or 'Pending').capitalize()
+        status_raw = str(q.get('status') or '').strip().upper()
+        if status_raw not in allowed_statuses:
+            status_raw = 'PENDING'
+            try:
+                if q.get('id'):
+                    update_quotation(q.get('id'), {'status': status_raw})
+            except Exception:
+                pass
+        q['status'] = status_raw
     total_quotes = len(quotations)
     pending_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'PENDING'])
-    cancelled_quotes = len([q for q in quotations if str(q.get('status')).upper() == 'CANCELLED'])
     total_value_number = sum([to_float(q.get('amount_value')) for q in quotations])
     total_value = f"{total_value_number:,.2f}"
     regions = sorted(list({(q.get('region') or '').strip() for q in quotations if (q.get('region') or '').strip()}))
@@ -923,20 +932,18 @@ def quotation():
     from models.region_province_map import region_province_map
     # province_muni_map is just philippineLocations
     province_muni_map = philippineLocations
-    # Always provide status_data for chart (Pending, In Transit, For Delivery, Delivered, Cancelled)
+    # Always provide status_data for chart (Pending, Approved, Rejected, Forwarded)
     status_data = [
         len([q for q in quotations if str(q.get('status', '')).lower() == 'pending']),
-        len([q for q in quotations if str(q.get('status', '')).lower() == 'in-transit']),
-        len([q for q in quotations if str(q.get('status', '')).lower() == 'for-delivery']),
-        len([q for q in quotations if str(q.get('status', '')).lower() == 'delivered']),
-        len([q for q in quotations if str(q.get('status', '')).lower() == 'cancelled'])
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'approved']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'rejected']),
+        len([q for q in quotations if str(q.get('status', '')).lower() == 'forwarded'])
     ]
     return render_template(
         'national/operations/quotation.html',
         quotations=quotations,
         total_quotes=total_quotes,
         pending_quotes=pending_quotes,
-        cancelled_quotes=cancelled_quotes,
         total_value=total_value,
         region_province_map=region_province_map,
         province_muni_map=province_muni_map,
