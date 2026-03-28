@@ -4345,6 +4345,15 @@ def applicants_regional_view(job_id):
             'cover_letter': data.get('cover_letter') or 'N/A',
             'notes': data.get('notes') or 'N/A',
             'resume_url': data.get('resume_url') or data.get('resume_link') or '',
+            'photo_url': (
+                data.get('photo_url')
+                or data.get('photo')
+                or data.get('profile_photo')
+                or data.get('profilePhoto')
+                or data.get('photoURL')
+                or ''
+            ),
+            'valid_id_url': data.get('valid_id_url') or data.get('valid_id') or '',
         }
 
         return render_template(
