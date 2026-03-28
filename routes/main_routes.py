@@ -1,21 +1,54 @@
-from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify
+from flask import Blueprint, render_template, redirect, url_for, session, request, jsonify, current_app
 import uuid
 from datetime import datetime
 import os
 import time
 import hashlib
 import requests
+from urllib.parse import urlparse
 from firebase_auth_middleware import role_required, firebase_auth_required
 
 bp = Blueprint('main', __name__)
 
 
+def _get_cloudinary_credentials():
+    """Resolve Cloudinary credentials from env, app config, or CLOUDINARY_URL."""
+    cloud_name = str(os.environ.get('CLOUDINARY_CLOUD_NAME') or '').strip()
+    api_key = str(os.environ.get('CLOUDINARY_API_KEY') or '').strip()
+    api_secret = str(os.environ.get('CLOUDINARY_API_SECRET') or '').strip()
+
+    # Try Flask app config if env vars are missing.
+    if not (cloud_name and api_key and api_secret):
+        try:
+            cloud_name = cloud_name or str(current_app.config.get('CLOUDINARY_CLOUD_NAME') or '').strip()
+            api_key = api_key or str(current_app.config.get('CLOUDINARY_API_KEY') or '').strip()
+            api_secret = api_secret or str(current_app.config.get('CLOUDINARY_API_SECRET') or '').strip()
+        except Exception:
+            pass
+
+    # Support CLOUDINARY_URL format: cloudinary://<api_key>:<api_secret>@<cloud_name>
+    if not (cloud_name and api_key and api_secret):
+        raw_url = str(
+            os.environ.get('CLOUDINARY_URL')
+            or (current_app.config.get('CLOUDINARY_URL') if current_app else '')
+            or ''
+        ).strip()
+        if raw_url:
+            try:
+                parsed = urlparse(raw_url)
+                if parsed.scheme == 'cloudinary':
+                    api_key = api_key or (parsed.username or '')
+                    api_secret = api_secret or (parsed.password or '')
+                    cloud_name = cloud_name or (parsed.hostname or '')
+            except Exception:
+                pass
+
+    return cloud_name, api_key, api_secret
+
+
 def _cloudinary_enabled() -> bool:
-    return all([
-        os.environ.get('CLOUDINARY_CLOUD_NAME'),
-        os.environ.get('CLOUDINARY_API_KEY'),
-        os.environ.get('CLOUDINARY_API_SECRET')
-    ])
+    cloud_name, api_key, api_secret = _get_cloudinary_credentials()
+    return bool(cloud_name and api_key and api_secret)
 
 
 def _cloudinary_signature(params: dict, api_secret: str) -> str:
@@ -25,9 +58,7 @@ def _cloudinary_signature(params: dict, api_secret: str) -> str:
 
 
 def _upload_to_cloudinary(file_obj, folder: str):
-    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '').strip()
-    api_key = os.environ.get('CLOUDINARY_API_KEY', '').strip()
-    api_secret = os.environ.get('CLOUDINARY_API_SECRET', '').strip()
+    cloud_name, api_key, api_secret = _get_cloudinary_credentials()
 
     if not cloud_name or not api_key or not api_secret:
         return None
