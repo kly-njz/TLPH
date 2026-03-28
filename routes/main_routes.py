@@ -249,8 +249,13 @@ def apply_for_hiring_position():
         municipality = str(hiring.get('municipality') or '').strip()
         region = str(hiring.get('region') or '').strip()
         scope_type = str(hiring.get('scope_type') or '').strip().lower()
-        if scope_type not in {'municipality', 'region'}:
-            scope_type = 'region' if region and not municipality else 'municipality'
+        if scope_type not in {'municipality', 'region', 'national'}:
+            if municipality:
+                scope_type = 'municipality'
+            elif region:
+                scope_type = 'region'
+            else:
+                scope_type = 'national'
         position = str(hiring.get('position') or '').strip()
         job_title = str(hiring.get('job_title') or '').strip()
         description = str(hiring.get('description') or '').strip()
@@ -260,7 +265,12 @@ def apply_for_hiring_position():
         if scope_type == 'region' and not region:
             return jsonify({'success': False, 'error': 'Hiring position has no region scope'}), 400
 
-        scope_value = municipality if scope_type == 'municipality' else region
+        if scope_type == 'municipality':
+            scope_value = municipality
+        elif scope_type == 'region':
+            scope_value = region
+        else:
+            scope_value = 'NATIONAL OFFICE'
         municipality_value = municipality if scope_type == 'municipality' else ''
 
         application_id = f"HIRE-{hiring_id}-{uuid.uuid4().hex[:8].upper()}"

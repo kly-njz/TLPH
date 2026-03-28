@@ -100,6 +100,7 @@
             <option value="ALL">All Scope</option>
             <option value="municipality">Municipality</option>
             <option value="region">Region</option>
+            <option value="national">National</option>
           </select>
 
           <select x-model="statusFilter" title="Filter by status" class="gov-input h-7 min-w-[130px] cursor-pointer">
@@ -158,15 +159,19 @@
                   <td class="px-3 py-2 uppercase text-[9px] text-slate-700 font-bold" x-text="row.candidate_type"></td>
                   <td class="px-3 py-2 text-[9px] text-slate-700" x-text="row.job_description"></td>
                   <td class="px-3 py-2 text-[9px]">
-                    <span :class="row.scope_type === 'municipality' ? 'bg-cyan-50 border-cyan-200 text-cyan-700' : 'bg-indigo-50 border-indigo-200 text-indigo-700'"
+                      <span :class="row.scope_type === 'municipality' ? 'bg-cyan-50 border-cyan-200 text-cyan-700' : (row.scope_type === 'region' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-violet-50 border-violet-200 text-violet-700')"
                           class="inline-block px-2 py-0.5 rounded-[2px] border uppercase font-black text-[8px] tracking-wide"
-                          x-text="(row.scope_type === 'municipality' ? 'Municipality: ' : 'Region: ') + row.scope"></span>
+                        x-text="row.scope_type === 'municipality' ? ('Municipality: ' + row.scope) : (row.scope_type === 'region' ? ('Region: ' + row.scope) : 'National Office')"></span>
                   </td>
                   <td class="px-3 py-2 font-mono text-[9px] text-slate-500" x-text="row.date_filed"></td>
                   <td class="px-3 py-2 text-[9px] text-slate-700" x-text="row.accepted_by || 'N/A'"></td>
                   <td class="px-3 py-2 font-mono text-[9px] text-slate-500" x-text="row.updated_at || 'N/A'"></td>
                   <td class="px-3 py-2 text-center">
-                    <button type="button" class="gov-btn bg-blue-900 text-white hover:bg-blue-800 h-6 px-2" @click="viewApplicant(row.id)">View</button>
+                    <div class="flex items-center justify-center gap-1">
+                      <button type="button" class="gov-btn bg-blue-900 text-white hover:bg-blue-800 h-6 px-2" @click="viewApplicant(row.id)">View</button>
+                      <button type="button" class="gov-btn bg-emerald-700 text-white hover:bg-emerald-800 h-6 px-2" @click="updateApplicantStatus(row, 'approved')" :disabled="row.scope_type !== 'national'">Approve</button>
+                      <button type="button" class="gov-btn bg-rose-700 text-white hover:bg-rose-800 h-6 px-2" @click="updateApplicantStatus(row, 'rejected')" :disabled="row.scope_type !== 'national'">Reject</button>
+                    </div>
                   </td>
                   <td class="px-3 py-2 text-center">
                     <span class="inline-block px-2 py-0.5 rounded-[2px] border uppercase font-black text-[8px] tracking-wide"
@@ -327,6 +332,38 @@
 
         viewApplicant(applicantId) {
           window.location.href = `/national/applicants/view/${encodeURIComponent(applicantId)}`;
+        },
+
+        async updateApplicantStatus(row, nextStatus) {
+          if (!row || row.scope_type !== 'national') {
+            return;
+          }
+          if ((row.status || '').toLowerCase() === nextStatus) {
+            return;
+          }
+
+          const actionLabel = nextStatus === 'approved' ? 'approve' : 'reject';
+          if (!confirm(`Are you sure you want to ${actionLabel} this national application?`)) {
+            return;
+          }
+
+          try {
+            const res = await fetch(`/national/api/applicants/${encodeURIComponent(row.id)}/status`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: nextStatus }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || 'Failed to update application status');
+            }
+
+            row.status = nextStatus;
+            row.accepted_by = nextStatus === 'approved' ? 'NATIONAL ADMIN' : (row.accepted_by || 'N/A');
+            row.updated_at = new Date().toLocaleString('en-US');
+          } catch (err) {
+            alert(err.message || 'Unexpected error while updating status');
+          }
         }
       };
     }

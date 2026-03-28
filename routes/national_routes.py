@@ -1014,6 +1014,7 @@ def applicants():
         rejected_count = 0
         municipal_scope_count = 0
         regional_scope_count = 0
+        national_scope_count = 0
 
         for doc in docs:
             data = doc.to_dict() or {}
@@ -1043,11 +1044,20 @@ def applicants():
             municipality = data.get('municipality') or ''
 
             scope_type = str(data.get('scope_type') or '').strip().lower()
-            if scope_type not in ['municipality', 'region']:
-                scope_type = 'municipality' if municipality else 'region'
+            if scope_type not in ['municipality', 'region', 'national']:
+                if municipality:
+                    scope_type = 'municipality'
+                elif region_office and region_office != 'N/A':
+                    scope_type = 'region'
+                else:
+                    scope_type = 'national'
             scope = (
                 data.get('scope')
-                or (municipality if scope_type == 'municipality' else region_office)
+                or (
+                    municipality
+                    if scope_type == 'municipality'
+                    else (region_office if scope_type == 'region' else 'NATIONAL OFFICE')
+                )
                 or 'N/A'
             )
 
@@ -1098,8 +1108,10 @@ def applicants():
 
             if scope_type == 'municipality':
                 municipal_scope_count += 1
-            else:
+            elif scope_type == 'region':
                 regional_scope_count += 1
+            else:
+                national_scope_count += 1
 
             if region_office and region_office != 'N/A':
                 region_set.add(str(region_office).upper())
@@ -1188,6 +1200,7 @@ def applicants():
             rejected_count=rejected_count,
             municipal_scope_count=municipal_scope_count,
             regional_scope_count=regional_scope_count,
+            national_scope_count=national_scope_count,
             regions=sorted(region_set),
             candidate_types=sorted(candidate_type_set),
             hiring_rows_json=json.dumps(hiring_rows),
@@ -1209,6 +1222,7 @@ def applicants():
             rejected_count=0,
             municipal_scope_count=0,
             regional_scope_count=0,
+            national_scope_count=0,
             regions=[],
             candidate_types=[],
             hiring_rows_json='[]',
@@ -1349,6 +1363,56 @@ def applicants_view_detail(job_id):
             applicant={},
             error='Failed to load applicant details.'
         ), 500
+
+
+@bp.route('/api/applicants/<job_id>/status', methods=['POST'])
+@role_required('national', 'national_admin')
+def applicants_update_status(job_id):
+    db = get_firestore_db()
+    payload = request.get_json(silent=True) or {}
+    status = str(payload.get('status') or '').strip().lower()
+    if status not in {'approved', 'rejected', 'pending'}:
+        return jsonify({'success': False, 'error': 'Invalid status value'}), 400
+
+    actor_email = session.get('user_email', 'national_admin')
+
+    try:
+        doc_ref = db.collection('municipal_denr_applicant_jobs').document(job_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            return jsonify({'success': False, 'error': 'Applicant job not found'}), 404
+
+        existing = doc.to_dict() or {}
+        scope_type = str(existing.get('scope_type') or '').strip().lower()
+        if scope_type != 'national':
+            return jsonify({'success': False, 'error': 'Only national-scope applications can be updated here'}), 403
+
+        update_payload = {
+            'status': status.upper(),
+            'employeeStatus': status,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'updated_by': actor_email,
+        }
+
+        if status == 'approved':
+            update_payload.update({
+                'accepted_by': actor_email,
+                'reviewed_by': actor_email,
+                'reviewed_at': firestore.SERVER_TIMESTAMP,
+            })
+        elif status in {'pending', 'rejected'}:
+            update_payload.update({
+                'reviewed_by': actor_email,
+                'reviewed_at': firestore.SERVER_TIMESTAMP,
+            })
+            if status == 'pending':
+                update_payload['accepted_by'] = 'N/A'
+
+        doc_ref.set(update_payload, merge=True)
+        return jsonify({'success': True, 'status': status}), 200
+    except Exception as e:
+        print(f"[ERROR] applicants_update_status failed: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update applicant status'}), 500
 
 
 @bp.route('/api/hiring', methods=['GET'])
