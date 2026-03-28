@@ -8,6 +8,7 @@ from datetime import datetime
 import uuid
 
 bp = Blueprint('service_api', __name__, url_prefix='/api/service')
+SERVICE_REQUESTS_COLLECTION = 'service_requests'
 
 @bp.route('/compensation/submit', methods=['POST'])
 @role_required('user')
@@ -24,14 +25,14 @@ def submit_compensation_request():
 
         # Parse form data
         service_type = request.form.get('serviceType')
-            print(f"\n===== COMPENSATION SUBMIT REQUEST =====")
-            print(f"User ID: {user_id}")
-            print(f"Service Type: {service_type}")
-            print(f"Request Method: {request.method}")
-            print(f"Request Content-Type: {request.content_type}")
-            print(f"Form keys: {list(request.form.keys())}")
-            print(f"Files keys: {list(request.files.keys())}")
-            print(f"===== END REQUEST INFO =====\n")
+        print(f"\n===== COMPENSATION SUBMIT REQUEST =====")
+        print(f"User ID: {user_id}")
+        print(f"Service Type: {service_type}")
+        print(f"Request Method: {request.method}")
+        print(f"Request Content-Type: {request.content_type}")
+        print(f"Form keys: {list(request.form.keys())}")
+        print(f"Files keys: {list(request.files.keys())}")
+        print(f"===== END REQUEST INFO =====\n")
         
         if not service_type:
             return jsonify({'error': 'Service type is required'}), 400
@@ -102,7 +103,7 @@ def submit_compensation_request():
             print(f'  - {doc.get("name")}: {doc.get("url")}')
 
         # Store in Firestore
-        db.collection('serviceRequests').document(request_id).set(submission_data)
+        db.collection(SERVICE_REQUESTS_COLLECTION).document(request_id).set(submission_data)
 
         return jsonify({
             'success': True,
@@ -129,7 +130,10 @@ def get_compensation_request(request_id):
         if not user_id:
             return jsonify({'error': 'Unauthorized'}), 401
 
-        doc = db.collection('serviceRequests').document(request_id).get()
+        doc = db.collection(SERVICE_REQUESTS_COLLECTION).document(request_id).get()
+        if not doc.exists:
+            # Backward compatibility for any records saved in legacy collection name
+            doc = db.collection('serviceRequests').document(request_id).get()
         
         if not doc.exists:
             return jsonify({'error': 'Request not found'}), 404
@@ -161,7 +165,7 @@ def list_compensation_requests():
 
         service_type = request.args.get('serviceType')  # Optional filter
         
-        query = db.collection('serviceRequests').where('userId', '==', user_id)
+        query = db.collection(SERVICE_REQUESTS_COLLECTION).where('userId', '==', user_id)
         
         if service_type:
             query = query.where('serviceType', '==', service_type)
