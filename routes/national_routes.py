@@ -1,8 +1,3 @@
-@bp.route('/notification')
-@role_required('national', 'national_admin')
-def notification_national_view():
-    return render_template('national/notification.html')
-
 from flask import Blueprint, request, jsonify
 from firebase_config import get_firestore_db
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -3426,3 +3421,9 @@ def get_quotation_national(quotation_id):
     except Exception as e:
         print(f"[ERROR] get_quotation_national failed: {e}")
         return jsonify({'success': False, 'error': 'Failed to fetch quotation'}), 500
+
+
+@bp.route('/notification')
+@role_required('national', 'national_admin')
+def notification_national_view():
+    return render_template('national/notification.html')
