@@ -229,7 +229,7 @@
                                 <th class="border-r border-slate-200">Service Type</th>
                                 <th class="border-r border-slate-200 text-center w-32 cursor-pointer hover:bg-slate-200 transition" @click="sortBy('date')">
                                     <div class="flex items-center justify-center gap-1">
-                                        Date Filed
+                                        Date
                                         <span class="text-[10px]" x-text="sortField === 'date' ? (sortAsc ? '▲' : '▼') : '─'"></span>
                                     </div>
                                 </th>
@@ -393,11 +393,24 @@
                                     }
                                     let dateValue = null;
                                     let dateText = 'N/A';
-                                    if (data.createdAt) {
-                                        if (typeof data.createdAt.toDate === 'function') { dateValue = data.createdAt.toDate(); }
-                                        else if (data.createdAt.seconds) { dateValue = new Date(data.createdAt.seconds * 1000); }
-                                        if (dateValue) {
-                                            dateText = dateValue.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' });
+                                    // Try multiple timestamp fields
+                                    const timestamps = [data.createdAt, data.submittedAt, data.forwardedAt, data.updatedAt];
+                                    for (const ts of timestamps) {
+                                        if (!ts) continue;
+                                        try {
+                                            let dateObj = null;
+                                            if (typeof ts.toDate === 'function') { dateObj = ts.toDate(); }
+                                            else if (ts.seconds) { dateObj = new Date(ts.seconds * 1000); }
+                                            else if (ts instanceof Date) { dateObj = ts; }
+                                            else if (typeof ts === 'string') { dateObj = new Date(ts); }
+                                            
+                                            if (dateObj && !isNaN(dateObj)) {
+                                                dateValue = dateObj;
+                                                dateText = dateObj.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' });
+                                                break;
+                                            }
+                                        } catch (e) {
+                                            continue;
                                         }
                                     }
                                     this.apps.push({
