@@ -102,10 +102,9 @@
           <label class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1 ml-0.5">Status *</label>
           <select id="newStatus" class="gov-input w-full h-8 bg-white cursor-pointer" required>
             <option value="pending">Pending</option>
-            <option value="in-transit">In Transit</option>
-            <option value="for-delivery">For Delivery</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="forwarded">Forwarded</option>
           </select>
         </div>
       </div>
@@ -238,8 +237,12 @@
     .status-badge { padding: 2px 6px; font-size: 8px; font-weight: 900; text-transform: uppercase; border: 1px solid transparent; border-radius: 1px; display: inline-block; line-height: 1; letter-spacing: 0.05em; white-space: nowrap; }
 
     .btn-action { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; transition: all 0.2s; border: 1px solid #cbd5e1; background: white; color: #64748b; cursor: pointer; padding: 0; }
+    .btn-approve:hover { color: white; background: #15803d; border-color: #15803d; }
+    .btn-reject:hover { color: white; background: #b91c1c; border-color: #b91c1c; }
+    .btn-forward:hover { color: white; background: #4338ca; border-color: #4338ca; }
     .btn-edit:hover { color: white; background: #1e3a8a; border-color: #1e3a8a; }
     .btn-draft:hover { color: white; background: #0f172a; border-color: #0f172a; }
+    .btn-status:hover { color: white; background: #0f766e; border-color: #0f766e; }
     .btn-delivery:hover { color: white; background: #15803d; border-color: #15803d; }
     .btn-locked { background: #0f172a; border-color: #0f172a; color: #cbd5e1; cursor: not-allowed; }
   </style>
@@ -269,7 +272,7 @@
           </button>
         </header>
 
-        <section class="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
+        <section class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
           <div class="gov-card p-2 px-3 border-l-4 border-l-slate-600">
             <div class="flex items-center justify-between">
               <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Total Quotations</span>
@@ -283,13 +286,6 @@
               <span class="material-icons-round text-amber-600 text-[14px]">pending_actions</span>
             </div>
             <div class="text-lg font-black text-amber-700 mt-0.5 leading-none">{{ pending_quotes|default('0') }}</div>
-          </div>
-          <div class="gov-card p-2 px-3 border-l-4 border-l-rose-600">
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Cancelled</span>
-              <span class="material-icons-round text-rose-700 text-[14px]">cancel</span>
-            </div>
-            <div class="text-lg font-black text-rose-800 mt-0.5 leading-none">{{ cancelled_quotes|default('0') }}</div>
           </div>
         </section>
 
@@ -321,10 +317,9 @@
               <select id="statusFilter" class="gov-input cursor-pointer" onchange="filterTable()">
                 <option value="">All Status</option>
                 <option value="pending">Pending</option>
-                <option value="in-transit">In Transit</option>
-                <option value="for-delivery">For Delivery</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Cancelled</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="forwarded">Forwarded</option>
               </select>
               <button onclick="resetFilters()" class="px-2 py-0.5 bg-slate-200 border border-slate-300 text-slate-700 font-bold uppercase text-[9px] rounded-[2px] hover:bg-slate-300">Reset</button>
             </div>
@@ -355,7 +350,15 @@
               </thead>
               <tbody id="quotTable" class="text-[10px] divide-y divide-slate-100">
               {% for q in quotations %}
-                <tr class="hover:bg-slate-50 transition-colors data-row" data-quote-id="{{ q.id }}">
+                {% set status = (q.status or 'PENDING')|upper %}
+                <tr class="hover:bg-slate-50 transition-colors data-row"
+                  data-quote-id="{{ q.id }}"
+                  data-number="{{ q.id }}"
+                  data-buyer="{{ q.buyer or q.buyer_entity or '' }}"
+                  data-total="{{ '%.2f' % ((q.quantity or q.qty or 0) * (q.unit_price or q.unitPrice or 0) + (q.other_charges or q.otherCharges or 0)) }}"
+                  data-status="{{ status }}"
+                  data-deliver-to="{{ q.deliver_to or '' }}"
+                  data-deliver-to-type="{{ q.deliver_to_type or '' }}">
                   <td class="px-3 py-1.5 font-mono font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight">{{ q.id }}</td>
                   {% set issue_raw = q.issue_date or q.date or q.created_at or '' %}
                   {% set issue_display = q.created_at if (issue_raw and 'T' not in issue_raw and q.created_at) else issue_raw %}
@@ -373,29 +376,40 @@
                   <td class="px-3 py-1.5 font-mono font-black text-emerald-700 text-right border-r border-slate-100">&#8369;{{ '%.2f' % ((q.quantity or q.qty or 0) * (q.unit_price or q.unitPrice or 0) + (q.other_charges or q.otherCharges or 0)) }}</td>
                   {% set df = (q.deliver_from or '')|lower %}
                   <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ 'Municipal' if df == 'municipal' else 'Regional' if df == 'regional' else 'National' }}</td>
-                  <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100">{{ q.deliver_to }}<br><span class="text-[8px] text-slate-400">({{ q.deliver_to_type }})</span></td>
+                  <td class="px-3 py-1.5 text-slate-700 border-r border-slate-100" data-deliver-to-cell>
+                    <span class="deliver-to-name">{{ q.deliver_to }}</span>
+                    <br>
+                    <span class="deliver-to-type text-[8px] text-slate-400">({{ q.deliver_to_type }})</span>
+                  </td>
                   <td class="px-3 py-1.5 text-center border-r border-slate-100">
-                    <span class="status-badge border {{ 'bg-emerald-100 text-emerald-700 border-emerald-300' if q.status == 'delivered' else
-                        'bg-blue-100 text-blue-700 border-blue-300' if q.status == 'in-transit' else
-                        'bg-indigo-100 text-indigo-700 border-indigo-300' if q.status == 'for-delivery' else
-                        'bg-rose-100 text-rose-700 border-rose-300' if q.status == 'cancelled' else
-                        'bg-amber-100 text-amber-700 border-amber-300' }}">
-                        {{ q.status|capitalize }}
+                    <span class="status-badge border
+                      {{ 'bg-emerald-100 text-emerald-700 border-emerald-300' if status == 'APPROVED' else
+                         'bg-rose-100 text-rose-700 border-rose-300' if status == 'REJECTED' else
+                         'bg-indigo-100 text-indigo-700 border-indigo-300' if status == 'FORWARDED' else
+                         'bg-amber-100 text-amber-700 border-amber-300' }}">
+                      {{ status|replace('-', ' ')|replace('_', ' ')|title }}
                     </span>
                   </td>
                   <td class="px-3 py-1.5 text-center no-print">
                     <div class="flex justify-center gap-1 flex-nowrap">
+                      <button type="button" class="btn-action btn-approve" onclick="openActionModal('approve', this)" title="Approve">
+                        <span class="material-icons-round text-[12px]">check_circle</span>
+                      </button>
+                      <button type="button" class="btn-action btn-reject" onclick="openActionModal('reject', this)" title="Reject">
+                        <span class="material-icons-round text-[12px]">block</span>
+                      </button>
+                      <button type="button" class="btn-action btn-forward" onclick="openAllocateModal('{{ q.id }}')" title="Forward">
+                        <span class="material-icons-round text-[12px]">send</span>
+                      </button>
                       <button type="button" class="btn-action btn-edit" onclick="openEditDrawer('{{ q.id }}')" title="Edit">
                         <span class="material-icons-round text-[12px]">edit</span>
                       </button>
                       <button type="button" class="btn-action btn-draft" onclick="openDraftPreview(this)" title="Draft">
                         <span class="material-icons-round text-[12px]">description</span>
                       </button>
-                      {% if q.status and q.status|lower == 'delivered' %}
-                      <button type="button" class="btn-action btn-delivery" onclick="downloadDeliveryDetails('{{ q.id }}')" title="Delivery Details">
-                        <span class="material-icons-round text-[12px]">download</span>
+                      <button type="button" class="btn-action btn-status" onclick="openStatusModal('{{ q.id }}')" title="Change Status">
+                        <span class="material-icons-round text-[12px]">sync_alt</span>
                       </button>
-                      {% endif %}
                     </div>
                   </td>
                 </tr>
@@ -409,19 +423,22 @@
                     <div class="bg-blue-900 text-white px-4 py-3 flex items-center justify-between shrink-0">
                       <div class="flex items-center gap-2">
                         <span class="material-icons-round text-[18px]">send</span>
-                        <span class="font-black uppercase text-xs tracking-widest">Allocate/Forward Quotation</span>
+                        <span class="font-black uppercase text-xs tracking-widest">Forward Quotation</span>
                       </div>
                       <button type="button" onclick="closeAllocateModal()" class="text-slate-300 hover:text-white">
                         <span class="material-icons-round text-[20px]">close</span>
                       </button>
                     </div>
                     <div class="p-4 flex flex-col gap-2">
-                      <p class="text-[10px] font-bold text-slate-700 uppercase tracking-widest">Select target region/municipality or admin to forward this quotation to.</p>
+                      <p class="text-[10px] font-bold text-slate-700 uppercase tracking-widest">Set deliver-to type and destination.</p>
+                      <label class="text-[8px] font-black uppercase tracking-widest text-slate-500">Deliver To Type</label>
                       <select id="allocateTarget" class="gov-input w-full bg-white cursor-pointer">
-                        <option value="">Select Target</option>
+                        <option value="">Select Type</option>
                         <option value="regional">Regional Admin</option>
                         <option value="municipal">Municipal Admin</option>
                       </select>
+                      <label class="text-[8px] font-black uppercase tracking-widest text-slate-500 mt-2">Deliver To</label>
+                      <input id="allocateDeliverTo" type="text" class="gov-input w-full" placeholder="e.g. Region IV-A Office" />
                       <textarea id="allocateNote" class="gov-input w-full resize-none mt-2" rows="2" placeholder="Optional note..."></textarea>
                     </div>
                     <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 shrink-0">
@@ -449,10 +466,9 @@
                       <p class="text-[10px] font-bold text-slate-700 uppercase tracking-widest">Select new status for this quotation.</p>
           <select id="statusSelect" class="gov-input w-full bg-white cursor-pointer">
             <option value="pending">Pending</option>
-            <option value="in-transit">In Transit</option>
-            <option value="for-delivery">For Delivery</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="forwarded">Forwarded</option>
           </select>
                       <textarea id="statusNote" class="gov-input w-full resize-none mt-2" rows="2" placeholder="Optional note..."></textarea>
                     </div>
@@ -471,6 +487,13 @@
                 function openAllocateModal(id) {
                   currentAllocateId = id;
                   const modal = document.getElementById('allocateModal');
+                  const row = document.querySelector(`tr[data-quote-id="${id}"]`);
+                  const deliverTo = row ? row.dataset.deliverTo : '';
+                  const deliverToType = row ? row.dataset.deliverToType : '';
+                  const targetSelect = document.getElementById('allocateTarget');
+                  const deliverToInput = document.getElementById('allocateDeliverTo');
+                  if (targetSelect) targetSelect.value = deliverToType ? deliverToType.toLowerCase() : '';
+                  if (deliverToInput) deliverToInput.value = deliverTo || '';
                   modal.hidden = false;
                   modal.classList.remove('hidden');
                   modal.classList.add('flex');
@@ -484,18 +507,23 @@
                 }
                 async function confirmAllocate() {
                   const target = document.getElementById('allocateTarget').value;
+                  const deliverTo = document.getElementById('allocateDeliverTo').value.trim();
                   const note = document.getElementById('allocateNote').value;
-                  if (!target) { alert('Select a target.'); return; }
+                  if (!target) { alert('Select a deliver-to type.'); return; }
+                  if (!deliverTo) { alert('Provide a deliver-to destination.'); return; }
                   try {
-                    const res = await fetch(`/national/operations/quotation/api/${currentAllocateId}/status`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ status: target.toUpperCase(), note: note })
+                    await updateQuotationStatus(currentAllocateId, {
+                      status: 'FORWARDED',
+                      deliver_to_type: target,
+                      deliver_to: deliverTo,
+                      note: note
                     });
-                    const data = await res.json();
-                    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to forward quotation');
+                    const row = document.querySelector(`tr[data-quote-id="${currentAllocateId}"]`);
+                    updateStatusBadge(row, 'FORWARDED');
+                    const typeLabel = target ? target.charAt(0).toUpperCase() + target.slice(1) : '';
+                    updateDeliverToCell(row, deliverTo, typeLabel);
                     alert('Quotation forwarded successfully.');
-                    location.reload();
+                    filterTable();
                   } catch (e) {
                     alert('Error: ' + e.message);
                   }
@@ -507,6 +535,10 @@
                 function openStatusModal(id) {
                   currentStatusId = id;
                   const modal = document.getElementById('statusModal');
+                  const row = document.querySelector(`tr[data-quote-id="${id}"]`);
+                  const currentStatus = row ? String(row.dataset.status || '').toLowerCase().replace(/\s+/g, '-') : '';
+                  const statusSelect = document.getElementById('statusSelect');
+                  if (statusSelect && currentStatus) statusSelect.value = currentStatus;
                   modal.hidden = false;
                   modal.classList.remove('hidden');
                   modal.classList.add('flex');
@@ -522,15 +554,11 @@
                   const status = document.getElementById('statusSelect').value;
                   const note = document.getElementById('statusNote').value;
                   try {
-                    const res = await fetch(`/national/operations/quotation/api/${currentStatusId}/status`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ status: status.toUpperCase(), note: note })
-                    });
-                    const data = await res.json();
-                    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to update status');
+                    await updateQuotationStatus(currentStatusId, { status: status.toUpperCase(), note: note });
+                    const row = document.querySelector(`tr[data-quote-id="${currentStatusId}"]`);
+                    updateStatusBadge(row, status.toUpperCase());
                     alert('Quotation status updated.');
-                    location.reload();
+                    filterTable();
                   } catch (e) {
                     alert('Error: ' + e.message);
                   }
@@ -799,10 +827,10 @@
   new Chart(document.getElementById('quoteStatusChart'), {
     type: 'doughnut',
     data: {
-      labels: ['Pending', 'In Transit', 'For Delivery', 'Delivered', 'Cancelled'],
+      labels: ['Pending', 'Approved', 'Rejected', 'Forwarded'],
       datasets: [{
         data: {{ status_data|tojson|safe }},
-        backgroundColor: ['#f59e0b', '#2563eb', '#4f46e5', '#10b981', '#ef4444'],
+        backgroundColor: ['#f59e0b', '#10b981', '#ef4444', '#4f46e5'],
         borderWidth: 0
       }]
     },
@@ -916,22 +944,24 @@
   // --- Row Action Functions ---
   function getRowData(btn) {
     const row = btn.closest('tr');
-    const cells = row.querySelectorAll('td');
+    const cells = row ? row.querySelectorAll('td') : [];
     return {
       row,
-      number:  cells[0].innerText.trim(),
-      client:  cells[1].innerText.trim(),
-      amount:  cells[2].innerText.trim(),
-      date:    cells[3].innerText.trim(),
-      statusEl: cells[4].querySelector('span')
+      id: row ? row.dataset.quoteId : '',
+      number: row?.dataset.number || (cells[0] ? cells[0].innerText.trim() : ''),
+      client: row?.dataset.buyer || (cells[2] ? cells[2].innerText.trim() : ''),
+      amount: row?.dataset.total ? `PHP ${Number(row.dataset.total).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : (cells[12] ? cells[12].innerText.trim() : ''),
+      date: cells[1] ? cells[1].innerText.trim() : '',
+      statusEl: row ? row.querySelector('.status-badge') : null,
+      deliverToCell: row ? row.querySelector('[data-deliver-to-cell]') : null
     };
   }
 
   function viewQuotation(btn) {
     const d = getRowData(btn);
     document.getElementById('vqNumber').textContent  = d.number;
-    document.getElementById('vqClient').textContent  = d.client;
-    document.getElementById('vqAmount').textContent  = d.amount;
+    document.getElementById('vqClient').textContent  = d.client || '—';
+    document.getElementById('vqAmount').textContent  = d.amount || '—';
     document.getElementById('vqDate').textContent    = d.date;
     document.getElementById('vqStatus').textContent  = d.statusEl ? d.statusEl.textContent.trim() : '—';
     const modal = document.getElementById('viewQuotationModal');
@@ -951,7 +981,7 @@
     if (e.target === this) closeViewModal();
   });
 
-  // --- Action Modal (Approve/Delete) ---
+  // --- Action Modal (Approve/Reject) ---
   let pendingAction = null;
 
   function openActionModal(type, btn) {
@@ -973,13 +1003,13 @@
       message.textContent = 'Confirm approval for this quotation?';
       confirmBtn.className = 'gov-btn bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1';
       confirmBtn.innerHTML = '<span class="material-icons-round text-[12px]">check</span> Approve';
-    } else {
+    } else if (type === 'reject') {
       header.className = 'bg-rose-700 text-white px-4 py-3 flex items-center justify-between shrink-0';
-      icon.textContent = 'delete_forever';
-      title.textContent = 'Delete Quotation';
-      message.textContent = 'This action will permanently remove the record.';
+      icon.textContent = 'block';
+      title.textContent = 'Reject Quotation';
+      message.textContent = 'Confirm rejection for this quotation?';
       confirmBtn.className = 'gov-btn bg-rose-700 hover:bg-rose-800 text-white flex items-center gap-1';
-      confirmBtn.innerHTML = '<span class="material-icons-round text-[12px]">delete</span> Delete';
+      confirmBtn.innerHTML = '<span class="material-icons-round text-[12px]">block</span> Reject';
     }
 
     meta.textContent = `${d.number}  •  ${d.client}  •  ${d.amount}`;
@@ -1008,48 +1038,83 @@
     closeActionModal();
     if (type === 'approve') {
       await performApprove(btn);
-    } else if (type === 'delete') {
-      await performDelete(btn);
+    } else if (type === 'reject') {
+      await performReject(btn);
     }
   });
 
   // Mocked API Actions (Remove shared logic for local testing)
 
+  function formatStatusLabel(status) {
+    const clean = String(status || '').replace(/[_-]+/g, ' ').trim();
+    return clean
+      .split(' ')
+      .filter(Boolean)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  function getStatusBadgeClass(status) {
+    const s = String(status || '').toUpperCase();
+    if (s === 'FORWARDED') return 'bg-indigo-100 text-indigo-700 border-indigo-300';
+    if (s === 'APPROVED') return 'bg-emerald-100 text-emerald-700 border-emerald-300';
+    if (s === 'REJECTED') return 'bg-rose-100 text-rose-700 border-rose-300';
+    return 'bg-amber-100 text-amber-700 border-amber-300';
+  }
+
+  function updateStatusBadge(row, status) {
+    if (!row) return;
+    const badge = row.querySelector('.status-badge');
+    if (!badge) return;
+    badge.textContent = formatStatusLabel(status);
+    badge.className = `status-badge border ${getStatusBadgeClass(status)}`;
+    row.dataset.status = String(status || '').toUpperCase();
+  }
+
+  function updateDeliverToCell(row, deliverTo, deliverToType) {
+    if (!row) return;
+    const cell = row.querySelector('[data-deliver-to-cell]');
+    if (!cell) return;
+    const nameEl = cell.querySelector('.deliver-to-name');
+    const typeEl = cell.querySelector('.deliver-to-type');
+    if (nameEl) nameEl.textContent = deliverTo || '';
+    if (typeEl) typeEl.textContent = deliverToType ? `(${deliverToType})` : '';
+    row.dataset.deliverTo = deliverTo || '';
+    row.dataset.deliverToType = deliverToType || '';
+  }
+
+  async function updateQuotationStatus(quoteId, payload) {
+    const res = await fetch(`/national/operations/quotation/api/${quoteId}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to update quotation');
+    return data;
+  }
+
   async function performApprove(btn) {
     const d = getRowData(btn);
-    if (!d.row || !d.row.dataset.id) return;
+    if (!d.row || !d.id) return;
     try {
-      const res = await fetch(`/national/api/quotations/${d.row.dataset.id}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'APPROVED' })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to approve quotation');
-      if (d.statusEl) {
-        d.statusEl.textContent = 'Approved';
-        d.statusEl.className = 'inline-block px-1.5 py-0.5 rounded-[1px] font-black text-[8px] uppercase w-20 text-center border bg-blue-50 text-blue-700 border-blue-200';
-      }
+      await updateQuotationStatus(d.id, { status: 'APPROVED' });
+      updateStatusBadge(d.row, 'APPROVED');
       alert('Quotation approved.');
     } catch (err) {
       alert(err.message || 'Unable to approve quotation.');
     }
   }
 
-  async function performDelete(btn) {
+  async function performReject(btn) {
     const d = getRowData(btn);
-    if (!d.row || !d.row.dataset.id) return;
+    if (!d.row || !d.id) return;
     try {
-      const res = await fetch(`/national/api/quotations/${d.row.dataset.id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete quotation');
-      d.row.remove();
-      alert('Quotation deleted.');
+      await updateQuotationStatus(d.id, { status: 'REJECTED' });
+      updateStatusBadge(d.row, 'REJECTED');
+      alert('Quotation rejected.');
     } catch (err) {
-      alert(err.message || 'Unable to delete quotation.');
+      alert(err.message || 'Unable to reject quotation.');
     }
   }
 
