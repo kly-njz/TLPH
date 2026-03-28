@@ -1,8 +1,8 @@
 """
 Service request API endpoints for handling compensation service requests submission and retrieval
 """
-from flask import Blueprint, request, jsonify
-from firebase_auth_middleware import role_required, get_current_user
+from flask import Blueprint, request, jsonify, session
+from firebase_auth_middleware import role_required
 from firebase_config import db
 from datetime import datetime
 import uuid
@@ -17,8 +17,9 @@ def submit_compensation_request():
     Expected form data: serviceType, formData (dict), files (list of uploaded files)
     """
     try:
-        user = get_current_user()
-        if not user:
+        # Get user from session (set by @role_required decorator)
+        user_id = session.get('user_id')
+        if not user_id:
             return jsonify({'error': 'Unauthorized'}), 401
 
         # Parse form data
@@ -30,7 +31,7 @@ def submit_compensation_request():
         request_id = str(uuid.uuid4())
         submission_data = {
             'id': request_id,
-            'userId': user['uid'],
+            'userId': user_id,
             'serviceType': service_type,
             'submittedAt': datetime.now().isoformat(),
             'status': 'pending',  # pending, approved, rejected
@@ -41,7 +42,7 @@ def submit_compensation_request():
         form_fields = {
             'typhoonName', 'areaAffected', 'province', 'municipality', 'barangay',
             'occurrenceTime', 'cropSpecies', 'damageType', 'narrative',
-            'farmerIdNumber', 'costOfDamage', 'farmLatitude', 'farmLongitude', 'farmAddress',
+            'farmerIdNumber', 'costOfDamage', 'farmLatitude', 'farmLongitude', 'farmAddress', 'googlePinLocation',
             'pestType', 'areaDamaged', 'lossValue', 'dateObserved', 'lastSpray'
         }
 
@@ -52,16 +53,24 @@ def submit_compensation_request():
 
         # Handle file uploads
         files_to_upload = request.files.getlist('supportingFiles')
+        print(f'DEBUG: Files received: {len(files_to_upload)} file(s)')
         if files_to_upload:
             from routes.api_routes import _upload_to_cloudinary
             for file in files_to_upload:
                 if file and file.filename:
-                    web_url = _upload_to_cloudinary(file, f'service-requests/{service_type}/{user["uid"]}')
+                    print(f'DEBUG: Uploading file: {file.filename}')
+                    web_url = _upload_to_cloudinary(file, f'service-requests/{service_type}/{user_id}')
+                    print(f'DEBUG: Upload result: {web_url}')
                     if web_url:
                         submission_data['supportingDocuments'].append({
                             'url': web_url,
                             'name': file.filename
                         })
+                        print(f'DEBUG: File stored: {file.filename} -> {web_url}')
+                    else:
+                        print(f'DEBUG: Upload failed for {file.filename}')
+        
+        print(f'DEBUG: Final supportingDocuments: {submission_data["supportingDocuments"]}')
 
         # Store in Firestore
         db.collection('serviceRequests').document(request_id).set(submission_data)
@@ -74,6 +83,8 @@ def submit_compensation_request():
 
     except Exception as e:
         print(f'Error submitting service request: {str(e)}')
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to submit request', 'details': str(e)}), 500
 
 
@@ -84,8 +95,9 @@ def get_compensation_request(request_id):
     Retrieves a specific compensation service request for the current user
     """
     try:
-        user = get_current_user()
-        if not user:
+        # Get user from session (set by @role_required decorator)
+        user_id = session.get('user_id')
+        if not user_id:
             return jsonify({'error': 'Unauthorized'}), 401
 
         doc = db.collection('serviceRequests').document(request_id).get()
@@ -96,7 +108,7 @@ def get_compensation_request(request_id):
         data = doc.to_dict()
         
         # Verify ownership
-        if data.get('userId') != user['uid']:
+        if data.get('userId') != user_id:
             return jsonify({'error': 'Unauthorized'}), 403
 
         return jsonify(data), 200
@@ -113,13 +125,14 @@ def list_compensation_requests():
     Lists all compensation service requests for the current user
     """
     try:
-        user = get_current_user()
-        if not user:
+        # Get user from session (set by @role_required decorator)
+        user_id = session.get('user_id')
+        if not user_id:
             return jsonify({'error': 'Unauthorized'}), 401
 
         service_type = request.args.get('serviceType')  # Optional filter
         
-        query = db.collection('serviceRequests').where('userId', '==', user['uid'])
+        query = db.collection('serviceRequests').where('userId', '==', user_id)
         
         if service_type:
             query = query.where('serviceType', '==', service_type)
