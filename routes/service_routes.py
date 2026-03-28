@@ -42,11 +42,23 @@ def compensation_typhoon():
     """Shows typhoon compensation page"""
     return render_template('user/service/compensation/typhoon.html')
 
+@bp.route('/compensation/typhoon/view')
+@role_required('user')
+def compensation_typhoon_view():
+    """Shows typhoon compensation request details view"""
+    return render_template('user/service/compensation/typhoon-view.html')
+
 @bp.route('/compensation/pest')
 @role_required('user')
 def compensation_pest():
     """Shows pest compensation page"""
     return render_template('user/service/compensation/pest.html')
+
+@bp.route('/compensation/pest/view')
+@role_required('user')
+def compensation_pest_view():
+    """Shows pest compensation request details view"""
+    return render_template('user/service/compensation/pest-view.html')
 
 @bp.route('/inventory')
 @role_required('user')
